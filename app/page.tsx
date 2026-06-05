@@ -63,22 +63,35 @@ function isTodayReservation(item: ReservationRecord) {
   return normalizeDate(item.reservationDate) === todayString();
 }
 
-function toDate(value: any) {
+function toDate(value: unknown) {
   try {
     if (!value) return null;
-    if (typeof value.toDate === "function") return value.toDate();
+
+    if (
+      typeof value === "object" &&
+      value !== null &&
+      "toDate" in value &&
+      typeof (value as { toDate?: unknown }).toDate === "function"
+    ) {
+      return (value as { toDate: () => Date }).toDate();
+    }
+
     if (value instanceof Date) return value;
 
-    const date = new Date(value);
-    if (Number.isNaN(date.getTime())) return null;
+    if (typeof value === "string" || typeof value === "number") {
+      const date = new Date(value);
+      if (Number.isNaN(date.getTime())) return null;
 
-    return date;
+      return date;
+    }
+
+    return null;
   } catch {
     return null;
   }
 }
 
-function formatMemoTime(value: any) {
+function formatMemoTime(value: unknown) {
   const date = toDate(value);
 
   if (!date) return "";
@@ -214,23 +227,25 @@ export default function HomePage() {
                     등록된 메모가 없습니다.
                   </div>
                 ) : (
-                  todayMemos.map((memo) => (
-                    <div
-                      key={memo.id}
-                      className="rounded-[8px] border border-emerald-100 bg-emerald-50 p-3 text-xs leading-6 text-emerald-800"
-                    >
-                      <div className="mb-1 flex items-center justify-between gap-3 text-[11px] text-emerald-600">
-                        <span>{memo.createdByName || "시스템"}</span>
-                        {memo.createdAt && (
-                          <span>{formatMemoTime(memo.createdAt)}</span>
-                        )}
-                      </div>
+                  todayMemos.map((memo) => {
+                    const memoTime = formatMemoTime(memo.createdAt);
 
-                      <div className="whitespace-pre-line">
-                        {memo.memoText}
+                    return (
+                      <div
+                        key={memo.id}
+                        className="rounded-[8px] border border-emerald-100 bg-emerald-50 p-3 text-xs leading-6 text-emerald-800"
+                      >
+                        <div className="mb-1 flex items-center justify-between gap-3 text-[11px] text-emerald-600">
+                          <span>{memo.createdByName || "시스템"}</span>
+                          {memoTime ? <span>{memoTime}</span> : null}
+                        </div>
+
+                        <div className="whitespace-pre-line">
+                          {memo.memoText}
+                        </div>
                       </div>
-                    </div>
-                  ))
+                    );
+                  })
                 )}
               </div>
             </div>
