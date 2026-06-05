@@ -18,6 +18,7 @@ export type DoctorOption = {
   uid: string;
   displayName: string;
   email: string;
+  orderNo: number;
 };
 
 export type ReservationStatus =
@@ -108,6 +109,16 @@ function cleanText(value: unknown) {
   return String(value || "").trim();
 }
 
+function cleanNumber(value: unknown, fallback = 999999) {
+  const num = Number(value);
+
+  if (Number.isFinite(num)) {
+    return num;
+  }
+
+  return fallback;
+}
+
 function normalizeReservationStatus(value: unknown): ReservationStatus {
   const v = cleanText(value);
 
@@ -161,8 +172,12 @@ function mapReservationDoc(id: string, data: any): ReservationRecord {
     depositAmount: cleanText(data.depositAmount),
     consultArea: cleanText(data.consultArea),
 
-    doctors: Array.isArray(data.doctors) ? data.doctors : [],
-    coordinators: Array.isArray(data.coordinators) ? data.coordinators : [],
+    doctors: Array.isArray(data.doctors)
+      ? data.doctors.map(cleanText).filter(Boolean)
+      : [],
+    coordinators: Array.isArray(data.coordinators)
+      ? data.coordinators.map(cleanText).filter(Boolean)
+      : [],
 
     doctorStatusMap: data.doctorStatusMap || {},
     doctorStatusMetaMap: data.doctorStatusMetaMap || {},
@@ -182,6 +197,15 @@ function mapReservationDoc(id: string, data: any): ReservationRecord {
   };
 }
 
+function sortDoctors(doctors: DoctorOption[]) {
+  return [...doctors].sort((a, b) => {
+    return (
+      cleanNumber(a.orderNo) - cleanNumber(b.orderNo) ||
+      a.displayName.localeCompare(b.displayName)
+    );
+  });
+}
+
 export async function getDoctors(): Promise<DoctorOption[]> {
   const q = query(
     collection(db, "staff"),
@@ -191,15 +215,22 @@ export async function getDoctors(): Promise<DoctorOption[]> {
 
   const snap = await getDocs(q);
 
-  return snap.docs.map((docSnap) => {
-    const data = docSnap.data();
+  const doctors = snap.docs
+    .map((docSnap) => {
+      const data = docSnap.data();
 
-    return {
-      uid: docSnap.id,
-      displayName: cleanText(data.displayName),
-      email: cleanText(data.email),
-    };
-  });
+      return {
+        uid: docSnap.id,
+        displayName: cleanText(
+          data.displayName || data.display_name || data.name
+        ),
+        email: cleanText(data.email),
+        orderNo: cleanNumber(data.orderNo ?? data.order_no),
+      };
+    })
+    .filter((doctor) => doctor.displayName);
+
+  return sortDoctors(doctors);
 }
 
 export async function getAllReservations(): Promise<{
@@ -264,7 +295,7 @@ export async function createReservation(
   const name = cleanText(params.name);
   const reservationDate = cleanText(params.reservationDate);
   const doctors = Array.isArray(params.doctors)
-    ? params.doctors.filter(Boolean)
+    ? params.doctors.map(cleanText).filter(Boolean)
     : [];
 
   if (!name) {
@@ -336,7 +367,7 @@ export async function createReservation(
 
     doctors,
     coordinators: Array.isArray(params.coordinators)
-      ? params.coordinators.filter(Boolean)
+      ? params.coordinators.map(cleanText).filter(Boolean)
       : [],
 
     doctorStatusMap,
@@ -517,7 +548,7 @@ export async function updateReservationFull(
   const name = cleanText(params.name);
   const reservationDate = cleanText(params.reservationDate);
   const doctors = Array.isArray(params.doctors)
-    ? params.doctors.filter(Boolean)
+    ? params.doctors.map(cleanText).filter(Boolean)
     : [];
 
   if (!name) {
@@ -568,7 +599,7 @@ export async function updateReservationFull(
 
     doctors,
     coordinators: Array.isArray(params.coordinators)
-      ? params.coordinators.filter(Boolean)
+      ? params.coordinators.map(cleanText).filter(Boolean)
       : [],
 
     doctorStatusMap,
