@@ -262,6 +262,26 @@ function sortDoctors(doctors: DoctorOption[]) {
   });
 }
 
+function makeDoctorOptionsFromReservations(
+  reservations: ReservationRecord[]
+): DoctorOption[] {
+  const names = Array.from(
+    new Set(
+      reservations
+        .flatMap((item) => item.doctors || [])
+        .map(cleanText)
+        .filter(Boolean)
+    )
+  );
+
+  return names.map((name, index) => ({
+    uid: `fallback-doctor-${index}-${name}`,
+    displayName: name,
+    email: "",
+    orderNo: index + 1,
+  }));
+}
+
 export async function getDoctors(): Promise<DoctorOption[]> {
   const q = query(
     collection(db, "staff"),
@@ -293,12 +313,9 @@ export async function getAllReservations(): Promise<{
   reservations: ReservationRecord[];
   doctors: DoctorOption[];
 }> {
-  const [reservationSnap, doctors] = await Promise.all([
-    getDocs(
-      query(collection(db, "reservations"), orderBy("reservationDate", "desc"))
-    ),
-    getDoctors(),
-  ]);
+  const reservationSnap = await getDocs(
+    query(collection(db, "reservations"), orderBy("reservationDate", "desc"))
+  );
 
   const reservations = reservationSnap.docs
     .map((docSnap) => mapReservationDoc(docSnap.id, docSnap.data()))
@@ -309,7 +326,19 @@ export async function getAllReservations(): Promise<{
       return aa.localeCompare(bb);
     });
 
-  return { reservations, doctors };
+  let doctors: DoctorOption[] = [];
+
+  try {
+    doctors = await getDoctors();
+  } catch (error) {
+    console.error("[getAllReservations getDoctors error]", error);
+    doctors = makeDoctorOptionsFromReservations(reservations);
+  }
+
+  return {
+    reservations,
+    doctors: doctors.length ? doctors : makeDoctorOptionsFromReservations(reservations),
+  };
 }
 
 export function subscribeAllReservations(
@@ -323,9 +352,11 @@ export function subscribeAllReservations(
   let currentReservations: ReservationRecord[] = [];
 
   function emit() {
+    const fallbackDoctors = makeDoctorOptionsFromReservations(currentReservations);
+
     callback({
       reservations: currentReservations,
-      doctors: currentDoctors,
+      doctors: currentDoctors.length ? currentDoctors : fallbackDoctors,
     });
   }
 
@@ -335,12 +366,9 @@ export function subscribeAllReservations(
       emit();
     })
     .catch((error) => {
-      console.error(error);
-      onError?.(
-        error instanceof Error
-          ? error
-          : new Error("원장 목록을 불러오지 못했습니다.")
-      );
+      console.error("[getDoctors error in subscribeAllReservations]", error);
+      currentDoctors = [];
+      emit();
     });
 
   return onSnapshot(
@@ -358,7 +386,7 @@ export function subscribeAllReservations(
       emit();
     },
     (error) => {
-      console.error(error);
+      console.error("[reservations snapshot error in subscribeAllReservations]", error);
       onError?.(error);
     }
   );
@@ -376,9 +404,11 @@ export function subscribeTimelineReservations(
   let currentReservations: ReservationRecord[] = [];
 
   function emit() {
+    const fallbackDoctors = makeDoctorOptionsFromReservations(currentReservations);
+
     callback({
       reservations: currentReservations,
-      doctors: currentDoctors,
+      doctors: currentDoctors.length ? currentDoctors : fallbackDoctors,
     });
   }
 
@@ -388,12 +418,9 @@ export function subscribeTimelineReservations(
       emit();
     })
     .catch((error) => {
-      console.error(error);
-      onError?.(
-        error instanceof Error
-          ? error
-          : new Error("원장 목록을 불러오지 못했습니다.")
-      );
+      console.error("[getDoctors error in subscribeTimelineReservations]", error);
+      currentDoctors = [];
+      emit();
     });
 
   return onSnapshot(
@@ -414,7 +441,7 @@ export function subscribeTimelineReservations(
       emit();
     },
     (error) => {
-      console.error(error);
+      console.error("[reservations snapshot error in subscribeTimelineReservations]", error);
       onError?.(error);
     }
   );
@@ -424,16 +451,13 @@ export async function getTimelineReservations(date: string): Promise<{
   reservations: ReservationRecord[];
   doctors: DoctorOption[];
 }> {
-  const [reservationSnap, doctors] = await Promise.all([
-    getDocs(
-      query(
-        collection(db, "reservations"),
-        where("reservationDate", "==", date),
-        where("isDeleted", "==", false)
-      )
-    ),
-    getDoctors(),
-  ]);
+  const reservationSnap = await getDocs(
+    query(
+      collection(db, "reservations"),
+      where("reservationDate", "==", date),
+      where("isDeleted", "==", false)
+    )
+  );
 
   const reservations = reservationSnap.docs
     .map((docSnap) => mapReservationDoc(docSnap.id, docSnap.data()))
@@ -443,7 +467,19 @@ export async function getTimelineReservations(date: string): Promise<{
       return aa.localeCompare(bb);
     });
 
-  return { reservations, doctors };
+  let doctors: DoctorOption[] = [];
+
+  try {
+    doctors = await getDoctors();
+  } catch (error) {
+    console.error("[getTimelineReservations getDoctors error]", error);
+    doctors = makeDoctorOptionsFromReservations(reservations);
+  }
+
+  return {
+    reservations,
+    doctors: doctors.length ? doctors : makeDoctorOptionsFromReservations(reservations),
+  };
 }
 
 export async function createReservation(
