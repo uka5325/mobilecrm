@@ -89,6 +89,17 @@ function isSameStaff(a: StaffUser | null, b: StaffUser | null) {
   );
 }
 
+function LoadingScreen() {
+  return (
+    <main className="flex min-h-screen items-center justify-center bg-white">
+      <div className="text-center">
+        <div className="mx-auto mb-3 h-6 w-6 animate-spin rounded-full border-2 border-[#cfeee4] border-t-[#1d9e75]" />
+        <p className="text-sm text-gray-500">로딩 중...</p>
+      </div>
+    </main>
+  );
+}
+
 export default function AppShell({ children }: AppShellProps) {
   const router = useRouter();
   const pathname = usePathname();
@@ -96,11 +107,10 @@ export default function AppShell({ children }: AppShellProps) {
   const isLoginPage = pathname === "/login";
   const isTimelinePage = pathname.startsWith("/timeline");
 
+  const [mounted, setMounted] = useState(false);
   const [firebaseUser, setFirebaseUser] = useState<User | null>(null);
-  const [staffUser, setStaffUser] = useState<StaffUser | null>(() =>
-    getCachedStaff()
-  );
-  const [loading, setLoading] = useState(() => !getCachedStaff());
+  const [staffUser, setStaffUser] = useState<StaffUser | null>(null);
+  const [loading, setLoading] = useState(true);
 
   const currentPage = useMemo(() => {
     if (pathname === "/") return pageInfo["/"];
@@ -116,6 +126,10 @@ export default function AppShell({ children }: AppShellProps) {
           description: "상담회 운영 시스템",
         };
   }, [pathname]);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const refreshStaff = useCallback(
     async (user: User | null = firebaseUser, options?: { silent?: boolean }) => {
@@ -133,7 +147,7 @@ export default function AppShell({ children }: AppShellProps) {
       }
 
       if (!options?.silent) {
-        setLoading((prev) => prev && true);
+        setLoading(true);
       }
 
       try {
@@ -168,15 +182,17 @@ export default function AppShell({ children }: AppShellProps) {
   );
 
   useEffect(() => {
+    if (!mounted) return;
+
     if (isLoginPage) {
       setLoading(false);
       return;
     }
 
-    let mounted = true;
+    let alive = true;
 
     const unsubscribe = listenCurrentUser(async (user) => {
-      if (!mounted) return;
+      if (!alive) return;
 
       setFirebaseUser(user);
 
@@ -198,7 +214,7 @@ export default function AppShell({ children }: AppShellProps) {
       try {
         const staff = await getStaffByUid(user.uid);
 
-        if (!mounted) return;
+        if (!alive) return;
 
         if (!staff || !staff.active) {
           clearCachedStaff();
@@ -209,12 +225,17 @@ export default function AppShell({ children }: AppShellProps) {
         }
 
         setCachedStaff(staff);
-        setStaffUser(staff);
+
+        setStaffUser((prev) => {
+          if (isSameStaff(prev, staff)) return prev;
+          return staff;
+        });
+
         setLoading(false);
       } catch (error) {
         console.error("Auth check error:", error);
 
-        if (!mounted) return;
+        if (!alive) return;
 
         clearCachedStaff();
         setStaffUser(null);
@@ -224,19 +245,19 @@ export default function AppShell({ children }: AppShellProps) {
     });
 
     return () => {
-      mounted = false;
+      alive = false;
       unsubscribe();
     };
-  }, [isLoginPage, router]);
+  }, [mounted, isLoginPage, router]);
 
   useEffect(() => {
-    if (isLoginPage || !firebaseUser) return;
+    if (!mounted || isLoginPage || !firebaseUser) return;
 
     refreshStaff(firebaseUser, { silent: true });
-  }, [pathname, firebaseUser, isLoginPage, refreshStaff]);
+  }, [mounted, pathname, firebaseUser, isLoginPage, refreshStaff]);
 
   useEffect(() => {
-    if (isLoginPage) return;
+    if (!mounted || isLoginPage) return;
 
     function handleFocus() {
       if (firebaseUser) {
@@ -257,7 +278,7 @@ export default function AppShell({ children }: AppShellProps) {
       window.removeEventListener("focus", handleFocus);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, [firebaseUser, isLoginPage, refreshStaff]);
+  }, [mounted, firebaseUser, isLoginPage, refreshStaff]);
 
   async function handleLogout() {
     clearCachedStaff();
@@ -265,28 +286,20 @@ export default function AppShell({ children }: AppShellProps) {
     router.push("/login");
   }
 
-  const displayName = staffUser?.displayName || firebaseUser?.email || "사용자";
-  const roleName = staffUser?.role || "";
-  const avatarText = displayName.slice(0, 1).toUpperCase();
-
   if (isLoginPage) {
     return <>{children}</>;
   }
 
-  if (loading) {
-    return (
-      <main className="flex min-h-screen items-center justify-center bg-white">
-        <div className="text-center">
-          <div className="mx-auto mb-3 h-6 w-6 animate-spin rounded-full border-2 border-[#cfeee4] border-t-[#1d9e75]" />
-          <p className="text-sm text-gray-500">로딩 중...</p>
-        </div>
-      </main>
-    );
+  if (!mounted || loading) {
+    return <LoadingScreen />;
   }
+
+  const displayName = staffUser?.displayName || firebaseUser?.email || "사용자";
+  const roleName = staffUser?.role || "";
+  const avatarText = displayName.slice(0, 1).toUpperCase();
 
   return (
     <div className="min-h-screen bg-white lg:flex">
-      {/* PC sidebar */}
       <aside className="hidden w-[260px] shrink-0 flex-col justify-between bg-[#0f1923] px-6 py-8 lg:flex">
         <div>
           <div className="mb-4 flex h-[38px] w-[38px] items-center justify-center rounded-lg bg-[#1d9e75] text-xl text-white">
@@ -354,7 +367,6 @@ export default function AppShell({ children }: AppShellProps) {
         </div>
       </aside>
 
-      {/* Mobile top menu */}
       <header className="bg-[#0f1923] px-5 py-5 lg:hidden">
         <div className="flex items-center gap-4">
           <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-[#1d9e75] text-xl text-white">
