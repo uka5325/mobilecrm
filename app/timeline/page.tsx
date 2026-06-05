@@ -655,17 +655,20 @@ async function loadReservationNotes(item: ReservationRecord) {
     setDetailDoctors(item.doctors || []);
   }
 
-  function openDetail(item: ReservationRecord) {
-    setSelectedReservation(item);
-    setActiveTab("info");
-    setDetailError("");
-    setDetailMessage("");
-    setMemoText("");
-    fillDetailForm(item);
-    setDetailOpen(true);
-    loadReservationLogs(item);
-    loadReservationNotes(item);
-  }
+ function openDetail(item: ReservationRecord) {
+  setSelectedReservation(item);
+  setActiveTab("info");
+  setDetailError("");
+  setDetailMessage("");
+  setMemoText("");
+  setNotes([]);
+  setEditingNoteId("");
+  setEditingMemoText("");
+  fillDetailForm(item);
+  setDetailOpen(true);
+  loadReservationLogs(item);
+  loadReservationNotes(item);
+}
 
   function closeDetail() {
     setDetailOpen(false);
