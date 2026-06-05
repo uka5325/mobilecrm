@@ -344,7 +344,7 @@ function getSoftStatusColor(hex: string) {
   const color = String(hex || "").trim();
 
   if (/^#[0-9a-fA-F]{6}$/.test(color)) {
-    return `${color}14`;
+    return `${color}2E`;
   }
 
   return "#f3f4f6";
@@ -1790,12 +1790,13 @@ function KpiBox({
           ? {
               backgroundColor: getSoftStatusColor(validColor),
               color: validColor,
+              border: `1px solid ${validColor}33`,
             }
           : undefined
       }
     >
-      <div className="text-xs">{label}</div>
-      <div className="text-lg font-bold">{value}</div>
+      <div className="text-xs font-semibold opacity-90">{label}</div>
+      <div className="text-lg font-extrabold">{value}</div>
     </div>
   );
 }
