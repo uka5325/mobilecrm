@@ -1,13 +1,13 @@
 import {
   addDoc,
   collection,
+  doc,
   getDocs,
   orderBy,
   query,
   serverTimestamp,
   updateDoc,
   where,
-  doc,
 } from "firebase/firestore";
 import { db } from "./firebase";
 import type { StaffUser } from "./auth";
@@ -28,6 +28,10 @@ export type ReservationNote = {
   isDeleted: boolean;
 };
 
+function cleanText(value: unknown) {
+  return String(value || "").trim();
+}
+
 export async function getReservationNotes(
   reservationId: string,
   reservationDocId: string
@@ -46,16 +50,16 @@ export async function getReservationNotes(
 
     return {
       id: d.id,
-      reservationId: String(data.reservationId || ""),
-      reservationDocId: String(data.reservationDocId || reservationDocId || ""),
-      patientId: String(data.patientId || ""),
-      memoText: String(data.memoText || ""),
+      reservationId: cleanText(data.reservationId),
+      reservationDocId: cleanText(data.reservationDocId || reservationDocId),
+      patientId: cleanText(data.patientId),
+      memoText: cleanText(data.memoText),
       createdAt: data.createdAt,
-      createdBy: String(data.createdBy || ""),
-      createdByUid: String(data.createdByUid || ""),
+      createdBy: cleanText(data.createdBy),
+      createdByUid: cleanText(data.createdByUid),
       updatedAt: data.updatedAt,
-      updatedBy: String(data.updatedBy || ""),
-      updatedByUid: String(data.updatedByUid || ""),
+      updatedBy: cleanText(data.updatedBy),
+      updatedByUid: cleanText(data.updatedByUid),
       isDeleted: data.isDeleted === true,
     };
   });
@@ -91,7 +95,7 @@ export async function addReservationNote(params: {
   await createLog({
     action: "memo_create",
     targetType: "reservation",
-    targetId: ref.id,
+    targetId: params.reservationId,
     staff: params.staff,
     message: memoText,
     patientId: params.patientId,
@@ -104,6 +108,44 @@ export async function addReservationNote(params: {
   });
 
   return { success: true, id: ref.id };
+}
+
+export async function updateReservationNote(params: {
+  noteId: string;
+  reservationId: string;
+  patientId: string;
+  memoText: string;
+  staff: StaffUser;
+}) {
+  const memoText = params.memoText.trim();
+
+  if (!memoText) {
+    return { success: false, message: "메모 내용을 입력하세요." };
+  }
+
+  await updateDoc(doc(db, "reservationNotes", params.noteId), {
+    memoText,
+    updatedAt: serverTimestamp(),
+    updatedBy: params.staff.displayName,
+    updatedByUid: params.staff.uid,
+  });
+
+  await createLog({
+    action: "memo_update",
+    targetType: "reservation",
+    targetId: params.reservationId,
+    staff: params.staff,
+    message: "메모를 수정했습니다.",
+    patientId: params.patientId,
+    reservationId: params.reservationId,
+    before: null,
+    after: {
+      memoText,
+      noteId: params.noteId,
+    },
+  });
+
+  return { success: true };
 }
 
 export async function deleteReservationNote(params: {
@@ -122,13 +164,14 @@ export async function deleteReservationNote(params: {
   await createLog({
     action: "memo_delete",
     targetType: "reservation",
-    targetId: params.noteId,
+    targetId: params.reservationId,
     staff: params.staff,
     message: "메모를 삭제했습니다.",
     patientId: params.patientId,
     reservationId: params.reservationId,
     before: null,
     after: {
+      noteId: params.noteId,
       isDeleted: true,
     },
   });
