@@ -510,15 +510,23 @@ export default function TimelinePage() {
   }
 
 async function loadReservationNotes(item: ReservationRecord) {
+  console.log("[loadReservationNotes]", {
+    reservationId: item.reservationId,
+    reservationDocId: item.id,
+    patientId: item.patientId,
+  });
+
   try {
     const list = await getReservationNotes(
       item.reservationId,
       item.id,
       item.patientId
     );
+
+    console.log("[loaded notes]", list);
     setNotes(list);
   } catch (error) {
-    console.error(error);
+    console.error("[loadReservationNotes error]", error);
     setNotes([]);
   }
 }
