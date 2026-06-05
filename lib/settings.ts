@@ -1,9 +1,4 @@
-import {
-  doc,
-  getDoc,
-  serverTimestamp,
-  setDoc,
-} from "firebase/firestore";
+import { doc, getDoc, serverTimestamp, setDoc } from "firebase/firestore";
 import { db } from "./firebase";
 import type { StaffUser } from "./auth";
 import { createLog } from "./logs";
@@ -47,9 +42,33 @@ export type VisitStatusColorSetting = {
 function normalizeHexColor(value: unknown, fallback: string) {
   const raw = String(value || "").trim();
 
-  if (/^#[0-9a-fA-F]{6}$/.test(raw)) return raw;
+  if (/^#[0-9a-fA-F]{6}$/.test(raw)) {
+    return raw;
+  }
 
   return fallback;
+}
+
+function normalizeVisitStatusColors(
+  colors?: Partial<VisitStatusColorMap> | null
+): VisitStatusColorMap {
+  return {
+    내원전: normalizeHexColor(
+      colors?.내원전,
+      DEFAULT_VISIT_STATUS_COLORS.내원전
+    ),
+    대기: normalizeHexColor(colors?.대기, DEFAULT_VISIT_STATUS_COLORS.대기),
+    원상중: normalizeHexColor(
+      colors?.원상중,
+      DEFAULT_VISIT_STATUS_COLORS.원상중
+    ),
+    후상중: normalizeHexColor(
+      colors?.후상중,
+      DEFAULT_VISIT_STATUS_COLORS.후상중
+    ),
+    귀가: normalizeHexColor(colors?.귀가, DEFAULT_VISIT_STATUS_COLORS.귀가),
+    부도: normalizeHexColor(colors?.부도, DEFAULT_VISIT_STATUS_COLORS.부도),
+  };
 }
 
 export async function getVisitStatusColors(): Promise<VisitStatusColorMap> {
@@ -61,25 +80,9 @@ export async function getVisitStatusColors(): Promise<VisitStatusColorMap> {
   }
 
   const data = snap.data() as Partial<VisitStatusColorSetting>;
-  const colors = data.colors || {};
+  const colors = data.colors as Partial<VisitStatusColorMap> | undefined;
 
-  return {
-    내원전: normalizeHexColor(
-      colors.내원전,
-      DEFAULT_VISIT_STATUS_COLORS.내원전
-    ),
-    대기: normalizeHexColor(colors.대기, DEFAULT_VISIT_STATUS_COLORS.대기),
-    원상중: normalizeHexColor(
-      colors.원상중,
-      DEFAULT_VISIT_STATUS_COLORS.원상중
-    ),
-    후상중: normalizeHexColor(
-      colors.후상중,
-      DEFAULT_VISIT_STATUS_COLORS.후상중
-    ),
-    귀가: normalizeHexColor(colors.귀가, DEFAULT_VISIT_STATUS_COLORS.귀가),
-    부도: normalizeHexColor(colors.부도, DEFAULT_VISIT_STATUS_COLORS.부도),
-  };
+  return normalizeVisitStatusColors(colors);
 }
 
 export async function saveVisitStatusColors(
@@ -90,14 +93,7 @@ export async function saveVisitStatusColors(
     throw new Error("로그인 정보를 확인할 수 없습니다.");
   }
 
-  const normalizedColors: VisitStatusColorMap = {
-    내원전: normalizeHexColor(colors.내원전, DEFAULT_VISIT_STATUS_COLORS.내원전),
-    대기: normalizeHexColor(colors.대기, DEFAULT_VISIT_STATUS_COLORS.대기),
-    원상중: normalizeHexColor(colors.원상중, DEFAULT_VISIT_STATUS_COLORS.원상중),
-    후상중: normalizeHexColor(colors.후상중, DEFAULT_VISIT_STATUS_COLORS.후상중),
-    귀가: normalizeHexColor(colors.귀가, DEFAULT_VISIT_STATUS_COLORS.귀가),
-    부도: normalizeHexColor(colors.부도, DEFAULT_VISIT_STATUS_COLORS.부도),
-  };
+  const normalizedColors = normalizeVisitStatusColors(colors);
 
   const ref = doc(db, "appSettings", "visitStatusColors");
 
