@@ -1058,6 +1058,79 @@ export default function TimelinePage() {
     }
   }
 
+
+  function renderNoteCard(note: ReservationNote, compact = false) {
+    const isEditing = editingNoteId === note.id;
+
+    return (
+      <div
+        key={note.id}
+        className={
+          compact
+            ? "rounded-xl bg-gray-50 px-4 py-3 text-sm"
+            : "rounded-xl border border-[#edf0f3] bg-white p-4 text-sm"
+        }
+      >
+        {isEditing ? (
+          <>
+            <textarea
+              rows={compact ? 2 : 3}
+              value={editingMemoText}
+              onChange={(e) => setEditingMemoText(e.target.value)}
+              className="w-full resize-none rounded-xl border border-[#dfe3e8] bg-white px-3 py-2 text-sm transition focus:border-emerald-500 focus:outline-none"
+            />
+
+            <div className="mt-2 flex justify-end gap-3 text-xs">
+              <button
+                onClick={handleCancelEditNote}
+                className="text-gray-500 hover:underline"
+              >
+                취소
+              </button>
+              <button
+                onClick={() => handleUpdateNote(note)}
+                className="font-semibold text-blue-600 hover:underline"
+              >
+                저장
+              </button>
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="mb-1 flex items-center justify-between gap-2">
+              <span className="truncate font-semibold text-emerald-700">
+                {note.createdBy || "작성자"}
+              </span>
+
+              <span className="shrink-0 text-xs text-gray-400">
+                {formatLogDate(note.createdAt)}
+              </span>
+            </div>
+
+            <div className="whitespace-pre-line leading-6 text-gray-700">
+              {note.memoText}
+            </div>
+
+            <div className="mt-2 flex justify-end gap-3 text-xs">
+              <button
+                onClick={() => handleStartEditNote(note)}
+                className="text-blue-500 hover:underline"
+              >
+                수정
+              </button>
+              <button
+                onClick={() => handleDeleteNote(note)}
+                className="text-red-500 hover:underline"
+              >
+                삭제
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    );
+  }
+
   const selectedStatus = selectedReservation?.operationStatus || "내원전";
   const recentNotes = notes.slice(0, 3);
 
@@ -1555,7 +1628,7 @@ export default function TimelinePage() {
                   <div className="mt-5 border-t border-[#edf0f3] pt-4">
                     <div className="mb-2 flex items-center justify-between">
                       <label className="text-xs font-semibold text-gray-500">
-                        메모
+                        최근 메모
                       </label>
 
                       <button
@@ -1587,38 +1660,7 @@ export default function TimelinePage() {
                           등록된 메모가 없습니다.
                         </div>
                       ) : (
-                        recentNotes.map((note) => (
-                          <div
-                            key={note.id}
-                            className="rounded-xl bg-gray-50 px-4 py-3 text-sm"
-                          >
-                            <div className="whitespace-pre-line leading-6 text-gray-700">
-                              {note.memoText}
-                            </div>
-
-                            <div className="mt-2 flex items-center justify-between text-xs text-gray-400">
-                              <span>{note.createdBy || "작성자"}</span>
-
-                              <div className="flex gap-2">
-                                <button
-                                  onClick={() => {
-                                    setActiveTab("notes");
-                                    handleStartEditNote(note);
-                                  }}
-                                  className="text-blue-500 hover:underline"
-                                >
-                                  수정
-                                </button>
-                                <button
-                                  onClick={() => handleDeleteNote(note)}
-                                  className="text-red-500 hover:underline"
-                                >
-                                  삭제
-                                </button>
-                              </div>
-                            </div>
-                          </div>
-                        ))
+                        recentNotes.map((note) => renderNoteCard(note, true))
                       )}
                     </div>
                   </div>
@@ -1648,71 +1690,7 @@ export default function TimelinePage() {
                         등록된 메모가 없습니다.
                       </div>
                     ) : (
-                      notes.map((note) => (
-                        <div
-                          key={note.id}
-                          className="rounded-xl border border-[#edf0f3] bg-white p-4 text-sm"
-                        >
-                          {editingNoteId === note.id ? (
-                            <>
-                              <textarea
-                                rows={3}
-                                value={editingMemoText}
-                                onChange={(e) =>
-                                  setEditingMemoText(e.target.value)
-                                }
-                                className="w-full resize-none rounded-xl border border-[#dfe3e8] px-3 py-2 text-sm transition focus:border-emerald-500 focus:outline-none"
-                              />
-
-                              <div className="mt-2 flex justify-end gap-3 text-xs">
-                                <button
-                                  onClick={handleCancelEditNote}
-                                  className="text-gray-500 hover:underline"
-                                >
-                                  취소
-                                </button>
-                                <button
-                                  onClick={() => handleUpdateNote(note)}
-                                  className="font-semibold text-blue-600 hover:underline"
-                                >
-                                  저장
-                                </button>
-                              </div>
-                            </>
-                          ) : (
-                            <>
-                              <div className="mb-1 flex items-center justify-between">
-                                <span className="font-semibold text-emerald-700">
-                                  {note.createdBy || "작성자"}
-                                </span>
-
-                                <span className="text-xs text-gray-400">
-                                  {formatLogDate(note.createdAt)}
-                                </span>
-                              </div>
-
-                              <div className="whitespace-pre-line leading-6 text-gray-700">
-                                {note.memoText}
-                              </div>
-
-                              <div className="mt-2 flex justify-end gap-3 text-xs">
-                                <button
-                                  onClick={() => handleStartEditNote(note)}
-                                  className="text-blue-500 hover:underline"
-                                >
-                                  수정
-                                </button>
-                                <button
-                                  onClick={() => handleDeleteNote(note)}
-                                  className="text-red-500 hover:underline"
-                                >
-                                  삭제
-                                </button>
-                              </div>
-                            </>
-                          )}
-                        </div>
-                      ))
+                      notes.map((note) => renderNoteCard(note))
                     )}
                   </div>
                 </div>
