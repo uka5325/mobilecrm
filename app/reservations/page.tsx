@@ -24,6 +24,13 @@ import {
   parseBirthInfo,
 } from "@/lib/reservationUtils";
 import { db } from "@/lib/firebase";
+import {
+  DEFAULT_VISIT_STATUS_COLORS,
+  getVisitStatusColors,
+  VISIT_STATUS_LIST,
+  type VisitStatus,
+  type VisitStatusColorMap,
+} from "@/lib/settings";
 
 const STATUS_LIST: ReservationStatus[] = [
   "내원전",
@@ -52,21 +59,32 @@ function todayString() {
   );
 }
 
-function statusClass(status: string) {
-  switch (status) {
-    case "대기":
-      return "bg-yellow-50 text-yellow-700";
-    case "원상중":
-      return "bg-blue-50 text-blue-700";
-    case "후상중":
-      return "bg-teal-50 text-teal-700";
-    case "귀가":
-      return "bg-green-50 text-green-700";
-    case "부도":
-      return "bg-red-50 text-red-700";
-    default:
-      return "bg-gray-100 text-gray-600";
+function getStatusColor(status: string, colors: VisitStatusColorMap) {
+  if (VISIT_STATUS_LIST.includes(status as VisitStatus)) {
+    return colors[status as VisitStatus] || DEFAULT_VISIT_STATUS_COLORS.내원전;
   }
+
+  return DEFAULT_VISIT_STATUS_COLORS.내원전;
+}
+
+function getSoftStatusColor(hex: string) {
+  const color = String(hex || "").trim();
+
+  if (/^#[0-9a-fA-F]{6}$/.test(color)) {
+    return `${color}2E`;
+  }
+
+  return "#f3f4f6";
+}
+
+function getStatusSelectStyle(status: string, colors: VisitStatusColorMap) {
+  const color = getStatusColor(status, colors);
+
+  return {
+    backgroundColor: getSoftStatusColor(color),
+    color,
+    borderColor: `${color}33`,
+  };
 }
 
 function formatDateGroup(dateStr: string) {
@@ -100,6 +118,10 @@ export default function ReservationsPage() {
 
   const [reservations, setReservations] = useState<ReservationRecord[]>([]);
   const [doctors, setDoctors] = useState<DoctorOption[]>([]);
+
+  const [statusColors, setStatusColors] = useState<VisitStatusColorMap>(
+    DEFAULT_VISIT_STATUS_COLORS
+  );
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -183,8 +205,19 @@ export default function ReservationsPage() {
     }
   }
 
+  async function loadReservationSettings() {
+    try {
+      const colors = await getVisitStatusColors();
+      setStatusColors(colors);
+    } catch (error) {
+      console.error("예약관리 설정 색상 로딩 오류:", error);
+      setStatusColors(DEFAULT_VISIT_STATUS_COLORS);
+    }
+  }
+
   useEffect(() => {
     loadData();
+    loadReservationSettings();
   }, []);
 
   const filteredReservations = useMemo(() => {
@@ -790,6 +823,7 @@ export default function ReservationsPage() {
                     const date = item.reservationDate || "날짜 미정";
                     const time = normalizeTimeText(item.reservationTime || "");
                     const birthInfo = getReservationBirthInfo(item);
+                    const currentStatus = item.operationStatus || "내원전";
 
                     if (!filterDate && date !== lastDate) {
                       rows.push(
@@ -878,16 +912,18 @@ export default function ReservationsPage() {
 
                         <td className="border-b border-gray-100 px-4 py-3">
                           <select
-                            value={item.operationStatus}
+                            value={currentStatus}
                             onChange={(e) =>
                               handleStatusChange(
                                 item,
                                 e.target.value as ReservationStatus
                               )
                             }
-                            className={`rounded-full border-0 px-3 py-1 text-xs outline-none ${statusClass(
-                              item.operationStatus
-                            )}`}
+                            className="rounded-full border px-3 py-1 text-xs font-semibold outline-none transition"
+                            style={getStatusSelectStyle(
+                              currentStatus,
+                              statusColors
+                            )}
                           >
                             {STATUS_LIST.map((status) => (
                               <option key={status} value={status}>
