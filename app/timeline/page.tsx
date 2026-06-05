@@ -29,12 +29,6 @@ import {
 } from "@/lib/logs";
 import { db } from "@/lib/firebase";
 import {
-  addReservationNote,
-  deleteReservationNote,
-  getReservationNotes,
-  type ReservationNote,
-} from "@/lib/reservationNotes";
-import {
   DEFAULT_VISIT_STATUS_COLORS,
   getConferenceMemos,
   getVisitStatusColors,
@@ -42,6 +36,13 @@ import {
   type VisitStatus,
   type VisitStatusColorMap,
 } from "@/lib/settings";
+import {
+  addReservationNote,
+  deleteReservationNote,
+  getReservationNotes,
+  updateReservationNote,
+  type ReservationNote,
+} from "@/lib/reservationNotes";
 
 const START_H = 9;
 const END_H = 21;
@@ -318,6 +319,7 @@ function getLogBadgeClass(action: string) {
   return "bg-gray-100 text-gray-600";
 }
 
+
 function splitComma(value: string) {
   return String(value || "")
     .split(",")
@@ -409,7 +411,8 @@ export default function TimelinePage() {
   );
   const [memoText, setMemoText] = useState("");
   const [notes, setNotes] = useState<ReservationNote[]>([]);
-  const [notesLoading, setNotesLoading] = useState(false);
+  const [editingNoteId, setEditingNoteId] = useState("");
+  const [editingMemoText, setEditingMemoText] = useState("");
 
   const [newDoctors, setNewDoctors] = useState<string[]>([]);
   const [newError, setNewError] = useState("");
@@ -492,16 +495,12 @@ export default function TimelinePage() {
   }
 
   async function loadReservationNotes(item: ReservationRecord) {
-    setNotesLoading(true);
-
     try {
       const list = await getReservationNotes(item.reservationId, item.id);
       setNotes(list);
     } catch (error) {
       console.error(error);
       setNotes([]);
-    } finally {
-      setNotesLoading(false);
     }
   }
 
@@ -676,7 +675,8 @@ export default function TimelinePage() {
     setDetailDoctors([]);
     setMemoText("");
     setNotes([]);
-    setNotesLoading(false);
+    setEditingNoteId("");
+    setEditingMemoText("");
   }
 
   function toggleNewDoctor(name: string) {
@@ -924,27 +924,54 @@ export default function TimelinePage() {
     }
   }
 
-  async function handleDeleteMemo(note: ReservationNote) {
+  function handleStartEditNote(note: ReservationNote) {
+    setEditingNoteId(note.id);
+    setEditingMemoText(note.memoText);
+  }
+
+  function handleCancelEditNote() {
+    setEditingNoteId("");
+    setEditingMemoText("");
+  }
+
+  async function handleUpdateNote(note: ReservationNote) {
     if (!currentUser || !selectedReservation) return;
 
-    const ok = confirm("이 메모를 삭제할까요?");
+    const result = await updateReservationNote({
+      noteId: note.id,
+      reservationId: selectedReservation.reservationId,
+      patientId: selectedReservation.patientId || "",
+      memoText: editingMemoText,
+      staff: currentUser,
+    });
+
+    if (!result.success) {
+      alert(result.message || "메모 수정 실패");
+      return;
+    }
+
+    handleCancelEditNote();
+    await loadReservationNotes(selectedReservation);
+    await loadReservationLogs(selectedReservation);
+    await refreshLatestLog(selectedReservation);
+  }
+
+  async function handleDeleteNote(note: ReservationNote) {
+    if (!currentUser || !selectedReservation) return;
+
+    const ok = confirm("메모를 삭제할까요?");
     if (!ok) return;
 
-    try {
-      await deleteReservationNote({
-        noteId: note.id,
-        reservationId: selectedReservation.reservationId,
-        patientId: selectedReservation.patientId || "",
-        staff: currentUser,
-      });
+    await deleteReservationNote({
+      noteId: note.id,
+      reservationId: selectedReservation.reservationId,
+      patientId: selectedReservation.patientId || "",
+      staff: currentUser,
+    });
 
-      await loadReservationNotes(selectedReservation);
-      await loadReservationLogs(selectedReservation);
-      await refreshLatestLog(selectedReservation);
-    } catch (error) {
-      console.error(error);
-      alert("메모 삭제 중 오류가 발생했습니다.");
-    }
+    await loadReservationNotes(selectedReservation);
+    await loadReservationLogs(selectedReservation);
+    await refreshLatestLog(selectedReservation);
   }
 
   async function handleDeleteInvoiceFromDetail() {
@@ -1544,11 +1571,7 @@ export default function TimelinePage() {
                     </button>
 
                     <div className="mt-3 space-y-2">
-                      {notesLoading ? (
-                        <div className="rounded-xl bg-gray-50 px-4 py-3 text-sm text-gray-400">
-                          메모를 불러오는 중...
-                        </div>
-                      ) : recentNotes.length === 0 ? (
+                      {recentNotes.length === 0 ? (
                         <div className="rounded-xl bg-gray-50 px-4 py-3 text-sm text-gray-400">
                           등록된 메모가 없습니다.
                         </div>
@@ -1559,21 +1582,29 @@ export default function TimelinePage() {
                             className="rounded-xl bg-gray-50 px-4 py-3 text-sm"
                           >
                             <div className="whitespace-pre-line leading-6 text-gray-700">
-                              {note.memoText || ""}
+                              {note.memoText}
                             </div>
 
                             <div className="mt-2 flex items-center justify-between text-xs text-gray-400">
-                              <span>
-                                {note.createdBy || "작성자"} · {formatLogDate(note.createdAt)}
-                              </span>
+                              <span>{note.createdBy || "작성자"}</span>
 
-                              <button
-                                type="button"
-                                onClick={() => handleDeleteMemo(note)}
-                                className="text-red-500 hover:underline"
-                              >
-                                삭제
-                              </button>
+                              <div className="flex gap-2">
+                                <button
+                                  onClick={() => {
+                                    setActiveTab("notes");
+                                    handleStartEditNote(note);
+                                  }}
+                                  className="text-blue-500 hover:underline"
+                                >
+                                  수정
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteNote(note)}
+                                  className="text-red-500 hover:underline"
+                                >
+                                  삭제
+                                </button>
+                              </div>
                             </div>
                           </div>
                         ))
@@ -1601,11 +1632,7 @@ export default function TimelinePage() {
                   </button>
 
                   <div className="mt-4 space-y-3">
-                    {notesLoading ? (
-                      <div className="rounded-xl border border-[#edf0f3] bg-white p-4 text-sm text-gray-400">
-                        메모를 불러오는 중...
-                      </div>
-                    ) : notes.length === 0 ? (
+                    {notes.length === 0 ? (
                       <div className="rounded-xl border border-[#edf0f3] bg-white p-4 text-sm text-gray-400">
                         등록된 메모가 없습니다.
                       </div>
@@ -1615,29 +1642,64 @@ export default function TimelinePage() {
                           key={note.id}
                           className="rounded-xl border border-[#edf0f3] bg-white p-4 text-sm"
                         >
-                          <div className="mb-1 flex items-center justify-between">
-                            <span className="font-semibold text-emerald-700">
-                              {note.createdBy || "작성자"}
-                            </span>
+                          {editingNoteId === note.id ? (
+                            <>
+                              <textarea
+                                rows={3}
+                                value={editingMemoText}
+                                onChange={(e) =>
+                                  setEditingMemoText(e.target.value)
+                                }
+                                className="w-full resize-none rounded-xl border border-[#dfe3e8] px-3 py-2 text-sm transition focus:border-emerald-500 focus:outline-none"
+                              />
 
-                            <span className="text-xs text-gray-400">
-                              {formatLogDate(note.createdAt)}
-                            </span>
-                          </div>
+                              <div className="mt-2 flex justify-end gap-3 text-xs">
+                                <button
+                                  onClick={handleCancelEditNote}
+                                  className="text-gray-500 hover:underline"
+                                >
+                                  취소
+                                </button>
+                                <button
+                                  onClick={() => handleUpdateNote(note)}
+                                  className="font-semibold text-blue-600 hover:underline"
+                                >
+                                  저장
+                                </button>
+                              </div>
+                            </>
+                          ) : (
+                            <>
+                              <div className="mb-1 flex items-center justify-between">
+                                <span className="font-semibold text-emerald-700">
+                                  {note.createdBy || "작성자"}
+                                </span>
 
-                          <div className="whitespace-pre-line leading-6 text-gray-700">
-                            {note.memoText || ""}
-                          </div>
+                                <span className="text-xs text-gray-400">
+                                  {formatLogDate(note.createdAt)}
+                                </span>
+                              </div>
 
-                          <div className="mt-3 flex justify-end">
-                            <button
-                              type="button"
-                              onClick={() => handleDeleteMemo(note)}
-                              className="text-xs text-red-500 hover:underline"
-                            >
-                              삭제
-                            </button>
-                          </div>
+                              <div className="whitespace-pre-line leading-6 text-gray-700">
+                                {note.memoText}
+                              </div>
+
+                              <div className="mt-2 flex justify-end gap-3 text-xs">
+                                <button
+                                  onClick={() => handleStartEditNote(note)}
+                                  className="text-blue-500 hover:underline"
+                                >
+                                  수정
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteNote(note)}
+                                  className="text-red-500 hover:underline"
+                                >
+                                  삭제
+                                </button>
+                              </div>
+                            </>
+                          )}
                         </div>
                       ))
                     )}
