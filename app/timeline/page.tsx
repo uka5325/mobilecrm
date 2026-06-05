@@ -929,39 +929,64 @@ async function loadReservationNotes(item: ReservationRecord) {
     await refreshLatestLog(updated);
   }
 
-  async function handleAddMemo() {
-    if (!currentUser || !selectedReservation) return;
+ async function handleAddMemo() {
+  console.log("[handleAddMemo clicked]", {
+    currentUser,
+    selectedReservation,
+    memoText,
+  });
 
-    const text = memoText.trim();
+  if (!currentUser) {
+    alert("로그인 정보가 없습니다.");
+    return;
+  }
 
-    if (!text) {
-      alert("메모 내용을 입력하세요.");
+  if (!selectedReservation) {
+    alert("선택된 예약 정보가 없습니다.");
+    return;
+  }
+
+  const text = memoText.trim();
+
+  if (!text) {
+    alert("메모 내용을 입력하세요.");
+    return;
+  }
+
+  try {
+    console.log("[before addReservationNote]", {
+      reservationId: selectedReservation.reservationId,
+      reservationDocId: selectedReservation.id,
+      patientId: selectedReservation.patientId || "",
+      memoText: text,
+    });
+
+    const result = await addReservationNote({
+      reservationId: selectedReservation.reservationId,
+      reservationDocId: selectedReservation.id,
+      patientId: selectedReservation.patientId || "",
+      memoText: text,
+      staff: currentUser,
+    });
+
+    console.log("[addReservationNote result]", result);
+
+    if (!result.success) {
+      alert(result.message || "메모 저장 실패");
       return;
     }
 
-    try {
-      const result = await addReservationNote({
-        reservationId: selectedReservation.reservationId,
-        reservationDocId: selectedReservation.id,
-        patientId: selectedReservation.patientId || "",
-        memoText: text,
-        staff: currentUser,
-      });
+    setMemoText("");
+    await loadReservationNotes(selectedReservation);
+    await loadReservationLogs(selectedReservation);
+    await refreshLatestLog(selectedReservation);
 
-      if (!result.success) {
-        alert(result.message || "메모 저장 실패");
-        return;
-      }
-
-      setMemoText("");
-      await loadReservationNotes(selectedReservation);
-      await loadReservationLogs(selectedReservation);
-      await refreshLatestLog(selectedReservation);
-    } catch (error) {
-      console.error(error);
-      alert("메모 저장 중 오류가 발생했습니다.");
-    }
+    alert("메모 저장 완료");
+  } catch (error) {
+    console.error("[handleAddMemo error]", error);
+    alert("메모 저장 중 오류가 발생했습니다.");
   }
+}
 
   function handleStartEditNote(note: ReservationNote) {
     setEditingNoteId(note.id);
