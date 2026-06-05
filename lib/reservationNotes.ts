@@ -90,7 +90,7 @@ export async function addReservationNote(params: {
 
   await createLog({
     action: "memo_create",
-    targetType: "reservationNote",
+    targetType: "reservation",
     targetId: ref.id,
     staff: params.staff,
     message: memoText,
@@ -121,7 +121,7 @@ export async function deleteReservationNote(params: {
 
   await createLog({
     action: "memo_delete",
-    targetType: "reservationNote",
+    targetType: "reservation",
     targetId: params.noteId,
     staff: params.staff,
     message: "메모를 삭제했습니다.",
