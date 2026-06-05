@@ -479,19 +479,22 @@ export default function TimelinePage() {
   }
 
   async function loadTimelineSettings(date = selectedDate) {
-    try {
-      const [loadedColors, loadedMemos] = await Promise.all([
-        getVisitStatusColors(),
-        getConferenceMemos(date, 10),
-      ]);
-
-      setStatusColors(loadedColors);
-      setTodayMemos(loadedMemos.map((memo) => memo.memoText).filter(Boolean));
-    } catch (error) {
-      console.error("Timeline settings load error:", error);
-    }
+  try {
+    const loadedColors = await getVisitStatusColors();
+    setStatusColors(loadedColors);
+  } catch (error) {
+    console.error("[getVisitStatusColors error]", error);
+    setStatusColors(DEFAULT_VISIT_STATUS_COLORS);
   }
 
+  try {
+    const loadedMemos = await getConferenceMemos(date, 10);
+    setTodayMemos(loadedMemos.map((memo) => memo.memoText).filter(Boolean));
+  } catch (error) {
+    console.error("[getConferenceMemos error]", error);
+    setTodayMemos([]);
+  }
+}
   async function loadReservationLogs(item: ReservationRecord) {
     setLogsLoading(true);
     setLogsError("");
