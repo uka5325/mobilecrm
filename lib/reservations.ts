@@ -7,7 +7,6 @@ import {
   onSnapshot,
   orderBy,
   query,
-  runTransaction,
   serverTimestamp,
   updateDoc,
   where,
@@ -31,16 +30,6 @@ export type ReservationStatus =
   | "후상중"
   | "귀가"
   | "부도";
-
-export type PatientRecord = {
-  patientId: string;
-  name: string;
-  birth: string;
-  birthInput: string;
-  gender: string;
-  phone: string;
-  nationality: string;
-};
 
 export type ReservationRecord = {
   id: string;
@@ -116,12 +105,18 @@ function cleanText(value: unknown) {
 
 function cleanNumber(value: unknown, fallback = 999999) {
   const num = Number(value);
+  return Number.isFinite(num) ? num : fallback;
+}
 
-  if (Number.isFinite(num)) {
-    return num;
-  }
+function makeDateBasedId(prefix: "P" | "R") {
+  const now = new Date();
 
-  return fallback;
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, "0");
+  const d = String(now.getDate()).padStart(2, "0");
+  const random = Math.floor(100000 + Math.random() * 900000);
+
+  return `${prefix}-${y}${m}${d}-${random}`;
 }
 
 function normalizeReservationStatus(value: unknown): ReservationStatus {
@@ -141,57 +136,6 @@ function normalizeReservationStatus(value: unknown): ReservationStatus {
   return "내원전";
 }
 
-function formatLegacyClientId(prefix: string, serial: number) {
-  return `${prefix}-${String(serial).padStart(4, "0")}`;
-}
-
-function extractLegacySerial(value: unknown, prefix: string) {
-  const raw = cleanText(value);
-  const match = raw.match(new RegExp(`^${prefix}-(\\d{1,})(?:\\.\\d+)?$`, "i"));
-
-  if (!match) return 0;
-
-  const serial = Number(match[1]);
-  return Number.isFinite(serial) ? serial : 0;
-}
-
-async function getNextLegacySerial(prefix: "P" | "R") {
-  const counterRef = doc(db, "counters", prefix === "P" ? "patients" : "reservations");
-  const collectionName = prefix === "P" ? "patients" : "reservations";
-  const fieldName = prefix === "P" ? "patientId" : "reservationId";
-
-  return runTransaction(db, async (transaction) => {
-    const counterSnap = await transaction.get(counterRef);
-    let current = counterSnap.exists() ? cleanNumber(counterSnap.data().current, 0) : 0;
-
-    if (!counterSnap.exists()) {
-      const existingSnap = await getDocs(collection(db, collectionName));
-      current = existingSnap.docs.reduce((max, docSnap) => {
-        return Math.max(max, extractLegacySerial(docSnap.data()[fieldName], prefix));
-      }, 0);
-    }
-
-    const next = current + 1;
-
-    transaction.set(
-      counterRef,
-      {
-        current: next,
-        prefix,
-        updatedAt: serverTimestamp(),
-      },
-      { merge: true }
-    );
-
-    return next;
-  });
-}
-
-async function makeLegacyClientId(prefix: "P" | "R") {
-  const serial = await getNextLegacySerial(prefix);
-  return formatLegacyClientId(prefix, serial);
-}
-
 function normalizeDuplicateKey(params: CreateReservationParams) {
   const doctors = Array.isArray(params.doctors)
     ? params.doctors.map(cleanText).filter(Boolean).sort().join("|")
@@ -204,58 +148,6 @@ function normalizeDuplicateKey(params: CreateReservationParams) {
     cleanText(params.phone).replace(/[^0-9+]/g, ""),
     doctors,
   ].join("__");
-}
-
-async function hasDuplicateReservation(params: CreateReservationParams) {
-  const reservationId = cleanText(params.reservationId);
-
-  if (reservationId) {
-    const idSnap = await getDocs(
-      query(
-        collection(db, "reservations"),
-        where("reservationId", "==", reservationId),
-        where("isDeleted", "==", false)
-      )
-    );
-
-    if (!idSnap.empty) return true;
-  }
-
-  const reservationDate = cleanText(params.reservationDate);
-  const reservationTime = cleanText(params.reservationTime);
-  const name = cleanText(params.name);
-
-  if (!reservationDate || !name) return false;
-
-  const snap = await getDocs(
-    query(
-      collection(db, "reservations"),
-      where("reservationDate", "==", reservationDate),
-      where("isDeleted", "==", false)
-    )
-  );
-
-  const key = normalizeDuplicateKey({ ...params, reservationTime });
-
-  return snap.docs
-    .map((docSnap) => mapReservationDoc(docSnap.id, docSnap.data()))
-    .some(
-      (item) =>
-        normalizeDuplicateKey({
-          name: item.name,
-          birthInput: item.birthInput,
-          birth: item.birth,
-          gender: item.gender,
-          phone: item.phone,
-          nationality: item.nationality,
-          consultArea: item.consultArea,
-          reservationDate: item.reservationDate,
-          reservationTime: item.reservationTime,
-          doctors: item.doctors,
-          coordinators: item.coordinators,
-          depositAmount: item.depositAmount,
-        }) === key
-    );
 }
 
 function mapReservationDoc(id: string, data: any): ReservationRecord {
@@ -309,10 +201,62 @@ function mapReservationDoc(id: string, data: any): ReservationRecord {
   };
 }
 
+async function hasDuplicateReservation(params: CreateReservationParams) {
+  const reservationId = cleanText(params.reservationId);
+
+  if (reservationId) {
+    const idSnap = await getDocs(
+      query(
+        collection(db, "reservations"),
+        where("reservationId", "==", reservationId),
+        where("isDeleted", "==", false)
+      )
+    );
+
+    if (!idSnap.empty) return true;
+  }
+
+  const reservationDate = cleanText(params.reservationDate);
+  const name = cleanText(params.name);
+
+  if (!reservationDate || !name) return false;
+
+  const snap = await getDocs(
+    query(
+      collection(db, "reservations"),
+      where("reservationDate", "==", reservationDate),
+      where("isDeleted", "==", false)
+    )
+  );
+
+  const key = normalizeDuplicateKey(params);
+
+  return snap.docs
+    .map((docSnap) => mapReservationDoc(docSnap.id, docSnap.data()))
+    .some(
+      (item) =>
+        normalizeDuplicateKey({
+          name: item.name,
+          birthInput: item.birthInput,
+          birth: item.birth,
+          gender: item.gender,
+          phone: item.phone,
+          nationality: item.nationality,
+          consultArea: item.consultArea,
+          reservationDate: item.reservationDate,
+          reservationTime: item.reservationTime,
+          doctors: item.doctors,
+          coordinators: item.coordinators,
+          depositAmount: item.depositAmount,
+        }) === key
+    );
+}
+
 function sortDoctors(doctors: DoctorOption[]) {
   return [...doctors].sort((a, b) => {
     return (
-      cleanNumber(a.orderNo) - cleanNumber(b.orderNo) ||
+      cleanNumber(a.orderNo) -
+        cleanNumber(b.orderNo) ||
       a.displayName.localeCompare(b.displayName)
     );
   });
@@ -365,10 +309,7 @@ export async function getAllReservations(): Promise<{
       return aa.localeCompare(bb);
     });
 
-  return {
-    reservations,
-    doctors,
-  };
+  return { reservations, doctors };
 }
 
 export function subscribeAllReservations(
@@ -382,7 +323,10 @@ export function subscribeAllReservations(
   let currentReservations: ReservationRecord[] = [];
 
   function emit() {
-    callback({ reservations: currentReservations, doctors: currentDoctors });
+    callback({
+      reservations: currentReservations,
+      doctors: currentDoctors,
+    });
   }
 
   getDoctors()
@@ -432,7 +376,10 @@ export function subscribeTimelineReservations(
   let currentReservations: ReservationRecord[] = [];
 
   function emit() {
-    callback({ reservations: currentReservations, doctors: currentDoctors });
+    callback({
+      reservations: currentReservations,
+      doctors: currentDoctors,
+    });
   }
 
   getDoctors()
@@ -496,10 +443,7 @@ export async function getTimelineReservations(date: string): Promise<{
       return aa.localeCompare(bb);
     });
 
-  return {
-    reservations,
-    doctors,
-  };
+  return { reservations, doctors };
 }
 
 export async function createReservation(
@@ -534,9 +478,8 @@ export async function createReservation(
     };
   }
 
-  const patientId = cleanText(params.patientId) || (await makeLegacyClientId("P"));
-  const reservationId =
-    cleanText(params.reservationId) || (await makeLegacyClientId("R"));
+  const patientId = cleanText(params.patientId) || makeDateBasedId("P");
+  const reservationId = cleanText(params.reservationId) || makeDateBasedId("R");
 
   const parsedBirth = parseBirthInfo(
     params.birthInput || params.birth || "",
@@ -613,6 +556,7 @@ export async function createReservation(
   };
 
   await addDoc(collection(db, "patients"), patientPayload);
+
   const reservationRef = await addDoc(
     collection(db, "reservations"),
     reservationPayload
@@ -796,6 +740,7 @@ export async function updateReservationFull(
   const currentReservationSnap = await getDoc(
     doc(db, "reservations", reservationDocId)
   );
+
   const currentReservation = currentReservationSnap.exists()
     ? mapReservationDoc(currentReservationSnap.id, currentReservationSnap.data())
     : null;
