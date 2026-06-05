@@ -2,9 +2,12 @@ import {
   addDoc,
   collection,
   doc,
+  getDoc,
   getDocs,
+  onSnapshot,
   orderBy,
   query,
+  runTransaction,
   serverTimestamp,
   updateDoc,
   where,
@@ -103,6 +106,8 @@ export type CreateReservationParams = {
   doctors: string[];
   coordinators?: string[];
   depositAmount?: string;
+  reservationId?: string;
+  patientId?: string;
 };
 
 function cleanText(value: unknown) {
@@ -136,14 +141,121 @@ function normalizeReservationStatus(value: unknown): ReservationStatus {
   return "내원전";
 }
 
-function makeClientId(prefix: string) {
-  const now = new Date();
-  const y = now.getFullYear();
-  const m = String(now.getMonth() + 1).padStart(2, "0");
-  const d = String(now.getDate()).padStart(2, "0");
-  const time = String(now.getTime()).slice(-6);
+function formatLegacyClientId(prefix: string, serial: number) {
+  return `${prefix}-${String(serial).padStart(4, "0")}`;
+}
 
-  return `${prefix}-${y}${m}${d}-${time}`;
+function extractLegacySerial(value: unknown, prefix: string) {
+  const raw = cleanText(value);
+  const match = raw.match(new RegExp(`^${prefix}-(\\d{1,})(?:\\.\\d+)?$`, "i"));
+
+  if (!match) return 0;
+
+  const serial = Number(match[1]);
+  return Number.isFinite(serial) ? serial : 0;
+}
+
+async function getNextLegacySerial(prefix: "P" | "R") {
+  const counterRef = doc(db, "counters", prefix === "P" ? "patients" : "reservations");
+  const collectionName = prefix === "P" ? "patients" : "reservations";
+  const fieldName = prefix === "P" ? "patientId" : "reservationId";
+
+  return runTransaction(db, async (transaction) => {
+    const counterSnap = await transaction.get(counterRef);
+    let current = counterSnap.exists() ? cleanNumber(counterSnap.data().current, 0) : 0;
+
+    if (!counterSnap.exists()) {
+      const existingSnap = await getDocs(collection(db, collectionName));
+      current = existingSnap.docs.reduce((max, docSnap) => {
+        return Math.max(max, extractLegacySerial(docSnap.data()[fieldName], prefix));
+      }, 0);
+    }
+
+    const next = current + 1;
+
+    transaction.set(
+      counterRef,
+      {
+        current: next,
+        prefix,
+        updatedAt: serverTimestamp(),
+      },
+      { merge: true }
+    );
+
+    return next;
+  });
+}
+
+async function makeLegacyClientId(prefix: "P" | "R") {
+  const serial = await getNextLegacySerial(prefix);
+  return formatLegacyClientId(prefix, serial);
+}
+
+function normalizeDuplicateKey(params: CreateReservationParams) {
+  const doctors = Array.isArray(params.doctors)
+    ? params.doctors.map(cleanText).filter(Boolean).sort().join("|")
+    : "";
+
+  return [
+    cleanText(params.name).toLowerCase(),
+    cleanText(params.reservationDate),
+    cleanText(params.reservationTime),
+    cleanText(params.phone).replace(/[^0-9+]/g, ""),
+    doctors,
+  ].join("__");
+}
+
+async function hasDuplicateReservation(params: CreateReservationParams) {
+  const reservationId = cleanText(params.reservationId);
+
+  if (reservationId) {
+    const idSnap = await getDocs(
+      query(
+        collection(db, "reservations"),
+        where("reservationId", "==", reservationId),
+        where("isDeleted", "==", false)
+      )
+    );
+
+    if (!idSnap.empty) return true;
+  }
+
+  const reservationDate = cleanText(params.reservationDate);
+  const reservationTime = cleanText(params.reservationTime);
+  const name = cleanText(params.name);
+
+  if (!reservationDate || !name) return false;
+
+  const snap = await getDocs(
+    query(
+      collection(db, "reservations"),
+      where("reservationDate", "==", reservationDate),
+      where("isDeleted", "==", false)
+    )
+  );
+
+  const key = normalizeDuplicateKey({ ...params, reservationTime });
+
+  return snap.docs
+    .map((docSnap) => mapReservationDoc(docSnap.id, docSnap.data()))
+    .some(
+      (item) =>
+        normalizeDuplicateKey({
+          name: item.name,
+          birthInput: item.birthInput,
+          birth: item.birth,
+          gender: item.gender,
+          phone: item.phone,
+          nationality: item.nationality,
+          consultArea: item.consultArea,
+          reservationDate: item.reservationDate,
+          reservationTime: item.reservationTime,
+          doctors: item.doctors,
+          coordinators: item.coordinators,
+          depositAmount: item.depositAmount,
+        }) === key
+    );
 }
 
 function mapReservationDoc(id: string, data: any): ReservationRecord {
@@ -259,6 +371,108 @@ export async function getAllReservations(): Promise<{
   };
 }
 
+export function subscribeAllReservations(
+  callback: (data: {
+    reservations: ReservationRecord[];
+    doctors: DoctorOption[];
+  }) => void,
+  onError?: (error: Error) => void
+) {
+  let currentDoctors: DoctorOption[] = [];
+  let currentReservations: ReservationRecord[] = [];
+
+  function emit() {
+    callback({ reservations: currentReservations, doctors: currentDoctors });
+  }
+
+  getDoctors()
+    .then((loadedDoctors) => {
+      currentDoctors = loadedDoctors;
+      emit();
+    })
+    .catch((error) => {
+      console.error(error);
+      onError?.(
+        error instanceof Error
+          ? error
+          : new Error("원장 목록을 불러오지 못했습니다.")
+      );
+    });
+
+  return onSnapshot(
+    query(collection(db, "reservations"), orderBy("reservationDate", "desc")),
+    (snap) => {
+      currentReservations = snap.docs
+        .map((docSnap) => mapReservationDoc(docSnap.id, docSnap.data()))
+        .filter((item) => !item.isDeleted)
+        .sort((a, b) => {
+          const aa = `${a.reservationDate} ${a.reservationTime} ${a.name}`;
+          const bb = `${b.reservationDate} ${b.reservationTime} ${b.name}`;
+          return aa.localeCompare(bb);
+        });
+
+      emit();
+    },
+    (error) => {
+      console.error(error);
+      onError?.(error);
+    }
+  );
+}
+
+export function subscribeTimelineReservations(
+  date: string,
+  callback: (data: {
+    reservations: ReservationRecord[];
+    doctors: DoctorOption[];
+  }) => void,
+  onError?: (error: Error) => void
+) {
+  let currentDoctors: DoctorOption[] = [];
+  let currentReservations: ReservationRecord[] = [];
+
+  function emit() {
+    callback({ reservations: currentReservations, doctors: currentDoctors });
+  }
+
+  getDoctors()
+    .then((loadedDoctors) => {
+      currentDoctors = loadedDoctors;
+      emit();
+    })
+    .catch((error) => {
+      console.error(error);
+      onError?.(
+        error instanceof Error
+          ? error
+          : new Error("원장 목록을 불러오지 못했습니다.")
+      );
+    });
+
+  return onSnapshot(
+    query(
+      collection(db, "reservations"),
+      where("reservationDate", "==", date),
+      where("isDeleted", "==", false)
+    ),
+    (snap) => {
+      currentReservations = snap.docs
+        .map((docSnap) => mapReservationDoc(docSnap.id, docSnap.data()))
+        .sort((a, b) => {
+          const aa = `${a.reservationTime} ${a.name}`;
+          const bb = `${b.reservationTime} ${b.name}`;
+          return aa.localeCompare(bb);
+        });
+
+      emit();
+    },
+    (error) => {
+      console.error(error);
+      onError?.(error);
+    }
+  );
+}
+
 export async function getTimelineReservations(date: string): Promise<{
   reservations: ReservationRecord[];
   doctors: DoctorOption[];
@@ -310,8 +524,19 @@ export async function createReservation(
     return { success: false, message: "지정원장을 선택하세요." };
   }
 
-  const patientId = makeClientId("P");
-  const reservationId = makeClientId("R");
+  const isDuplicate = await hasDuplicateReservation(params);
+
+  if (isDuplicate) {
+    return {
+      success: false,
+      message: "이미 등록된 예약으로 보여 저장하지 않았습니다.",
+      duplicate: true,
+    };
+  }
+
+  const patientId = cleanText(params.patientId) || (await makeLegacyClientId("P"));
+  const reservationId =
+    cleanText(params.reservationId) || (await makeLegacyClientId("R"));
 
   const parsedBirth = parseBirthInfo(
     params.birthInput || params.birth || "",
@@ -568,13 +793,24 @@ export async function updateReservationFull(
     params.gender || ""
   );
 
-  const doctorStatusMap: Record<string, ReservationStatus> = {};
+  const currentReservationSnap = await getDoc(
+    doc(db, "reservations", reservationDocId)
+  );
+  const currentReservation = currentReservationSnap.exists()
+    ? mapReservationDoc(currentReservationSnap.id, currentReservationSnap.data())
+    : null;
+
+  const previousDoctorStatusMap = currentReservation?.doctorStatusMap || {};
+  const previousDoctorStatusMetaMap =
+    currentReservation?.doctorStatusMetaMap || {};
+
+  const doctorStatusMap: Record<string, ReservationStatus | string> = {};
   const doctorStatusMetaMap: ReservationRecord["doctorStatusMetaMap"] = {};
 
   doctors.forEach((doctor) => {
-    doctorStatusMap[doctor] = "내원전";
-    doctorStatusMetaMap[doctor] = {
-      status: "내원전",
+    doctorStatusMap[doctor] = previousDoctorStatusMap[doctor] || "내원전";
+    doctorStatusMetaMap[doctor] = previousDoctorStatusMetaMap[doctor] || {
+      status: String(doctorStatusMap[doctor] || "내원전"),
       updatedAt: "",
       updatedBy: "",
       updatedRole: "",
@@ -659,6 +895,10 @@ export async function deleteReservation(
   reservationId: string,
   staff: StaffUser
 ) {
+  if (staff.role !== "admin" && staff.role !== "doctor") {
+    return { success: false, message: "예약 삭제 권한이 없습니다." };
+  }
+
   const ref = doc(db, "reservations", reservationDocId);
 
   await updateDoc(ref, {
