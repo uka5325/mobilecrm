@@ -27,6 +27,14 @@ import {
   type LogRecord,
 } from "@/lib/logs";
 import { db } from "@/lib/firebase";
+import {
+  DEFAULT_VISIT_STATUS_COLORS,
+  getConferenceMemos,
+  getVisitStatusColors,
+  VISIT_STATUS_LIST,
+  type VisitStatus,
+  type VisitStatusColorMap,
+} from "@/lib/settings";
 
 const START_H = 9;
 const END_H = 21;
@@ -52,33 +60,6 @@ const STATUS_LABELS: Record<string, string> = {
   후상중: "후상중",
   귀가: "귀가",
   부도: "부도",
-};
-
-const STATUS_CLASS: Record<string, string> = {
-  내원전: "bg-gray-500",
-  대기: "bg-amber-500",
-  원상중: "bg-blue-600",
-  후상중: "bg-teal-500",
-  귀가: "bg-green-600",
-  부도: "bg-red-600 opacity-80",
-};
-
-const STATUS_BUTTON_CLASS: Record<string, string> = {
-  내원전: "border-gray-300 text-gray-600 bg-white",
-  대기: "border-yellow-400 text-yellow-700 bg-white",
-  원상중: "border-blue-400 text-blue-700 bg-white",
-  후상중: "border-teal-400 text-teal-700 bg-white",
-  귀가: "border-green-400 text-green-700 bg-white",
-  부도: "border-red-400 text-red-700 bg-white",
-};
-
-const STATUS_BUTTON_ACTIVE_CLASS: Record<string, string> = {
-  내원전: "border-gray-500 bg-gray-500 text-white",
-  대기: "border-yellow-500 bg-yellow-500 text-white",
-  원상중: "border-blue-600 bg-blue-600 text-white",
-  후상중: "border-teal-500 bg-teal-500 text-white",
-  귀가: "border-green-600 bg-green-600 text-white",
-  부도: "border-red-600 bg-red-600 text-white",
 };
 
 type DetailTab = "info" | "notes" | "logs" | "invoice";
@@ -337,6 +318,38 @@ function splitComma(value: string) {
     .filter(Boolean);
 }
 
+function getReadableTextColor(hex: string) {
+  const clean = String(hex || "").replace("#", "");
+
+  if (clean.length !== 6) return "#ffffff";
+
+  const r = parseInt(clean.slice(0, 2), 16);
+  const g = parseInt(clean.slice(2, 4), 16);
+  const b = parseInt(clean.slice(4, 6), 16);
+
+  const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+
+  return brightness > 150 ? "#111827" : "#ffffff";
+}
+
+function getStatusColor(status: string, colors: VisitStatusColorMap) {
+  if (VISIT_STATUS_LIST.includes(status as VisitStatus)) {
+    return colors[status as VisitStatus] || DEFAULT_VISIT_STATUS_COLORS.내원전;
+  }
+
+  return DEFAULT_VISIT_STATUS_COLORS.내원전;
+}
+
+function getSoftStatusColor(hex: string) {
+  const color = String(hex || "").trim();
+
+  if (/^#[0-9a-fA-F]{6}$/.test(color)) {
+    return `${color}14`;
+  }
+
+  return "#f3f4f6";
+}
+
 export default function TimelinePage() {
   const router = useRouter();
 
@@ -347,6 +360,11 @@ export default function TimelinePage() {
   const [reservations, setReservations] = useState<ReservationRecord[]>([]);
   const [doctors, setDoctors] = useState<DoctorOption[]>([]);
   const [selectedDate, setSelectedDate] = useState(todayString());
+
+  const [statusColors, setStatusColors] = useState<VisitStatusColorMap>(
+    DEFAULT_VISIT_STATUS_COLORS
+  );
+  const [todayMemos, setTodayMemos] = useState<string[]>([]);
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -432,6 +450,20 @@ export default function TimelinePage() {
     }
   }
 
+  async function loadTimelineSettings(date = selectedDate) {
+    try {
+      const [loadedColors, loadedMemos] = await Promise.all([
+        getVisitStatusColors(),
+        getConferenceMemos(date, 10),
+      ]);
+
+      setStatusColors(loadedColors);
+      setTodayMemos(loadedMemos.map((memo) => memo.memoText).filter(Boolean));
+    } catch (error) {
+      console.error("Timeline settings load error:", error);
+    }
+  }
+
   async function loadReservationLogs(item: ReservationRecord) {
     setLogsLoading(true);
     setLogsError("");
@@ -476,6 +508,10 @@ export default function TimelinePage() {
   useEffect(() => {
     loadData();
   }, []);
+
+  useEffect(() => {
+    loadTimelineSettings(selectedDate);
+  }, [selectedDate]);
 
   const dayReservations = useMemo(() => {
     return reservations.filter((item) => item.reservationDate === selectedDate);
@@ -896,15 +932,26 @@ export default function TimelinePage() {
   const selectedStatus = selectedReservation?.operationStatus || "내원전";
 
   return (
-     <div className="relative -mx-6 -mb-6 mt-5 h-[calc(100vh-170px)] min-h-[640px] overflow-hidden bg-white">
+    <div className="relative -mx-6 -mb-6 mt-5 h-[calc(100vh-170px)] min-h-[640px] overflow-hidden bg-white">
       <div className="absolute inset-0 overflow-hidden rounded-2xl border border-[#edf0f3] bg-white">
         <div className="absolute left-0 right-0 top-0 z-30 flex min-h-[72px] items-center justify-between rounded-t-2xl border-b border-[#edf0f3] bg-[#ecfdf5] px-6 py-3">
           <div>
             <div className="mb-1 text-xs font-extrabold text-emerald-700">
               오늘의 메모
             </div>
+
             <div className="text-sm leading-6 text-emerald-800">
-              등록된 메모가 없습니다.
+              {todayMemos.length === 0 ? (
+                "등록된 메모가 없습니다."
+              ) : (
+                <div className="space-y-0.5">
+                  {todayMemos.map((memo, index) => (
+                    <div key={`${memo}-${index}`} className="line-clamp-1">
+                      • {memo}
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
 
@@ -927,36 +974,12 @@ export default function TimelinePage() {
 
         <div className="absolute left-0 right-0 top-[72px] z-20 grid grid-cols-4 gap-2 border-b border-[#edf0f3] bg-white px-6 py-2 md:grid-cols-8">
           <KpiBox label="전체" value={kpi.total} className="bg-gray-100" />
-          <KpiBox
-            label="내원전"
-            value={kpi.before}
-            className="bg-gray-50 text-gray-600"
-          />
-          <KpiBox
-            label="대기"
-            value={kpi.wait}
-            className="bg-yellow-50 text-yellow-700"
-          />
-          <KpiBox
-            label="원상중"
-            value={kpi.cons}
-            className="bg-blue-50 text-blue-700"
-          />
-          <KpiBox
-            label="후상중"
-            value={kpi.post}
-            className="bg-teal-50 text-teal-700"
-          />
-          <KpiBox
-            label="귀가"
-            value={kpi.left}
-            className="bg-green-50 text-green-700"
-          />
-          <KpiBox
-            label="부도"
-            value={kpi.no}
-            className="bg-red-50 text-red-700"
-          />
+          <KpiBox label="내원전" value={kpi.before} color={statusColors.내원전} />
+          <KpiBox label="대기" value={kpi.wait} color={statusColors.대기} />
+          <KpiBox label="원상중" value={kpi.cons} color={statusColors.원상중} />
+          <KpiBox label="후상중" value={kpi.post} color={statusColors.후상중} />
+          <KpiBox label="귀가" value={kpi.left} color={statusColors.귀가} />
+          <KpiBox label="부도" value={kpi.no} color={statusColors.부도} />
           <KpiBox
             label="예약"
             value={kpi.surg}
@@ -1069,6 +1092,12 @@ export default function TimelinePage() {
                         {laidOutReservations.map(
                           ({ item, top, left, width, height }) => {
                             const status = getCardStatus(item);
+                            const cardColor = getStatusColor(
+                              status,
+                              statusColors
+                            );
+                            const cardTextColor =
+                              getReadableTextColor(cardColor);
 
                             const latestLog =
                               latestLogMap[item.reservationId] ||
@@ -1086,14 +1115,14 @@ export default function TimelinePage() {
                               <button
                                 key={`${doctor.uid}-${item.id}`}
                                 onClick={() => openDetail(item)}
-                                className={`absolute z-[2] flex overflow-hidden rounded-xl px-2.5 py-2 text-left text-white shadow-[0_3px_10px_rgba(0,0,0,0.12)] transition hover:-translate-y-0.5 hover:shadow-[0_6px_18px_rgba(0,0,0,0.18)] active:scale-[0.99] ${
-                                  STATUS_CLASS[status] || "bg-gray-500"
-                                }`}
+                                className="absolute z-[2] flex overflow-hidden rounded-xl px-2.5 py-2 text-left shadow-[0_3px_10px_rgba(0,0,0,0.12)] transition hover:-translate-y-0.5 hover:shadow-[0_6px_18px_rgba(0,0,0,0.18)] active:scale-[0.99]"
                                 style={{
                                   top,
                                   left,
                                   width,
                                   height,
+                                  backgroundColor: cardColor,
+                                  color: cardTextColor,
                                 }}
                               >
                                 <div className="flex min-h-0 flex-1 flex-col justify-center overflow-hidden">
@@ -1167,16 +1196,19 @@ export default function TimelinePage() {
                 {DETAIL_STATUS_LIST.map((status) => {
                   const active = selectedStatus === status;
                   const label = status === "대기" ? "내원" : status;
+                  const color = getStatusColor(status, statusColors);
+                  const textColor = getReadableTextColor(color);
 
                   return (
                     <button
                       key={status}
                       onClick={() => handleStatusChange(status)}
-                      className={`min-w-0 rounded-lg border px-1.5 py-1.5 text-xs font-semibold transition hover:-translate-y-0.5 hover:shadow-md active:scale-95 ${
-                        active
-                          ? STATUS_BUTTON_ACTIVE_CLASS[status]
-                          : STATUS_BUTTON_CLASS[status]
-                      }`}
+                      className="min-w-0 rounded-lg border px-1.5 py-1.5 text-xs font-semibold transition hover:-translate-y-0.5 hover:shadow-md active:scale-95"
+                      style={{
+                        borderColor: color,
+                        backgroundColor: active ? color : "#ffffff",
+                        color: active ? textColor : color,
+                      }}
                     >
                       {label}
                     </button>
@@ -1740,13 +1772,28 @@ function KpiBox({
   label,
   value,
   className,
+  color,
 }: {
   label: string;
   value: number;
   className?: string;
+  color?: string;
 }) {
+  const validColor =
+    color && /^#[0-9a-fA-F]{6}$/.test(color) ? color : "";
+
   return (
-    <div className={`rounded-xl px-3 py-1.5 ${className || "bg-gray-100"}`}>
+    <div
+      className={`rounded-xl px-3 py-1.5 ${className || ""}`}
+      style={
+        validColor
+          ? {
+              backgroundColor: getSoftStatusColor(validColor),
+              color: validColor,
+            }
+          : undefined
+      }
+    >
       <div className="text-xs">{label}</div>
       <div className="text-lg font-bold">{value}</div>
     </div>
