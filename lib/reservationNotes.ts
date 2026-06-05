@@ -40,24 +40,23 @@ export async function getReservationNotes(
   const cleanReservationDocId = cleanText(reservationDocId);
   const cleanPatientId = cleanText(patientId);
 
+  console.log("[getReservationNotes params]", {
+    reservationId: cleanReservationId,
+    reservationDocId: cleanReservationDocId,
+    patientId: cleanPatientId,
+  });
+
   const requests: Promise<any>[] = [];
 
   const targets = [
-    {
-      field: "reservationId",
-      value: cleanReservationId,
-    },
-    {
-      field: "reservationDocId",
-      value: cleanReservationDocId,
-    },
-    {
-      field: "patientId",
-      value: cleanPatientId,
-    },
+    { field: "reservationId", value: cleanReservationId },
+    { field: "reservationDocId", value: cleanReservationDocId },
+    { field: "patientId", value: cleanPatientId },
   ].filter((item) => item.value);
 
   targets.forEach((target) => {
+    console.log("[reservationNotes query]", target.field, target.value);
+
     requests.push(
       getDocs(
         query(
@@ -74,7 +73,10 @@ export async function getReservationNotes(
   const noteMap = new Map<string, ReservationNote>();
 
   snaps.forEach((result) => {
-    if (result.status !== "fulfilled") return;
+    if (result.status !== "fulfilled") {
+      console.error("[reservationNotes query failed]", result.reason);
+      return;
+    }
 
     result.value.docs.forEach((d: any) => {
       const data = d.data();
@@ -122,7 +124,7 @@ export async function getReservationNotes(
     });
   });
 
-  return Array.from(noteMap.values()).sort((a, b) => {
+  const notes = Array.from(noteMap.values()).sort((a, b) => {
     const aa =
       a.createdAt && typeof (a.createdAt as any).toMillis === "function"
         ? (a.createdAt as any).toMillis()
@@ -135,6 +137,10 @@ export async function getReservationNotes(
 
     return bb - aa;
   });
+
+  console.log("[reservationNotes loaded]", notes);
+
+  return notes;
 }
 
 export async function addReservationNote(params: {
