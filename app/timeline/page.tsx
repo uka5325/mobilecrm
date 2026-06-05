@@ -366,6 +366,7 @@ export default function TimelinePage() {
   const timeScaleRef = useRef<HTMLDivElement | null>(null);
 
   const [currentUser, setCurrentUser] = useState<StaffUser | null>(null);
+  const [authReady, setAuthReady] = useState(false);
   const [reservations, setReservations] = useState<ReservationRecord[]>([]);
   const [doctors, setDoctors] = useState<DoctorOption[]>([]);
   const [selectedDate, setSelectedDate] = useState(todayString());
@@ -439,14 +440,28 @@ export default function TimelinePage() {
 
   useEffect(() => {
     const unsubscribe = listenCurrentUser(async (user: User | null) => {
-      if (!user) return;
+      if (!user) {
+        setCurrentUser(null);
+        setAuthReady(true);
+        router.replace("/login");
+        return;
+      }
 
       const staff = await getStaffByUid(user.uid);
-      if (staff) setCurrentUser(staff);
+
+      if (!staff || !staff.active) {
+        setCurrentUser(null);
+        setAuthReady(true);
+        router.replace("/login");
+        return;
+      }
+
+      setCurrentUser(staff);
+      setAuthReady(true);
     });
 
     return () => unsubscribe();
-  }, []);
+  }, [router]);
 
   async function loadData() {
     setLoading(true);
@@ -533,6 +548,8 @@ async function loadReservationNotes(item: ReservationRecord) {
   }
 
   useEffect(() => {
+    if (!authReady || !currentUser) return;
+
     setLoading(true);
 
     const unsubscribe = subscribeTimelineReservations(
@@ -550,11 +567,13 @@ async function loadReservationNotes(item: ReservationRecord) {
     );
 
     return () => unsubscribe();
-  }, [selectedDate]);
+  }, [authReady, currentUser, selectedDate]);
 
   useEffect(() => {
+    if (!authReady || !currentUser) return;
+
     loadTimelineSettings(selectedDate);
-  }, [selectedDate]);
+  }, [authReady, currentUser, selectedDate]);
 
   const dayReservations = useMemo(() => {
     return reservations.filter((item) => item.reservationDate === selectedDate);
@@ -569,6 +588,8 @@ async function loadReservationNotes(item: ReservationRecord) {
   }, [slotLayouts]);
 
   useEffect(() => {
+    if (!authReady || !currentUser) return;
+
     async function loadLatestLogs() {
       const reservationIds = dayReservations
         .flatMap((item) => [item.reservationId, item.id])
@@ -589,7 +610,7 @@ async function loadReservationNotes(item: ReservationRecord) {
     }
 
     loadLatestLogs();
-  }, [dayReservations]);
+  }, [authReady, currentUser, dayReservations]);
 
   const kpi = useMemo(() => {
     const base = {
