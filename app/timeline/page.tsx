@@ -8,6 +8,7 @@ import {
   createReservation,
   type DoctorOption,
   getAllReservations,
+  subscribeTimelineReservations,
   type ReservationRecord,
   type ReservationStatus,
   toggleSurgeryReserved,
@@ -506,8 +507,24 @@ export default function TimelinePage() {
   }
 
   useEffect(() => {
-    loadData();
-  }, []);
+    setLoading(true);
+
+    const unsubscribe = subscribeTimelineReservations(
+      selectedDate,
+      (data) => {
+        setReservations(data.reservations || []);
+        setDoctors(data.doctors || []);
+        setLoading(false);
+      },
+      (error) => {
+        console.error(error);
+        setLoading(false);
+        alert("타임라인 실시간 데이터를 불러오지 못했습니다.");
+      }
+    );
+
+    return () => unsubscribe();
+  }, [selectedDate]);
 
   useEffect(() => {
     loadTimelineSettings(selectedDate);
