@@ -9,6 +9,7 @@ import {
 } from "@/lib/reservations";
 import { getStaffByUid, listenCurrentUser } from "@/lib/auth";
 import type { StaffUser } from "@/lib/auth";
+import { getConferenceMemos, type ConferenceMemo } from "@/lib/settings";
 
 function todayString() {
   const d = new Date();
@@ -62,6 +63,33 @@ function isTodayReservation(item: ReservationRecord) {
   return normalizeDate(item.reservationDate) === todayString();
 }
 
+function toDate(value: any) {
+  try {
+    if (!value) return null;
+    if (typeof value.toDate === "function") return value.toDate();
+    if (value instanceof Date) return value;
+
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return null;
+
+    return date;
+  } catch {
+    return null;
+  }
+}
+
+function formatMemoTime(value: any) {
+  const date = toDate(value);
+
+  if (!date) return "";
+
+  return (
+    String(date.getHours()).padStart(2, "0") +
+    ":" +
+    String(date.getMinutes()).padStart(2, "0")
+  );
+}
+
 const ROLE_LIST = ["admin", "doctor", "coordinator", "staff", "interpreter"];
 
 export default function HomePage() {
@@ -69,7 +97,10 @@ export default function HomePage() {
 
   const [currentUser, setCurrentUser] = useState<StaffUser | null>(null);
   const [reservations, setReservations] = useState<ReservationRecord[]>([]);
+  const [todayMemos, setTodayMemos] = useState<ConferenceMemo[]>([]);
+
   const [loading, setLoading] = useState(true);
+  const [memoLoading, setMemoLoading] = useState(true);
 
   useEffect(() => {
     const unsubscribe = listenCurrentUser(async (user: User | null) => {
@@ -96,8 +127,26 @@ export default function HomePage() {
     }
   }
 
+  async function loadTodayMemos() {
+    setMemoLoading(true);
+
+    try {
+      const list = await getConferenceMemos(todayString(), 10);
+      setTodayMemos(list);
+    } catch (error) {
+      console.error("오늘의 메모를 불러오지 못했습니다.", error);
+      setTodayMemos([]);
+    } finally {
+      setMemoLoading(false);
+    }
+  }
+
+  async function refreshHome() {
+    await Promise.all([loadData(), loadTodayMemos()]);
+  }
+
   useEffect(() => {
-    loadData();
+    refreshHome();
   }, []);
 
   const todayReservations = useMemo(() => {
@@ -146,12 +195,43 @@ export default function HomePage() {
                     오늘 표시되는 전체 운영 메모입니다.
                   </div>
                 </div>
+
+                <button
+                  onClick={loadTodayMemos}
+                  className="shrink-0 rounded-[8px] border border-black/10 bg-[#f9fafb] px-3 py-2 text-xs text-[#6b7280] transition hover:bg-gray-100 active:scale-95"
+                >
+                  새로고침
+                </button>
               </div>
 
               <div className="flex flex-col gap-[9px]">
-                <div className="rounded-[8px] border border-black/10 bg-[#f9fafb] p-3 text-xs leading-6 text-[#6b7280]">
-                  등록된 메모가 없습니다.
-                </div>
+                {memoLoading ? (
+                  <div className="rounded-[8px] border border-black/10 bg-[#f9fafb] p-3 text-xs leading-6 text-[#6b7280]">
+                    메모를 불러오는 중...
+                  </div>
+                ) : todayMemos.length === 0 ? (
+                  <div className="rounded-[8px] border border-black/10 bg-[#f9fafb] p-3 text-xs leading-6 text-[#6b7280]">
+                    등록된 메모가 없습니다.
+                  </div>
+                ) : (
+                  todayMemos.map((memo) => (
+                    <div
+                      key={memo.id}
+                      className="rounded-[8px] border border-emerald-100 bg-emerald-50 p-3 text-xs leading-6 text-emerald-800"
+                    >
+                      <div className="mb-1 flex items-center justify-between gap-3 text-[11px] text-emerald-600">
+                        <span>{memo.createdByName || "시스템"}</span>
+                        {memo.createdAt && (
+                          <span>{formatMemoTime(memo.createdAt)}</span>
+                        )}
+                      </div>
+
+                      <div className="whitespace-pre-line">
+                        {memo.memoText}
+                      </div>
+                    </div>
+                  ))
+                )}
               </div>
             </div>
 
