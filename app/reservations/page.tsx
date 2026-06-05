@@ -116,6 +116,7 @@ export default function ReservationsPage() {
   const router = useRouter();
 
   const [currentUser, setCurrentUser] = useState<StaffUser | null>(null);
+  const [authReady, setAuthReady] = useState(false);
 
   const [reservations, setReservations] = useState<ReservationRecord[]>([]);
   const [doctors, setDoctors] = useState<DoctorOption[]>([]);
@@ -182,14 +183,28 @@ export default function ReservationsPage() {
 
   useEffect(() => {
     const unsubscribe = listenCurrentUser(async (user: User | null) => {
-      if (!user) return;
+      if (!user) {
+        setCurrentUser(null);
+        setAuthReady(true);
+        router.replace("/login");
+        return;
+      }
 
       const staff = await getStaffByUid(user.uid);
-      if (staff) setCurrentUser(staff);
+
+      if (!staff || !staff.active) {
+        setCurrentUser(null);
+        setAuthReady(true);
+        router.replace("/login");
+        return;
+      }
+
+      setCurrentUser(staff);
+      setAuthReady(true);
     });
 
     return () => unsubscribe();
-  }, []);
+  }, [router]);
 
   async function loadData() {
     setLoading(true);
@@ -217,6 +232,8 @@ export default function ReservationsPage() {
   }
 
   useEffect(() => {
+    if (!authReady || !currentUser) return;
+
     setLoading(true);
     loadReservationSettings();
 
@@ -234,7 +251,7 @@ export default function ReservationsPage() {
     );
 
     return () => unsubscribe();
-  }, []);
+  }, [authReady, currentUser]);
 
   const filteredReservations = useMemo(() => {
     const keyword = search.trim().toLowerCase();
