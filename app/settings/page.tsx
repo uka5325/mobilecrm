@@ -536,7 +536,10 @@ export default function SettingsPage() {
     }
   }
 
-  async function runInvoiceAction(action: () => Promise<void>, doneMessage: string) {
+  async function runInvoiceAction(
+    action: () => Promise<unknown>,
+    doneMessage: string
+  ) {
     if (!currentUser) {
       setError("로그인 정보를 확인할 수 없습니다.");
       return;
@@ -1169,6 +1172,10 @@ export default function SettingsPage() {
   );
 }
 
+/**
+ * 아래부터 하위 컴포넌트
+ */
+
 function InvoiceCategoriesPanel({
   categories,
   canManage,
@@ -1233,8 +1240,11 @@ function InvoiceCategoriesPanel({
             value={form.categoryId}
             disabled={!!form.categoryId || !canManage || saving}
             placeholder="breast"
-            onChange={(value) => setForm((prev) => ({ ...prev, categoryId: value }))}
+            onChange={(value) =>
+              setForm((prev) => ({ ...prev, categoryId: value }))
+            }
           />
+
           <InputField
             label="한국어 대분류명"
             value={form.nameKo}
@@ -1242,6 +1252,7 @@ function InvoiceCategoriesPanel({
             placeholder="가슴 수술"
             onChange={(value) => setForm((prev) => ({ ...prev, nameKo: value }))}
           />
+
           <InputField
             label="영어 대분류명"
             value={form.nameEn}
@@ -1249,6 +1260,7 @@ function InvoiceCategoriesPanel({
             placeholder="Breast Surgery"
             onChange={(value) => setForm((prev) => ({ ...prev, nameEn: value }))}
           />
+
           <InputField
             label="현지어 대분류명"
             value={form.nameLocal}
@@ -1258,13 +1270,17 @@ function InvoiceCategoriesPanel({
               setForm((prev) => ({ ...prev, nameLocal: value }))
             }
           />
+
           <InputField
             label="정렬순서"
             type="number"
             value={String(form.sortOrder)}
             disabled={!canManage || saving}
             onChange={(value) =>
-              setForm((prev) => ({ ...prev, sortOrder: Number(value || 999999) }))
+              setForm((prev) => ({
+                ...prev,
+                sortOrder: Number(value || 999999),
+              }))
             }
           />
 
@@ -1288,6 +1304,7 @@ function InvoiceCategoriesPanel({
           >
             새 항목
           </button>
+
           <button
             disabled={!canManage || saving}
             onClick={() => onSave(form)}
@@ -1310,6 +1327,7 @@ function InvoiceCategoriesPanel({
             <Th>관리</Th>
           </tr>
         </thead>
+
         <tbody>
           {categories.length === 0 ? (
             <EmptyTableRow colSpan={7} text="등록된 대분류가 없습니다." />
@@ -1376,7 +1394,10 @@ function InvoiceItemsPanel({
 
   useEffect(() => {
     if (!form.categoryId && activeCategories[0]?.categoryId) {
-      setForm((prev) => ({ ...prev, categoryId: activeCategories[0].categoryId }));
+      setForm((prev) => ({
+        ...prev,
+        categoryId: activeCategories[0].categoryId,
+      }));
     }
   }, [activeCategories, form.categoryId]);
 
@@ -1502,7 +1523,10 @@ function InvoiceItemsPanel({
             value={String(form.regularPrice)}
             disabled={!canManage || saving}
             onChange={(value) =>
-              setForm((prev) => ({ ...prev, regularPrice: Number(value || 0) }))
+              setForm((prev) => ({
+                ...prev,
+                regularPrice: Number(value || 0),
+              }))
             }
           />
 
@@ -1512,7 +1536,10 @@ function InvoiceItemsPanel({
             value={String(form.eventPrice)}
             disabled={!canManage || saving}
             onChange={(value) =>
-              setForm((prev) => ({ ...prev, eventPrice: Number(value || 0) }))
+              setForm((prev) => ({
+                ...prev,
+                eventPrice: Number(value || 0),
+              }))
             }
           />
 
@@ -1522,7 +1549,10 @@ function InvoiceItemsPanel({
             value={String(form.costPrice)}
             disabled={!canManage || saving}
             onChange={(value) =>
-              setForm((prev) => ({ ...prev, costPrice: Number(value || 0) }))
+              setForm((prev) => ({
+                ...prev,
+                costPrice: Number(value || 0),
+              }))
             }
           />
 
@@ -1532,7 +1562,10 @@ function InvoiceItemsPanel({
             value={String(form.sortOrder)}
             disabled={!canManage || saving}
             onChange={(value) =>
-              setForm((prev) => ({ ...prev, sortOrder: Number(value || 999999) }))
+              setForm((prev) => ({
+                ...prev,
+                sortOrder: Number(value || 999999),
+              }))
             }
           />
         </div>
@@ -1571,6 +1604,7 @@ function InvoiceItemsPanel({
             >
               새 항목
             </button>
+
             <button
               disabled={!canManage || saving}
               onClick={() =>
@@ -1602,6 +1636,7 @@ function InvoiceItemsPanel({
             <Th>관리</Th>
           </tr>
         </thead>
+
         <tbody>
           {items.length === 0 ? (
             <EmptyTableRow colSpan={9} text="등록된 수술항목이 없습니다." />
@@ -1612,8 +1647,12 @@ function InvoiceItemsPanel({
                 <Td>{item.nameKo}</Td>
                 <Td>{item.nameEn || "-"}</Td>
                 <Td>{item.nameLocal || "-"}</Td>
-                <Td>{formatPrice(item.regularPrice)} {item.currency}</Td>
-                <Td>{formatPrice(item.eventPrice)} {item.currency}</Td>
+                <Td>
+                  {formatPrice(item.regularPrice)} {item.currency}
+                </Td>
+                <Td>
+                  {formatPrice(item.eventPrice)} {item.currency}
+                </Td>
                 <Td>{item.sortOrder}</Td>
                 <Td>{item.active ? "사용" : "비활성"}</Td>
                 <Td>
@@ -1702,8 +1741,11 @@ function InvoiceSectionsPanel({
             value={form.sectionId}
             disabled={!!form.sectionId || !canManage || saving}
             placeholder="payment_notice"
-            onChange={(value) => setForm((prev) => ({ ...prev, sectionId: value }))}
+            onChange={(value) =>
+              setForm((prev) => ({ ...prev, sectionId: value }))
+            }
           />
+
           <InputField
             label="한국어 제목"
             value={form.titleKo}
@@ -1711,6 +1753,7 @@ function InvoiceSectionsPanel({
             placeholder="결제 안내"
             onChange={(value) => setForm((prev) => ({ ...prev, titleKo: value }))}
           />
+
           <InputField
             label="영어 제목"
             value={form.titleEn}
@@ -1718,6 +1761,7 @@ function InvoiceSectionsPanel({
             placeholder="Payment Notice"
             onChange={(value) => setForm((prev) => ({ ...prev, titleEn: value }))}
           />
+
           <InputField
             label="현지어 제목"
             value={form.titleLocal}
@@ -1738,6 +1782,7 @@ function InvoiceSectionsPanel({
               setForm((prev) => ({ ...prev, contentKo: value }))
             }
           />
+
           <TextareaField
             label="영어 내용"
             value={form.contentEn}
@@ -1746,6 +1791,7 @@ function InvoiceSectionsPanel({
               setForm((prev) => ({ ...prev, contentEn: value }))
             }
           />
+
           <TextareaField
             label="현지어 내용"
             value={form.contentLocal}
@@ -1763,7 +1809,10 @@ function InvoiceSectionsPanel({
             value={String(form.sortOrder)}
             disabled={!canManage || saving}
             onChange={(value) =>
-              setForm((prev) => ({ ...prev, sortOrder: Number(value || 999999) }))
+              setForm((prev) => ({
+                ...prev,
+                sortOrder: Number(value || 999999),
+              }))
             }
           />
 
@@ -1787,6 +1836,7 @@ function InvoiceSectionsPanel({
           >
             새 항목
           </button>
+
           <button
             disabled={!canManage || saving}
             onClick={() => onSave(form)}
@@ -1809,6 +1859,7 @@ function InvoiceSectionsPanel({
             <Th>관리</Th>
           </tr>
         </thead>
+
         <tbody>
           {sections.length === 0 ? (
             <EmptyTableRow colSpan={7} text="등록된 안내사항이 없습니다." />
@@ -1923,6 +1974,7 @@ function InvoiceTemplatesPanel({
               setForm((prev) => ({ ...prev, templateId: value }))
             }
           />
+
           <InputField
             label="언어"
             value={form.language}
@@ -1932,6 +1984,7 @@ function InvoiceTemplatesPanel({
               setForm((prev) => ({ ...prev, language: value }))
             }
           />
+
           <InputField
             label="한국어 제목"
             value={form.titleKo}
@@ -1939,6 +1992,7 @@ function InvoiceTemplatesPanel({
             placeholder="수술 견적서"
             onChange={(value) => setForm((prev) => ({ ...prev, titleKo: value }))}
           />
+
           <InputField
             label="영어 제목"
             value={form.titleEn}
@@ -1946,6 +2000,7 @@ function InvoiceTemplatesPanel({
             placeholder="Surgery Quotation"
             onChange={(value) => setForm((prev) => ({ ...prev, titleEn: value }))}
           />
+
           <InputField
             label="현지어 제목"
             value={form.titleLocal}
@@ -1955,15 +2010,20 @@ function InvoiceTemplatesPanel({
               setForm((prev) => ({ ...prev, titleLocal: value }))
             }
           />
+
           <InputField
             label="정렬순서"
             type="number"
             value={String(form.sortOrder)}
             disabled={!canManage || saving}
             onChange={(value) =>
-              setForm((prev) => ({ ...prev, sortOrder: Number(value || 999999) }))
+              setForm((prev) => ({
+                ...prev,
+                sortOrder: Number(value || 999999),
+              }))
             }
           />
+
           <InputField
             label="병원명 한국어"
             value={form.hospitalNameKo}
@@ -1972,6 +2032,7 @@ function InvoiceTemplatesPanel({
               setForm((prev) => ({ ...prev, hospitalNameKo: value }))
             }
           />
+
           <InputField
             label="병원명 영어"
             value={form.hospitalNameEn}
@@ -1980,6 +2041,7 @@ function InvoiceTemplatesPanel({
               setForm((prev) => ({ ...prev, hospitalNameEn: value }))
             }
           />
+
           <InputField
             label="병원명 현지어"
             value={form.hospitalNameLocal}
@@ -1997,12 +2059,14 @@ function InvoiceTemplatesPanel({
             disabled={!canManage || saving}
             onChange={(value) => setForm((prev) => ({ ...prev, footerKo: value }))}
           />
+
           <TextareaField
             label="하단 문구 영어"
             value={form.footerEn}
             disabled={!canManage || saving}
             onChange={(value) => setForm((prev) => ({ ...prev, footerEn: value }))}
           />
+
           <TextareaField
             label="하단 문구 현지어"
             value={form.footerLocal}
@@ -2033,6 +2097,7 @@ function InvoiceTemplatesPanel({
             >
               새 항목
             </button>
+
             <button
               disabled={!canManage || saving}
               onClick={() => onSave(form)}
@@ -2056,6 +2121,7 @@ function InvoiceTemplatesPanel({
             <Th>관리</Th>
           </tr>
         </thead>
+
         <tbody>
           {templates.length === 0 ? (
             <EmptyTableRow colSpan={7} text="등록된 템플릿이 없습니다." />
