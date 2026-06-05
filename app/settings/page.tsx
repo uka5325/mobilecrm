@@ -3,11 +3,27 @@
 import { useEffect, useMemo, useState } from "react";
 import type { User } from "firebase/auth";
 import {
+  addConferenceMemo,
+  changeMyPassword,
+  COUNTRY_TIMEZONES,
+  DEFAULT_GENERAL_SETTINGS,
   DEFAULT_VISIT_STATUS_COLORS,
+  deactivateStaffFromSettings,
+  deleteConferenceMemo,
+  getConferenceMemos,
+  getGeneralSettings,
+  getStaffListForSettings,
   getVisitStatusColors,
   resetVisitStatusColors,
+  saveGeneralSettings,
   saveVisitStatusColors,
+  updateStaffFromSettings,
   VISIT_STATUS_LIST,
+  type ConferenceMemo,
+  type CountryKey,
+  type GeneralSettings,
+  type SettingsStaffRecord,
+  type SettingsStaffRole,
   type VisitStatus,
   type VisitStatusColorMap,
 } from "@/lib/settings";
@@ -24,6 +40,14 @@ const TAB_ITEMS: { key: SettingsTab; label: string; icon: string }[] = [
   { key: "security", label: "보안", icon: "🔐" },
 ];
 
+const STAFF_ROLES: SettingsStaffRole[] = [
+  "admin",
+  "doctor",
+  "coordinator",
+  "staff",
+  "interpreter",
+];
+
 const STATUS_HELP: Record<VisitStatus, string> = {
   내원전: "아직 방문 전인 예약",
   대기: "내원 후 대기 중인 고객",
@@ -32,6 +56,18 @@ const STATUS_HELP: Record<VisitStatus, string> = {
   귀가: "상담 또는 진료 종료",
   부도: "예약 후 미방문",
 };
+
+function todayString() {
+  const d = new Date();
+
+  return (
+    d.getFullYear() +
+    "-" +
+    String(d.getMonth() + 1).padStart(2, "0") +
+    "-" +
+    String(d.getDate()).padStart(2, "0")
+  );
+}
 
 function getReadableTextColor(hex: string) {
   const clean = hex.replace("#", "");
@@ -60,6 +96,45 @@ function isValidHex(value: string) {
   return /^#[0-9a-fA-F]{6}$/.test(value);
 }
 
+function getErrorMessage(error: unknown) {
+  if (error instanceof Error) return error.message;
+  return "오류가 발생했습니다.";
+}
+
+function toDate(value: any) {
+  try {
+    if (!value) return null;
+    if (typeof value.toDate === "function") return value.toDate();
+    if (value instanceof Date) return value;
+
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return null;
+
+    return date;
+  } catch {
+    return null;
+  }
+}
+
+function formatDateTime(value: any) {
+  const date = toDate(value);
+  if (!date) return "";
+
+  return (
+    date.getFullYear() +
+    "." +
+    String(date.getMonth() + 1).padStart(2, "0") +
+    "." +
+    String(date.getDate()).padStart(2, "0") +
+    " " +
+    String(date.getHours()).padStart(2, "0") +
+    ":" +
+    String(date.getMinutes()).padStart(2, "0") +
+    ":" +
+    String(date.getSeconds()).padStart(2, "0")
+  );
+}
+
 export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState<SettingsTab>("statusColors");
 
@@ -73,7 +148,23 @@ export default function SettingsPage() {
     DEFAULT_VISIT_STATUS_COLORS
   );
 
+  const [generalSettings, setGeneralSettings] = useState<GeneralSettings>(
+    DEFAULT_GENERAL_SETTINGS
+  );
+  const [selectedCountry, setSelectedCountry] = useState<CountryKey>("Korea");
+
+  const [memoDate, setMemoDate] = useState(todayString());
+  const [memoText, setMemoText] = useState("");
+  const [memos, setMemos] = useState<ConferenceMemo[]>([]);
+
+  const [staffList, setStaffList] = useState<SettingsStaffRecord[]>([]);
+
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+
   const [loading, setLoading] = useState(true);
+  const [memoLoading, setMemoLoading] = useState(false);
+  const [staffLoading, setStaffLoading] = useState(false);
   const [saving, setSaving] = useState(false);
 
   const [message, setMessage] = useState("");
@@ -85,7 +176,13 @@ export default function SettingsPage() {
     return role === "admin" || role === "doctor";
   }, [currentUser]);
 
-  const hasChanges = useMemo(() => {
+  const canEditMemo = useMemo(() => {
+    const role = String(currentUser?.role || "").toLowerCase();
+
+    return ["admin", "doctor", "coordinator", "staff"].includes(role);
+  }, [currentUser]);
+
+  const hasColorChanges = useMemo(() => {
     return JSON.stringify(colors) !== JSON.stringify(initialColors);
   }, [colors, initialColors]);
 
@@ -111,16 +208,21 @@ export default function SettingsPage() {
     return () => unsubscribe();
   }, []);
 
-  async function loadSettings() {
+  async function loadBaseSettings() {
     setLoading(true);
     setError("");
     setMessage("");
 
     try {
-      const loadedColors = await getVisitStatusColors();
+      const [loadedColors, loadedGeneral] = await Promise.all([
+        getVisitStatusColors(),
+        getGeneralSettings(),
+      ]);
 
       setColors(loadedColors);
       setInitialColors(loadedColors);
+      setGeneralSettings(loadedGeneral);
+      setSelectedCountry(loadedGeneral.appCountry);
     } catch (err) {
       console.error(err);
       setError("설정 데이터를 불러오지 못했습니다.");
@@ -129,9 +231,46 @@ export default function SettingsPage() {
     }
   }
 
+  async function loadMemos(date = memoDate) {
+    setMemoLoading(true);
+    setError("");
+
+    try {
+      const list = await getConferenceMemos(date, 50);
+      setMemos(list);
+    } catch (err) {
+      console.error(err);
+      setError("메모를 불러오지 못했습니다.");
+    } finally {
+      setMemoLoading(false);
+    }
+  }
+
+  async function loadStaffList() {
+    setStaffLoading(true);
+    setError("");
+
+    try {
+      const list = await getStaffListForSettings();
+      setStaffList(list);
+    } catch (err) {
+      console.error(err);
+      setError("직원 목록을 불러오지 못했습니다.");
+    } finally {
+      setStaffLoading(false);
+    }
+  }
+
   useEffect(() => {
-    loadSettings();
+    loadBaseSettings();
+    loadMemos(todayString());
+    loadStaffList();
   }, []);
+
+  function clearAlerts() {
+    setError("");
+    setMessage("");
+  }
 
   function updateColor(status: VisitStatus, value: string) {
     const next = normalizeHexInput(value);
@@ -148,11 +287,6 @@ export default function SettingsPage() {
       return;
     }
 
-    if (!canManageSettings) {
-      setError("설정 변경 권한이 없습니다. admin 또는 doctor만 변경할 수 있습니다.");
-      return;
-    }
-
     const invalidStatus = VISIT_STATUS_LIST.find(
       (status) => !isValidHex(colors[status])
     );
@@ -163,8 +297,7 @@ export default function SettingsPage() {
     }
 
     setSaving(true);
-    setError("");
-    setMessage("");
+    clearAlerts();
 
     try {
       const savedColors = await saveVisitStatusColors(colors, currentUser);
@@ -174,7 +307,7 @@ export default function SettingsPage() {
       setMessage("내원상태 색상이 저장되었습니다.");
     } catch (err) {
       console.error(err);
-      setError("색상 저장 중 오류가 발생했습니다.");
+      setError(getErrorMessage(err));
     } finally {
       setSaving(false);
     }
@@ -186,18 +319,12 @@ export default function SettingsPage() {
       return;
     }
 
-    if (!canManageSettings) {
-      setError("설정 변경 권한이 없습니다. admin 또는 doctor만 변경할 수 있습니다.");
-      return;
-    }
-
     const ok = confirm("내원상태 색상을 기본값으로 되돌릴까요?");
 
     if (!ok) return;
 
     setSaving(true);
-    setError("");
-    setMessage("");
+    clearAlerts();
 
     try {
       const resetColors = await resetVisitStatusColors(currentUser);
@@ -207,7 +334,105 @@ export default function SettingsPage() {
       setMessage("기본 색상으로 복원되었습니다.");
     } catch (err) {
       console.error(err);
-      setError("기본값 복원 중 오류가 발생했습니다.");
+      setError(getErrorMessage(err));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleSaveGeneralSettings() {
+    if (!currentUser) {
+      setError("로그인 정보를 확인할 수 없습니다.");
+      return;
+    }
+
+    setSaving(true);
+    clearAlerts();
+
+    try {
+      const saved = await saveGeneralSettings(selectedCountry, currentUser);
+
+      setGeneralSettings(saved);
+      setSelectedCountry(saved.appCountry);
+      setMessage("기본 설정이 저장되었습니다.");
+    } catch (err) {
+      console.error(err);
+      setError(getErrorMessage(err));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleAddMemo() {
+    if (!currentUser) {
+      setError("로그인 정보를 확인할 수 없습니다.");
+      return;
+    }
+
+    if (!memoText.trim()) {
+      setError("메모 내용을 입력하세요.");
+      return;
+    }
+
+    setSaving(true);
+    clearAlerts();
+
+    try {
+      await addConferenceMemo(memoDate, memoText, currentUser);
+      setMemoText("");
+      await loadMemos(memoDate);
+      setMessage("메모가 추가되었습니다.");
+    } catch (err) {
+      console.error(err);
+      setError(getErrorMessage(err));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleDeleteMemo(memoId: string) {
+    if (!currentUser) {
+      setError("로그인 정보를 확인할 수 없습니다.");
+      return;
+    }
+
+    const ok = confirm("이 메모를 삭제할까요?");
+
+    if (!ok) return;
+
+    setSaving(true);
+    clearAlerts();
+
+    try {
+      await deleteConferenceMemo(memoId, currentUser);
+      await loadMemos(memoDate);
+      setMessage("메모가 삭제되었습니다.");
+    } catch (err) {
+      console.error(err);
+      setError(getErrorMessage(err));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleChangePassword() {
+    if (!currentUser) {
+      setError("로그인 정보를 확인할 수 없습니다.");
+      return;
+    }
+
+    setSaving(true);
+    clearAlerts();
+
+    try {
+      await changeMyPassword(currentPassword, newPassword, currentUser);
+
+      setCurrentPassword("");
+      setNewPassword("");
+      setMessage("비밀번호가 변경되었습니다.");
+    } catch (err) {
+      console.error(err);
+      setError(getErrorMessage(err));
     } finally {
       setSaving(false);
     }
@@ -227,7 +452,10 @@ export default function SettingsPage() {
             return (
               <button
                 key={item.key}
-                onClick={() => setActiveTab(item.key)}
+                onClick={() => {
+                  setActiveTab(item.key);
+                  clearAlerts();
+                }}
                 className={`flex shrink-0 items-center gap-2 rounded-xl px-3 py-3 text-left text-sm transition hover:-translate-y-0.5 active:scale-95 lg:w-full ${
                   active
                     ? "bg-emerald-50 font-bold text-emerald-700"
@@ -243,47 +471,34 @@ export default function SettingsPage() {
       </nav>
 
       <div className="min-w-0">
+        <GlobalAlert error={error} message={message} />
+
         {activeTab === "statusColors" && (
           <section className="rounded-[18px] border border-[#edf0f3] bg-white p-6 shadow-[0_2px_14px_rgba(0,0,0,0.04)]">
-            <div className="mb-5 flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-              <div>
-                <h2 className="text-lg font-bold text-gray-900">
-                  내원상태 색상 설정
-                </h2>
-                <p className="mt-1 text-sm leading-6 text-gray-500">
-                  타임라인 고객 카드, 예약관리 상태 배지, 대시보드 상태 표시 색상에
-                  공통으로 사용할 수 있는 기준 색상입니다.
-                </p>
-              </div>
-
-              <div className="flex shrink-0 items-center gap-2">
-                <span
-                  className={`rounded-full px-3 py-1 text-xs font-semibold ${
-                    canManageSettings
-                      ? "bg-emerald-50 text-emerald-700"
-                      : "bg-gray-100 text-gray-500"
-                  }`}
-                >
-                  {authLoading
-                    ? "권한 확인 중"
-                    : canManageSettings
-                      ? "수정 가능"
-                      : "보기 전용"}
-                </span>
-              </div>
-            </div>
+            <SectionHeader
+              title="내원상태 색상 설정"
+              description="타임라인 고객 카드, 예약관리 상태 배지, 대시보드 상태 표시 색상에 공통으로 사용할 기준 색상입니다."
+              badge={
+                authLoading
+                  ? "권한 확인 중"
+                  : canManageSettings
+                    ? "수정 가능"
+                    : "보기 전용"
+              }
+              badgeActive={canManageSettings}
+            />
 
             {loading ? (
-              <div className="rounded-2xl border border-[#edf0f3] bg-gray-50 p-8 text-center text-sm text-gray-400">
-                설정을 불러오는 중...
-              </div>
+              <EmptyBox text="설정을 불러오는 중..." />
             ) : (
               <>
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
                   {VISIT_STATUS_LIST.map((status) => {
                     const color = colors[status];
-                    const textColor = getReadableTextColor(color);
                     const valid = isValidHex(color);
+                    const previewColor = valid
+                      ? color
+                      : DEFAULT_VISIT_STATUS_COLORS[status];
 
                     return (
                       <div
@@ -303,14 +518,8 @@ export default function SettingsPage() {
                           <div
                             className="flex h-10 min-w-[76px] items-center justify-center rounded-xl px-3 text-xs font-bold shadow-sm"
                             style={{
-                              backgroundColor: valid
-                                ? color
-                                : DEFAULT_VISIT_STATUS_COLORS[status],
-                              color: valid
-                                ? textColor
-                                : getReadableTextColor(
-                                    DEFAULT_VISIT_STATUS_COLORS[status]
-                                  ),
+                              backgroundColor: previewColor,
+                              color: getReadableTextColor(previewColor),
                             }}
                           >
                             {status}
@@ -320,18 +529,20 @@ export default function SettingsPage() {
                         <div className="flex items-center gap-2">
                           <input
                             type="color"
-                            value={
-                              valid ? color : DEFAULT_VISIT_STATUS_COLORS[status]
-                            }
+                            value={previewColor}
                             disabled={!canManageSettings || saving}
-                            onChange={(e) => updateColor(status, e.target.value)}
+                            onChange={(e) =>
+                              updateColor(status, e.target.value)
+                            }
                             className="h-10 w-12 shrink-0 cursor-pointer rounded-lg border border-[#dfe3e8] bg-white p-1 disabled:cursor-not-allowed disabled:opacity-50"
                           />
 
                           <input
                             value={color}
                             disabled={!canManageSettings || saving}
-                            onChange={(e) => updateColor(status, e.target.value)}
+                            onChange={(e) =>
+                              updateColor(status, e.target.value)
+                            }
                             className={`h-10 min-w-0 flex-1 rounded-xl border bg-white px-3 text-sm outline-none transition focus:border-[#1d9e75] focus:ring-4 focus:ring-emerald-100 disabled:bg-gray-50 disabled:text-gray-400 ${
                               valid ? "border-[#dfe3e8]" : "border-red-300"
                             }`}
@@ -376,18 +587,6 @@ export default function SettingsPage() {
                   </div>
                 </div>
 
-                {error && (
-                  <div className="mt-4 rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-600">
-                    {error}
-                  </div>
-                )}
-
-                {message && (
-                  <div className="mt-4 rounded-xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
-                    {message}
-                  </div>
-                )}
-
                 <div className="mt-5 flex flex-col gap-2 sm:flex-row sm:justify-end">
                   <button
                     onClick={handleResetColors}
@@ -399,7 +598,7 @@ export default function SettingsPage() {
 
                   <button
                     onClick={handleSaveColors}
-                    disabled={!canManageSettings || saving || !hasChanges}
+                    disabled={!canManageSettings || saving || !hasColorChanges}
                     className="rounded-xl bg-black px-5 py-3 text-sm font-medium text-white transition hover:-translate-y-0.5 hover:shadow-md active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     {saving ? "저장 중..." : "색상 저장"}
@@ -411,84 +610,517 @@ export default function SettingsPage() {
         )}
 
         {activeTab === "system" && (
-          <ComingSoonPanel
-            title="기본 설정"
-            description="상담회 국가, 시간대, 기본 날짜 기준을 관리하는 영역입니다."
-            items={[
-              "상담회 국가 / 시간대 설정",
-              "로그 저장 시간 기준",
-              "기본 조회 날짜 설정",
-            ]}
-          />
+          <section className="rounded-[18px] border border-[#edf0f3] bg-white p-6 shadow-[0_2px_14px_rgba(0,0,0,0.04)]">
+            <SectionHeader
+              title="기본 설정"
+              description="상담회 국가와 로그 시간대를 설정합니다. 예약 시간은 변환하지 않고, 로그/표시 기준 시간대만 관리합니다."
+              badge={canManageSettings ? "수정 가능" : "보기 전용"}
+              badgeActive={canManageSettings}
+            />
+
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <div>
+                <label className="mb-1 block text-xs text-gray-500">
+                  상담회 국가
+                </label>
+                <select
+                  value={selectedCountry}
+                  disabled={!canManageSettings || saving}
+                  onChange={(e) =>
+                    setSelectedCountry(e.target.value as CountryKey)
+                  }
+                  className="h-11 w-full rounded-xl border border-[#dfe3e8] bg-white px-3 text-sm outline-none transition focus:border-[#1d9e75] focus:ring-4 focus:ring-emerald-100 disabled:bg-gray-50 disabled:text-gray-400"
+                >
+                  {Object.entries(COUNTRY_TIMEZONES).map(([key, country]) => (
+                    <option key={key} value={key}>
+                      {country.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="mb-1 block text-xs text-gray-500">
+                  현재 로그 시간대
+                </label>
+                <input
+                  value={COUNTRY_TIMEZONES[selectedCountry].timezone}
+                  readOnly
+                  className="h-11 w-full rounded-xl border border-[#dfe3e8] bg-gray-50 px-3 text-sm text-gray-500 outline-none"
+                />
+              </div>
+            </div>
+
+            <div className="mt-4 rounded-2xl border border-[#edf0f3] bg-gray-50 p-4 text-sm text-gray-500">
+              현재 저장값: {generalSettings.appCountryLabel} /{" "}
+              {generalSettings.appTimezone}
+            </div>
+
+            <div className="mt-5 flex justify-end">
+              <button
+                onClick={handleSaveGeneralSettings}
+                disabled={!canManageSettings || saving}
+                className="rounded-xl bg-black px-5 py-3 text-sm font-medium text-white transition hover:-translate-y-0.5 hover:shadow-md active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {saving ? "저장 중..." : "기본 설정 저장"}
+              </button>
+            </div>
+          </section>
         )}
 
         {activeTab === "memo" && (
-          <ComingSoonPanel
-            title="오늘의 메모"
-            description="홈과 타임라인에 표시되는 날짜별 운영 메모를 관리하는 영역입니다."
-            items={[
-              "날짜별 메모 추가",
-              "메모 삭제",
-              "홈 / 타임라인 동시 표시",
-            ]}
-          />
+          <section className="space-y-4">
+            <div className="rounded-[18px] border border-[#edf0f3] bg-white p-6 shadow-[0_2px_14px_rgba(0,0,0,0.04)]">
+              <SectionHeader
+                title="오늘의 메모"
+                description="선택한 날짜의 홈/타임라인에 표시할 운영 메모를 관리합니다."
+                badge={canEditMemo ? "수정 가능" : "보기 전용"}
+                badgeActive={canEditMemo}
+              />
+
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-[220px_minmax(0,1fr)]">
+                <div>
+                  <label className="mb-1 block text-xs text-gray-500">
+                    메모 표시 날짜
+                  </label>
+                  <input
+                    type="date"
+                    value={memoDate}
+                    onChange={(e) => {
+                      setMemoDate(e.target.value);
+                      loadMemos(e.target.value);
+                    }}
+                    className="h-11 w-full rounded-xl border border-[#dfe3e8] bg-white px-3 text-sm outline-none transition focus:border-[#1d9e75] focus:ring-4 focus:ring-emerald-100"
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-1 block text-xs text-gray-500">
+                    메모 내용
+                  </label>
+                  <textarea
+                    rows={3}
+                    value={memoText}
+                    disabled={!canEditMemo || saving}
+                    onChange={(e) => setMemoText(e.target.value)}
+                    placeholder="전체 공유 메모를 입력하세요."
+                    className="w-full resize-none rounded-xl border border-[#dfe3e8] bg-white px-3 py-2 text-sm outline-none transition focus:border-[#1d9e75] focus:ring-4 focus:ring-emerald-100 disabled:bg-gray-50 disabled:text-gray-400"
+                  />
+                </div>
+              </div>
+
+              <div className="mt-4 flex justify-end">
+                <button
+                  onClick={handleAddMemo}
+                  disabled={!canEditMemo || saving}
+                  className="rounded-xl bg-[#1d9e75] px-5 py-3 text-sm font-medium text-white transition hover:-translate-y-0.5 hover:shadow-md active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {saving ? "저장 중..." : "메모 추가"}
+                </button>
+              </div>
+            </div>
+
+            <div className="rounded-[18px] border border-[#edf0f3] bg-white p-6 shadow-[0_2px_14px_rgba(0,0,0,0.04)]">
+              <div className="mb-3 flex items-center justify-between">
+                <h3 className="text-base font-bold text-gray-900">
+                  선택 날짜 메모
+                </h3>
+                <span className="text-xs text-gray-400">
+                  {memos.length}개
+                </span>
+              </div>
+
+              {memoLoading ? (
+                <EmptyBox text="메모를 불러오는 중..." />
+              ) : memos.length === 0 ? (
+                <EmptyBox text="등록된 메모가 없습니다." />
+              ) : (
+                <div className="space-y-2">
+                  {memos.map((memo) => (
+                    <div
+                      key={memo.id}
+                      className="rounded-2xl border border-[#edf0f3] bg-gray-50 p-4"
+                    >
+                      <div className="mb-2 flex items-start justify-between gap-3">
+                        <div className="text-xs text-gray-400">
+                          {memo.createdByName || "시스템"}
+                          {memo.createdAt
+                            ? ` · ${formatDateTime(memo.createdAt)}`
+                            : ""}
+                        </div>
+
+                        {canEditMemo && (
+                          <button
+                            onClick={() => handleDeleteMemo(memo.id)}
+                            disabled={saving}
+                            className="rounded-lg bg-red-50 px-2.5 py-1 text-xs font-semibold text-red-600 transition hover:bg-red-100 active:scale-95 disabled:opacity-50"
+                          >
+                            삭제
+                          </button>
+                        )}
+                      </div>
+
+                      <div className="whitespace-pre-line text-sm leading-6 text-gray-800">
+                        {memo.memoText}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </section>
         )}
 
         {activeTab === "staff" && (
-          <ComingSoonPanel
-            title="직원 관리"
-            description="직원 계정, 권한, 원장 표시 순서를 관리하는 영역입니다."
-            items={[
-              "직원 추가 / 비활성화",
-              "권한 변경",
-              "원장 표시 순서 설정",
-            ]}
-          />
+          <section className="rounded-[18px] border border-[#edf0f3] bg-white p-6 shadow-[0_2px_14px_rgba(0,0,0,0.04)]">
+            <SectionHeader
+              title="직원 관리"
+              description="직원 권한, 활성상태, 원장 표시 순서를 관리합니다. 신규 Auth 계정 생성은 서버 API 연결 후 추가하는 것이 안전합니다."
+              badge={canManageSettings ? "수정 가능" : "보기 전용"}
+              badgeActive={canManageSettings}
+            />
+
+            {staffLoading ? (
+              <EmptyBox text="직원 목록을 불러오는 중..." />
+            ) : staffList.length === 0 ? (
+              <EmptyBox text="등록된 직원이 없습니다." />
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full border-collapse text-sm">
+                  <thead>
+                    <tr>
+                      <th className="whitespace-nowrap border-b border-[#edf0f3] bg-gray-50 px-3 py-2.5 text-left text-[11px] font-semibold text-gray-500">
+                        이름
+                      </th>
+                      <th className="whitespace-nowrap border-b border-[#edf0f3] bg-gray-50 px-3 py-2.5 text-left text-[11px] font-semibold text-gray-500">
+                        이메일
+                      </th>
+                      <th className="whitespace-nowrap border-b border-[#edf0f3] bg-gray-50 px-3 py-2.5 text-left text-[11px] font-semibold text-gray-500">
+                        권한
+                      </th>
+                      <th className="whitespace-nowrap border-b border-[#edf0f3] bg-gray-50 px-3 py-2.5 text-left text-[11px] font-semibold text-gray-500">
+                        순서
+                      </th>
+                      <th className="whitespace-nowrap border-b border-[#edf0f3] bg-gray-50 px-3 py-2.5 text-left text-[11px] font-semibold text-gray-500">
+                        상태
+                      </th>
+                      <th className="whitespace-nowrap border-b border-[#edf0f3] bg-gray-50 px-3 py-2.5 text-left text-[11px] font-semibold text-gray-500">
+                        관리
+                      </th>
+                    </tr>
+                  </thead>
+
+                  <tbody>
+                    {staffList.map((staff) => (
+                      <StaffRow
+                        key={staff.id}
+                        item={staff}
+                        currentUser={currentUser}
+                        canManage={canManageSettings}
+                        saving={saving}
+                        onSave={async (payload) => {
+                          if (!currentUser) {
+                            setError("로그인 정보를 확인할 수 없습니다.");
+                            return;
+                          }
+
+                          setSaving(true);
+                          clearAlerts();
+
+                          try {
+                            await updateStaffFromSettings(
+                              staff.id,
+                              payload,
+                              currentUser
+                            );
+                            await loadStaffList();
+                            setMessage("직원 정보가 저장되었습니다.");
+                          } catch (err) {
+                            console.error(err);
+                            setError(getErrorMessage(err));
+                          } finally {
+                            setSaving(false);
+                          }
+                        }}
+                        onDeactivate={async () => {
+                          if (!currentUser) {
+                            setError("로그인 정보를 확인할 수 없습니다.");
+                            return;
+                          }
+
+                          const ok = confirm(
+                            "이 직원을 비활성화할까요?\n로그인은 차단되지만 기록은 보존됩니다."
+                          );
+
+                          if (!ok) return;
+
+                          setSaving(true);
+                          clearAlerts();
+
+                          try {
+                            await deactivateStaffFromSettings(
+                              staff.id,
+                              currentUser
+                            );
+                            await loadStaffList();
+                            setMessage("직원이 비활성화되었습니다.");
+                          } catch (err) {
+                            console.error(err);
+                            setError(getErrorMessage(err));
+                          } finally {
+                            setSaving(false);
+                          }
+                        }}
+                      />
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </section>
         )}
 
         {activeTab === "security" && (
-          <ComingSoonPanel
-            title="보안"
-            description="내 비밀번호 변경과 로그인 보안 설정을 관리하는 영역입니다."
-            items={[
-              "내 비밀번호 변경",
-              "로그인 기록 확인",
-              "계정별 접근 권한 점검",
-            ]}
-          />
+          <section className="rounded-[18px] border border-[#edf0f3] bg-white p-6 shadow-[0_2px_14px_rgba(0,0,0,0.04)]">
+            <SectionHeader
+              title="보안"
+              description="현재 로그인 계정의 비밀번호를 변경합니다."
+            />
+
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <div>
+                <label className="mb-1 block text-xs text-gray-500">
+                  현재 비밀번호
+                </label>
+                <input
+                  type="password"
+                  value={currentPassword}
+                  onChange={(e) => setCurrentPassword(e.target.value)}
+                  className="h-11 w-full rounded-xl border border-[#dfe3e8] bg-white px-3 text-sm outline-none transition focus:border-[#1d9e75] focus:ring-4 focus:ring-emerald-100"
+                />
+              </div>
+
+              <div>
+                <label className="mb-1 block text-xs text-gray-500">
+                  새 비밀번호
+                </label>
+                <input
+                  type="password"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  className="h-11 w-full rounded-xl border border-[#dfe3e8] bg-white px-3 text-sm outline-none transition focus:border-[#1d9e75] focus:ring-4 focus:ring-emerald-100"
+                />
+              </div>
+            </div>
+
+            <div className="mt-4 rounded-2xl border border-[#edf0f3] bg-gray-50 p-4 text-sm text-gray-500">
+              Firebase Auth 기준으로 재인증 후 비밀번호를 변경합니다. 새
+              비밀번호는 최소 6자 이상이어야 합니다.
+            </div>
+
+            <div className="mt-5 flex justify-end">
+              <button
+                onClick={handleChangePassword}
+                disabled={saving}
+                className="rounded-xl bg-black px-5 py-3 text-sm font-medium text-white transition hover:-translate-y-0.5 hover:shadow-md active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {saving ? "변경 중..." : "비밀번호 변경"}
+              </button>
+            </div>
+          </section>
         )}
       </div>
     </div>
   );
 }
 
-function ComingSoonPanel({
+function SectionHeader({
   title,
   description,
-  items,
+  badge,
+  badgeActive,
 }: {
   title: string;
   description: string;
-  items: string[];
+  badge?: string;
+  badgeActive?: boolean;
 }) {
   return (
-    <section className="rounded-[18px] border border-[#edf0f3] bg-white p-6 shadow-[0_2px_14px_rgba(0,0,0,0.04)]">
-      <div className="mb-5">
+    <div className="mb-5 flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+      <div>
         <h2 className="text-lg font-bold text-gray-900">{title}</h2>
         <p className="mt-1 text-sm leading-6 text-gray-500">{description}</p>
       </div>
 
-      <div className="rounded-2xl border border-dashed border-[#dfe3e8] bg-gray-50 p-5">
-        <div className="mb-3 text-sm font-bold text-gray-700">
-          다음 단계에서 구현 예정
-        </div>
+      {badge && (
+        <span
+          className={`w-fit rounded-full px-3 py-1 text-xs font-semibold ${
+            badgeActive
+              ? "bg-emerald-50 text-emerald-700"
+              : "bg-gray-100 text-gray-500"
+          }`}
+        >
+          {badge}
+        </span>
+      )}
+    </div>
+  );
+}
 
-        <ul className="space-y-2 text-sm text-gray-500">
-          {items.map((item) => (
-            <li key={item}>• {item}</li>
+function GlobalAlert({
+  error,
+  message,
+}: {
+  error: string;
+  message: string;
+}) {
+  if (!error && !message) return null;
+
+  return (
+    <div className="mb-4">
+      {error && (
+        <div className="rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-600">
+          {error}
+        </div>
+      )}
+
+      {message && (
+        <div className="rounded-xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+          {message}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function EmptyBox({ text }: { text: string }) {
+  return (
+    <div className="rounded-2xl border border-[#edf0f3] bg-gray-50 p-8 text-center text-sm text-gray-400">
+      {text}
+    </div>
+  );
+}
+
+function StaffRow({
+  item,
+  currentUser,
+  canManage,
+  saving,
+  onSave,
+  onDeactivate,
+}: {
+  item: SettingsStaffRecord;
+  currentUser: StaffUser | null;
+  canManage: boolean;
+  saving: boolean;
+  onSave: (payload: {
+    displayName: string;
+    role: SettingsStaffRole | string;
+    active: boolean;
+    orderNo: number;
+  }) => Promise<void>;
+  onDeactivate: () => Promise<void>;
+}) {
+  const [displayName, setDisplayName] = useState(item.displayName);
+  const [role, setRole] = useState<SettingsStaffRole | string>(item.role);
+  const [active, setActive] = useState(item.active);
+  const [orderNo, setOrderNo] = useState(Number(item.orderNo || 999999));
+
+  useEffect(() => {
+    setDisplayName(item.displayName);
+    setRole(item.role);
+    setActive(item.active);
+    setOrderNo(Number(item.orderNo || 999999));
+  }, [item]);
+
+  const isMe = currentUser?.uid === item.uid || currentUser?.uid === item.id;
+
+  return (
+    <tr>
+      <td className="whitespace-nowrap border-b border-[#f1f3f5] px-3 py-3">
+        <input
+          value={displayName}
+          disabled={!canManage || saving}
+          onChange={(e) => setDisplayName(e.target.value)}
+          className="h-9 w-[130px] rounded-lg border border-[#dfe3e8] bg-white px-2 text-sm outline-none disabled:bg-gray-50 disabled:text-gray-400"
+        />
+      </td>
+
+      <td className="whitespace-nowrap border-b border-[#f1f3f5] px-3 py-3 text-gray-500">
+        {item.email || "-"}
+      </td>
+
+      <td className="whitespace-nowrap border-b border-[#f1f3f5] px-3 py-3">
+        <select
+          value={role}
+          disabled={!canManage || saving}
+          onChange={(e) => setRole(e.target.value as SettingsStaffRole)}
+          className="h-9 rounded-lg border border-[#dfe3e8] bg-white px-2 text-sm outline-none disabled:bg-gray-50 disabled:text-gray-400"
+        >
+          {STAFF_ROLES.map((roleItem) => (
+            <option key={roleItem} value={roleItem}>
+              {roleItem}
+            </option>
           ))}
-        </ul>
-      </div>
-    </section>
+        </select>
+      </td>
+
+      <td className="whitespace-nowrap border-b border-[#f1f3f5] px-3 py-3">
+        <input
+          type="number"
+          value={orderNo}
+          disabled={!canManage || saving}
+          onChange={(e) => setOrderNo(Number(e.target.value || 999999))}
+          className="h-9 w-[80px] rounded-lg border border-[#dfe3e8] bg-white px-2 text-sm outline-none disabled:bg-gray-50 disabled:text-gray-400"
+        />
+      </td>
+
+      <td className="whitespace-nowrap border-b border-[#f1f3f5] px-3 py-3">
+        <label className="inline-flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={active}
+            disabled={!canManage || saving || isMe}
+            onChange={(e) => setActive(e.target.checked)}
+          />
+          <span
+            className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
+              active
+                ? "bg-emerald-50 text-emerald-700"
+                : "bg-gray-100 text-gray-500"
+            }`}
+          >
+            {active ? "활성" : "비활성"}
+          </span>
+        </label>
+      </td>
+
+      <td className="whitespace-nowrap border-b border-[#f1f3f5] px-3 py-3">
+        <div className="flex gap-2">
+          <button
+            disabled={!canManage || saving}
+            onClick={() =>
+              onSave({
+                displayName,
+                role,
+                active,
+                orderNo,
+              })
+            }
+            className="rounded-lg bg-black px-3 py-2 text-xs font-medium text-white transition hover:-translate-y-0.5 active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            저장
+          </button>
+
+          <button
+            disabled={!canManage || saving || !active || isMe}
+            onClick={onDeactivate}
+            className="rounded-lg bg-red-50 px-3 py-2 text-xs font-medium text-red-600 transition hover:bg-red-100 active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            비활성화
+          </button>
+        </div>
+      </td>
+    </tr>
   );
 }
