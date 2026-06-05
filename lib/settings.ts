@@ -144,9 +144,7 @@ function canEditMemo(staff: StaffUser | null | undefined) {
 }
 
 function assertCanManageSettings(staff: StaffUser) {
-  if (!staff?.uid) {
-    throw new Error("로그인 정보를 확인할 수 없습니다.");
-  }
+  if (!staff?.uid) throw new Error("로그인 정보를 확인할 수 없습니다.");
 
   if (!canManageSettings(staff)) {
     throw new Error("설정 변경 권한이 없습니다. admin 또는 doctor만 변경할 수 있습니다.");
@@ -154,9 +152,7 @@ function assertCanManageSettings(staff: StaffUser) {
 }
 
 function assertCanEditMemo(staff: StaffUser) {
-  if (!staff?.uid) {
-    throw new Error("로그인 정보를 확인할 수 없습니다.");
-  }
+  if (!staff?.uid) throw new Error("로그인 정보를 확인할 수 없습니다.");
 
   if (!canEditMemo(staff)) {
     throw new Error("메모 수정 권한이 없습니다.");
@@ -165,31 +161,17 @@ function assertCanEditMemo(staff: StaffUser) {
 
 function normalizeHexColor(value: unknown, fallback: string) {
   const raw = String(value || "").trim();
-
-  if (/^#[0-9a-fA-F]{6}$/.test(raw)) {
-    return raw;
-  }
-
-  return fallback;
+  return /^#[0-9a-fA-F]{6}$/.test(raw) ? raw : fallback;
 }
 
 function normalizeVisitStatusColors(
   colors?: Partial<VisitStatusColorMap> | null
 ): VisitStatusColorMap {
   return {
-    내원전: normalizeHexColor(
-      colors?.내원전,
-      DEFAULT_VISIT_STATUS_COLORS.내원전
-    ),
+    내원전: normalizeHexColor(colors?.내원전, DEFAULT_VISIT_STATUS_COLORS.내원전),
     대기: normalizeHexColor(colors?.대기, DEFAULT_VISIT_STATUS_COLORS.대기),
-    원상중: normalizeHexColor(
-      colors?.원상중,
-      DEFAULT_VISIT_STATUS_COLORS.원상중
-    ),
-    후상중: normalizeHexColor(
-      colors?.후상중,
-      DEFAULT_VISIT_STATUS_COLORS.후상중
-    ),
+    원상중: normalizeHexColor(colors?.원상중, DEFAULT_VISIT_STATUS_COLORS.원상중),
+    후상중: normalizeHexColor(colors?.후상중, DEFAULT_VISIT_STATUS_COLORS.후상중),
     귀가: normalizeHexColor(colors?.귀가, DEFAULT_VISIT_STATUS_COLORS.귀가),
     부도: normalizeHexColor(colors?.부도, DEFAULT_VISIT_STATUS_COLORS.부도),
   };
@@ -197,17 +179,13 @@ function normalizeVisitStatusColors(
 
 function normalizeCountryKey(value: unknown): CountryKey {
   const raw = String(value || "").trim() as CountryKey;
-
-  if (Object.prototype.hasOwnProperty.call(COUNTRY_TIMEZONES, raw)) {
-    return raw;
-  }
-
-  return "Korea";
+  return Object.prototype.hasOwnProperty.call(COUNTRY_TIMEZONES, raw)
+    ? raw
+    : "Korea";
 }
 
 function normalizeDateOnly(value: unknown) {
   const raw = String(value || "").trim();
-
   if (!raw) return todayString();
 
   const dash = raw.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})/);
@@ -256,9 +234,7 @@ function cleanText(value: unknown) {
 function cleanRole(value: unknown): SettingsStaffRole | string {
   const role = cleanText(value).toLowerCase();
 
-  if (
-    ["admin", "doctor", "coordinator", "staff", "interpreter"].includes(role)
-  ) {
+  if (["admin", "doctor", "coordinator", "staff", "interpreter"].includes(role)) {
     return role as SettingsStaffRole;
   }
 
@@ -273,14 +249,10 @@ export async function getVisitStatusColors(): Promise<VisitStatusColorMap> {
   const ref = doc(db, "appSettings", "visitStatusColors");
   const snap = await getDoc(ref);
 
-  if (!snap.exists()) {
-    return DEFAULT_VISIT_STATUS_COLORS;
-  }
+  if (!snap.exists()) return DEFAULT_VISIT_STATUS_COLORS;
 
   const data = snap.data() as Partial<VisitStatusColorSetting>;
-  const colors = data.colors as Partial<VisitStatusColorMap> | undefined;
-
-  return normalizeVisitStatusColors(colors);
+  return normalizeVisitStatusColors(data.colors);
 }
 
 export async function saveVisitStatusColors(
@@ -310,9 +282,7 @@ export async function saveVisitStatusColors(
     targetId: "visitStatusColors",
     staff,
     message: "내원상태 색상 설정을 변경했습니다.",
-    after: {
-      colors: normalizedColors,
-    },
+    after: { colors: normalizedColors },
   });
 
   return normalizedColors;
@@ -330,9 +300,7 @@ export async function getGeneralSettings(): Promise<GeneralSettings> {
   const ref = doc(db, "appSettings", "general");
   const snap = await getDoc(ref);
 
-  if (!snap.exists()) {
-    return DEFAULT_GENERAL_SETTINGS;
-  }
+  if (!snap.exists()) return DEFAULT_GENERAL_SETTINGS;
 
   const data = snap.data() as Partial<GeneralSettings>;
   const appCountry = normalizeCountryKey(data.appCountry);
@@ -369,7 +337,6 @@ export async function saveGeneralSettings(
   };
 
   const ref = doc(db, "appSettings", "general");
-
   await setDoc(ref, nextSettings, { merge: true });
 
   await createLog({
@@ -385,10 +352,7 @@ export async function saveGeneralSettings(
     },
   });
 
-  return {
-    ...nextSettings,
-    updatedAt: undefined,
-  };
+  return { ...nextSettings, updatedAt: undefined };
 }
 
 /* ============================================================
@@ -403,8 +367,7 @@ export async function getConferenceMemos(
 
   const q = query(
     collection(db, "conferenceMemos"),
-    where("memoDate", "==", targetDate),
-    where("deleted", "==", false)
+    where("memoDate", "==", targetDate)
   );
 
   const snap = await getDocs(q);
@@ -425,6 +388,7 @@ export async function getConferenceMemos(
         deletedBy: cleanText(data.deletedBy),
       };
     })
+    .filter((memo) => memo.deleted !== true)
     .sort((a, b) => toMillis(b.createdAt) - toMillis(a.createdAt))
     .slice(0, limit);
 }
@@ -439,9 +403,7 @@ export async function addConferenceMemo(
   const targetDate = normalizeDateOnly(memoDate);
   const text = cleanText(memoText);
 
-  if (!text) {
-    throw new Error("메모 내용을 입력하세요.");
-  }
+  if (!text) throw new Error("메모 내용을 입력하세요.");
 
   const docRef = await addDoc(collection(db, "conferenceMemos"), {
     memoDate: targetDate,
@@ -469,17 +431,11 @@ export async function addConferenceMemo(
   return docRef.id;
 }
 
-export async function deleteConferenceMemo(
-  memoId: string,
-  staff: StaffUser
-) {
+export async function deleteConferenceMemo(memoId: string, staff: StaffUser) {
   assertCanEditMemo(staff);
 
   const id = cleanText(memoId);
-
-  if (!id) {
-    throw new Error("메모 ID가 없습니다.");
-  }
+  if (!id) throw new Error("메모 ID가 없습니다.");
 
   const ref = doc(db, "conferenceMemos", id);
 
@@ -495,9 +451,7 @@ export async function deleteConferenceMemo(
     targetId: id,
     staff,
     message: "전체 메모를 삭제했습니다.",
-    after: {
-      deleted: true,
-    },
+    after: { deleted: true },
   });
 
   return true;
@@ -505,13 +459,9 @@ export async function deleteConferenceMemo(
 
 /* ============================================================
    직원 관리
-   - Auth 계정 생성은 Admin SDK 서버 API 필요.
-   - 여기서는 staff 문서 조회/수정/비활성화/원장순서 관리만 처리.
 ============================================================ */
 
-export async function getStaffListForSettings(): Promise<
-  SettingsStaffRecord[]
-> {
+export async function getStaffListForSettings(): Promise<SettingsStaffRecord[]> {
   const snap = await getDocs(collection(db, "staff"));
 
   return snap.docs
@@ -523,7 +473,10 @@ export async function getStaffListForSettings(): Promise<
         uid: cleanText(data.uid || docSnap.id),
         email: cleanText(data.email),
         displayName: cleanText(
-          data.displayName || (data as any).display_name || data.email || docSnap.id
+          data.displayName ||
+            (data as any).display_name ||
+            data.email ||
+            docSnap.id
         ),
         role: cleanRole(data.role),
         active: data.active !== false,
@@ -568,10 +521,7 @@ export async function updateStaffFromSettings(
   assertCanManageSettings(actor);
 
   const id = cleanText(staffId);
-
-  if (!id) {
-    throw new Error("직원 ID가 없습니다.");
-  }
+  if (!id) throw new Error("직원 ID가 없습니다.");
 
   const updatePayload: Record<string, unknown> = {
     updatedAt: serverTimestamp(),
@@ -617,22 +567,13 @@ export async function deactivateStaffFromSettings(
   assertCanManageSettings(actor);
 
   const id = cleanText(staffId);
-
-  if (!id) {
-    throw new Error("직원 ID가 없습니다.");
-  }
+  if (!id) throw new Error("직원 ID가 없습니다.");
 
   if (id === actor.uid) {
     throw new Error("본인 계정은 비활성화할 수 없습니다.");
   }
 
-  return updateStaffFromSettings(
-    id,
-    {
-      active: false,
-    },
-    actor
-  );
+  return updateStaffFromSettings(id, { active: false }, actor);
 }
 
 /* ============================================================
@@ -644,9 +585,7 @@ export async function changeMyPassword(
   newPassword: string,
   staff: StaffUser
 ) {
-  if (!staff?.uid) {
-    throw new Error("로그인 정보를 확인할 수 없습니다.");
-  }
+  if (!staff?.uid) throw new Error("로그인 정보를 확인할 수 없습니다.");
 
   const user = auth.currentUser;
 
@@ -657,14 +596,8 @@ export async function changeMyPassword(
   const current = cleanText(currentPassword);
   const next = cleanText(newPassword);
 
-  if (!current) {
-    throw new Error("현재 비밀번호를 입력하세요.");
-  }
-
-  if (!next) {
-    throw new Error("새 비밀번호를 입력하세요.");
-  }
-
+  if (!current) throw new Error("현재 비밀번호를 입력하세요.");
+  if (!next) throw new Error("새 비밀번호를 입력하세요.");
   if (next.length < 6) {
     throw new Error("새 비밀번호는 최소 6자 이상 입력하세요.");
   }
@@ -680,9 +613,7 @@ export async function changeMyPassword(
     targetId: "password",
     staff,
     message: "내 비밀번호를 변경했습니다.",
-    after: {
-      changed: true,
-    },
+    after: { changed: true },
   });
 
   return true;
