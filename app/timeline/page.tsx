@@ -494,15 +494,19 @@ export default function TimelinePage() {
     }
   }
 
-  async function loadReservationNotes(item: ReservationRecord) {
-    try {
-      const list = await getReservationNotes(item.reservationId, item.id);
-      setNotes(list);
-    } catch (error) {
-      console.error(error);
-      setNotes([]);
-    }
+async function loadReservationNotes(item: ReservationRecord) {
+  try {
+    const list = await getReservationNotes(
+      item.reservationId,
+      item.id,
+      item.patientId
+    );
+    setNotes(list);
+  } catch (error) {
+    console.error(error);
+    setNotes([]);
   }
+}
 
   async function refreshLatestLog(item: ReservationRecord) {
     const ids = [item.reservationId, item.id].filter(Boolean);
