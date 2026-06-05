@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import type { User } from "firebase/auth";
 import { getStaffByUid, listenCurrentUser, logout } from "@/lib/auth";
@@ -76,6 +76,19 @@ function clearCachedStaff() {
   }
 }
 
+function isSameStaff(a: StaffUser | null, b: StaffUser | null) {
+  if (!a || !b) return false;
+
+  return (
+    a.uid === b.uid &&
+    a.displayName === b.displayName &&
+    a.email === b.email &&
+    a.role === b.role &&
+    a.active === b.active &&
+    a.staffCode === b.staffCode
+  );
+}
+
 export default function AppShell({ children }: AppShellProps) {
   const router = useRouter();
   const pathname = usePathname();
@@ -104,6 +117,56 @@ export default function AppShell({ children }: AppShellProps) {
         };
   }, [pathname]);
 
+  const refreshStaff = useCallback(
+    async (user: User | null = firebaseUser, options?: { silent?: boolean }) => {
+      if (isLoginPage) {
+        setLoading(false);
+        return;
+      }
+
+      if (!user) {
+        clearCachedStaff();
+        setStaffUser(null);
+        setLoading(false);
+        router.push("/login");
+        return;
+      }
+
+      if (!options?.silent) {
+        setLoading((prev) => prev && true);
+      }
+
+      try {
+        const staff = await getStaffByUid(user.uid);
+
+        if (!staff || !staff.active) {
+          clearCachedStaff();
+          setStaffUser(null);
+          setLoading(false);
+          router.push("/login");
+          return;
+        }
+
+        setCachedStaff(staff);
+
+        setStaffUser((prev) => {
+          if (isSameStaff(prev, staff)) return prev;
+          return staff;
+        });
+
+        setLoading(false);
+      } catch (error) {
+        console.error("Staff refresh error:", error);
+
+        clearCachedStaff();
+        setStaffUser(null);
+        setLoading(false);
+        router.push("/login");
+      }
+    },
+    [firebaseUser, isLoginPage, router]
+  );
+
   useEffect(() => {
     if (isLoginPage) {
       setLoading(false);
@@ -113,26 +176,26 @@ export default function AppShell({ children }: AppShellProps) {
     let mounted = true;
 
     const unsubscribe = listenCurrentUser(async (user) => {
+      if (!mounted) return;
+
+      setFirebaseUser(user);
+
+      if (!user) {
+        clearCachedStaff();
+        setStaffUser(null);
+        setLoading(false);
+        router.push("/login");
+        return;
+      }
+
+      const cachedStaff = getCachedStaff();
+
+      if (cachedStaff && cachedStaff.uid === user.uid && cachedStaff.active) {
+        setStaffUser(cachedStaff);
+        setLoading(false);
+      }
+
       try {
-        if (!mounted) return;
-
-        setFirebaseUser(user);
-
-        if (!user) {
-          clearCachedStaff();
-          setStaffUser(null);
-          setLoading(false);
-          router.push("/login");
-          return;
-        }
-
-        const cachedStaff = getCachedStaff();
-
-        if (cachedStaff && cachedStaff.uid === user.uid && cachedStaff.active) {
-          setStaffUser(cachedStaff);
-          setLoading(false);
-        }
-
         const staff = await getStaffByUid(user.uid);
 
         if (!mounted) return;
@@ -166,6 +229,36 @@ export default function AppShell({ children }: AppShellProps) {
     };
   }, [isLoginPage, router]);
 
+  useEffect(() => {
+    if (isLoginPage || !firebaseUser) return;
+
+    refreshStaff(firebaseUser, { silent: true });
+  }, [pathname, firebaseUser, isLoginPage, refreshStaff]);
+
+  useEffect(() => {
+    if (isLoginPage) return;
+
+    function handleFocus() {
+      if (firebaseUser) {
+        refreshStaff(firebaseUser, { silent: true });
+      }
+    }
+
+    function handleVisibilityChange() {
+      if (document.visibilityState === "visible" && firebaseUser) {
+        refreshStaff(firebaseUser, { silent: true });
+      }
+    }
+
+    window.addEventListener("focus", handleFocus);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      window.removeEventListener("focus", handleFocus);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [firebaseUser, isLoginPage, refreshStaff]);
+
   async function handleLogout() {
     clearCachedStaff();
     await logout();
@@ -173,6 +266,7 @@ export default function AppShell({ children }: AppShellProps) {
   }
 
   const displayName = staffUser?.displayName || firebaseUser?.email || "사용자";
+  const roleName = staffUser?.role || "";
   const avatarText = displayName.slice(0, 1).toUpperCase();
 
   if (isLoginPage) {
@@ -207,48 +301,52 @@ export default function AppShell({ children }: AppShellProps) {
             실시간 운영 시스템
           </div>
 
-         <nav className="mt-8 flex flex-col gap-[7px]">
-  {menuItems.map((item) => {
-    const active =
-      item.href === "/"
-        ? pathname === "/"
-        : pathname.startsWith(item.href);
+          <nav className="mt-8 flex flex-col gap-[7px]">
+            {menuItems.map((item) => {
+              const active =
+                item.href === "/"
+                  ? pathname === "/"
+                  : pathname.startsWith(item.href);
 
-    return (
-      <Link
-        key={item.href}
-        href={item.href}
-        className="flex items-center gap-2 rounded-lg px-3 py-2.5 text-xs transition-all duration-150 hover:-translate-y-[1px] active:scale-[0.97]"
-        style={{
-          backgroundColor: active ? "#123f39" : "#182430",
-          color: active ? "#ffffff" : "#c3ccd6",
-          border: active ? "1px solid rgba(255,255,255,0.75)" : "1px solid transparent",
-          boxShadow: active ? "0 2px 10px rgba(0,0,0,0.12)" : "none",
-        }}
-      >
-        <span
-          className="w-[18px] text-center text-[15px]"
-          style={{
-            color: active ? "#ffffff" : "#c3ccd6",
-            opacity: 1,
-          }}
-        >
-          {item.icon}
-        </span>
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className="flex items-center gap-2 rounded-lg px-3 py-2.5 text-xs transition-all duration-150 hover:-translate-y-[1px] active:scale-[0.97]"
+                  style={{
+                    backgroundColor: active ? "#123f39" : "#182430",
+                    color: active ? "#ffffff" : "#c3ccd6",
+                    border: active
+                      ? "1px solid rgba(255,255,255,0.75)"
+                      : "1px solid transparent",
+                    boxShadow: active
+                      ? "0 2px 10px rgba(0,0,0,0.12)"
+                      : "none",
+                  }}
+                >
+                  <span
+                    className="w-[18px] text-center text-[15px]"
+                    style={{
+                      color: active ? "#ffffff" : "#c3ccd6",
+                      opacity: 1,
+                    }}
+                  >
+                    {item.icon}
+                  </span>
 
-        <span
-          className="font-medium"
-          style={{
-            color: active ? "#ffffff" : "#c3ccd6",
-            opacity: 1,
-          }}
-        >
-          {item.label}
-        </span>
-      </Link>
-    );
-  })}
-</nav>
+                  <span
+                    className="font-medium"
+                    style={{
+                      color: active ? "#ffffff" : "#c3ccd6",
+                      opacity: 1,
+                    }}
+                  >
+                    {item.label}
+                  </span>
+                </Link>
+              );
+            })}
+          </nav>
         </div>
 
         <div className="text-[11px] text-[#52606d]">
@@ -319,8 +417,16 @@ export default function AppShell({ children }: AppShellProps) {
                 {avatarText}
               </div>
 
-              <div className="text-sm font-medium text-[#1a1a1a]">
-                {displayName}
+              <div>
+                <div className="text-sm font-medium text-[#1a1a1a]">
+                  {displayName}
+                </div>
+
+                {roleName && (
+                  <div className="mt-0.5 text-[11px] text-gray-400">
+                    {roleName}
+                  </div>
+                )}
               </div>
             </div>
 
