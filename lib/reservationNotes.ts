@@ -34,34 +34,92 @@ function cleanText(value: unknown) {
 
 export async function getReservationNotes(
   reservationId: string,
-  reservationDocId: string
+  reservationDocId: string,
+  patientId?: string
 ): Promise<ReservationNote[]> {
-  const snap = await getDocs(
-    query(
-      collection(db, "reservationNotes"),
-      where("reservationId", "==", reservationId),
-      where("isDeleted", "==", false),
-      orderBy("createdAt", "desc")
-    )
-  );
+  const cleanReservationId = cleanText(reservationId);
+  const cleanReservationDocId = cleanText(reservationDocId);
+  const cleanPatientId = cleanText(patientId);
 
-  return snap.docs.map((d) => {
-    const data = d.data();
+  const requests: Promise<any>[] = [];
 
-    return {
-      id: d.id,
-      reservationId: cleanText(data.reservationId),
-      reservationDocId: cleanText(data.reservationDocId || reservationDocId),
-      patientId: cleanText(data.patientId),
-      memoText: cleanText(data.memoText),
-      createdAt: data.createdAt,
-      createdBy: cleanText(data.createdBy),
-      createdByUid: cleanText(data.createdByUid),
-      updatedAt: data.updatedAt,
-      updatedBy: cleanText(data.updatedBy),
-      updatedByUid: cleanText(data.updatedByUid),
-      isDeleted: data.isDeleted === true,
-    };
+  if (cleanReservationId) {
+    requests.push(
+      getDocs(
+        query(
+          collection(db, "reservationNotes"),
+          where("reservationId", "==", cleanReservationId)
+        )
+      )
+    );
+  }
+
+  if (cleanReservationDocId) {
+    requests.push(
+      getDocs(
+        query(
+          collection(db, "reservationNotes"),
+          where("reservationDocId", "==", cleanReservationDocId)
+        )
+      )
+    );
+  }
+
+  if (cleanPatientId) {
+    requests.push(
+      getDocs(
+        query(
+          collection(db, "reservationNotes"),
+          where("patientId", "==", cleanPatientId)
+        )
+      )
+    );
+  }
+
+  if (!requests.length) return [];
+
+  const snaps = await Promise.all(requests);
+  const noteMap = new Map<string, ReservationNote>();
+
+  snaps.forEach((snap) => {
+    snap.docs.forEach((d: any) => {
+      const data = d.data();
+
+      const note: ReservationNote = {
+        id: d.id,
+        reservationId: cleanText(data.reservationId || cleanReservationId),
+        reservationDocId: cleanText(
+          data.reservationDocId || cleanReservationDocId
+        ),
+        patientId: cleanText(data.patientId || cleanPatientId),
+        memoText: cleanText(data.memoText),
+        createdAt: data.createdAt,
+        createdBy: cleanText(data.createdBy),
+        createdByUid: cleanText(data.createdByUid),
+        updatedAt: data.updatedAt,
+        updatedBy: cleanText(data.updatedBy),
+        updatedByUid: cleanText(data.updatedByUid),
+        isDeleted: data.isDeleted === true,
+      };
+
+      if (!note.isDeleted) {
+        noteMap.set(note.id, note);
+      }
+    });
+  });
+
+  return Array.from(noteMap.values()).sort((a, b) => {
+    const aa =
+      a.createdAt && typeof (a.createdAt as any).toMillis === "function"
+        ? (a.createdAt as any).toMillis()
+        : 0;
+
+    const bb =
+      b.createdAt && typeof (b.createdAt as any).toMillis === "function"
+        ? (b.createdAt as any).toMillis()
+        : 0;
+
+    return bb - aa;
   });
 }
 
