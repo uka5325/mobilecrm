@@ -3,7 +3,6 @@ import {
   collection,
   doc,
   getDocs,
-  orderBy,
   query,
   serverTimestamp,
   updateDoc,
@@ -43,47 +42,59 @@ export async function getReservationNotes(
 
   const requests: Promise<any>[] = [];
 
-  if (cleanReservationId) {
-    requests.push(
-      getDocs(
-        query(
-          collection(db, "reservationNotes"),
-          where("reservationId", "==", cleanReservationId)
-        )
-      )
-    );
-  }
+  const targets = [
+    {
+      field: "reservationId",
+      value: cleanReservationId,
+    },
+    {
+      field: "reservationDocId",
+      value: cleanReservationDocId,
+    },
+    {
+      field: "patientId",
+      value: cleanPatientId,
+    },
+  ].filter((item) => item.value);
 
-  if (cleanReservationDocId) {
+  targets.forEach((target) => {
     requests.push(
       getDocs(
         query(
           collection(db, "reservationNotes"),
-          where("reservationDocId", "==", cleanReservationDocId)
+          where(target.field, "==", target.value)
         )
       )
     );
-  }
-
-  if (cleanPatientId) {
-    requests.push(
-      getDocs(
-        query(
-          collection(db, "reservationNotes"),
-          where("patientId", "==", cleanPatientId)
-        )
-      )
-    );
-  }
+  });
 
   if (!requests.length) return [];
 
-  const snaps = await Promise.all(requests);
+  const snaps = await Promise.allSettled(requests);
   const noteMap = new Map<string, ReservationNote>();
 
-  snaps.forEach((snap) => {
-    snap.docs.forEach((d: any) => {
+  snaps.forEach((result) => {
+    if (result.status !== "fulfilled") return;
+
+    result.value.docs.forEach((d: any) => {
       const data = d.data();
+
+      const isDeleted =
+        data.isDeleted === true ||
+        data.deleted === true ||
+        data.status === "deleted";
+
+      if (isDeleted) return;
+
+      const memoText = cleanText(
+        data.memoText ||
+          data.memo ||
+          data.note ||
+          data.content ||
+          data.text
+      );
+
+      if (!memoText) return;
 
       const note: ReservationNote = {
         id: d.id,
@@ -92,19 +103,22 @@ export async function getReservationNotes(
           data.reservationDocId || cleanReservationDocId
         ),
         patientId: cleanText(data.patientId || cleanPatientId),
-        memoText: cleanText(data.memoText),
+        memoText,
         createdAt: data.createdAt,
-        createdBy: cleanText(data.createdBy),
-        createdByUid: cleanText(data.createdByUid),
+        createdBy: cleanText(
+          data.createdBy ||
+            data.createdByName ||
+            data.staffName ||
+            data.writer
+        ),
+        createdByUid: cleanText(data.createdByUid || data.createdBy),
         updatedAt: data.updatedAt,
         updatedBy: cleanText(data.updatedBy),
         updatedByUid: cleanText(data.updatedByUid),
-        isDeleted: data.isDeleted === true,
+        isDeleted,
       };
 
-      if (!note.isDeleted) {
-        noteMap.set(note.id, note);
-      }
+      noteMap.set(note.id, note);
     });
   });
 
