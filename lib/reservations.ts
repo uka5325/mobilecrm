@@ -260,6 +260,23 @@ async function hasDuplicateReservation(params: CreateReservationParams) {
     );
 }
 
+const DOCTORS_CACHE_KEY = "crm_doctors_v1";
+
+function getCachedDoctors(): DoctorOption[] | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = localStorage.getItem(DOCTORS_CACHE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch { return null; }
+}
+
+function setCachedDoctors(doctors: DoctorOption[]) {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(DOCTORS_CACHE_KEY, JSON.stringify(doctors));
+  } catch {}
+}
+
 function sortDoctors(doctors: DoctorOption[]) {
   return [...doctors].sort((a, b) => {
     return (
@@ -307,6 +324,7 @@ export async function getDoctors(): Promise<DoctorOption[]> {
     })
     .filter((d) => d.displayName && d.role === "doctor" && d.active !== false);
 
+  setCachedDoctors(sortDoctors(doctors));
   return sortDoctors(doctors);
 }
 
@@ -359,13 +377,12 @@ export function subscribeAllReservations(
   }) => void,
   onError?: (error: Error) => void
 ) {
-  let currentDoctors: DoctorOption[] = [];
+  let currentDoctors: DoctorOption[] = getCachedDoctors() ?? [];
   let currentReservations: ReservationRecord[] = [];
-  let doctorsReady = false;
   let reservationsReady = false;
 
   function emit() {
-    if (!doctorsReady || !reservationsReady) return;
+    if (!reservationsReady) return;
     const fallbackDoctors = makeDoctorOptionsFromReservations(currentReservations);
     callback({
       reservations: currentReservations,
@@ -376,13 +393,9 @@ export function subscribeAllReservations(
   getDoctors()
     .then((loadedDoctors) => {
       currentDoctors = loadedDoctors;
-      doctorsReady = true;
       emit();
     })
-    .catch(() => {
-      doctorsReady = true;
-      emit();
-    });
+    .catch(() => {});
 
   const sixMonthsAgo = (() => {
     const d = new Date();
@@ -423,13 +436,12 @@ export function subscribeTimelineReservations(
   }) => void,
   onError?: (error: Error) => void
 ) {
-  let currentDoctors: DoctorOption[] = [];
+  let currentDoctors: DoctorOption[] = getCachedDoctors() ?? [];
   let currentReservations: ReservationRecord[] = [];
-  let doctorsReady = false;
   let reservationsReady = false;
 
   function emit() {
-    if (!doctorsReady || !reservationsReady) return;
+    if (!reservationsReady) return;
     const fallbackDoctors = makeDoctorOptionsFromReservations(currentReservations);
     callback({
       reservations: currentReservations,
@@ -440,13 +452,9 @@ export function subscribeTimelineReservations(
   getDoctors()
     .then((doctors) => {
       currentDoctors = doctors;
-      doctorsReady = true;
       emit();
     })
-    .catch(() => {
-      doctorsReady = true;
-      emit();
-    });
+    .catch(() => {});
 
   const unsubReservations = onSnapshot(
     query(
