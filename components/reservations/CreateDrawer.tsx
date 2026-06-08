@@ -161,22 +161,22 @@ export function CreateDrawer({ open, onClose, doctors, currentUser, initialDate 
           </div>
 
           <div className="grid grid-cols-2 gap-3">
-            <div>
+            <div className="min-w-0">
               <label className="text-xs text-gray-500">예약날짜 *</label>
               <input
                 type="date"
                 value={form.reservationDate}
                 onChange={(e) => setForm((p) => ({ ...p, reservationDate: e.target.value }))}
-                className="mt-1 w-full rounded-xl border border-[#dfe3e8] px-3 py-2 text-sm transition focus:border-[#1d9e75] focus:outline-none"
+                className="mt-1 min-w-0 w-full appearance-none rounded-xl border border-[#dfe3e8] px-3 py-2 text-sm transition focus:border-[#1d9e75] focus:outline-none"
               />
             </div>
-            <div>
+            <div className="min-w-0">
               <label className="text-xs text-gray-500">예약시간</label>
               <input
                 type="time"
                 value={form.reservationTime}
                 onChange={(e) => setForm((p) => ({ ...p, reservationTime: e.target.value }))}
-                className="mt-1 w-full rounded-xl border border-[#dfe3e8] px-3 py-2 text-sm transition focus:border-[#1d9e75] focus:outline-none"
+                className="mt-1 min-w-0 w-full appearance-none rounded-xl border border-[#dfe3e8] px-3 py-2 text-sm transition focus:border-[#1d9e75] focus:outline-none"
               />
             </div>
           </div>
