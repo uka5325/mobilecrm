@@ -535,7 +535,7 @@ export default function ReservationsPage() {
         </>
       )}
 
-      <div className="-mx-6 mb-4 border-b border-[#edf0f3] bg-[#ecfdf5] px-6 py-4 lg:-mx-8 lg:px-8">
+      <div className="-mx-6 mb-4 rounded-t-2xl border border-[#edf0f3] bg-[#ecfdf5] px-6 py-4 lg:-mx-8 lg:px-8">
         <div className="flex flex-wrap items-center gap-2">
           <input
             type="text"
@@ -554,9 +554,9 @@ export default function ReservationsPage() {
 
           <button
             onClick={() => setFilterDate("")}
-            className="h-10 rounded-xl border border-[#dfe3e8] bg-white px-3 text-xs text-gray-400 hover:bg-gray-50"
+            className="h-10 rounded-xl border border-[#dfe3e8] bg-white px-4 text-sm text-gray-400 hover:bg-gray-50"
           >
-            초기화
+            날짜 초기화
           </button>
         </div>
 
