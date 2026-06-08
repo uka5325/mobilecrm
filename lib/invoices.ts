@@ -9,7 +9,7 @@ import {
 } from "firebase/firestore";
 import { db } from "./firebase";
 import type { StaffUser } from "./auth";
-import type { ReservationRecord } from "./reservations";
+import { mapReservationDoc, type ReservationRecord } from "./reservations";
 import { createLog } from "./logs";
 import { getReservationBirthInfo } from "./reservationUtils";
 
@@ -181,55 +181,6 @@ function makeInvoiceId(reservation: ReservationRecord) {
     .slice(0, 20);
 
   return `INV-${yy}${mm}${dd}-${namePart}-${birthPart}`;
-}
-
-function mapReservationDoc(id: string, data: Record<string, unknown>): ReservationRecord {
-  const doctors = Array.isArray(data.doctors) ? data.doctors : [];
-  const coordinators = Array.isArray(data.coordinators) ? data.coordinators : [];
-  const name = cleanText(data.name || data.patientName);
-
-  return {
-    id,
-    reservationId: cleanText(data.reservationId || id),
-    patientId: cleanText(data.patientId),
-
-    name,
-    patientName: name,
-    birth: cleanText(data.birth),
-    birthInput: cleanText(data.birthInput),
-    gender: cleanText(data.gender),
-    phone: cleanText(data.phone),
-    nationality: cleanText(data.nationality),
-
-    reservationDate: cleanText(data.reservationDate),
-    reservationTime: cleanText(data.reservationTime),
-
-    operationStatus: data.operationStatus || "내원전",
-    surgeryReserved: data.surgeryReserved === true,
-    surgeryReservedAt: cleanText(data.surgeryReservedAt),
-
-    depositAmount: cleanText(data.depositAmount),
-    consultArea: cleanText(data.consultArea),
-
-    doctors,
-    coordinators,
-
-    doctorStatusMap: data.doctorStatusMap || {},
-    doctorStatusMetaMap: data.doctorStatusMetaMap || {},
-
-    invoiceUrl: cleanText(data.invoiceUrl),
-    invoiceId: cleanText(data.invoiceId),
-    invoiceSheetName: cleanText(data.invoiceSheetName),
-
-    createdAt: data.createdAt,
-    createdBy: cleanText(data.createdBy),
-    createdByUid: cleanText(data.createdByUid),
-    updatedAt: data.updatedAt,
-    updatedBy: cleanText(data.updatedBy),
-    updatedByUid: cleanText(data.updatedByUid),
-
-    isDeleted: data.isDeleted === true,
-  };
 }
 
 function mapTemplate(id: string, data: Record<string, unknown>): InvoiceTemplate {
