@@ -184,7 +184,7 @@ export function mapReservationDoc(id: string, data: Record<string, unknown>): Re
       : [],
 
     doctorStatusMap: (data.doctorStatusMap as Record<string, string>) || {},
-    doctorStatusMetaMap: (data.doctorStatusMetaMap as Record<string, unknown>) || {},
+    doctorStatusMetaMap: (data.doctorStatusMetaMap as ReservationRecord["doctorStatusMetaMap"]) || {},
 
     invoiceUrl: cleanText(data.invoiceUrl),
     invoiceId: cleanText(data.invoiceId),
