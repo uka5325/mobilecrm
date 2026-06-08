@@ -458,11 +458,13 @@ export function subscribeTimelineReservations(
           const bb = `${b.reservationTime} ${b.name}`;
           return aa.localeCompare(bb);
         });
-
+      reservationsReady = true;
       emit();
     },
     (error) => {
       console.error("[reservations snapshot error in subscribeTimelineReservations]", error);
+      reservationsReady = true;
+      emit();
       onError?.(error);
     }
   );
