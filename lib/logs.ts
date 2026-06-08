@@ -197,25 +197,27 @@ export async function getLatestLogsByReservationIds(reservationIds: string[]) {
   const result: Record<string, LogRecord> = {};
 
   async function fetchByField(fieldName: "reservationId" | "targetId") {
+    const chunks: string[][] = [];
     for (let i = 0; i < ids.length; i += 30) {
-      const chunk = ids.slice(i, i + 30);
-
-      const q = query(collection(db, "logs"), where(fieldName, "in", chunk));
-      const snap = await getDocs(q);
-
+      chunks.push(ids.slice(i, i + 30));
+    }
+    const snaps = await Promise.all(
+      chunks.map((chunk) =>
+        getDocs(query(collection(db, "logs"), where(fieldName, "in", chunk)))
+      )
+    );
+    snaps.forEach((snap) => {
       snap.docs.forEach((docSnap) => {
         const log = mapLogDoc(docSnap.id, docSnap.data());
         const keys = [log.reservationId, log.targetId].filter(Boolean);
-
         keys.forEach((key) => {
           const prev = result[key];
-
           if (!prev || getLogTime(log.createdAt) > getLogTime(prev.createdAt)) {
             result[key] = log;
           }
         });
       });
-    }
+    });
   }
 
   await Promise.all([

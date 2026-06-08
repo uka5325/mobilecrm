@@ -190,6 +190,8 @@ export function mapReservationDoc(id: string, data: Record<string, unknown>): Re
 
     invoiceUrl: cleanText(data.invoiceUrl),
     invoiceId: cleanText(data.invoiceId),
+    invoiceDocId: cleanText(data.invoiceDocId) || undefined,
+    invoiceStatus: cleanText(data.invoiceStatus) || undefined,
     invoiceSheetName: cleanText(data.invoiceSheetName),
 
     createdAt: data.createdAt,

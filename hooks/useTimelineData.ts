@@ -17,6 +17,27 @@ import { getLatestLogsByReservationIds, type LogRecord } from "@/lib/logs";
 import { buildSlotLayouts, getTimelineHeight } from "@/lib/timelineUtils";
 import type { StaffUser } from "@/lib/auth";
 
+const TIMELINE_CACHE_PREFIX = "crm_timeline_";
+
+function getCachedTimelineData(date: string): { reservations: ReservationRecord[]; doctors: DoctorOption[] } | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = sessionStorage.getItem(TIMELINE_CACHE_PREFIX + date);
+    return raw ? JSON.parse(raw) : null;
+  } catch { return null; }
+}
+
+function setCachedTimelineData(date: string, reservations: ReservationRecord[], doctors: DoctorOption[]) {
+  if (typeof window === "undefined") return;
+  try {
+    const keysToRemove = Object.keys(sessionStorage).filter(
+      (k) => k.startsWith(TIMELINE_CACHE_PREFIX) && k !== TIMELINE_CACHE_PREFIX + date
+    );
+    keysToRemove.forEach((k) => sessionStorage.removeItem(k));
+    sessionStorage.setItem(TIMELINE_CACHE_PREFIX + date, JSON.stringify({ reservations, doctors }));
+  } catch {}
+}
+
 export function useTimelineData(
   currentUser: StaffUser | null,
   authReady: boolean,
@@ -25,27 +46,38 @@ export function useTimelineData(
   const [reservations, setReservations] = useState<ReservationRecord[]>([]);
   const [doctors, setDoctors] = useState<DoctorOption[]>([]);
   const [statusColors, setStatusColors] = useState<VisitStatusColorMap>(DEFAULT_VISIT_STATUS_COLORS);
+  const [todayMemos, setTodayMemos] = useState<string[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [latestLogMap, setLatestLogMap] = useState<Record<string, LogRecord>>({});
 
   useEffect(() => {
     const cached = getCachedVisitStatusColors();
     if (cached) setStatusColors(cached);
   }, []);
-  const [todayMemos, setTodayMemos] = useState<string[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [latestLogMap, setLatestLogMap] = useState<Record<string, LogRecord>>(
-    {}
-  );
+
+  // Load from cache when date changes — runs before auth check for instant display
+  useEffect(() => {
+    const cached = getCachedTimelineData(selectedDate);
+    if (cached && cached.reservations.length > 0) {
+      setReservations(cached.reservations);
+      setDoctors(cached.doctors);
+      setLoading(false);
+    } else {
+      setReservations([]);
+      setDoctors([]);
+      setLoading(true);
+    }
+  }, [selectedDate]);
 
   useEffect(() => {
     if (!authReady || !currentUser) return;
-
-    setLoading(true);
 
     const unsubscribe = subscribeTimelineReservations(
       selectedDate,
       (data) => {
         setReservations(data.reservations || []);
         setDoctors(data.doctors || []);
+        setCachedTimelineData(selectedDate, data.reservations || [], data.doctors || []);
         setLoading(false);
       },
       (error) => {
