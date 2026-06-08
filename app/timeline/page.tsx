@@ -163,7 +163,7 @@ export default function TimelinePage() {
         </div>
 
         <div className="grid grid-cols-4 gap-2 border-b border-[#edf0f3] bg-white px-6 py-2 md:grid-cols-8">
-          <KpiBox label="전체" value={kpi.total} className="bg-gray-100" />
+          <KpiBox label="전체" value={kpi.total} className="border border-gray-300 bg-gray-100" />
           <KpiBox label="내원전" value={kpi.before} color={statusColors.내원전} />
           <KpiBox label="대기" value={kpi.wait} color={statusColors.대기} />
           <KpiBox label="원상중" value={kpi.cons} color={statusColors.원상중} />
@@ -173,7 +173,7 @@ export default function TimelinePage() {
           <KpiBox
             label="예약"
             value={kpi.surg}
-            className="bg-purple-50 text-purple-700"
+            className="border border-purple-300 bg-purple-50 text-purple-700"
           />
         </div>
 
