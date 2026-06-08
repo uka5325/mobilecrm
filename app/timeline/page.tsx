@@ -112,7 +112,9 @@ export default function TimelinePage() {
     setSelectedReservation(null);
   }
 
-
+  function openNewDrawer() {
+    setNewOpen(true);
+  }
 
   return (
     <div className="relative -mx-6 -mb-6 mt-5 h-[calc(100vh-170px)] min-h-[640px] overflow-hidden bg-white">
