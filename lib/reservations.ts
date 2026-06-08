@@ -183,8 +183,8 @@ export function mapReservationDoc(id: string, data: Record<string, unknown>): Re
       ? data.coordinators.map(cleanText).filter(Boolean)
       : [],
 
-    doctorStatusMap: data.doctorStatusMap || {},
-    doctorStatusMetaMap: data.doctorStatusMetaMap || {},
+    doctorStatusMap: (data.doctorStatusMap as Record<string, string>) || {},
+    doctorStatusMetaMap: (data.doctorStatusMetaMap as Record<string, unknown>) || {},
 
     invoiceUrl: cleanText(data.invoiceUrl),
     invoiceId: cleanText(data.invoiceId),
