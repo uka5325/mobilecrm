@@ -518,11 +518,6 @@ export default function ReservationsPage() {
       currentUser
     );
 
-    setReservations((prev) =>
-      prev.map((r) =>
-        r.id === item.id ? { ...r, operationStatus: status } : r
-      )
-    );
   }
 
   async function handleSurgeryToggle(item: ReservationRecord) {
@@ -535,12 +530,6 @@ export default function ReservationsPage() {
       item.reservationId,
       next,
       currentUser
-    );
-
-    setReservations((prev) =>
-      prev.map((r) =>
-        r.id === item.id ? { ...r, surgeryReserved: next } : r
-      )
     );
   }
 
@@ -557,7 +546,6 @@ export default function ReservationsPage() {
       return;
     }
 
-    setReservations((prev) => prev.filter((r) => r.id !== item.id));
   }
 
   return (
