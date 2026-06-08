@@ -24,9 +24,12 @@ export function useTimelineData(
 ) {
   const [reservations, setReservations] = useState<ReservationRecord[]>([]);
   const [doctors, setDoctors] = useState<DoctorOption[]>([]);
-  const [statusColors, setStatusColors] = useState<VisitStatusColorMap>(
-    () => getCachedVisitStatusColors() ?? DEFAULT_VISIT_STATUS_COLORS
-  );
+  const [statusColors, setStatusColors] = useState<VisitStatusColorMap>(DEFAULT_VISIT_STATUS_COLORS);
+
+  useEffect(() => {
+    const cached = getCachedVisitStatusColors();
+    if (cached) setStatusColors(cached);
+  }, []);
   const [todayMemos, setTodayMemos] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [latestLogMap, setLatestLogMap] = useState<Record<string, LogRecord>>(

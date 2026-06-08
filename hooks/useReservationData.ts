@@ -20,9 +20,12 @@ export function useReservationData(
 ) {
   const [reservations, setReservations] = useState<ReservationRecord[]>([]);
   const [doctors, setDoctors] = useState<DoctorOption[]>([]);
-  const [statusColors, setStatusColors] = useState<VisitStatusColorMap>(
-    () => getCachedVisitStatusColors() ?? DEFAULT_VISIT_STATUS_COLORS
-  );
+  const [statusColors, setStatusColors] = useState<VisitStatusColorMap>(DEFAULT_VISIT_STATUS_COLORS);
+
+  useEffect(() => {
+    const cached = getCachedVisitStatusColors();
+    if (cached) setStatusColors(cached);
+  }, []);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
