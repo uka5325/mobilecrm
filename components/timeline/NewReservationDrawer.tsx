@@ -173,7 +173,7 @@ export function NewReservationDrawer({ open, onClose, doctors, currentUser, init
                 type="date"
                 value={newForm.reservationDate}
                 onChange={(e) => setNewForm((p) => ({ ...p, reservationDate: e.target.value }))}
-                className="mt-1 w-full rounded-xl border border-[#dfe3e8] px-2 py-2 text-xs transition focus:border-[#1d9e75] focus:outline-none"
+                className="mt-1 w-full rounded-xl border border-[#dfe3e8] px-2 py-1.5 text-sm transition focus:border-[#1d9e75] focus:outline-none"
               />
             </div>
             <div>
@@ -183,7 +183,7 @@ export function NewReservationDrawer({ open, onClose, doctors, currentUser, init
                 step={1800}
                 value={newForm.reservationTime}
                 onChange={(e) => setNewForm((p) => ({ ...p, reservationTime: e.target.value }))}
-                className="mt-1 w-full rounded-xl border border-[#dfe3e8] px-2 py-2 text-xs transition focus:border-[#1d9e75] focus:outline-none"
+                className="mt-1 w-full rounded-xl border border-[#dfe3e8] px-2 py-1.5 text-sm transition focus:border-[#1d9e75] focus:outline-none"
               />
             </div>
           </div>
