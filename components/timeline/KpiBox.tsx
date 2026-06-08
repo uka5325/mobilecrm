@@ -1,7 +1,5 @@
 "use client";
 
-import { getSoftStatusColor } from "@/lib/colorUtils";
-
 export function KpiBox({
   label,
   value,
@@ -22,15 +20,19 @@ export function KpiBox({
       style={
         validColor
           ? {
-              backgroundColor: getSoftStatusColor(validColor),
-              color: validColor,
-              border: `1px solid ${validColor}33`,
+              backgroundColor: `${validColor}22`,
+              border: `2px solid ${validColor}`,
             }
           : undefined
       }
     >
-      <div className="text-xs font-semibold opacity-90">{label}</div>
-      <div className="text-lg font-extrabold">{value}</div>
+      <div className="text-xs font-semibold text-gray-500">{label}</div>
+      <div
+        className="text-lg font-extrabold"
+        style={validColor ? { color: validColor } : undefined}
+      >
+        {value}
+      </div>
     </div>
   );
 }
