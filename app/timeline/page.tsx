@@ -43,6 +43,7 @@ import {
   updateReservationNote,
   type ReservationNote,
 } from "@/lib/reservationNotes";
+import { todayString } from "@/lib/dateUtils";
 
 const START_H = 9;
 const END_H = 21;
@@ -78,18 +79,6 @@ type SlotLayout = {
   top: number;
   height: number;
 };
-
-function todayString() {
-  const d = new Date();
-
-  return (
-    d.getFullYear() +
-    "-" +
-    String(d.getMonth() + 1).padStart(2, "0") +
-    "-" +
-    String(d.getDate()).padStart(2, "0")
-  );
-}
 
 function normalizeTime(value: string) {
   const raw = String(value || "").trim();

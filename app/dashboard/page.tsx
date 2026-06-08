@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { collection, getDocs, query, where } from "firebase/firestore";
 import { db } from "@/lib/firebase";
+import { todayString } from "@/lib/dateUtils";
 
 type StaffRole = "admin" | "doctor" | "coordinator" | "staff" | "interpreter";
 
@@ -98,18 +99,6 @@ const CURRENCY_SYMBOL: Record<string, string> = {
   CNY: "¥",
   VND: "₫",
 };
-
-function todayString() {
-  const d = new Date();
-
-  return (
-    d.getFullYear() +
-    "-" +
-    String(d.getMonth() + 1).padStart(2, "0") +
-    "-" +
-    String(d.getDate()).padStart(2, "0")
-  );
-}
 
 function formatDate(date: Date) {
   return (

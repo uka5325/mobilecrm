@@ -48,6 +48,7 @@ import {
   type InvoiceTemplate,
   type InvoiceTemplateSection,
 } from "@/lib/invoiceSettings";
+import { todayString } from "@/lib/dateUtils";
 
 type SettingsTab =
   | "statusColors"
@@ -101,17 +102,6 @@ const STATUS_HELP: Record<VisitStatus, string> = {
   부도: "예약 후 미방문",
 };
 
-function todayString() {
-  const d = new Date();
-
-  return (
-    d.getFullYear() +
-    "-" +
-    String(d.getMonth() + 1).padStart(2, "0") +
-    "-" +
-    String(d.getDate()).padStart(2, "0")
-  );
-}
 
 function getReadableTextColor(hex: string) {
   const clean = hex.replace("#", "");

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { todayString } from "@/lib/dateUtils";
 
 type ImportPayload = {
   name: string;
@@ -92,18 +93,6 @@ function findCol(headers: string[], candidates: string[]) {
   }
 
   return -1;
-}
-
-function todayString() {
-  const d = new Date();
-
-  return (
-    d.getFullYear() +
-    "-" +
-    String(d.getMonth() + 1).padStart(2, "0") +
-    "-" +
-    String(d.getDate()).padStart(2, "0")
-  );
 }
 
 function normalizeDate(value: unknown) {

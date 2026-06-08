@@ -10,18 +10,7 @@ import {
 import { getStaffByUid, listenCurrentUser } from "@/lib/auth";
 import type { StaffUser } from "@/lib/auth";
 import { getConferenceMemos, type ConferenceMemo } from "@/lib/settings";
-
-function todayString() {
-  const d = new Date();
-
-  return (
-    d.getFullYear() +
-    "-" +
-    String(d.getMonth() + 1).padStart(2, "0") +
-    "-" +
-    String(d.getDate()).padStart(2, "0")
-  );
-}
+import { todayString } from "@/lib/dateUtils";
 
 function todayDisplayString() {
   const d = new Date();

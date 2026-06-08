@@ -32,6 +32,7 @@ import {
   type VisitStatus,
   type VisitStatusColorMap,
 } from "@/lib/settings";
+import { todayString } from "@/lib/dateUtils";
 
 const STATUS_LIST: ReservationStatus[] = [
   "내원전",
@@ -47,18 +48,6 @@ type InvoiceMenuState = {
   x: number;
   y: number;
 } | null;
-
-function todayString() {
-  const d = new Date();
-
-  return (
-    d.getFullYear() +
-    "-" +
-    String(d.getMonth() + 1).padStart(2, "0") +
-    "-" +
-    String(d.getDate()).padStart(2, "0")
-  );
-}
 
 function getStatusColor(status: string, colors: VisitStatusColorMap) {
   if (VISIT_STATUS_LIST.includes(status as VisitStatus)) {
