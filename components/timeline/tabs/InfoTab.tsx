@@ -38,8 +38,8 @@ type Props = {
   onSave: () => void;
   onMemoTextChange: (text: string) => void;
   onAddMemo: () => void;
-  onUpdateNote: (note: ReservationNote, text: string) => void;
-  onDeleteNote: (note: ReservationNote) => void;
+  onUpdateNote: (note: ReservationNote, text: string) => Promise<void>;
+  onDeleteNote: (note: ReservationNote) => Promise<void>;
   onShowAllNotes: () => void;
 };
 

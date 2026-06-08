@@ -278,13 +278,13 @@ function mapInvoiceDoc(id: string, data: Record<string, unknown>): InvoiceRecord
 
     language: cleanText(data.language || "mn"),
     templateId: cleanText(data.templateId || "template_mn"),
-    templateSnapshot: data.templateSnapshot || null,
+    templateSnapshot: (data.templateSnapshot as InvoiceTemplate) || null,
     sectionsSnapshot: Array.isArray(data.sectionsSnapshot)
-      ? data.sectionsSnapshot
+      ? (data.sectionsSnapshot as InvoiceTemplateSection[])
       : [],
 
-    items: Array.isArray(data.items) ? data.items : [],
-    discounts: Array.isArray(data.discounts) ? data.discounts : [],
+    items: Array.isArray(data.items) ? (data.items as InvoiceItemSnapshot[]) : [],
+    discounts: Array.isArray(data.discounts) ? (data.discounts as InvoiceDiscount[]) : [],
 
     depositAmount: toNumber(data.depositAmount),
 
