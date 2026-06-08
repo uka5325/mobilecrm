@@ -316,7 +316,7 @@ export default function TimelinePage() {
                                   left,
                                   width,
                                   height,
-                                  backgroundColor: /^#[0-9a-fA-F]{6}$/.test(cardColor) ? `${cardColor}B3` : cardColor,
+                                  backgroundColor: /^#[0-9a-fA-F]{6}$/.test(cardColor) ? `${cardColor}FF` : cardColor,
                                   color: cardTextColor,
                                 }}
                               >
