@@ -48,6 +48,7 @@ export type ReservationRecord = {
   reservationTime: string;
 
   operationStatus: ReservationStatus;
+  preConsStatus: string;
   surgeryReserved: boolean;
   surgeryReservedAt?: string;
 
@@ -170,6 +171,7 @@ export function mapReservationDoc(id: string, data: Record<string, unknown>): Re
     reservationTime: cleanText(data.reservationTime),
 
     operationStatus: normalizeReservationStatus(data.operationStatus),
+    preConsStatus: cleanText(data.preConsStatus),
     surgeryReserved: data.surgeryReserved === true,
     surgeryReservedAt: cleanText(data.surgeryReservedAt),
 
@@ -682,11 +684,12 @@ export async function updateDoctorStatus(
   reservationId: string,
   doctorName: string,
   newStatus: ReservationStatus,
-  staff: StaffUser
+  staff: StaffUser,
+  options?: { previousOperationStatus?: string }
 ) {
   const ref = doc(db, "reservations", reservationDocId);
 
-  await updateDoc(ref, {
+  const updateData: Record<string, unknown> = {
     [`doctorStatusMap.${doctorName}`]: newStatus,
     [`doctorStatusMetaMap.${doctorName}.status`]: newStatus,
     [`doctorStatusMetaMap.${doctorName}.updatedAt`]: new Date().toISOString(),
@@ -695,7 +698,21 @@ export async function updateDoctorStatus(
     updatedAt: serverTimestamp(),
     updatedBy: staff.displayName,
     updatedByUid: staff.uid,
-  });
+  };
+
+  if (newStatus === "원상중") {
+    // 대시보드/KPI 카운팅을 위해 전역 operationStatus도 업데이트
+    updateData.operationStatus = "원상중";
+    // 다른 doctor 카드가 이전 상태를 유지하도록 preConsStatus 저장
+    if (options?.previousOperationStatus !== undefined) {
+      updateData.preConsStatus = options.previousOperationStatus;
+    }
+  } else {
+    // 원상중 해제 시 preConsStatus 초기화
+    updateData.preConsStatus = "";
+  }
+
+  await updateDoc(ref, updateData);
 
   await createLog({
     action: "reservation_update",
@@ -721,6 +738,7 @@ export async function updateReservationStatus(
 
   await updateDoc(ref, {
     operationStatus: newStatus,
+    preConsStatus: "",
     updatedAt: serverTimestamp(),
     updatedBy: staff.displayName,
     updatedByUid: staff.uid,

@@ -210,10 +210,13 @@ export function DetailDrawer({ open, reservation, doctors, currentUser, statusCo
         selectedReservation.reservationId,
         clickedDoctorName,
         "원상중",
-        currentUser
+        currentUser,
+        { previousOperationStatus: selectedReservation.operationStatus }
       );
       const updated = {
         ...selectedReservation,
+        operationStatus: "원상중" as ReservationStatus,
+        preConsStatus: selectedReservation.operationStatus,
         doctorStatusMap: { ...selectedReservation.doctorStatusMap, [clickedDoctorName]: "원상중" },
       };
       setSelectedReservation(updated);
