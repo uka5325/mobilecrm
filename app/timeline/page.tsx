@@ -453,10 +453,6 @@ async function loadReservationNotes(item: ReservationRecord) {
         depositAmount: detailForm.depositAmount,
       };
 
-      setReservations((prev) =>
-        prev.map((item) => (item.id === updated.id ? updated : item))
-      );
-
       setSelectedReservation(updated);
       setDetailMessage("수정 저장 완료");
 
@@ -490,10 +486,6 @@ async function loadReservationNotes(item: ReservationRecord) {
       operationStatus: nextStatus,
     };
 
-    setReservations((prev) =>
-      prev.map((item) => (item.id === updated.id ? updated : item))
-    );
-
     setSelectedReservation(updated);
 
     await loadReservationLogs(updated);
@@ -516,10 +508,6 @@ async function loadReservationNotes(item: ReservationRecord) {
       ...selectedReservation,
       surgeryReserved: next,
     };
-
-    setReservations((prev) =>
-      prev.map((item) => (item.id === updated.id ? updated : item))
-    );
 
     setSelectedReservation(updated);
 
@@ -703,10 +691,6 @@ async function loadReservationNotes(item: ReservationRecord) {
         invoiceDocId: "",
         invoiceStatus: "",
       } as ReservationRecord;
-
-      setReservations((prev) =>
-        prev.map((item) => (item.id === updated.id ? updated : item))
-      );
 
       setSelectedReservation(updated);
 
