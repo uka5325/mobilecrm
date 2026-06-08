@@ -451,12 +451,12 @@ export function subscribeTimelineReservations(
   const unsubReservations = onSnapshot(
     query(
       collection(db, "reservations"),
-      where("reservationDate", "==", date),
-      where("isDeleted", "==", false)
+      where("reservationDate", "==", date)
     ),
     (snap) => {
       currentReservations = snap.docs
         .map((docSnap) => mapReservationDoc(docSnap.id, docSnap.data()))
+        .filter((item) => !item.isDeleted)
         .sort((a, b) => {
           const aa = `${a.reservationTime} ${a.name}`;
           const bb = `${b.reservationTime} ${b.name}`;
