@@ -282,7 +282,7 @@ export default function ReservationsPage() {
       const rows = inRange.map((r, i) => {
         const birthInfo = getReservationBirthInfo(r);
         const notes = notesPerReservation[i];
-        const allMemo = notes.map((n) => n.memoText).join(" | ");
+        const allMemo = notes.map((n) => `[${n.createdBy || ""}] ${n.memoText}`).join(" | ");
         const depositRaw = String(r.depositAmount || "").trim();
         const depositMatch = depositRaw.match(/^([\d,]+)\s*([A-Z₩$¥€]+)?$/);
         const depositAmount = depositMatch ? depositMatch[1].replace(/,/g, "") : depositRaw;
@@ -361,15 +361,19 @@ export default function ReservationsPage() {
                 <div className="space-y-3">
                   {memoPopover.notes.map((note) => (
                     <div key={note.id} className="rounded-xl border border-[#edf0f3] bg-[#f8fafc] p-3">
-                      <div className="mb-1 text-sm leading-relaxed text-gray-700">{note.memoText}</div>
-                      <div className="text-xs text-gray-400">
-                        {note.createdBy}
+                      <div className="mb-1.5 flex items-start gap-2">
+                        <span className="mt-0.5 shrink-0 rounded-lg bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-700">
+                          {note.createdBy || "알 수 없음"}
+                        </span>
+                        <span className="text-sm leading-relaxed text-gray-700">{note.memoText}</span>
+                      </div>
+                      <div className="text-right text-xs text-gray-400">
                         {note.createdAt ? (() => {
                           try {
                             const d = typeof (note.createdAt as any).toDate === "function"
                               ? (note.createdAt as any).toDate()
                               : new Date(note.createdAt as any);
-                            return " · " + d.getFullYear() + "." + String(d.getMonth() + 1).padStart(2, "0") + "." + String(d.getDate()).padStart(2, "0") + " " + String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0");
+                            return d.getFullYear() + "." + String(d.getMonth() + 1).padStart(2, "0") + "." + String(d.getDate()).padStart(2, "0") + " " + String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0");
                           } catch { return ""; }
                         })() : ""}
                       </div>
