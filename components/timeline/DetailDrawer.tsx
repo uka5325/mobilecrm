@@ -231,24 +231,31 @@ export function DetailDrawer({ open, reservation, doctors, currentUser, statusCo
       currentUser
     );
 
-    // 이 doctor에 원상중이 남아있으면 함께 초기화
-    const hadDoctorStatus = clickedDoctorName && selectedReservation.doctorStatusMap?.[clickedDoctorName] === "원상중";
-    if (hadDoctorStatus && clickedDoctorName) {
-      await updateDoctorStatus(
-        selectedReservation.id,
-        selectedReservation.reservationId,
-        clickedDoctorName,
-        nextStatus,
-        currentUser
-      );
-    }
+    // 원상중이 남아있는 모든 doctor의 per-doctor status를 초기화 (두 카드 동시 반영)
+    const doctorStatusMap = selectedReservation.doctorStatusMap || {};
+    const doctorsWithConsStatus = Object.entries(doctorStatusMap)
+      .filter(([, s]) => s === "원상중")
+      .map(([d]) => d);
+
+    await Promise.all(
+      doctorsWithConsStatus.map((doctorName) =>
+        updateDoctorStatus(
+          selectedReservation.id,
+          selectedReservation.reservationId,
+          doctorName,
+          nextStatus,
+          currentUser
+        )
+      )
+    );
+
+    const newDoctorStatusMap = { ...doctorStatusMap };
+    doctorsWithConsStatus.forEach((d) => { newDoctorStatusMap[d] = nextStatus; });
 
     const updated = {
       ...selectedReservation,
       operationStatus: nextStatus,
-      doctorStatusMap: hadDoctorStatus && clickedDoctorName
-        ? { ...selectedReservation.doctorStatusMap, [clickedDoctorName]: nextStatus }
-        : selectedReservation.doctorStatusMap,
+      doctorStatusMap: newDoctorStatusMap,
     };
     setSelectedReservation(updated);
     await loadLogs(updated);

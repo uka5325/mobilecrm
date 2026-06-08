@@ -130,7 +130,7 @@ export default function TimelinePage() {
               오늘의 메모
             </div>
 
-            <div className="max-h-[42px] overflow-y-auto text-sm leading-6 text-emerald-800">
+            <div className="text-sm leading-6 text-emerald-800">
               {todayMemos.length === 0 ? (
                 "등록된 메모가 없습니다."
               ) : (
