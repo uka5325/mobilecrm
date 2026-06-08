@@ -33,6 +33,10 @@ const ROLE_LEVEL: Record<StaffRole, number> = {
   interpreter: 1,
 };
 
+// 로그인 실패 시 모든 경우에 동일한 메시지를 반환합니다.
+// 계정 존재 여부나 활성화 상태를 외부에서 추론할 수 없도록 합니다.
+const LOGIN_FAIL_MESSAGE = "이메일 또는 비밀번호가 올바르지 않습니다.";
+
 export async function loginWithEmail(email: string, password: string) {
   if (!email || !password) {
     return {
@@ -50,19 +54,11 @@ export async function loginWithEmail(email: string, password: string) {
 
     const staff = await getStaffByUid(credential.user.uid);
 
-    if (!staff) {
+    if (!staff || !staff.active) {
       await signOut(auth);
       return {
         success: false,
-        message: "등록된 직원 계정이 아닙니다.",
-      };
-    }
-
-    if (!staff.active) {
-      await signOut(auth);
-      return {
-        success: false,
-        message: "비활성화된 계정입니다.",
+        message: LOGIN_FAIL_MESSAGE,
       };
     }
 
@@ -72,9 +68,12 @@ export async function loginWithEmail(email: string, password: string) {
       redirect: "/",
     };
   } catch (error) {
+    if (process.env.NODE_ENV === "development") {
+      console.error("[Auth] 로그인 실패:", error);
+    }
     return {
       success: false,
-      message: "이메일 또는 비밀번호가 올바르지 않습니다.",
+      message: LOGIN_FAIL_MESSAGE,
     };
   }
 }
