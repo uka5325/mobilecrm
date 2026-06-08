@@ -94,13 +94,13 @@ export function CreateDrawer({ open, onClose, doctors, currentUser, initialDate 
     <>
       <div className="fixed inset-0 z-[998] bg-black/35" onClick={onClose} />
 
-      <div className="fixed right-0 top-0 z-[999] flex h-screen w-[440px] max-w-full flex-col bg-white shadow-[-8px_0_30px_rgba(0,0,0,0.12)]">
-        <div className="flex items-center justify-between border-b px-6 py-5">
+      <div className="fixed right-0 top-0 z-[1001] flex h-screen w-[390px] max-w-[calc(100vw-12px)] flex-col bg-white shadow-[-8px_0_30px_rgba(0,0,0,0.12)]">
+        <div className="flex shrink-0 items-center justify-between border-b border-[#edf0f3] px-6 py-5">
           <div>
             <div className="text-xl font-bold">신규 예약 등록</div>
             <div className="mt-1 text-sm text-gray-500">단일 예약 추가</div>
           </div>
-          <button onClick={onClose} className="text-2xl text-gray-400">×</button>
+          <button onClick={onClose} className="text-2xl text-gray-400 transition hover:scale-110 hover:text-gray-700 active:scale-95">×</button>
         </div>
 
         <div className="flex-1 space-y-4 overflow-auto p-6">
@@ -110,7 +110,7 @@ export function CreateDrawer({ open, onClose, doctors, currentUser, initialDate 
               <input
                 value={form.name}
                 onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))}
-                className="mt-1 w-full rounded-xl border px-3 py-2 text-sm"
+                className="mt-1 w-full rounded-xl border border-[#dfe3e8] px-3 py-2 text-sm transition focus:border-[#1d9e75] focus:outline-none"
               />
             </div>
 
@@ -120,7 +120,7 @@ export function CreateDrawer({ open, onClose, doctors, currentUser, initialDate 
                 value={form.birthInput}
                 onChange={(e) => setForm((p) => ({ ...p, birthInput: e.target.value }))}
                 placeholder="891210-1 / 19891210-1"
-                className="mt-1 w-full rounded-xl border px-3 py-2 text-sm"
+                className="mt-1 w-full rounded-xl border border-[#dfe3e8] px-3 py-2 text-sm transition focus:border-[#1d9e75] focus:outline-none"
               />
               {form.birthInput && (
                 <div className="mt-1 text-xs text-gray-500">
@@ -136,7 +136,7 @@ export function CreateDrawer({ open, onClose, doctors, currentUser, initialDate 
               <input
                 value={form.phone}
                 onChange={(e) => setForm((p) => ({ ...p, phone: e.target.value }))}
-                className="mt-1 w-full rounded-xl border px-3 py-2 text-sm"
+                className="mt-1 w-full rounded-xl border border-[#dfe3e8] px-3 py-2 text-sm transition focus:border-[#1d9e75] focus:outline-none"
               />
             </div>
 
@@ -146,7 +146,7 @@ export function CreateDrawer({ open, onClose, doctors, currentUser, initialDate 
                 value={form.nationality}
                 onChange={(e) => setForm((p) => ({ ...p, nationality: e.target.value }))}
                 placeholder="몽골"
-                className="mt-1 w-full rounded-xl border px-3 py-2 text-sm"
+                className="mt-1 w-full rounded-xl border border-[#dfe3e8] px-3 py-2 text-sm transition focus:border-[#1d9e75] focus:outline-none"
               />
             </div>
           </div>
@@ -156,7 +156,7 @@ export function CreateDrawer({ open, onClose, doctors, currentUser, initialDate 
             <input
               value={form.consultArea}
               onChange={(e) => setForm((p) => ({ ...p, consultArea: e.target.value }))}
-              className="mt-1 w-full rounded-xl border px-3 py-2 text-sm"
+              className="mt-1 w-full rounded-xl border border-[#dfe3e8] px-3 py-2 text-sm transition focus:border-[#1d9e75] focus:outline-none"
             />
           </div>
 
@@ -167,7 +167,7 @@ export function CreateDrawer({ open, onClose, doctors, currentUser, initialDate 
                 type="date"
                 value={form.reservationDate}
                 onChange={(e) => setForm((p) => ({ ...p, reservationDate: e.target.value }))}
-                className="mt-1 w-full rounded-xl border px-3 py-2 text-sm"
+                className="mt-1 w-full rounded-xl border border-[#dfe3e8] px-3 py-2 text-sm transition focus:border-[#1d9e75] focus:outline-none"
               />
             </div>
 
@@ -177,7 +177,7 @@ export function CreateDrawer({ open, onClose, doctors, currentUser, initialDate 
                 type="time"
                 value={form.reservationTime}
                 onChange={(e) => setForm((p) => ({ ...p, reservationTime: e.target.value }))}
-                className="mt-1 w-full rounded-xl border px-3 py-2 text-sm"
+                className="mt-1 w-full rounded-xl border border-[#dfe3e8] px-3 py-2 text-sm transition focus:border-[#1d9e75] focus:outline-none"
               />
             </div>
           </div>
@@ -194,8 +194,8 @@ export function CreateDrawer({ open, onClose, doctors, currentUser, initialDate 
                     <button
                       key={doctor.uid}
                       onClick={() => toggleDoctor(doctor.displayName)}
-                      className={`rounded-xl border px-3 py-2 text-sm transition ${
-                        on ? "border-black bg-black text-white" : "border-gray-300 bg-white"
+                      className={`rounded-xl border px-3 py-2 text-sm transition hover:-translate-y-0.5 hover:shadow-md active:scale-95 ${
+                        on ? "border-black bg-black text-white" : "border-[#dfe3e8] bg-white text-gray-700"
                       }`}
                     >
                       {doctor.displayName}
@@ -212,7 +212,7 @@ export function CreateDrawer({ open, onClose, doctors, currentUser, initialDate 
               value={form.coordinators}
               onChange={(e) => setForm((p) => ({ ...p, coordinators: e.target.value }))}
               placeholder="쉼표로 구분"
-              className="mt-1 w-full rounded-xl border px-3 py-2 text-sm"
+              className="mt-1 w-full rounded-xl border border-[#dfe3e8] px-3 py-2 text-sm transition focus:border-[#1d9e75] focus:outline-none"
             />
           </div>
 
@@ -222,25 +222,26 @@ export function CreateDrawer({ open, onClose, doctors, currentUser, initialDate 
               value={form.depositAmount}
               onChange={(e) => setForm((p) => ({ ...p, depositAmount: e.target.value }))}
               placeholder="100,000원 / 10,000엔"
-              className="mt-1 w-full rounded-xl border px-3 py-2 text-sm"
+              className="mt-1 w-full rounded-xl border border-[#dfe3e8] px-3 py-2 text-sm transition focus:border-[#1d9e75] focus:outline-none"
             />
           </div>
 
           {errorMessage && (
-            <div className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">
-              {errorMessage}
-            </div>
+            <div className="text-sm text-red-500">{errorMessage}</div>
           )}
         </div>
 
-        <div className="flex gap-2 border-t p-4">
-          <button onClick={onClose} className="flex-1 rounded-xl border py-3 text-sm">
+        <div className="flex shrink-0 gap-2 border-t border-[#edf0f3] p-4">
+          <button
+            onClick={onClose}
+            className="flex-1 rounded-xl border border-[#dfe3e8] py-3 text-sm transition hover:-translate-y-0.5 hover:shadow-md active:scale-95"
+          >
             취소
           </button>
           <button
             onClick={handleCreate}
             disabled={saving}
-            className="flex-1 rounded-xl bg-black py-3 text-sm font-medium text-white disabled:opacity-50"
+            className="flex-1 rounded-xl bg-black py-3 text-sm font-medium text-white transition hover:-translate-y-0.5 hover:shadow-md active:scale-95 disabled:opacity-50"
           >
             {saving ? "저장 중..." : "예약 등록"}
           </button>

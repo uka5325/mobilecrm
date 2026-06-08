@@ -395,11 +395,15 @@ export default function AppShell({ children }: AppShellProps) {
               <Link
                 key={item.href}
                 href={item.href}
-                className={`flex shrink-0 items-center gap-2 rounded-lg px-4 py-3 text-sm font-medium transition-all duration-150 ${
-                  active
-                    ? "bg-[#1d9e75] text-white shadow-sm"
-                    : "bg-[#182430] text-[#b7c1cc] hover:bg-[#203141] hover:text-white active:scale-[0.96]"
-                }`}
+                className="flex shrink-0 items-center gap-2 rounded-lg px-4 py-3 text-sm font-medium transition-all duration-150 hover:-translate-y-[1px] active:scale-[0.96]"
+                style={{
+                  backgroundColor: active ? "#123f39" : "#182430",
+                  color: active ? "#ffffff" : "#c3ccd6",
+                  border: active
+                    ? "1px solid rgba(255,255,255,0.75)"
+                    : "1px solid transparent",
+                  boxShadow: active ? "0 2px 10px rgba(0,0,0,0.12)" : "none",
+                }}
               >
                 <span>{item.icon}</span>
                 <span>{item.label}</span>
