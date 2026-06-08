@@ -317,8 +317,18 @@ export async function getAllReservations(): Promise<{
   reservations: ReservationRecord[];
   doctors: DoctorOption[];
 }> {
+  const fromDate = (() => {
+    const d = new Date();
+    d.setFullYear(d.getFullYear() - 2);
+    return d.toISOString().slice(0, 10);
+  })();
+
   const reservationSnap = await getDocs(
-    query(collection(db, "reservations"), orderBy("reservationDate", "desc"))
+    query(
+      collection(db, "reservations"),
+      where("reservationDate", ">=", fromDate),
+      orderBy("reservationDate", "desc")
+    )
   );
 
   const reservations = reservationSnap.docs
@@ -375,8 +385,18 @@ export function subscribeAllReservations(
       emit();
     });
 
+  const twoYearsAgo = (() => {
+    const d = new Date();
+    d.setFullYear(d.getFullYear() - 2);
+    return d.toISOString().slice(0, 10);
+  })();
+
   return onSnapshot(
-    query(collection(db, "reservations"), orderBy("reservationDate", "desc")),
+    query(
+      collection(db, "reservations"),
+      where("reservationDate", ">=", twoYearsAgo),
+      orderBy("reservationDate", "desc")
+    ),
     (snap) => {
       currentReservations = snap.docs
         .map((docSnap) => mapReservationDoc(docSnap.id, docSnap.data()))
