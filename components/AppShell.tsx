@@ -17,6 +17,7 @@ const menuItems = [
   { href: "/timeline", label: "타임라인", icon: "📋" },
   { href: "/reservations", label: "예약관리", icon: "👥" },
   { href: "/dashboard", label: "KPI 대시보드", icon: "📊" },
+  { href: "/invoice", label: "인보이스", icon: "🧾" },
   { href: "/settings", label: "설정", icon: "⚙️" },
 ];
 
@@ -36,6 +37,10 @@ const pageInfo: Record<string, { title: string; description: string }> = {
   "/dashboard": {
     title: "KPI 대시보드",
     description: "상담회 주요 지표를 확인합니다.",
+  },
+  "/invoice": {
+    title: "인보이스",
+    description: "생성된 고객 인보이스를 조회하고 템플릿을 관리합니다.",
   },
   "/settings": {
     title: "설정",

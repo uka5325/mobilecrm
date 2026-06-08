@@ -3,9 +3,12 @@ import {
   doc,
   getDoc,
   getDocs,
+  orderBy,
+  query,
   serverTimestamp,
   setDoc,
   updateDoc,
+  where,
 } from "firebase/firestore";
 import { db } from "./firebase";
 import type { StaffUser } from "./auth";
@@ -597,6 +600,82 @@ export async function getOrCreateInvoiceDraft(
   }
 
   return createInvoiceDraftFromReservation(reservationDocId, staff, templateId);
+}
+
+export type InvoiceListFilter = {
+  startDate?: string;
+  endDate?: string;
+  status?: "draft" | "confirmed" | "void" | "";
+  doctorName?: string;
+  patientName?: string;
+};
+
+export async function getInvoices(filters?: InvoiceListFilter): Promise<InvoiceRecord[]> {
+  let q = query(
+    collection(db, "invoices"),
+    where("isDeleted", "==", false),
+    orderBy("createdAt", "desc")
+  );
+
+  const snap = await getDocs(q);
+  let records = snap.docs.map((docSnap) => mapInvoiceDoc(docSnap.id, docSnap.data()));
+
+  if (filters?.status) {
+    records = records.filter((r) => r.status === filters.status);
+  }
+
+  if (filters?.doctorName) {
+    records = records.filter((r) =>
+      r.doctors.some((d) => d.includes(filters.doctorName!))
+    );
+  }
+
+  if (filters?.patientName) {
+    const q2 = filters.patientName.toLowerCase();
+    records = records.filter((r) => r.patientName.toLowerCase().includes(q2));
+  }
+
+  if (filters?.startDate) {
+    records = records.filter((r) => {
+      const d = toDate(r.createdAt);
+      return d ? d.toISOString().slice(0, 10) >= filters.startDate! : true;
+    });
+  }
+
+  if (filters?.endDate) {
+    records = records.filter((r) => {
+      const d = toDate(r.createdAt);
+      return d ? d.toISOString().slice(0, 10) <= filters.endDate! : true;
+    });
+  }
+
+  return records;
+}
+
+function toDate(value: unknown): Date | null {
+  try {
+    const d =
+      value && typeof (value as any).toDate === "function"
+        ? (value as any).toDate()
+        : value instanceof Date
+          ? value
+          : new Date(value as any);
+    return Number.isNaN(d.getTime()) ? null : d;
+  } catch {
+    return null;
+  }
+}
+
+export async function saveInvoiceTemplateOrder(
+  templateId: string,
+  categoryOrder: string[],
+  sectionOrder: string[]
+) {
+  await updateDoc(doc(db, "invoiceTemplates", templateId), {
+    categoryOrder,
+    sectionOrder,
+    updatedAt: serverTimestamp(),
+  });
 }
 
 export async function updateInvoice(
