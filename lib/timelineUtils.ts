@@ -98,38 +98,31 @@ export function getBirthGenderNationalityText(item: ReservationRecord) {
 }
 
 export function buildSlotLayouts(
-  doctors: DoctorOption[],
+  _doctors: DoctorOption[],
   dayReservations: ReservationRecord[]
 ): SlotLayout[] {
-  const maxCountsBySlot = new Map<number, number>();
+  const countsBySlot = new Map<number, number>();
 
-  for (let slot = 0; slot <= END_H - START_H; slot += 1) {
-    maxCountsBySlot.set(slot, 0);
+  for (let slot = 0; slot <= END_H - START_H; slot++) {
+    countsBySlot.set(slot, 0);
   }
 
-  doctors.forEach((doctor) => {
-    const counts = new Map<number, number>();
-
-    dayReservations
-      .filter((item) =>
-        getReservationDoctors(item).includes(doctor.displayName)
-      )
-      .forEach((item) => {
-        const slot = getSlotIndex(item.reservationTime || "");
-        counts.set(slot, (counts.get(slot) || 0) + 1);
-      });
-
-    counts.forEach((count, slot) => {
-      const prev = maxCountsBySlot.get(slot) || 0;
-      maxCountsBySlot.set(slot, Math.max(prev, count));
-    });
+  // unique reservation count per slot (matches buildGlobalSlotInfo)
+  const slotSets = new Map<number, Set<string>>();
+  dayReservations.forEach((item) => {
+    const slot = getSlotIndex(item.reservationTime || "");
+    if (!slotSets.has(slot)) slotSets.set(slot, new Set());
+    slotSets.get(slot)!.add(item.id);
+  });
+  slotSets.forEach((ids, slot) => {
+    countsBySlot.set(slot, ids.size);
   });
 
   let top = 0;
 
   return Array.from({ length: END_H - START_H + 1 }, (_, slot) => {
     const hour = START_H + slot;
-    const count = maxCountsBySlot.get(slot) || 0;
+    const count = countsBySlot.get(slot) || 0;
 
     const requiredHeight =
       count <= 1
@@ -137,16 +130,8 @@ export function buildSlotLayouts(
         : SLOT_PADDING_Y * 2 + count * CARD_H + (count - 1) * CARD_GAP;
 
     const height = Math.max(SLOT_H, requiredHeight);
-
-    const layout = {
-      slot,
-      label: `${String(hour).padStart(2, "0")}:00`,
-      top,
-      height,
-    };
-
+    const layout = { slot, label: `${String(hour).padStart(2, "0")}:00`, top, height };
     top += height;
-
     return layout;
   });
 }
