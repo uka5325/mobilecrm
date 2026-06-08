@@ -1,21 +1,16 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import type { User } from "firebase/auth";
 import { doc, serverTimestamp, updateDoc } from "firebase/firestore";
 import {
   createReservation,
-  type DoctorOption,
-  getAllReservations,
-  subscribeTimelineReservations,
   type ReservationRecord,
   type ReservationStatus,
   toggleSurgeryReserved,
   updateReservationFull,
   updateReservationStatus,
 } from "@/lib/reservations";
-import { getStaffByUid, listenCurrentUser } from "@/lib/auth";
 import type { StaffUser } from "@/lib/auth";
 import { parseBirthInfo } from "@/lib/reservationUtils";
 import {
@@ -25,12 +20,9 @@ import {
   type LogRecord,
 } from "@/lib/logs";
 import { db } from "@/lib/firebase";
-import {
-  DEFAULT_VISIT_STATUS_COLORS,
-  getConferenceMemos,
-  getVisitStatusColors,
-  type VisitStatusColorMap,
-} from "@/lib/settings";
+import { type VisitStatusColorMap } from "@/lib/settings";
+import { useCurrentUser } from "@/hooks/useCurrentUser";
+import { useTimelineData } from "@/hooks/useTimelineData";
 import {
   addReservationNote,
   deleteReservationNote,
@@ -87,31 +79,28 @@ const STATUS_LABELS: Record<string, string> = {
 
 type DetailTab = "info" | "notes" | "logs" | "invoice";
 
-type SlotLayout = {
-  slot: number;
-  label: string;
-  top: number;
-  height: number;
-};
-
 export default function TimelinePage() {
   const router = useRouter();
 
   const timelineScrollRef = useRef<HTMLDivElement | null>(null);
   const timeScaleRef = useRef<HTMLDivElement | null>(null);
 
-  const [currentUser, setCurrentUser] = useState<StaffUser | null>(null);
-  const [authReady, setAuthReady] = useState(false);
-  const [reservations, setReservations] = useState<ReservationRecord[]>([]);
-  const [doctors, setDoctors] = useState<DoctorOption[]>([]);
+  const { currentUser, authReady } = useCurrentUser();
   const [selectedDate, setSelectedDate] = useState(todayString());
 
-  const [statusColors, setStatusColors] = useState<VisitStatusColorMap>(
-    DEFAULT_VISIT_STATUS_COLORS
-  );
-  const [todayMemos, setTodayMemos] = useState<string[]>([]);
+  const {
+    reservations,
+    doctors,
+    statusColors,
+    todayMemos,
+    loading,
+    dayReservations,
+    slotLayouts,
+    timelineHeight,
+    latestLogMap,
+    setLatestLogMap,
+  } = useTimelineData(currentUser, authReady, selectedDate);
 
-  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [detailSaving, setDetailSaving] = useState(false);
 
@@ -142,9 +131,6 @@ export default function TimelinePage() {
   const [logs, setLogs] = useState<LogRecord[]>([]);
   const [logsLoading, setLogsLoading] = useState(false);
   const [logsError, setLogsError] = useState("");
-  const [latestLogMap, setLatestLogMap] = useState<Record<string, LogRecord>>(
-    {}
-  );
   const [memoText, setMemoText] = useState("");
   const [notes, setNotes] = useState<ReservationNote[]>([]);
   const [editingNoteId, setEditingNoteId] = useState("");
@@ -173,63 +159,6 @@ export default function TimelinePage() {
     return parseBirthInfo(detailForm.birthInput);
   }, [detailForm.birthInput]);
 
-  useEffect(() => {
-    const unsubscribe = listenCurrentUser(async (user: User | null) => {
-      if (!user) {
-        setCurrentUser(null);
-        setAuthReady(true);
-        router.replace("/login");
-        return;
-      }
-
-      const staff = await getStaffByUid(user.uid);
-
-      if (!staff || !staff.active) {
-        setCurrentUser(null);
-        setAuthReady(true);
-        router.replace("/login");
-        return;
-      }
-
-      setCurrentUser(staff);
-      setAuthReady(true);
-    });
-
-    return () => unsubscribe();
-  }, [router]);
-
-  async function loadData() {
-    setLoading(true);
-
-    try {
-      const data = await getAllReservations();
-      setReservations(data.reservations || []);
-      setDoctors(data.doctors || []);
-    } catch (error) {
-      console.error(error);
-      alert("타임라인 데이터를 불러오지 못했습니다.");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function loadTimelineSettings(date = selectedDate) {
-  try {
-    const loadedColors = await getVisitStatusColors();
-    setStatusColors(loadedColors);
-  } catch (error) {
-    console.error("[getVisitStatusColors error]", error);
-    setStatusColors(DEFAULT_VISIT_STATUS_COLORS);
-  }
-
-  try {
-    const loadedMemos = await getConferenceMemos(date, 10);
-    setTodayMemos(loadedMemos.map((memo) => memo.memoText).filter(Boolean));
-  } catch (error) {
-    console.error("[getConferenceMemos error]", error);
-    setTodayMemos([]);
-  }
-}
   async function loadReservationLogs(item: ReservationRecord) {
     setLogsLoading(true);
     setLogsError("");
@@ -292,71 +221,6 @@ async function loadReservationNotes(item: ReservationRecord) {
       timeScaleRef.current.style.transform = `translateY(-${scrollTop}px)`;
     }
   }
-
-  useEffect(() => {
-    if (!authReady || !currentUser) return;
-
-    setLoading(true);
-
-    const unsubscribe = subscribeTimelineReservations(
-      selectedDate,
-      (data) => {
-        setReservations(data.reservations || []);
-        setDoctors(data.doctors || []);
-        setLoading(false);
-      },
-      (error) => {
-        console.error(error);
-        setLoading(false);
-        alert("타임라인 실시간 데이터를 불러오지 못했습니다.");
-      }
-    );
-
-    return () => unsubscribe();
-  }, [authReady, currentUser, selectedDate]);
-
-  useEffect(() => {
-    if (!authReady || !currentUser) return;
-
-    loadTimelineSettings(selectedDate);
-  }, [authReady, currentUser, selectedDate]);
-
-  const dayReservations = useMemo(() => {
-    return reservations.filter((item) => item.reservationDate === selectedDate);
-  }, [reservations, selectedDate]);
-
-  const slotLayouts = useMemo(() => {
-    return buildSlotLayouts(doctors, dayReservations);
-  }, [doctors, dayReservations]);
-
-  const timelineHeight = useMemo(() => {
-    return getTimelineHeight(slotLayouts);
-  }, [slotLayouts]);
-
-  useEffect(() => {
-    if (!authReady || !currentUser) return;
-
-    async function loadLatestLogs() {
-      const reservationIds = dayReservations
-        .flatMap((item) => [item.reservationId, item.id])
-        .filter(Boolean);
-
-      if (!reservationIds.length) {
-        setLatestLogMap({});
-        return;
-      }
-
-      try {
-        const map = await getLatestLogsByReservationIds(reservationIds);
-        setLatestLogMap(map);
-      } catch (error) {
-        console.error(error);
-        setLatestLogMap({});
-      }
-    }
-
-    loadLatestLogs();
-  }, [authReady, currentUser, dayReservations]);
 
   const kpi = useMemo(() => {
     const base = {

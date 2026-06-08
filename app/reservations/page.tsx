@@ -1,35 +1,29 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import type { MouseEvent } from "react";
 import { useRouter } from "next/navigation";
-import type { User } from "firebase/auth";
 import { doc, serverTimestamp, updateDoc } from "firebase/firestore";
 import {
   createReservation,
   createReservationsBatch,
   deleteReservation,
   type DoctorOption,
-  getAllReservations,
-  subscribeAllReservations,
   type ReservationRecord,
   type ReservationStatus,
   toggleSurgeryReserved,
   updateReservationFull,
   updateReservationStatus,
 } from "@/lib/reservations";
-import { getStaffByUid, listenCurrentUser } from "@/lib/auth";
 import type { StaffUser } from "@/lib/auth";
+import { useCurrentUser } from "@/hooks/useCurrentUser";
+import { useReservationData } from "@/hooks/useReservationData";
 import {
   getReservationBirthInfo,
   parseBirthInfo,
 } from "@/lib/reservationUtils";
 import { db } from "@/lib/firebase";
-import {
-  DEFAULT_VISIT_STATUS_COLORS,
-  getVisitStatusColors,
-  type VisitStatusColorMap,
-} from "@/lib/settings";
+import { type VisitStatusColorMap } from "@/lib/settings";
 import { todayString } from "@/lib/dateUtils";
 import {
   getStatusColor,
@@ -56,17 +50,12 @@ type InvoiceMenuState = {
 export default function ReservationsPage() {
   const router = useRouter();
 
-  const [currentUser, setCurrentUser] = useState<StaffUser | null>(null);
-  const [authReady, setAuthReady] = useState(false);
-
-  const [reservations, setReservations] = useState<ReservationRecord[]>([]);
-  const [doctors, setDoctors] = useState<DoctorOption[]>([]);
-
-  const [statusColors, setStatusColors] = useState<VisitStatusColorMap>(
-    DEFAULT_VISIT_STATUS_COLORS
+  const { currentUser, authReady } = useCurrentUser();
+  const { reservations, doctors, statusColors, loading } = useReservationData(
+    currentUser,
+    authReady
   );
 
-  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
   const [search, setSearch] = useState("");
@@ -122,77 +111,6 @@ export default function ReservationsPage() {
     return parseBirthInfo(editForm.birthInput);
   }, [editForm.birthInput]);
 
-  useEffect(() => {
-    const unsubscribe = listenCurrentUser(async (user: User | null) => {
-      if (!user) {
-        setCurrentUser(null);
-        setAuthReady(true);
-        router.replace("/login");
-        return;
-      }
-
-      const staff = await getStaffByUid(user.uid);
-
-      if (!staff || !staff.active) {
-        setCurrentUser(null);
-        setAuthReady(true);
-        router.replace("/login");
-        return;
-      }
-
-      setCurrentUser(staff);
-      setAuthReady(true);
-    });
-
-    return () => unsubscribe();
-  }, [router]);
-
-  async function loadData() {
-    setLoading(true);
-
-    try {
-      const data = await getAllReservations();
-      setReservations(data.reservations);
-      setDoctors(data.doctors);
-    } catch (error) {
-      console.error(error);
-      alert("예약 데이터를 불러오지 못했습니다.");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function loadReservationSettings() {
-    try {
-      const colors = await getVisitStatusColors();
-      setStatusColors(colors);
-    } catch (error) {
-      console.error("예약관리 설정 색상 로딩 오류:", error);
-      setStatusColors(DEFAULT_VISIT_STATUS_COLORS);
-    }
-  }
-
-  useEffect(() => {
-    if (!authReady || !currentUser) return;
-
-    setLoading(true);
-    loadReservationSettings();
-
-    const unsubscribe = subscribeAllReservations(
-      (data) => {
-        setReservations(data.reservations);
-        setDoctors(data.doctors);
-        setLoading(false);
-      },
-      (error) => {
-        console.error(error);
-        setLoading(false);
-        alert("예약 실시간 데이터를 불러오지 못했습니다.");
-      }
-    );
-
-    return () => unsubscribe();
-  }, [authReady, currentUser]);
 
   const filteredReservations = useMemo(() => {
     const keyword = search.trim().toLowerCase();
@@ -312,7 +230,6 @@ export default function ReservationsPage() {
         updatedByUid: currentUser.uid,
       });
 
-      await loadData();
     } catch (error) {
       console.error(error);
       alert("인보이스 삭제 중 오류가 발생했습니다.");
@@ -450,7 +367,6 @@ export default function ReservationsPage() {
       }
 
       closeDrawer();
-      await loadData();
     } catch (error) {
       console.error(error);
       setErrorMessage("예약 등록 중 오류가 발생했습니다.");
@@ -518,7 +434,6 @@ export default function ReservationsPage() {
       }
 
       closeEditDrawer();
-      await loadData();
     } catch (error) {
       console.error(error);
       setErrorMessage("예약 수정 중 오류가 발생했습니다.");
@@ -582,7 +497,6 @@ export default function ReservationsPage() {
         }`
       );
 
-      await loadData();
     } catch (error) {
       console.error(error);
       setErrorMessage("외부 링크 가져오기 중 오류가 발생했습니다.");
