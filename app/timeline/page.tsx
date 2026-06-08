@@ -122,15 +122,15 @@ export default function TimelinePage() {
   }
 
   return (
-    <div className="relative -mx-6 -mb-6 mt-5 h-[calc(100vh-170px)] min-h-[640px] overflow-hidden bg-white">
-      <div className="absolute inset-0 overflow-hidden rounded-2xl border border-[#edf0f3] bg-white">
-        <div className="absolute left-0 right-0 top-0 z-30 flex min-h-[72px] items-center justify-between rounded-t-2xl border-b border-[#edf0f3] bg-[#ecfdf5] px-6 py-3">
-          <div>
+    <div className="-mx-6 -mb-6 mt-5 flex h-[calc(100vh-170px)] min-h-[640px] flex-col overflow-hidden rounded-2xl border border-[#edf0f3] bg-white">
+      <div className="flex shrink-0 flex-col">
+        <div className="flex items-start justify-between rounded-t-2xl border-b border-[#edf0f3] bg-[#ecfdf5] px-6 py-3">
+          <div className="min-w-0 flex-1 pr-4">
             <div className="mb-1 text-xs font-extrabold text-emerald-700">
               오늘의 메모
             </div>
 
-            <div className="text-sm leading-6 text-emerald-800">
+            <div className="max-h-[42px] overflow-y-auto text-sm leading-6 text-emerald-800">
               {todayMemos.length === 0 ? (
                 "등록된 메모가 없습니다."
               ) : (
@@ -162,7 +162,7 @@ export default function TimelinePage() {
           </div>
         </div>
 
-        <div className="absolute left-0 right-0 top-[72px] z-20 grid grid-cols-4 gap-2 border-b border-[#edf0f3] bg-white px-6 py-2 md:grid-cols-8">
+        <div className="grid grid-cols-4 gap-2 border-b border-[#edf0f3] bg-white px-6 py-2 md:grid-cols-8">
           <KpiBox label="전체" value={kpi.total} className="bg-gray-100" />
           <KpiBox label="내원전" value={kpi.before} color={statusColors.내원전} />
           <KpiBox label="대기" value={kpi.wait} color={statusColors.대기} />
@@ -177,7 +177,8 @@ export default function TimelinePage() {
           />
         </div>
 
-        <div className="absolute bottom-0 left-0 right-0 top-[150px] flex overflow-hidden rounded-b-2xl">
+      </div>
+        <div className="flex min-h-0 flex-1 overflow-hidden rounded-b-2xl">
           <div className="flex w-16 shrink-0 flex-col border-r border-[#edf0f3] bg-white">
             <div className="flex h-[60px] shrink-0 items-center justify-center border-b border-[#edf0f3] bg-white text-xs font-semibold text-gray-500">
               시간
@@ -358,7 +359,6 @@ export default function TimelinePage() {
             )}
           </div>
         </div>
-      </div>
 
       <DetailDrawer
         open={detailOpen}
