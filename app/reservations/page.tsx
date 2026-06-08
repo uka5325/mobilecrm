@@ -25,7 +25,7 @@ import { formatDateGroup, normalizeTimeText } from "@/lib/timelineUtils";
 import { CreateDrawer } from "@/components/reservations/CreateDrawer";
 import { EditDrawer } from "@/components/reservations/EditDrawer";
 import { ImportDrawer } from "@/components/reservations/ImportDrawer";
-import { getReservationNotes, type ReservationNote } from "@/lib/reservationNotes";
+import { getReservationNotes, updateReservationNote, deleteReservationNote, type ReservationNote } from "@/lib/reservationNotes";
 
 const STATUS_LIST: ReservationStatus[] = [
   "내원전",
@@ -66,6 +66,8 @@ export default function ReservationsPage() {
   type MemoPopover = { item: ReservationRecord; notes: ReservationNote[]; loading: boolean } | null;
   const [memoPopover, setMemoPopover] = useState<MemoPopover>(null);
   const memoPopoverRef = useRef<HTMLDivElement | null>(null);
+  const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
+  const [editingNoteText, setEditingNoteText] = useState("");
 
   const [downloadOpen, setDownloadOpen] = useState(false);
   const [dlStart, setDlStart] = useState(() => todayString().slice(0, 7) + "-01");
@@ -222,12 +224,40 @@ export default function ReservationsPage() {
 
   async function openMemoPopover(item: ReservationRecord) {
     setMemoPopover({ item, notes: [], loading: true });
+    setEditingNoteId(null);
     try {
       const notes = await getReservationNotes(item.reservationId, item.id, item.patientId);
       setMemoPopover((prev) => (prev?.item.id === item.id ? { item, notes, loading: false } : prev));
     } catch {
       setMemoPopover((prev) => (prev?.item.id === item.id ? { item, notes: [], loading: false } : prev));
     }
+  }
+
+  async function handleMemoUpdate(note: ReservationNote) {
+    if (!currentUser || !memoPopover) return;
+    await updateReservationNote({
+      noteId: note.id,
+      reservationId: note.reservationId,
+      patientId: note.patientId || memoPopover.item.patientId || "",
+      memoText: editingNoteText,
+      staff: currentUser,
+    });
+    setEditingNoteId(null);
+    const notes = await getReservationNotes(memoPopover.item.reservationId, memoPopover.item.id, memoPopover.item.patientId);
+    setMemoPopover((prev) => prev ? { ...prev, notes } : prev);
+  }
+
+  async function handleMemoDelete(note: ReservationNote) {
+    if (!currentUser || !memoPopover) return;
+    if (!confirm("메모를 삭제할까요?")) return;
+    await deleteReservationNote({
+      noteId: note.id,
+      reservationId: note.reservationId,
+      patientId: note.patientId || memoPopover.item.patientId || "",
+      staff: currentUser,
+    });
+    const notes = await getReservationNotes(memoPopover.item.reservationId, memoPopover.item.id, memoPopover.item.patientId);
+    setMemoPopover((prev) => prev ? { ...prev, notes } : prev);
   }
 
   function escapeCsv(value: string): string {
@@ -365,17 +395,41 @@ export default function ReservationsPage() {
                         <span className="mt-0.5 shrink-0 rounded-lg bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-700">
                           {note.createdBy || "알 수 없음"}
                         </span>
-                        <span className="text-sm leading-relaxed text-gray-700">{note.memoText}</span>
+                        {editingNoteId === note.id ? (
+                          <textarea
+                            className="flex-1 rounded-lg border border-[#dfe3e8] px-2 py-1 text-sm focus:border-emerald-500 focus:outline-none"
+                            rows={2}
+                            value={editingNoteText}
+                            onChange={(e) => setEditingNoteText(e.target.value)}
+                          />
+                        ) : (
+                          <span className="flex-1 text-sm leading-relaxed text-gray-700">{note.memoText}</span>
+                        )}
                       </div>
-                      <div className="text-right text-xs text-gray-400">
-                        {note.createdAt ? (() => {
-                          try {
-                            const d = typeof (note.createdAt as any).toDate === "function"
-                              ? (note.createdAt as any).toDate()
-                              : new Date(note.createdAt as any);
-                            return d.getFullYear() + "." + String(d.getMonth() + 1).padStart(2, "0") + "." + String(d.getDate()).padStart(2, "0") + " " + String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0");
-                          } catch { return ""; }
-                        })() : ""}
+                      <div className="flex items-center justify-between">
+                        <div className="flex gap-2">
+                          {editingNoteId === note.id ? (
+                            <>
+                              <button onClick={() => handleMemoUpdate(note)} className="text-xs text-emerald-600 hover:underline">저장</button>
+                              <button onClick={() => setEditingNoteId(null)} className="text-xs text-gray-400 hover:underline">취소</button>
+                            </>
+                          ) : (
+                            <>
+                              <button onClick={() => { setEditingNoteId(note.id); setEditingNoteText(note.memoText); }} className="text-xs text-blue-500 hover:underline">수정</button>
+                              <button onClick={() => handleMemoDelete(note)} className="text-xs text-red-400 hover:underline">삭제</button>
+                            </>
+                          )}
+                        </div>
+                        <div className="text-xs text-gray-400">
+                          {note.createdAt ? (() => {
+                            try {
+                              const d = typeof (note.createdAt as any).toDate === "function"
+                                ? (note.createdAt as any).toDate()
+                                : new Date(note.createdAt as any);
+                              return d.getFullYear() + "." + String(d.getMonth() + 1).padStart(2, "0") + "." + String(d.getDate()).padStart(2, "0") + " " + String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0");
+                            } catch { return ""; }
+                          })() : ""}
+                        </div>
                       </div>
                     </div>
                   ))}
@@ -424,48 +478,44 @@ export default function ReservationsPage() {
         </>
       )}
 
-      <div className="mb-4 flex flex-wrap items-center gap-2 border-b border-gray-100 bg-white px-5 py-4">
+      <div className="mb-4 flex flex-wrap items-center gap-2 rounded-2xl bg-[#ecfdf5] px-5 py-4">
         <input
           type="text"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="이름, 상담부위, 원장 검색..."
-          className="w-[260px] rounded-xl border border-gray-200 px-4 py-2 text-sm outline-none focus:border-[#1d9e75]"
+          className="w-[260px] rounded-xl border border-[#dfe3e8] bg-white px-4 py-2 text-sm outline-none focus:border-[#1d9e75]"
         />
 
         <input
           type="date"
           value={filterDate}
           onChange={(e) => setFilterDate(e.target.value)}
-          className="rounded-xl border border-gray-200 px-4 py-2 text-sm outline-none focus:border-[#1d9e75]"
+          className="rounded-xl border border-[#dfe3e8] bg-white px-4 py-2 text-sm outline-none focus:border-[#1d9e75]"
         />
 
         <button
           onClick={() => setFilterDate("")}
-          className="rounded-xl border border-gray-200 px-3 py-2 text-xs text-gray-400"
+          className="rounded-xl border border-[#dfe3e8] bg-white px-3 py-2 text-xs text-gray-400 hover:bg-gray-50"
         >
           날짜 초기화
         </button>
 
-        <button
-          onClick={() => setDrawerOpen(true)}
-          className="ml-auto rounded-xl bg-black px-4 py-2 text-sm font-medium text-white"
-        >
-          + 단일 예약 추가
-        </button>
-
-        <button
-          onClick={() => setImportDrawerOpen(true)}
-          className="rounded-xl border border-gray-200 px-4 py-2 text-sm text-gray-700"
-        >
-          🔗 외부 링크 가져오기
-        </button>
-
-        <button
-          className="rounded-xl border border-gray-200 px-4 py-2 text-sm text-gray-700"
-        >
-          새로고침
-        </button>
+        <div className="ml-auto flex gap-1">
+          <button
+            onClick={() => setDrawerOpen(true)}
+            className="rounded-l-xl rounded-r-none border border-r-0 border-[#dfe3e8] bg-black px-4 py-2 text-sm font-medium text-white"
+          >
+            + 단일 예약 추가
+          </button>
+          <button
+            onClick={() => setImportDrawerOpen(true)}
+            className="rounded-l-none rounded-r-xl border border-[#dfe3e8] bg-white px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+            title="외부 링크 가져오기"
+          >
+            🔗
+          </button>
+        </div>
 
         <div className="relative">
           <button
@@ -481,14 +531,14 @@ export default function ReservationsPage() {
               <div className="absolute right-0 top-full z-[9991] mt-2 w-[280px] rounded-2xl border border-[#edf0f3] bg-white p-4 shadow-xl">
                 <div className="mb-3 text-sm font-bold text-gray-700">예약 데이터 다운로드</div>
                 <div className="mb-2 text-xs text-gray-400">선택한 기간의 예약을 CSV로 내보냅니다. (Google 스프레드시트에서 열기 가능)</div>
-                <div className="mb-2 flex flex-col gap-2">
+                <div className="mb-2 grid grid-cols-2 gap-2">
                   <div>
                     <label className="mb-1 block text-xs font-semibold text-gray-500">시작일</label>
                     <input
                       type="date"
                       value={dlStart}
                       onChange={(e) => setDlStart(e.target.value)}
-                      className="w-full rounded-xl border border-[#dfe3e8] px-3 py-2 text-sm focus:border-[#1d9e75] focus:outline-none"
+                      className="w-full min-w-0 appearance-none rounded-xl border border-[#dfe3e8] px-2 py-2 text-xs focus:border-[#1d9e75] focus:outline-none"
                     />
                   </div>
                   <div>
@@ -497,7 +547,7 @@ export default function ReservationsPage() {
                       type="date"
                       value={dlEnd}
                       onChange={(e) => setDlEnd(e.target.value)}
-                      className="w-full rounded-xl border border-[#dfe3e8] px-3 py-2 text-sm focus:border-[#1d9e75] focus:outline-none"
+                      className="w-full min-w-0 appearance-none rounded-xl border border-[#dfe3e8] px-2 py-2 text-xs focus:border-[#1d9e75] focus:outline-none"
                     />
                   </div>
                 </div>
@@ -528,10 +578,10 @@ export default function ReservationsPage() {
         <div className="overflow-x-auto border-y border-gray-100 bg-white">
           <table className="min-w-[1380px] w-full table-fixed border-collapse text-sm">
             <colgroup>
-              <col className="w-[230px]" />
-              <col className="w-[120px]" />
-              <col className="w-[90px]" />
-              <col className="w-[130px]" />
+              <col className="w-[110px]" />
+              <col className="w-[80px]" />
+              <col className="w-[200px]" />
+              <col className="w-[140px]" />
               <col className="w-[140px]" />
               <col className="w-[120px]" />
               <col className="w-[120px]" />
@@ -545,10 +595,9 @@ export default function ReservationsPage() {
             <thead className="bg-gray-50">
               <tr>
                 {[
-                  "이름",
                   "생년월일",
                   "국적",
-                  "연락처",
+                  "이름",
                   "상담부위",
                   "원장",
                   "실장",
@@ -556,6 +605,7 @@ export default function ReservationsPage() {
                   "수술예약",
                   "예약금",
                   "메모",
+                  "연락처",
                   "관리",
                 ].map((head) => (
                   <th
@@ -627,6 +677,14 @@ export default function ReservationsPage() {
 
                     rows.push(
                       <tr key={item.id} className="hover:bg-gray-50">
+                        <td className="border-b border-gray-100 px-4 py-3 text-gray-500">
+                          {birthInfo.birthDisplay}
+                        </td>
+
+                        <td className="border-b border-gray-100 px-4 py-3 text-gray-500">
+                          {item.nationality}
+                        </td>
+
                         <td className="border-b border-gray-100 px-4 py-3">
                           <div className="flex items-center gap-2">
                             <button
@@ -652,18 +710,6 @@ export default function ReservationsPage() {
                               {item.name}
                             </span>
                           </div>
-                        </td>
-
-                        <td className="border-b border-gray-100 px-4 py-3 text-gray-500">
-                          {birthInfo.birthDisplay}
-                        </td>
-
-                        <td className="border-b border-gray-100 px-4 py-3 text-gray-500">
-                          {item.nationality}
-                        </td>
-
-                        <td className="border-b border-gray-100 px-4 py-3 text-gray-500">
-                          {item.phone}
                         </td>
 
                         <td className="border-b border-gray-100 px-4 py-3">
@@ -725,6 +771,10 @@ export default function ReservationsPage() {
                           >
                             전체보기
                           </button>
+                        </td>
+
+                        <td className="border-b border-gray-100 px-4 py-3 text-gray-500">
+                          {item.phone}
                         </td>
 
                         <td className="border-b border-gray-100 px-4 py-3 text-center">
