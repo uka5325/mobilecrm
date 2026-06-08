@@ -626,7 +626,6 @@ export default function ReservationsPage() {
         </button>
 
         <button
-          onClick={loadData}
           className="rounded-xl border border-gray-200 px-4 py-2 text-sm text-gray-700"
         >
           새로고침
