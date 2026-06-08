@@ -231,8 +231,10 @@ export async function getLatestLogsByReservationIds(reservationIds: string[]) {
     }
   }
 
-  await fetchByField("reservationId");
-  await fetchByField("targetId");
+  await Promise.all([
+    fetchByField("reservationId"),
+    fetchByField("targetId"),
+  ]);
 
   return result;
 }
