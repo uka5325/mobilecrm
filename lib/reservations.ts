@@ -180,9 +180,13 @@ export function mapReservationDoc(id: string, data: Record<string, unknown>): Re
 
     doctors: Array.isArray(data.doctors)
       ? data.doctors.map(cleanText).filter(Boolean)
+      : typeof data.doctors === "string" && data.doctors
+      ? data.doctors.split("|").map(cleanText).filter(Boolean)
       : [],
     coordinators: Array.isArray(data.coordinators)
       ? data.coordinators.map(cleanText).filter(Boolean)
+      : typeof data.coordinators === "string" && data.coordinators
+      ? data.coordinators.split("|").map(cleanText).filter(Boolean)
       : [],
 
     doctorStatusMap: (data.doctorStatusMap as Record<string, string>) || {},
