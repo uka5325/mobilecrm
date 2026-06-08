@@ -297,7 +297,7 @@ function mapInvoiceDoc(id: string, data: Record<string, unknown>): InvoiceRecord
     memo: cleanText(data.memo),
     internalMemo: cleanText(data.internalMemo),
 
-    status: data.status || "draft",
+    status: (["draft", "confirmed", "void"].includes(String(data.status)) ? data.status : "draft") as "draft" | "confirmed" | "void",
 
     createdAt: data.createdAt,
     createdBy: cleanText(data.createdBy),
