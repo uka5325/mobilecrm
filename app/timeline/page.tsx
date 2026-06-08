@@ -381,7 +381,6 @@ async function loadReservationNotes(item: ReservationRecord) {
       }
 
       closeNewDrawer();
-      await loadData();
     } catch (error) {
       console.error(error);
       setNewError("예약 등록 중 오류가 발생했습니다.");
