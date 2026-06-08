@@ -28,11 +28,15 @@ import { db } from "@/lib/firebase";
 import {
   DEFAULT_VISIT_STATUS_COLORS,
   getVisitStatusColors,
-  VISIT_STATUS_LIST,
-  type VisitStatus,
   type VisitStatusColorMap,
 } from "@/lib/settings";
 import { todayString } from "@/lib/dateUtils";
+import {
+  getStatusColor,
+  getSoftStatusColor,
+  getStatusSelectStyle,
+} from "@/lib/colorUtils";
+import { formatDateGroup, normalizeTimeText } from "@/lib/timelineUtils";
 
 const STATUS_LIST: ReservationStatus[] = [
   "내원전",
@@ -48,58 +52,6 @@ type InvoiceMenuState = {
   x: number;
   y: number;
 } | null;
-
-function getStatusColor(status: string, colors: VisitStatusColorMap) {
-  if (VISIT_STATUS_LIST.includes(status as VisitStatus)) {
-    return colors[status as VisitStatus] || DEFAULT_VISIT_STATUS_COLORS.내원전;
-  }
-
-  return DEFAULT_VISIT_STATUS_COLORS.내원전;
-}
-
-function getSoftStatusColor(hex: string) {
-  const color = String(hex || "").trim();
-
-  if (/^#[0-9a-fA-F]{6}$/.test(color)) {
-    return `${color}2E`;
-  }
-
-  return "#f3f4f6";
-}
-
-function getStatusSelectStyle(status: string, colors: VisitStatusColorMap) {
-  const color = getStatusColor(status, colors);
-
-  return {
-    backgroundColor: getSoftStatusColor(color),
-    color,
-    borderColor: `${color}33`,
-  };
-}
-
-function formatDateGroup(dateStr: string) {
-  if (!dateStr) return "날짜 미정";
-
-  const d = new Date(dateStr);
-  if (Number.isNaN(d.getTime())) return dateStr;
-
-  const yoil = ["일", "월", "화", "수", "목", "금", "토"];
-
-  return `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(
-    2,
-    "0"
-  )}.${String(d.getDate()).padStart(2, "0")} (${yoil[d.getDay()]})`;
-}
-
-function normalizeTimeText(value: string) {
-  const s = String(value || "").trim();
-  if (!s) return "시간 미정";
-
-  const m = s.match(/(\d{1,2}):(\d{2})/);
-  if (m) return `${String(Number(m[1])).padStart(2, "0")}:${m[2]}`;
-
-  return s;
-}
 
 export default function ReservationsPage() {
   const router = useRouter();
