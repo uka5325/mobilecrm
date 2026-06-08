@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { doc, serverTimestamp, updateDoc } from "firebase/firestore";
 import {
   deleteReservation,
+  updateReservationFull,
   type ReservationRecord,
   type ReservationStatus,
   toggleSurgeryReserved,
@@ -60,6 +61,14 @@ export default function ReservationsPage() {
 
   const [editingReservation, setEditingReservation] =
     useState<ReservationRecord | null>(null);
+
+  const [inlineEditId, setInlineEditId] = useState<string | null>(null);
+  const [inlineForm, setInlineForm] = useState<{
+    name: string; birthInput: string; phone: string; nationality: string;
+    consultArea: string; reservationDate: string; reservationTime: string;
+    coordinators: string; depositAmount: string; doctors: string[];
+  } | null>(null);
+  const [inlineSaving, setInlineSaving] = useState(false);
 
   const [invoiceMenu, setInvoiceMenu] = useState<InvoiceMenuState>(null);
 
@@ -220,6 +229,54 @@ export default function ReservationsPage() {
       next,
       currentUser
     );
+  }
+
+  function startInlineEdit(item: ReservationRecord) {
+    setInlineEditId(item.id);
+    setInlineForm({
+      name: item.name || "",
+      birthInput: item.birthInput || item.birth || "",
+      phone: item.phone || "",
+      nationality: item.nationality || "",
+      consultArea: item.consultArea || "",
+      reservationDate: item.reservationDate || "",
+      reservationTime: item.reservationTime || "",
+      coordinators: item.coordinators.join(", "),
+      depositAmount: item.depositAmount || "",
+      doctors: item.doctors || [],
+    });
+  }
+
+  async function saveInlineEdit(item: ReservationRecord) {
+    if (!inlineForm || !currentUser) return;
+    setInlineSaving(true);
+    try {
+      await updateReservationFull(
+        item.id,
+        item.reservationId,
+        item.patientId,
+        {
+          name: inlineForm.name,
+          birthInput: inlineForm.birthInput,
+          birth: inlineForm.birthInput,
+          phone: inlineForm.phone,
+          nationality: inlineForm.nationality,
+          consultArea: inlineForm.consultArea,
+          reservationDate: inlineForm.reservationDate,
+          reservationTime: inlineForm.reservationTime,
+          doctors: inlineForm.doctors,
+          coordinators: inlineForm.coordinators.split(",").map((s) => s.trim()).filter(Boolean),
+          depositAmount: inlineForm.depositAmount,
+        },
+        currentUser
+      );
+      setInlineEditId(null);
+      setInlineForm(null);
+    } catch {
+      alert("수정 중 오류가 발생했습니다.");
+    } finally {
+      setInlineSaving(false);
+    }
   }
 
   async function openMemoPopover(item: ReservationRecord) {
@@ -478,49 +535,48 @@ export default function ReservationsPage() {
         </>
       )}
 
-      <div className="mb-4 flex flex-wrap items-center gap-2 rounded-2xl bg-[#ecfdf5] px-5 py-4">
+      <div className="mb-4 flex flex-wrap items-center gap-2 rounded-2xl border border-[#edf0f3] bg-[#ecfdf5] px-5 py-4">
         <input
           type="text"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="이름, 상담부위, 원장 검색..."
-          className="w-[260px] rounded-xl border border-[#dfe3e8] bg-white px-4 py-2 text-sm outline-none focus:border-[#1d9e75]"
+          className="h-10 w-[260px] rounded-xl border border-[#dfe3e8] bg-white px-4 text-sm outline-none focus:border-[#1d9e75]"
         />
 
         <input
           type="date"
           value={filterDate}
           onChange={(e) => setFilterDate(e.target.value)}
-          className="rounded-xl border border-[#dfe3e8] bg-white px-4 py-2 text-sm outline-none focus:border-[#1d9e75]"
+          className="h-10 appearance-none rounded-xl border border-[#dfe3e8] bg-white px-4 text-sm outline-none focus:border-[#1d9e75]"
         />
 
         <button
           onClick={() => setFilterDate("")}
-          className="rounded-xl border border-[#dfe3e8] bg-white px-3 py-2 text-xs text-gray-400 hover:bg-gray-50"
+          className="h-10 rounded-xl border border-[#dfe3e8] bg-white px-3 text-xs text-gray-400 hover:bg-gray-50"
         >
           날짜 초기화
         </button>
 
-        <div className="ml-auto flex gap-1">
+        <div className="ml-auto flex items-center gap-2">
           <button
             onClick={() => setDrawerOpen(true)}
-            className="rounded-l-xl rounded-r-none border border-r-0 border-[#dfe3e8] bg-black px-4 py-2 text-sm font-medium text-white"
+            className="h-10 rounded-xl bg-black px-4 text-sm font-medium text-white transition hover:-translate-y-0.5 hover:shadow-md active:scale-95"
           >
             + 단일 예약 추가
           </button>
           <button
             onClick={() => setImportDrawerOpen(true)}
-            className="rounded-l-none rounded-r-xl border border-[#dfe3e8] bg-white px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
-            title="외부 링크 가져오기"
+            className="h-10 rounded-xl border border-[#dfe3e8] bg-white px-4 text-sm text-gray-700 hover:bg-gray-50"
           >
-            🔗
+            🔗 외부 링크 가져오기
           </button>
         </div>
 
         <div className="relative">
           <button
             onClick={() => setDownloadOpen((v) => !v)}
-            className="rounded-xl border border-gray-200 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+            className="h-10 rounded-xl border border-[#dfe3e8] bg-white px-4 text-sm text-gray-700 hover:bg-gray-50"
           >
             📥 다운로드
           </button>
@@ -578,26 +634,26 @@ export default function ReservationsPage() {
         <div className="overflow-x-auto border-y border-gray-100 bg-white">
           <table className="min-w-[1380px] w-full table-fixed border-collapse text-sm">
             <colgroup>
+              <col className="w-[200px]" />
               <col className="w-[110px]" />
               <col className="w-[80px]" />
-              <col className="w-[200px]" />
-              <col className="w-[140px]" />
-              <col className="w-[140px]" />
+              <col className="w-[130px]" />
               <col className="w-[120px]" />
+              <col className="w-[90px]" />
+              <col className="w-[100px]" />
+              <col className="w-[90px]" />
+              <col className="w-[100px]" />
+              <col className="w-[80px]" />
               <col className="w-[120px]" />
-              <col className="w-[100px]" />
-              <col className="w-[100px]" />
               <col className="w-[110px]" />
-              <col className="w-[160px]" />
-              <col className="w-[120px]" />
             </colgroup>
 
             <thead className="bg-gray-50">
               <tr>
                 {[
+                  "이름",
                   "생년월일",
                   "국적",
-                  "이름",
                   "상담부위",
                   "원장",
                   "실장",
@@ -675,122 +731,132 @@ export default function ReservationsPage() {
                       lastTime = time;
                     }
 
+                    const isEditing = inlineEditId === item.id;
+                    const f = inlineForm;
+                    const cellCls = "border-b border-gray-100 px-2 py-2";
+                    const inputCls = "w-full rounded-lg border border-[#dfe3e8] px-2 py-1 text-xs focus:border-[#1d9e75] focus:outline-none";
+
                     rows.push(
-                      <tr key={item.id} className="hover:bg-gray-50">
-                        <td className="border-b border-gray-100 px-4 py-3 text-gray-500">
-                          {birthInfo.birthDisplay}
+                      <tr key={item.id} className={isEditing ? "bg-emerald-50" : "hover:bg-gray-50"}>
+                        {/* 이름 */}
+                        <td className={`${cellCls} px-4`}>
+                          {isEditing ? (
+                            <input className={inputCls} value={f!.name} onChange={(e) => setInlineForm((p) => p && ({ ...p, name: e.target.value }))} />
+                          ) : (
+                            <div className="flex items-center gap-2">
+                              <button type="button" onClick={(e) => handleInvoiceButtonClick(e, item)}
+                                className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-semibold shadow-sm transition hover:shadow active:scale-95 ${item.invoiceId ? "border border-emerald-200 bg-emerald-50 text-emerald-700" : "border border-gray-200 bg-gray-50 text-gray-400"}`}
+                                title={item.invoiceId ? "인보이스 메뉴" : "인보이스 생성"}>
+                                {item.invoiceId ? "🧾" : "+"}
+                              </button>
+                              <span className="truncate font-semibold text-gray-900">{item.name}</span>
+                            </div>
+                          )}
                         </td>
 
-                        <td className="border-b border-gray-100 px-4 py-3 text-gray-500">
-                          {item.nationality}
+                        {/* 생년월일 */}
+                        <td className={cellCls}>
+                          {isEditing ? (
+                            <input className={inputCls} value={f!.birthInput} onChange={(e) => setInlineForm((p) => p && ({ ...p, birthInput: e.target.value }))} placeholder="891210-1" />
+                          ) : (
+                            <span className="text-gray-500">{birthInfo.birthDisplay}</span>
+                          )}
                         </td>
 
-                        <td className="border-b border-gray-100 px-4 py-3">
-                          <div className="flex items-center gap-2">
-                            <button
-                              type="button"
-                              onClick={(e) =>
-                                handleInvoiceButtonClick(e, item)
-                              }
-                              className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-semibold shadow-sm transition hover:shadow active:scale-95 ${
-                                item.invoiceId
-                                  ? "border border-emerald-200 bg-emerald-50 text-emerald-700"
-                                  : "border border-gray-200 bg-gray-50 text-gray-400"
-                              }`}
-                              title={
-                                item.invoiceId
-                                  ? "인보이스 메뉴"
-                                  : "인보이스 생성"
-                              }
-                            >
-                              {item.invoiceId ? "🧾" : "+"}
-                            </button>
-
-                            <span className="truncate font-semibold text-gray-900">
-                              {item.name}
-                            </span>
-                          </div>
+                        {/* 국적 */}
+                        <td className={cellCls}>
+                          {isEditing ? (
+                            <input className={inputCls} value={f!.nationality} onChange={(e) => setInlineForm((p) => p && ({ ...p, nationality: e.target.value }))} />
+                          ) : (
+                            <span className="text-gray-500">{item.nationality}</span>
+                          )}
                         </td>
 
-                        <td className="border-b border-gray-100 px-4 py-3">
-                          {item.consultArea}
+                        {/* 상담부위 */}
+                        <td className={cellCls}>
+                          {isEditing ? (
+                            <input className={inputCls} value={f!.consultArea} onChange={(e) => setInlineForm((p) => p && ({ ...p, consultArea: e.target.value }))} />
+                          ) : item.consultArea}
                         </td>
 
-                        <td className="border-b border-gray-100 px-4 py-3">
-                          {item.doctors.join(", ")}
+                        {/* 원장 */}
+                        <td className={cellCls}>
+                          {isEditing ? (
+                            <input className={inputCls} value={f!.doctors.join(", ")} onChange={(e) => setInlineForm((p) => p && ({ ...p, doctors: e.target.value.split(",").map((s) => s.trim()).filter(Boolean) }))} placeholder="쉼표 구분" />
+                          ) : item.doctors.join(", ")}
                         </td>
 
-                        <td className="border-b border-gray-100 px-4 py-3 text-gray-500">
-                          {item.coordinators.join(", ")}
+                        {/* 실장 */}
+                        <td className={cellCls}>
+                          {isEditing ? (
+                            <input className={inputCls} value={f!.coordinators} onChange={(e) => setInlineForm((p) => p && ({ ...p, coordinators: e.target.value }))} placeholder="쉼표 구분" />
+                          ) : (
+                            <span className="text-gray-500">{item.coordinators.join(", ")}</span>
+                          )}
                         </td>
 
-                        <td className="border-b border-gray-100 px-4 py-3">
+                        {/* 상태 */}
+                        <td className={cellCls}>
                           <select
                             value={currentStatus}
-                            onChange={(e) =>
-                              handleStatusChange(
-                                item,
-                                e.target.value as ReservationStatus
-                              )
-                            }
-                            className="rounded-full border px-3 py-1 text-xs font-semibold outline-none transition"
-                            style={getStatusSelectStyle(
-                              currentStatus,
-                              statusColors
-                            )}
+                            onChange={(e) => handleStatusChange(item, e.target.value as ReservationStatus)}
+                            className="rounded-full border px-2 py-1 text-xs font-semibold outline-none transition"
+                            style={getStatusSelectStyle(currentStatus, statusColors)}
                           >
                             {STATUS_LIST.map((status) => (
-                              <option key={status} value={status}>
-                                {status}
-                              </option>
+                              <option key={status} value={status}>{status}</option>
                             ))}
                           </select>
                         </td>
 
-                        <td className="border-b border-gray-100 px-4 py-3 text-center">
-                          <button
-                            onClick={() => handleSurgeryToggle(item)}
-                            className={`rounded-full px-3 py-1 text-xs ${
-                              item.surgeryReserved
-                                ? "bg-purple-50 text-purple-700"
-                                : "bg-gray-100 text-gray-500"
-                            }`}
-                          >
+                        {/* 수술예약 */}
+                        <td className={`${cellCls} text-center`}>
+                          <button onClick={() => handleSurgeryToggle(item)}
+                            className={`rounded-full px-2 py-1 text-xs ${item.surgeryReserved ? "bg-purple-50 text-purple-700" : "bg-gray-100 text-gray-500"}`}>
                             {item.surgeryReserved ? "예약" : "미예약"}
                           </button>
                         </td>
 
-                        <td className="border-b border-gray-100 px-4 py-3 text-gray-600">
-                          {item.depositAmount || "—"}
+                        {/* 예약금 */}
+                        <td className={cellCls}>
+                          {isEditing ? (
+                            <input className={inputCls} value={f!.depositAmount} onChange={(e) => setInlineForm((p) => p && ({ ...p, depositAmount: e.target.value }))} />
+                          ) : (
+                            <span className="text-gray-600">{item.depositAmount || "—"}</span>
+                          )}
                         </td>
 
-                        <td className="border-b border-gray-100 px-4 py-3 text-xs text-gray-500">
-                          <button
-                            onClick={() => openMemoPopover(item)}
-                            className="text-emerald-700 hover:underline"
-                          >
-                            전체보기
-                          </button>
+                        {/* 메모 */}
+                        <td className={`${cellCls} text-xs text-gray-500`}>
+                          <button onClick={() => openMemoPopover(item)} className="text-emerald-700 hover:underline">전체보기</button>
                         </td>
 
-                        <td className="border-b border-gray-100 px-4 py-3 text-gray-500">
-                          {item.phone}
+                        {/* 연락처 */}
+                        <td className={cellCls}>
+                          {isEditing ? (
+                            <input className={inputCls} value={f!.phone} onChange={(e) => setInlineForm((p) => p && ({ ...p, phone: e.target.value }))} />
+                          ) : (
+                            <span className="text-gray-500">{item.phone}</span>
+                          )}
                         </td>
 
-                        <td className="border-b border-gray-100 px-4 py-3 text-center">
-                          <button
-                            onClick={() => { setEditingReservation(item); setEditDrawerOpen(true); }}
-                            className="px-2 py-1 text-xs text-blue-600 hover:underline"
-                          >
-                            수정
-                          </button>
-
-                          <button
-                            onClick={() => handleDelete(item)}
-                            className="px-2 py-1 text-xs text-red-500 hover:underline"
-                          >
-                            삭제
-                          </button>
+                        {/* 관리 */}
+                        <td className={`${cellCls} text-center`}>
+                          {isEditing ? (
+                            <div className="flex justify-center gap-1">
+                              <button onClick={() => saveInlineEdit(item)} disabled={inlineSaving} className="rounded-lg bg-emerald-600 px-2 py-1 text-xs text-white disabled:opacity-50">
+                                {inlineSaving ? "…" : "저장"}
+                              </button>
+                              <button onClick={() => { setInlineEditId(null); setInlineForm(null); }} className="rounded-lg border border-gray-200 px-2 py-1 text-xs text-gray-500">
+                                취소
+                              </button>
+                            </div>
+                          ) : (
+                            <>
+                              <button onClick={() => startInlineEdit(item)} className="px-2 py-1 text-xs text-blue-600 hover:underline">수정</button>
+                              <button onClick={() => handleDelete(item)} className="px-2 py-1 text-xs text-red-500 hover:underline">삭제</button>
+                            </>
+                          )}
                         </td>
                       </tr>
                     );
