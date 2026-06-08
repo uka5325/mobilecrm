@@ -21,12 +21,12 @@ export function KpiBox({
         validColor
           ? {
               backgroundColor: `${validColor}22`,
-              border: `2px solid ${validColor}`,
+              border: `1px solid ${validColor}66`,
             }
           : undefined
       }
     >
-      <div className="text-xs font-semibold text-gray-500">{label}</div>
+      <div className="text-xs font-semibold" style={validColor ? { color: validColor } : undefined}>{label}</div>
       <div
         className="text-lg font-extrabold"
         style={validColor ? { color: validColor } : undefined}
