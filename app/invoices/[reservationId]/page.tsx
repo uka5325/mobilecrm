@@ -214,6 +214,7 @@ export default function InvoiceEditPage() {
       setStatus(saved.status || "draft");
 
       setMessage("저장 완료");
+      router.back();
     } catch (error) {
       console.error(error);
       setMessage("저장 중 오류가 발생했습니다.");
@@ -261,10 +262,10 @@ export default function InvoiceEditPage() {
 
         <div className="flex flex-wrap gap-2">
           <button
-            onClick={() => router.push("/reservations")}
+            onClick={() => router.back()}
             className="rounded-xl border border-gray-200 px-4 py-2 text-sm text-gray-700"
           >
-            예약관리로
+            ← 뒤로
           </button>
 
           <button
