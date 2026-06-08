@@ -84,12 +84,13 @@ function cleanText(value: unknown) {
 
 function getLogTime(value: unknown) {
   try {
+    const v = value as { toDate?: () => Date } | Date | string | number | null;
     const date =
-      value && typeof value.toDate === "function"
-        ? value.toDate()
-        : value instanceof Date
-          ? value
-          : new Date(value);
+      v && typeof (v as { toDate?: unknown }).toDate === "function"
+        ? (v as { toDate: () => Date }).toDate()
+        : v instanceof Date
+          ? v
+          : new Date(v as string | number);
 
     const time = date.getTime();
     return Number.isFinite(time) ? time : 0;

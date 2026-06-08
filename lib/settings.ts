@@ -216,11 +216,12 @@ function todayString() {
 function toMillis(value: unknown) {
   try {
     if (!value) return 0;
-    if (typeof value.toMillis === "function") return value.toMillis();
-    if (typeof value.toDate === "function") return value.toDate().getTime();
+    const v = value as { toMillis?: () => number; toDate?: () => Date };
+    if (typeof v.toMillis === "function") return v.toMillis();
+    if (typeof v.toDate === "function") return v.toDate().getTime();
     if (value instanceof Date) return value.getTime();
 
-    const d = new Date(value);
+    const d = new Date(value as string | number);
     return Number.isNaN(d.getTime()) ? 0 : d.getTime();
   } catch {
     return 0;
