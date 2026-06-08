@@ -17,10 +17,12 @@ import {
   saveGeneralSettings,
   saveVisitStatusColors,
   updateStaffFromSettings,
+  createStaffFromSettings,
   type ConferenceMemo,
   type CountryKey,
   type GeneralSettings,
   type SettingsStaffRecord,
+  type SettingsStaffRole,
   type VisitStatus,
   type VisitStatusColorMap,
 } from "@/lib/settings";
@@ -56,6 +58,7 @@ import { InvoiceItemsPanel } from "@/components/settings/InvoiceItemsPanel";
 import { InvoiceSectionsPanel } from "@/components/settings/InvoiceSectionsPanel";
 import { InvoiceTemplatesPanel } from "@/components/settings/InvoiceTemplatesPanel";
 import { StaffRow } from "@/components/settings/StaffRow";
+import { AddStaffModal } from "@/components/settings/AddStaffModal";
 import { StatusColorsPanel } from "@/components/settings/StatusColorsPanel";
 import { SystemSettingsPanel } from "@/components/settings/SystemSettingsPanel";
 import { MemoPanel } from "@/components/settings/MemoPanel";
@@ -110,6 +113,7 @@ export default function SettingsPage() {
   const [loading, setLoading] = useState(true);
   const [memoLoading, setMemoLoading] = useState(false);
   const [staffLoading, setStaffLoading] = useState(false);
+  const [showAddStaff, setShowAddStaff] = useState(false);
   const [invoiceLoading, setInvoiceLoading] = useState(false);
   const [saving, setSaving] = useState(false);
 
@@ -422,12 +426,22 @@ export default function SettingsPage() {
 
         {activeTab === "staff" && (
           <section className="rounded-[18px] border border-[#edf0f3] bg-white p-6 shadow-[0_2px_14px_rgba(0,0,0,0.04)]">
-            <SectionHeader
-              title="직원 관리"
-              description="직원 권한, 활성상태, 원장 표시 순서를 관리합니다. 신규 Auth 계정 생성은 서버 API 연결 후 추가하는 것이 안전합니다."
-              badge={canManageSettings ? "수정 가능" : "보기 전용"}
-              badgeActive={canManageSettings}
-            />
+            <div className="flex items-start justify-between gap-4">
+              <SectionHeader
+                title="직원 관리"
+                description="직원 권한, 활성상태, 원장 표시 순서를 관리합니다."
+                badge={canManageSettings ? "수정 가능" : "보기 전용"}
+                badgeActive={canManageSettings}
+              />
+              {currentUser?.role === "admin" && (
+                <button
+                  onClick={() => setShowAddStaff(true)}
+                  className="shrink-0 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-medium text-white transition hover:-translate-y-0.5 hover:shadow-md active:scale-95"
+                >
+                  + 직원 추가
+                </button>
+              )}
+            </div>
 
             {staffLoading ? (
               <EmptyBox text="직원 목록을 불러오는 중..." />
@@ -495,6 +509,20 @@ export default function SettingsPage() {
               </div>
             )}
           </section>
+        )}
+
+        {showAddStaff && currentUser && (
+          <AddStaffModal
+            onClose={() => setShowAddStaff(false)}
+            onSubmit={async (params) => {
+              await createStaffFromSettings(
+                params as { email: string; password: string; displayName: string; role: SettingsStaffRole; staffCode?: string },
+                currentUser
+              );
+              await loadStaffList();
+              setMessage("직원 계정이 추가되었습니다.");
+            }}
+          />
         )}
 
         {activeTab === "invoice" && (

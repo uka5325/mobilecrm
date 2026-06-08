@@ -561,6 +561,30 @@ export async function updateStaffFromSettings(
   return true;
 }
 
+export async function createStaffFromSettings(
+  params: {
+    email: string;
+    password: string;
+    displayName: string;
+    role: SettingsStaffRole;
+    staffCode?: string;
+  },
+  actor: StaffUser
+): Promise<void> {
+  assertCanManageSettings(actor);
+
+  const res = await fetch("/api/staff/create", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ...params, callerUid: actor.uid }),
+  });
+
+  const data = (await res.json()) as { success: boolean; message?: string };
+  if (!data.success) {
+    throw new Error(data.message || "직원 생성에 실패했습니다.");
+  }
+}
+
 export async function deactivateStaffFromSettings(
   staffId: string,
   actor: StaffUser
