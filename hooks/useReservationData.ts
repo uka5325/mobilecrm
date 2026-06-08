@@ -8,6 +8,7 @@ import {
 } from "@/lib/reservations";
 import {
   DEFAULT_VISIT_STATUS_COLORS,
+  getCachedVisitStatusColors,
   getVisitStatusColors,
   type VisitStatusColorMap,
 } from "@/lib/settings";
@@ -20,7 +21,7 @@ export function useReservationData(
   const [reservations, setReservations] = useState<ReservationRecord[]>([]);
   const [doctors, setDoctors] = useState<DoctorOption[]>([]);
   const [statusColors, setStatusColors] = useState<VisitStatusColorMap>(
-    DEFAULT_VISIT_STATUS_COLORS
+    () => getCachedVisitStatusColors() ?? DEFAULT_VISIT_STATUS_COLORS
   );
   const [loading, setLoading] = useState(true);
 

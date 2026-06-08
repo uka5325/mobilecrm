@@ -246,6 +246,25 @@ function cleanRole(value: unknown): SettingsStaffRole | string {
    내원상태 색상 설정
 ============================================================ */
 
+const STATUS_COLOR_CACHE_KEY = "crm_visit_status_colors";
+
+export function getCachedVisitStatusColors(): VisitStatusColorMap | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = localStorage.getItem(STATUS_COLOR_CACHE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+function setCachedVisitStatusColors(colors: VisitStatusColorMap) {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(STATUS_COLOR_CACHE_KEY, JSON.stringify(colors));
+  } catch {}
+}
+
 export async function getVisitStatusColors(): Promise<VisitStatusColorMap> {
   const ref = doc(db, "appSettings", "visitStatusColors");
   const snap = await getDoc(ref);
@@ -253,7 +272,9 @@ export async function getVisitStatusColors(): Promise<VisitStatusColorMap> {
   if (!snap.exists()) return DEFAULT_VISIT_STATUS_COLORS;
 
   const data = snap.data() as Partial<VisitStatusColorSetting>;
-  return normalizeVisitStatusColors(data.colors);
+  const colors = normalizeVisitStatusColors(data.colors);
+  setCachedVisitStatusColors(colors);
+  return colors;
 }
 
 export async function saveVisitStatusColors(
@@ -286,6 +307,7 @@ export async function saveVisitStatusColors(
     after: { colors: normalizedColors },
   });
 
+  setCachedVisitStatusColors(normalizedColors);
   return normalizedColors;
 }
 

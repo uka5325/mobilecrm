@@ -8,6 +8,7 @@ import {
 } from "@/lib/reservations";
 import {
   DEFAULT_VISIT_STATUS_COLORS,
+  getCachedVisitStatusColors,
   getConferenceMemos,
   getVisitStatusColors,
   type VisitStatusColorMap,
@@ -24,7 +25,7 @@ export function useTimelineData(
   const [reservations, setReservations] = useState<ReservationRecord[]>([]);
   const [doctors, setDoctors] = useState<DoctorOption[]>([]);
   const [statusColors, setStatusColors] = useState<VisitStatusColorMap>(
-    DEFAULT_VISIT_STATUS_COLORS
+    () => getCachedVisitStatusColors() ?? DEFAULT_VISIT_STATUS_COLORS
   );
   const [todayMemos, setTodayMemos] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
