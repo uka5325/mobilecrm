@@ -13,6 +13,7 @@ import {
 } from "firebase/firestore";
 import { db } from "./firebase";
 import type { StaffUser } from "./auth";
+import { cleanText } from "./stringUtils";
 import { createLog } from "./logs";
 import { parseBirthInfo } from "./reservationUtils";
 
@@ -100,9 +101,6 @@ export type CreateReservationParams = {
   patientId?: string;
 };
 
-function cleanText(value: unknown) {
-  return String(value || "").trim();
-}
 
 function cleanNumber(value: unknown, fallback = 999999) {
   const num = Number(value);

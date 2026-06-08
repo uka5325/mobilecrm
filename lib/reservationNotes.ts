@@ -12,6 +12,7 @@ import {
 } from "firebase/firestore";
 import { db } from "./firebase";
 import type { StaffUser } from "./auth";
+import { cleanText } from "./stringUtils";
 import { createLog } from "./logs";
 
 export type ReservationNote = {
@@ -29,9 +30,6 @@ export type ReservationNote = {
   isDeleted: boolean;
 };
 
-function cleanText(value: unknown) {
-  return String(value || "").trim();
-}
 
 export async function getReservationNotes(
   reservationId: string,

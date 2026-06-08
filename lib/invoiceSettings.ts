@@ -12,6 +12,7 @@ import {
 import { db } from "./firebase";
 import type { StaffUser } from "./auth";
 import { createLog } from "./logs";
+import { cleanText } from "./stringUtils";
 
 export type InvoiceCurrency = "KRW" | "USD" | "JPY" | "CNY" | "MNT" | "VND";
 
@@ -179,9 +180,6 @@ export type SaveInvoiceTemplateParams = {
   sortOrder?: number;
 };
 
-function cleanText(value: unknown) {
-  return String(value ?? "").trim();
-}
 
 function cleanNumber(value: unknown, fallback = 0) {
   if (typeof value === "number" && Number.isFinite(value)) return value;

@@ -18,6 +18,7 @@ import {
 import { auth, db } from "./firebase";
 import type { StaffUser } from "./auth";
 import { createLog } from "./logs";
+import { cleanText } from "./stringUtils";
 
 export type VisitStatus =
   | "내원전"
@@ -226,10 +227,6 @@ function toMillis(value: unknown) {
   } catch {
     return 0;
   }
-}
-
-function cleanText(value: unknown) {
-  return String(value ?? "").trim();
 }
 
 function cleanRole(value: unknown): SettingsStaffRole | string {

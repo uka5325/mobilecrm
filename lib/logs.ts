@@ -8,6 +8,7 @@ import {
 } from "firebase/firestore";
 import { db } from "./firebase";
 import { StaffUser } from "./auth";
+import { cleanText } from "./stringUtils";
 
 export type LogAction =
   | "login"
@@ -78,9 +79,6 @@ export type LogRecord = {
   createdAt?: unknown;
 };
 
-function cleanText(value: unknown) {
-  return String(value || "").trim();
-}
 
 function getLogTime(value: unknown) {
   try {

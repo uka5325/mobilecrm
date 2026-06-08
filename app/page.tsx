@@ -11,6 +11,7 @@ import { getStaffByUid, listenCurrentUser } from "@/lib/auth";
 import type { StaffUser } from "@/lib/auth";
 import { getConferenceMemos, type ConferenceMemo } from "@/lib/settings";
 import { todayString } from "@/lib/dateUtils";
+import { toDate } from "@/lib/settingsUtils";
 
 function todayDisplayString() {
   const d = new Date();
@@ -52,33 +53,6 @@ function isTodayReservation(item: ReservationRecord) {
   return normalizeDate(item.reservationDate) === todayString();
 }
 
-function toDate(value: unknown) {
-  try {
-    if (!value) return null;
-
-    if (
-      typeof value === "object" &&
-      value !== null &&
-      "toDate" in value &&
-      typeof (value as { toDate?: unknown }).toDate === "function"
-    ) {
-      return (value as { toDate: () => Date }).toDate();
-    }
-
-    if (value instanceof Date) return value;
-
-    if (typeof value === "string" || typeof value === "number") {
-      const date = new Date(value);
-      if (Number.isNaN(date.getTime())) return null;
-
-      return date;
-    }
-
-    return null;
-  } catch {
-    return null;
-  }
-}
 
 function formatMemoTime(value: unknown) {
   const date = toDate(value);

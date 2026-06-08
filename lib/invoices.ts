@@ -13,6 +13,8 @@ import {
 import { db } from "./firebase";
 import type { StaffUser } from "./auth";
 import { mapReservationDoc, type ReservationRecord } from "./reservations";
+import { cleanText } from "./stringUtils";
+import { toDate } from "./settingsUtils";
 import { createLog } from "./logs";
 import { getReservationBirthInfo } from "./reservationUtils";
 
@@ -156,10 +158,6 @@ export type InvoiceUpdatePayload = {
   internalMemo?: string;
   status?: "draft" | "confirmed" | "void";
 };
-
-function cleanText(value: unknown) {
-  return String(value || "").trim();
-}
 
 function toNumber(value: unknown) {
   if (typeof value === "number") return value;
@@ -650,20 +648,6 @@ export async function getInvoices(filters?: InvoiceListFilter): Promise<InvoiceR
   }
 
   return records;
-}
-
-function toDate(value: unknown): Date | null {
-  try {
-    const d =
-      value && typeof (value as any).toDate === "function"
-        ? (value as any).toDate()
-        : value instanceof Date
-          ? value
-          : new Date(value as any);
-    return Number.isNaN(d.getTime()) ? null : d;
-  } catch {
-    return null;
-  }
 }
 
 export async function saveInvoiceTemplateOrder(

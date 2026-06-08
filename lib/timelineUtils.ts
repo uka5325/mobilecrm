@@ -1,5 +1,6 @@
 import type { DoctorOption, ReservationRecord } from "@/lib/reservations";
 import { getReservationBirthInfo } from "@/lib/reservationUtils";
+import { toDate } from "@/lib/settingsUtils";
 
 export const START_H = 9;
 export const END_H = 21;
@@ -225,23 +226,6 @@ export function layoutTimelineCards(
   }
 
   return result.sort((a, b) => a.top - b.top);
-}
-
-export function toDate(value: unknown) {
-  try {
-    const date =
-      value && typeof (value as any).toDate === "function"
-        ? (value as any).toDate()
-        : value instanceof Date
-          ? value
-          : new Date(value as any);
-
-    if (Number.isNaN(date.getTime())) return null;
-
-    return date;
-  } catch {
-    return null;
-  }
 }
 
 export function formatLogDate(value: unknown) {

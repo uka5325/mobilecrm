@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { todayString } from "@/lib/dateUtils";
+import { cleanText } from "@/lib/stringUtils";
 
 type ImportPayload = {
   name: string;
@@ -77,9 +78,6 @@ function parseCsv(text: string) {
   return rows;
 }
 
-function cleanText(value: unknown) {
-  return String(value || "").trim();
-}
 
 function normalizeHeader(value: unknown) {
   return cleanText(value).toLowerCase().replace(/\s+/g, "");

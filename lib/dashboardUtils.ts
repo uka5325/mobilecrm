@@ -1,3 +1,6 @@
+import { cleanText } from "./stringUtils";
+export { cleanText };
+
 // Types
 export type StaffRole = "admin" | "doctor" | "coordinator" | "staff" | "interpreter";
 
@@ -92,10 +95,6 @@ export function formatDate(date: Date) {
     "-" +
     String(date.getDate()).padStart(2, "0")
   );
-}
-
-export function cleanText(value: unknown) {
-  return String(value ?? "").trim();
 }
 
 function cleanName(value: unknown) {
