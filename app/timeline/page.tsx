@@ -343,7 +343,7 @@ export default function TimelinePage() {
                                         {formatCardLogDate(latestLog.createdAt)}
                                       </>
                                     )}
-                                    {item.surgeryReserved ? " · 🏥수술" : ""}
+                                    {item.surgeryReserved ? " · 🏥수술예약" : ""}
                                   </div>
                                 </div>
                               </button>
