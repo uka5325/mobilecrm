@@ -653,6 +653,40 @@ export async function createReservationsBatch(
   };
 }
 
+export async function updateDoctorStatus(
+  reservationDocId: string,
+  reservationId: string,
+  doctorName: string,
+  newStatus: ReservationStatus,
+  staff: StaffUser
+) {
+  const ref = doc(db, "reservations", reservationDocId);
+
+  await updateDoc(ref, {
+    [`doctorStatusMap.${doctorName}`]: newStatus,
+    [`doctorStatusMetaMap.${doctorName}.status`]: newStatus,
+    [`doctorStatusMetaMap.${doctorName}.updatedAt`]: new Date().toISOString(),
+    [`doctorStatusMetaMap.${doctorName}.updatedBy`]: staff.displayName,
+    [`doctorStatusMetaMap.${doctorName}.updatedRole`]: staff.role,
+    updatedAt: serverTimestamp(),
+    updatedBy: staff.displayName,
+    updatedByUid: staff.uid,
+  });
+
+  await createLog({
+    action: "reservation_update",
+    targetType: "reservation",
+    targetId: reservationId,
+    reservationId,
+    staff,
+    message: `${staff.displayName}님이 ${doctorName} 원상중 상태를 변경했습니다.`,
+    before: null,
+    after: { doctorStatusMap: { [doctorName]: newStatus } },
+  });
+
+  return { success: true };
+}
+
 export async function updateReservationStatus(
   reservationDocId: string,
   reservationId: string,

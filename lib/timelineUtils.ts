@@ -50,6 +50,41 @@ export function getCardStatus(item: ReservationRecord) {
   return item.operationStatus || "내원전";
 }
 
+export function getCardStatusForDoctor(item: ReservationRecord, doctorName: string): string {
+  const doctorStatus = item.doctorStatusMap?.[doctorName];
+  if (doctorStatus === "원상중") return "원상중";
+  return item.operationStatus || "내원전";
+}
+
+export function buildGlobalSlotInfo(dayReservations: ReservationRecord[]): {
+  rowMap: Map<string, number>;
+  slotCounts: Map<number, number>;
+} {
+  const bySlot = new Map<number, ReservationRecord[]>();
+
+  dayReservations.forEach((item) => {
+    const slot = getSlotIndex(item.reservationTime || "");
+    const list = bySlot.get(slot) || [];
+    list.push(item);
+    bySlot.set(slot, list);
+  });
+
+  const rowMap = new Map<string, number>();
+  const slotCounts = new Map<number, number>();
+
+  bySlot.forEach((items, slot) => {
+    const unique = [...new Map(items.map((i) => [i.id, i])).values()].sort(
+      (a, b) => String(a.name || "").localeCompare(String(b.name || ""))
+    );
+    slotCounts.set(slot, unique.length);
+    unique.forEach((item, idx) => {
+      rowMap.set(item.id, idx);
+    });
+  });
+
+  return { rowMap, slotCounts };
+}
+
 export function getBirthGenderText(item: ReservationRecord) {
   const info = getReservationBirthInfo(item);
   return [info.birthDisplay, info.gender].filter(Boolean).join(" · ");
@@ -125,27 +160,10 @@ export function getTimelineHeight(slotLayouts: SlotLayout[]) {
 
 export function layoutTimelineCards(
   items: ReservationRecord[],
-  slotLayouts: SlotLayout[]
+  slotLayouts: SlotLayout[],
+  globalRowMap?: Map<string, number>,
+  globalSlotCounts?: Map<number, number>
 ) {
-  const sorted = [...items].sort((a, b) => {
-    const timeDiff =
-      getMinutes(a.reservationTime || "") -
-      getMinutes(b.reservationTime || "");
-
-    if (timeDiff !== 0) return timeDiff;
-
-    return String(a.name || "").localeCompare(String(b.name || ""));
-  });
-
-  const groups = new Map<number, ReservationRecord[]>();
-
-  sorted.forEach((item) => {
-    const slot = getSlotIndex(item.reservationTime || "");
-    const list = groups.get(slot) || [];
-    list.push(item);
-    groups.set(slot, list);
-  });
-
   const result: {
     item: ReservationRecord;
     top: number;
@@ -154,30 +172,65 @@ export function layoutTimelineCards(
     height: number;
   }[] = [];
 
-  groups.forEach((groupItems, slot) => {
-    const slotLayout = slotLayouts.find((item) => item.slot === slot);
-    const slotTop = slotLayout?.top || 0;
-    const slotHeight = slotLayout?.height || SLOT_H;
+  if (globalRowMap && globalSlotCounts) {
+    items.forEach((item) => {
+      const slot = getSlotIndex(item.reservationTime || "");
+      const slotLayout = slotLayouts.find((l) => l.slot === slot);
+      const slotTop = slotLayout?.top || 0;
+      const slotHeight = slotLayout?.height || SLOT_H;
+      const totalInSlot = globalSlotCounts.get(slot) || 1;
+      const rowIndex = globalRowMap.get(item.id) ?? 0;
 
-    const totalCardsHeight =
-      groupItems.length * CARD_H + Math.max(groupItems.length - 1, 0) * CARD_GAP;
+      const totalCardsHeight = totalInSlot * CARD_H + Math.max(totalInSlot - 1, 0) * CARD_GAP;
+      const startTop =
+        totalInSlot === 1
+          ? slotTop + Math.max((slotHeight - CARD_H) / 2, 0)
+          : slotTop + Math.max((slotHeight - totalCardsHeight) / 2, SLOT_PADDING_Y);
 
-    const startTop =
-      groupItems.length === 1
-        ? slotTop + Math.max((slotHeight - CARD_H) / 2, 0)
-        : slotTop +
-          Math.max((slotHeight - totalCardsHeight) / 2, SLOT_PADDING_Y);
-
-    groupItems.forEach((item, index) => {
       result.push({
         item,
-        top: startTop + index * (CARD_H + CARD_GAP),
+        top: startTop + rowIndex * (CARD_H + CARD_GAP),
         left: CARD_SIDE_GAP,
         width: DOCTOR_COL_W - CARD_SIDE_GAP * 2,
         height: CARD_H,
       });
     });
-  });
+  } else {
+    const sorted = [...items].sort((a, b) => {
+      const timeDiff = getMinutes(a.reservationTime || "") - getMinutes(b.reservationTime || "");
+      if (timeDiff !== 0) return timeDiff;
+      return String(a.name || "").localeCompare(String(b.name || ""));
+    });
+
+    const groups = new Map<number, ReservationRecord[]>();
+    sorted.forEach((item) => {
+      const slot = getSlotIndex(item.reservationTime || "");
+      const list = groups.get(slot) || [];
+      list.push(item);
+      groups.set(slot, list);
+    });
+
+    groups.forEach((groupItems, slot) => {
+      const slotLayout = slotLayouts.find((l) => l.slot === slot);
+      const slotTop = slotLayout?.top || 0;
+      const slotHeight = slotLayout?.height || SLOT_H;
+      const totalCardsHeight = groupItems.length * CARD_H + Math.max(groupItems.length - 1, 0) * CARD_GAP;
+      const startTop =
+        groupItems.length === 1
+          ? slotTop + Math.max((slotHeight - CARD_H) / 2, 0)
+          : slotTop + Math.max((slotHeight - totalCardsHeight) / 2, SLOT_PADDING_Y);
+
+      groupItems.forEach((item, index) => {
+        result.push({
+          item,
+          top: startTop + index * (CARD_H + CARD_GAP),
+          left: CARD_SIDE_GAP,
+          width: DOCTOR_COL_W - CARD_SIDE_GAP * 2,
+          height: CARD_H,
+        });
+      });
+    });
+  }
 
   return result.sort((a, b) => a.top - b.top);
 }

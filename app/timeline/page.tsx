@@ -7,9 +7,10 @@ import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useTimelineData } from "@/hooks/useTimelineData";
 import { todayString } from "@/lib/dateUtils";
 import {
+  buildGlobalSlotInfo,
   formatCardLogDate,
   getBirthGenderText,
-  getCardStatus,
+  getCardStatusForDoctor,
   getReservationDoctors,
   layoutTimelineCards,
 } from "@/lib/timelineUtils";
@@ -102,14 +103,18 @@ export default function TimelinePage() {
     return base;
   }, [dayReservations]);
 
-  function openDetail(item: ReservationRecord) {
+  const [clickedDoctorName, setClickedDoctorName] = useState<string | undefined>(undefined);
+
+  function openDetail(item: ReservationRecord, doctorName?: string) {
     setSelectedReservation(item);
+    setClickedDoctorName(doctorName);
     setDetailOpen(true);
   }
 
   function closeDetail() {
     setDetailOpen(false);
     setSelectedReservation(null);
+    setClickedDoctorName(undefined);
   }
 
   function openNewDrawer() {
@@ -250,14 +255,18 @@ export default function TimelinePage() {
                   className="relative z-0 flex"
                   style={{ minHeight: timelineHeight }}
                 >
-                  {doctors.map((doctor) => {
+                  {(() => {
+                    const { rowMap, slotCounts } = buildGlobalSlotInfo(dayReservations);
+                    return doctors.map((doctor) => {
                     const doctorReservations = dayReservations.filter((item) =>
                       getReservationDoctors(item).includes(doctor.displayName)
                     );
 
                     const laidOutReservations = layoutTimelineCards(
                       doctorReservations,
-                      slotLayouts
+                      slotLayouts,
+                      rowMap,
+                      slotCounts
                     );
 
                     return (
@@ -276,7 +285,7 @@ export default function TimelinePage() {
 
                         {laidOutReservations.map(
                           ({ item, top, left, width, height }) => {
-                            const status = getCardStatus(item);
+                            const status = getCardStatusForDoctor(item, doctor.displayName);
                             const cardColor = getStatusColor(
                               status,
                               statusColors
@@ -299,7 +308,7 @@ export default function TimelinePage() {
                             return (
                               <button
                                 key={`${doctor.uid}-${item.id}`}
-                                onClick={() => openDetail(item)}
+                                onClick={() => openDetail(item, doctor.displayName)}
                                 className="absolute z-[2] flex overflow-hidden rounded-xl px-2.5 py-2 text-left shadow-[0_3px_10px_rgba(0,0,0,0.12)] transition hover:-translate-y-0.5 hover:shadow-[0_6px_18px_rgba(0,0,0,0.18)] active:scale-[0.99]"
                                 style={{
                                   top,
@@ -342,7 +351,8 @@ export default function TimelinePage() {
                         )}
                       </div>
                     );
-                  })}
+                  });
+                  })()}
                 </div>
               </div>
             )}
@@ -356,6 +366,7 @@ export default function TimelinePage() {
         doctors={doctors}
         currentUser={currentUser!}
         statusColors={statusColors}
+        clickedDoctorName={clickedDoctorName}
         onClose={closeDetail}
         onRefreshLatestLog={refreshLatestLog}
       />

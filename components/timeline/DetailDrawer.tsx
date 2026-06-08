@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { doc, serverTimestamp, updateDoc } from "firebase/firestore";
 import {
   toggleSurgeryReserved,
+  updateDoctorStatus,
   updateReservationFull,
   updateReservationStatus,
   type DoctorOption,
@@ -52,11 +53,12 @@ type Props = {
   doctors: DoctorOption[];
   currentUser: StaffUser;
   statusColors: VisitStatusColorMap;
+  clickedDoctorName?: string;
   onClose: () => void;
   onRefreshLatestLog: (item: ReservationRecord) => Promise<void>;
 };
 
-export function DetailDrawer({ open, reservation, doctors, currentUser, statusColors, onClose, onRefreshLatestLog }: Props) {
+export function DetailDrawer({ open, reservation, doctors, currentUser, statusColors, clickedDoctorName, onClose, onRefreshLatestLog }: Props) {
   const [activeTab, setActiveTab] = useState<DetailTab>("info");
   const [selectedReservation, setSelectedReservation] = useState<ReservationRecord | null>(null);
 
@@ -200,6 +202,25 @@ export function DetailDrawer({ open, reservation, doctors, currentUser, statusCo
 
   async function handleStatusChange(status: ReservationStatus) {
     if (!selectedReservation) return;
+
+    // 원상중은 클릭한 doctor column에만 반영
+    if (status === "원상중" && clickedDoctorName) {
+      await updateDoctorStatus(
+        selectedReservation.id,
+        selectedReservation.reservationId,
+        clickedDoctorName,
+        "원상중",
+        currentUser
+      );
+      const updated = {
+        ...selectedReservation,
+        doctorStatusMap: { ...selectedReservation.doctorStatusMap, [clickedDoctorName]: "원상중" },
+      };
+      setSelectedReservation(updated);
+      await loadLogs(updated);
+      await onRefreshLatestLog(updated);
+      return;
+    }
 
     const nextStatus = status === "대기" && selectedReservation.operationStatus === "대기" ? "내원전" : status;
 
