@@ -47,7 +47,7 @@ import {
   type InvoiceTemplateSection,
 } from "@/lib/invoiceSettings";
 import { todayString } from "@/lib/dateUtils";
-import { GlobalAlert, EmptyBox, SectionHeader } from "@/components/settings/ui";
+import { GlobalAlert, EmptyBox, SectionHeader, Th } from "@/components/settings/ui";
 import { InvoiceCategoriesPanel } from "@/components/settings/InvoiceCategoriesPanel";
 import { InvoiceItemsPanel } from "@/components/settings/InvoiceItemsPanel";
 import { InvoiceSectionsPanel } from "@/components/settings/InvoiceSectionsPanel";
