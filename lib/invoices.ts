@@ -183,7 +183,7 @@ function makeInvoiceId(reservation: ReservationRecord) {
   return `INV-${yy}${mm}${dd}-${namePart}-${birthPart}`;
 }
 
-function mapReservationDoc(id: string, data: any): ReservationRecord {
+function mapReservationDoc(id: string, data: Record<string, unknown>): ReservationRecord {
   const doctors = Array.isArray(data.doctors) ? data.doctors : [];
   const coordinators = Array.isArray(data.coordinators) ? data.coordinators : [];
   const name = cleanText(data.name || data.patientName);
@@ -232,7 +232,7 @@ function mapReservationDoc(id: string, data: any): ReservationRecord {
   };
 }
 
-function mapTemplate(id: string, data: any): InvoiceTemplate {
+function mapTemplate(id: string, data: Record<string, unknown>): InvoiceTemplate {
   return {
     templateId: cleanText(data.templateId || id),
     language: cleanText(data.language),
@@ -243,14 +243,17 @@ function mapTemplate(id: string, data: any): InvoiceTemplate {
     mainTitle: cleanText(data.mainTitle),
     invoiceTitle: cleanText(data.invoiceTitle),
 
-    patientInfoLabels: {
-      name: cleanText(data.patientInfoLabels?.name),
-      birth: cleanText(data.patientInfoLabels?.birth),
-      doctor: cleanText(data.patientInfoLabels?.doctor),
-      surgerySchedule: cleanText(data.patientInfoLabels?.surgerySchedule),
-      totalAmount: cleanText(data.patientInfoLabels?.totalAmount),
-      deposit: cleanText(data.patientInfoLabels?.deposit),
-    },
+    patientInfoLabels: (() => {
+      const labels = data.patientInfoLabels as Record<string, unknown> | undefined;
+      return {
+        name: cleanText(labels?.name),
+        birth: cleanText(labels?.birth),
+        doctor: cleanText(labels?.doctor),
+        surgerySchedule: cleanText(labels?.surgerySchedule),
+        totalAmount: cleanText(labels?.totalAmount),
+        deposit: cleanText(labels?.deposit),
+      };
+    })(),
 
     regularPriceLabel: cleanText(data.regularPriceLabel),
     eventPriceLabel: cleanText(data.eventPriceLabel),
@@ -262,7 +265,7 @@ function mapTemplate(id: string, data: any): InvoiceTemplate {
   };
 }
 
-function mapSection(id: string, data: any): InvoiceTemplateSection {
+function mapSection(id: string, data: Record<string, unknown>): InvoiceTemplateSection {
   return {
     sectionId: cleanText(data.sectionId || id),
     templateId: cleanText(data.templateId),
@@ -274,15 +277,15 @@ function mapSection(id: string, data: any): InvoiceTemplateSection {
     sortOrder: toNumber(data.sortOrder),
     active: data.active === true,
     lines: Array.isArray(data.lines)
-      ? data.lines.map((line: any) => ({
-          ko: cleanText(line.ko),
-          local: cleanText(line.local),
+      ? data.lines.map((line: unknown) => ({
+          ko: cleanText((line as Record<string, unknown>)?.ko),
+          local: cleanText((line as Record<string, unknown>)?.local),
         }))
       : [],
   };
 }
 
-function mapItem(id: string, data: any): InvoiceItemMaster {
+function mapItem(id: string, data: Record<string, unknown>): InvoiceItemMaster {
   return {
     itemId: cleanText(data.itemId || id),
     categoryId: cleanText(data.categoryId),
@@ -303,7 +306,7 @@ function mapItem(id: string, data: any): InvoiceItemMaster {
   };
 }
 
-function mapInvoiceDoc(id: string, data: any): InvoiceRecord {
+function mapInvoiceDoc(id: string, data: Record<string, unknown>): InvoiceRecord {
   return {
     id,
     invoiceId: cleanText(data.invoiceId || id),

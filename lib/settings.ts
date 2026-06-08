@@ -213,7 +213,7 @@ function todayString() {
   );
 }
 
-function toMillis(value: any) {
+function toMillis(value: unknown) {
   try {
     if (!value) return 0;
     if (typeof value.toMillis === "function") return value.toMillis();

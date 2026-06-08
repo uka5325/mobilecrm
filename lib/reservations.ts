@@ -150,7 +150,7 @@ function normalizeDuplicateKey(params: CreateReservationParams) {
   ].join("__");
 }
 
-function mapReservationDoc(id: string, data: any): ReservationRecord {
+function mapReservationDoc(id: string, data: Record<string, unknown>): ReservationRecord {
   const name = cleanText(data.name || data.patientName);
 
   return {

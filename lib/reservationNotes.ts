@@ -3,6 +3,8 @@ import {
   collection,
   doc,
   getDocs,
+  type QuerySnapshot,
+  type DocumentData,
   query,
   serverTimestamp,
   updateDoc,
@@ -40,13 +42,7 @@ export async function getReservationNotes(
   const cleanReservationDocId = cleanText(reservationDocId);
   const cleanPatientId = cleanText(patientId);
 
-  console.log("[getReservationNotes params]", {
-    reservationId: cleanReservationId,
-    reservationDocId: cleanReservationDocId,
-    patientId: cleanPatientId,
-  });
-
-  const requests: Promise<any>[] = [];
+  const requests: Promise<QuerySnapshot<DocumentData>>[] = [];
 
   const targets = [
     { field: "reservationId", value: cleanReservationId },
@@ -55,8 +51,6 @@ export async function getReservationNotes(
   ].filter((item) => item.value);
 
   targets.forEach((target) => {
-    console.log("[reservationNotes query]", target.field, target.value);
-
     requests.push(
       getDocs(
         query(
@@ -78,7 +72,7 @@ export async function getReservationNotes(
       return;
     }
 
-    result.value.docs.forEach((d: any) => {
+    result.value.docs.forEach((d) => {
       const data = d.data();
 
       const isDeleted =
@@ -124,21 +118,16 @@ export async function getReservationNotes(
     });
   });
 
-  const notes = Array.from(noteMap.values()).sort((a, b) => {
-    const aa =
-      a.createdAt && typeof (a.createdAt as any).toMillis === "function"
-        ? (a.createdAt as any).toMillis()
-        : 0;
+  function toMillis(value: unknown): number {
+    if (value && typeof (value as { toMillis?: unknown }).toMillis === "function") {
+      return (value as { toMillis: () => number }).toMillis();
+    }
+    return 0;
+  }
 
-    const bb =
-      b.createdAt && typeof (b.createdAt as any).toMillis === "function"
-        ? (b.createdAt as any).toMillis()
-        : 0;
-
-    return bb - aa;
-  });
-
-  console.log("[reservationNotes loaded]", notes);
+  const notes = Array.from(noteMap.values()).sort(
+    (a, b) => toMillis(b.createdAt) - toMillis(a.createdAt)
+  );
 
   return notes;
 }

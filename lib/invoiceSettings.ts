@@ -229,7 +229,7 @@ function sortByOrder<
   });
 }
 
-function mapCategory(id: string, data: any): InvoiceCategory {
+function mapCategory(id: string, data: Record<string, unknown>): InvoiceCategory {
   return {
     id,
     categoryId: cleanText(data.categoryId || id),
@@ -248,7 +248,7 @@ function mapCategory(id: string, data: any): InvoiceCategory {
   };
 }
 
-function mapItem(id: string, data: any): InvoiceItem {
+function mapItem(id: string, data: Record<string, unknown>): InvoiceItem {
   return {
     id,
     itemId: cleanText(data.itemId || id),
@@ -281,7 +281,7 @@ function mapItem(id: string, data: any): InvoiceItem {
   };
 }
 
-function mapSection(id: string, data: any): InvoiceTemplateSection {
+function mapSection(id: string, data: Record<string, unknown>): InvoiceTemplateSection {
   return {
     id,
     sectionId: cleanText(data.sectionId || id),
@@ -304,7 +304,7 @@ function mapSection(id: string, data: any): InvoiceTemplateSection {
   };
 }
 
-function mapTemplate(id: string, data: any): InvoiceTemplate {
+function mapTemplate(id: string, data: Record<string, unknown>): InvoiceTemplate {
   return {
     id,
     templateId: cleanText(data.templateId || id),

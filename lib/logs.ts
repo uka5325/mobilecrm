@@ -75,14 +75,14 @@ export type LogRecord = {
   before?: unknown;
   after?: unknown;
 
-  createdAt?: any;
+  createdAt?: unknown;
 };
 
 function cleanText(value: unknown) {
   return String(value || "").trim();
 }
 
-function getLogTime(value: any) {
+function getLogTime(value: unknown) {
   try {
     const date =
       value && typeof value.toDate === "function"
@@ -98,7 +98,7 @@ function getLogTime(value: any) {
   }
 }
 
-function mapLogDoc(id: string, data: any): LogRecord {
+function mapLogDoc(id: string, data: Record<string, unknown>): LogRecord {
   return {
     id,
 
