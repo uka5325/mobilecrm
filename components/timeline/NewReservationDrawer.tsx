@@ -95,7 +95,7 @@ export function NewReservationDrawer({ open, onClose, doctors, currentUser, init
     <>
       <div className="fixed inset-0 z-[998] bg-black/35" onClick={onClose} />
 
-      <div className="fixed right-0 top-0 z-[1001] flex h-screen w-[390px] max-w-[calc(100vw-12px)] flex-col bg-white shadow-[-8px_0_30px_rgba(0,0,0,0.12)]">
+      <div className="fixed right-0 top-0 z-[1001] flex h-[100dvh] w-[390px] max-w-[calc(100vw-12px)] flex-col bg-white shadow-[-8px_0_30px_rgba(0,0,0,0.12)]">
         <div className="flex shrink-0 items-center justify-between border-b border-[#edf0f3] px-6 py-5">
           <div>
             <div className="text-xl font-bold">신규 예약 등록</div>
@@ -166,27 +166,25 @@ export function NewReservationDrawer({ open, onClose, doctors, currentUser, init
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-xs text-gray-500">예약날짜 *</label>
-              <input
-                type="date"
-                value={newForm.reservationDate}
-                onChange={(e) => setNewForm((p) => ({ ...p, reservationDate: e.target.value }))}
-                className="mt-1 w-full rounded-xl border border-[#dfe3e8] px-3 py-2 text-sm transition focus:border-[#1d9e75] focus:outline-none"
-              />
-            </div>
+          <div>
+            <label className="text-xs text-gray-500">예약날짜 *</label>
+            <input
+              type="date"
+              value={newForm.reservationDate}
+              onChange={(e) => setNewForm((p) => ({ ...p, reservationDate: e.target.value }))}
+              className="mt-1 w-full rounded-xl border border-[#dfe3e8] px-3 py-2 text-sm transition focus:border-[#1d9e75] focus:outline-none"
+            />
+          </div>
 
-            <div>
-              <label className="text-xs text-gray-500">예약시간</label>
-              <input
-                type="time"
-                step={1800}
-                value={newForm.reservationTime}
-                onChange={(e) => setNewForm((p) => ({ ...p, reservationTime: e.target.value }))}
-                className="mt-1 w-full rounded-xl border border-[#dfe3e8] px-3 py-2 text-sm transition focus:border-[#1d9e75] focus:outline-none"
-              />
-            </div>
+          <div>
+            <label className="text-xs text-gray-500">예약시간</label>
+            <input
+              type="time"
+              step={1800}
+              value={newForm.reservationTime}
+              onChange={(e) => setNewForm((p) => ({ ...p, reservationTime: e.target.value }))}
+              className="mt-1 w-full rounded-xl border border-[#dfe3e8] px-3 py-2 text-sm transition focus:border-[#1d9e75] focus:outline-none"
+            />
           </div>
 
           <div>
