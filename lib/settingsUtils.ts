@@ -41,6 +41,10 @@ export function toDate(value: unknown): Date | null {
   }
 }
 
+export function toMillis(value: unknown): number {
+  return toDate(value)?.getTime() ?? 0;
+}
+
 export function formatDateTime(value: unknown) {
   const date = toDate(value);
   if (!date) return "";

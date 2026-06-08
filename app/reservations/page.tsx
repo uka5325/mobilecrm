@@ -27,6 +27,7 @@ import { CreateDrawer } from "@/components/reservations/CreateDrawer";
 import { EditDrawer } from "@/components/reservations/EditDrawer";
 import { ImportDrawer } from "@/components/reservations/ImportDrawer";
 import { getReservationNotes, updateReservationNote, deleteReservationNote, type ReservationNote } from "@/lib/reservationNotes";
+import { toDate } from "@/lib/settingsUtils";
 
 const STATUS_LIST: ReservationStatus[] = [
   "내원전",
@@ -175,8 +176,7 @@ export default function ReservationsPage() {
     closeInvoiceMenu();
 
     try {
-      const invoiceDocId =
-        (item as any).invoiceDocId || (item as any).invoiceId || item.invoiceId;
+      const invoiceDocId = item.invoiceDocId || item.invoiceId;
 
       if (invoiceDocId) {
         await updateDoc(doc(db, "invoices", invoiceDocId), {
@@ -326,24 +326,15 @@ export default function ReservationsPage() {
   }
 
   function toDateStr(value: unknown): string {
-    try {
-      const d =
-        value && typeof (value as any).toDate === "function"
-          ? (value as any).toDate()
-          : value instanceof Date
-            ? value
-            : new Date(value as any);
-      if (Number.isNaN(d.getTime())) return "";
-      return (
-        d.getFullYear() + "-" +
-        String(d.getMonth() + 1).padStart(2, "0") + "-" +
-        String(d.getDate()).padStart(2, "0") + " " +
-        String(d.getHours()).padStart(2, "0") + ":" +
-        String(d.getMinutes()).padStart(2, "0")
-      );
-    } catch {
-      return "";
-    }
+    const d = toDate(value);
+    if (!d) return "";
+    return (
+      d.getFullYear() + "-" +
+      String(d.getMonth() + 1).padStart(2, "0") + "-" +
+      String(d.getDate()).padStart(2, "0") + " " +
+      String(d.getHours()).padStart(2, "0") + ":" +
+      String(d.getMinutes()).padStart(2, "0")
+    );
   }
 
   async function handleDownload() {
@@ -478,14 +469,11 @@ export default function ReservationsPage() {
                           )}
                         </div>
                         <div className="text-xs text-gray-400">
-                          {note.createdAt ? (() => {
-                            try {
-                              const d = typeof (note.createdAt as any).toDate === "function"
-                                ? (note.createdAt as any).toDate()
-                                : new Date(note.createdAt as any);
-                              return d.getFullYear() + "." + String(d.getMonth() + 1).padStart(2, "0") + "." + String(d.getDate()).padStart(2, "0") + " " + String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0");
-                            } catch { return ""; }
-                          })() : ""}
+                          {(() => {
+                            const d = toDate(note.createdAt);
+                            if (!d) return "";
+                            return d.getFullYear() + "." + String(d.getMonth() + 1).padStart(2, "0") + "." + String(d.getDate()).padStart(2, "0") + " " + String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0");
+                          })()}
                         </div>
                       </div>
                     </div>

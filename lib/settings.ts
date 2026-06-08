@@ -19,6 +19,7 @@ import { auth, db } from "./firebase";
 import type { StaffUser } from "./auth";
 import { createLog } from "./logs";
 import { cleanText } from "./stringUtils";
+import { toMillis } from "./settingsUtils";
 
 export type VisitStatus =
   | "내원전"
@@ -214,20 +215,6 @@ function todayString() {
   );
 }
 
-function toMillis(value: unknown) {
-  try {
-    if (!value) return 0;
-    const v = value as { toMillis?: () => number; toDate?: () => Date };
-    if (typeof v.toMillis === "function") return v.toMillis();
-    if (typeof v.toDate === "function") return v.toDate().getTime();
-    if (value instanceof Date) return value.getTime();
-
-    const d = new Date(value as string | number);
-    return Number.isNaN(d.getTime()) ? 0 : d.getTime();
-  } catch {
-    return 0;
-  }
-}
 
 function cleanRole(value: unknown): SettingsStaffRole | string {
   const role = cleanText(value).toLowerCase();
@@ -486,7 +473,7 @@ export async function getStaffListForSettings(): Promise<SettingsStaffRecord[]> 
 
   return snap.docs
     .map((docSnap) => {
-      const data = docSnap.data() as Partial<SettingsStaffRecord>;
+      const data = docSnap.data();
 
       return {
         id: docSnap.id,
@@ -494,18 +481,18 @@ export async function getStaffListForSettings(): Promise<SettingsStaffRecord[]> 
         email: cleanText(data.email),
         displayName: cleanText(
           data.displayName ||
-            (data as any).display_name ||
+            data["display_name"] ||
             data.email ||
             docSnap.id
         ),
         role: cleanRole(data.role),
         active: data.active !== false,
-        staffCode: cleanText(data.staffCode || (data as any).staff_code),
+        staffCode: cleanText(data.staffCode || data["staff_code"]),
         orderNo:
           typeof data.orderNo === "number"
             ? data.orderNo
-            : typeof (data as any).order_no === "number"
-              ? (data as any).order_no
+            : typeof data["order_no"] === "number"
+              ? data["order_no"] as number
               : 999999,
         createdAt: data.createdAt,
         updatedAt: data.updatedAt,

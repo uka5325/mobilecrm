@@ -9,6 +9,7 @@ import {
 import { db } from "./firebase";
 import { StaffUser } from "./auth";
 import { cleanText } from "./stringUtils";
+import { toMillis } from "./settingsUtils";
 
 export type LogAction =
   | "login"
@@ -81,20 +82,7 @@ export type LogRecord = {
 
 
 function getLogTime(value: unknown) {
-  try {
-    const v = value as { toDate?: () => Date } | Date | string | number | null;
-    const date =
-      v && typeof (v as { toDate?: unknown }).toDate === "function"
-        ? (v as { toDate: () => Date }).toDate()
-        : v instanceof Date
-          ? v
-          : new Date(v as string | number);
-
-    const time = date.getTime();
-    return Number.isFinite(time) ? time : 0;
-  } catch {
-    return 0;
-  }
+  return toMillis(value);
 }
 
 function mapLogDoc(id: string, data: Record<string, unknown>): LogRecord {

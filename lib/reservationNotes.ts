@@ -13,6 +13,7 @@ import {
 import { db } from "./firebase";
 import type { StaffUser } from "./auth";
 import { cleanText } from "./stringUtils";
+import { toMillis } from "./settingsUtils";
 import { createLog } from "./logs";
 
 export type ReservationNote = {
@@ -115,13 +116,6 @@ export async function getReservationNotes(
       noteMap.set(note.id, note);
     });
   });
-
-  function toMillis(value: unknown): number {
-    if (value && typeof (value as { toMillis?: unknown }).toMillis === "function") {
-      return (value as { toMillis: () => number }).toMillis();
-    }
-    return 0;
-  }
 
   const notes = Array.from(noteMap.values()).sort(
     (a, b) => toMillis(b.createdAt) - toMillis(a.createdAt)

@@ -338,7 +338,7 @@ export function DetailDrawer({ open, reservation, doctors, currentUser, statusCo
     if (!confirm("연결된 인보이스를 삭제할까요?\n삭제 후 다시 생성할 수 있습니다.")) return;
 
     try {
-      const invoiceDocId = (selectedReservation as ReservationRecord & { invoiceDocId?: string }).invoiceDocId || selectedReservation.invoiceId;
+      const invoiceDocId = selectedReservation.invoiceDocId || selectedReservation.invoiceId;
 
       await updateDoc(doc(db, "invoices", invoiceDocId), {
         status: "void",
@@ -358,7 +358,6 @@ export function DetailDrawer({ open, reservation, doctors, currentUser, statusCo
         updatedByUid: currentUser.uid,
       });
 
-      const extReservation = selectedReservation as ReservationRecord & { invoiceDocId?: string; invoiceStatus?: string };
       await createLog({
         action: "invoice_delete",
         targetType: "invoice",
@@ -370,13 +369,13 @@ export function DetailDrawer({ open, reservation, doctors, currentUser, statusCo
         invoiceId: selectedReservation.invoiceId || invoiceDocId,
         before: {
           invoiceId: selectedReservation.invoiceId || "",
-          invoiceDocId: extReservation.invoiceDocId || "",
-          invoiceStatus: extReservation.invoiceStatus || "",
+          invoiceDocId: selectedReservation.invoiceDocId || "",
+          invoiceStatus: selectedReservation.invoiceStatus || "",
         },
         after: { invoiceId: "", invoiceDocId: "", invoiceStatus: "void", isDeleted: true },
       });
 
-      const updated = { ...selectedReservation, invoiceId: "", invoiceDocId: "", invoiceStatus: "" } as ReservationRecord;
+      const updated: ReservationRecord = { ...selectedReservation, invoiceId: "", invoiceDocId: "", invoiceStatus: "" };
       setSelectedReservation(updated);
       await loadLogs(updated);
       await onRefreshLatestLog(updated);

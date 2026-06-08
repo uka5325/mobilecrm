@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { getInvoices, type InvoiceRecord, type InvoiceListFilter } from "@/lib/invoices";
 import { todayString } from "@/lib/dateUtils";
+import { toDate } from "@/lib/settingsUtils";
 
 const STATUS_LABEL: Record<string, string> = {
   draft: "임시저장",
@@ -22,24 +23,15 @@ function formatMoney(value: number) {
 }
 
 function formatDate(value: unknown): string {
-  try {
-    const d =
-      value && typeof (value as any).toDate === "function"
-        ? (value as any).toDate()
-        : value instanceof Date
-          ? value
-          : new Date(value as any);
-    if (Number.isNaN(d.getTime())) return "-";
-    return (
-      d.getFullYear() +
-      "." +
-      String(d.getMonth() + 1).padStart(2, "0") +
-      "." +
-      String(d.getDate()).padStart(2, "0")
-    );
-  } catch {
-    return "-";
-  }
+  const d = toDate(value);
+  if (!d) return "-";
+  return (
+    d.getFullYear() +
+    "." +
+    String(d.getMonth() + 1).padStart(2, "0") +
+    "." +
+    String(d.getDate()).padStart(2, "0")
+  );
 }
 
 export function InvoiceListTab() {

@@ -72,6 +72,8 @@ export type ReservationRecord = {
 
   invoiceUrl: string;
   invoiceId: string;
+  invoiceDocId?: string;
+  invoiceStatus?: string;
   invoiceSheetName: string;
 
   createdAt?: unknown;
