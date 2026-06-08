@@ -64,7 +64,7 @@ export function InfoTab({
 }: Props) {
   return (
     <>
-      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+      <div className="grid grid-cols-2 gap-3">
         <EditField
           label="이름"
           value={detailForm.name}
@@ -152,12 +152,15 @@ export function InfoTab({
         </div>
       </div>
 
-      <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
+      <div className="mt-3">
         <EditField
           label="담당 실장"
           value={detailForm.coordinators}
           onChange={(value) => onFormChange({ coordinators: value })}
         />
+      </div>
+
+      <div className="mt-3">
         <EditField
           label="예약금"
           value={detailForm.depositAmount}
