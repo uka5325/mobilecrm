@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import type { MouseEvent } from "react";
 import { useRouter } from "next/navigation";
 import { doc, serverTimestamp, updateDoc } from "firebase/firestore";
@@ -25,6 +25,7 @@ import { formatDateGroup, normalizeTimeText } from "@/lib/timelineUtils";
 import { CreateDrawer } from "@/components/reservations/CreateDrawer";
 import { EditDrawer } from "@/components/reservations/EditDrawer";
 import { ImportDrawer } from "@/components/reservations/ImportDrawer";
+import { getReservationNotes, type ReservationNote } from "@/lib/reservationNotes";
 
 const STATUS_LIST: ReservationStatus[] = [
   "내원전",
@@ -61,6 +62,15 @@ export default function ReservationsPage() {
     useState<ReservationRecord | null>(null);
 
   const [invoiceMenu, setInvoiceMenu] = useState<InvoiceMenuState>(null);
+
+  type MemoPopover = { item: ReservationRecord; notes: ReservationNote[]; loading: boolean } | null;
+  const [memoPopover, setMemoPopover] = useState<MemoPopover>(null);
+  const memoPopoverRef = useRef<HTMLDivElement | null>(null);
+
+  const [downloadOpen, setDownloadOpen] = useState(false);
+  const [dlStart, setDlStart] = useState(() => todayString().slice(0, 7) + "-01");
+  const [dlEnd, setDlEnd] = useState(todayString);
+  const [downloading, setDownloading] = useState(false);
 
   const filteredReservations = useMemo(() => {
     const keyword = search.trim().toLowerCase();
@@ -210,6 +220,109 @@ export default function ReservationsPage() {
     );
   }
 
+  async function openMemoPopover(item: ReservationRecord) {
+    setMemoPopover({ item, notes: [], loading: true });
+    try {
+      const notes = await getReservationNotes(item.reservationId, item.id, item.patientId);
+      setMemoPopover((prev) => (prev?.item.id === item.id ? { item, notes, loading: false } : prev));
+    } catch {
+      setMemoPopover((prev) => (prev?.item.id === item.id ? { item, notes: [], loading: false } : prev));
+    }
+  }
+
+  function escapeCsv(value: string): string {
+    const s = String(value ?? "");
+    if (s.includes(",") || s.includes('"') || s.includes("\n")) {
+      return '"' + s.replace(/"/g, '""') + '"';
+    }
+    return s;
+  }
+
+  function toDateStr(value: unknown): string {
+    try {
+      const d =
+        value && typeof (value as any).toDate === "function"
+          ? (value as any).toDate()
+          : value instanceof Date
+            ? value
+            : new Date(value as any);
+      if (Number.isNaN(d.getTime())) return "";
+      return (
+        d.getFullYear() + "-" +
+        String(d.getMonth() + 1).padStart(2, "0") + "-" +
+        String(d.getDate()).padStart(2, "0") + " " +
+        String(d.getHours()).padStart(2, "0") + ":" +
+        String(d.getMinutes()).padStart(2, "0")
+      );
+    } catch {
+      return "";
+    }
+  }
+
+  async function handleDownload() {
+    setDownloading(true);
+    try {
+      const inRange = reservations.filter((r) => {
+        const d = r.reservationDate || "";
+        return d >= dlStart && d <= dlEnd;
+      });
+
+      const notesPerReservation = await Promise.all(
+        inRange.map((r) =>
+          getReservationNotes(r.reservationId, r.id, r.patientId).catch(() => [] as ReservationNote[])
+        )
+      );
+
+      const header = [
+        "예약일", "예약시간", "환자명", "생년월일", "성별", "연락처",
+        "상담부위", "담당원장", "상담실장", "수술결정여부",
+        "예약금", "예약금통화", "현재상태", "전체메모", "등록일", "최종수정일",
+      ];
+
+      const rows = inRange.map((r, i) => {
+        const birthInfo = getReservationBirthInfo(r);
+        const notes = notesPerReservation[i];
+        const allMemo = notes.map((n) => n.memoText).join(" | ");
+        const depositRaw = String(r.depositAmount || "").trim();
+        const depositMatch = depositRaw.match(/^([\d,]+)\s*([A-Z₩$¥€]+)?$/);
+        const depositAmount = depositMatch ? depositMatch[1].replace(/,/g, "") : depositRaw;
+        const depositCurrency = depositMatch?.[2] || "KRW";
+
+        return [
+          r.reservationDate || "",
+          r.reservationTime || "",
+          r.name || "",
+          birthInfo.birthDisplay || "",
+          birthInfo.gender || "",
+          r.phone || "",
+          r.consultArea || "",
+          r.doctors.join(", "),
+          r.coordinators.join(", "),
+          r.surgeryReserved ? "예" : "아니오",
+          depositAmount,
+          depositCurrency,
+          r.operationStatus || "",
+          allMemo,
+          toDateStr(r.createdAt),
+          toDateStr(r.updatedAt),
+        ].map(escapeCsv).join(",");
+      });
+
+      const bom = "﻿";
+      const csv = bom + [header.map(escapeCsv).join(","), ...rows].join("\n");
+      const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `예약목록_${dlStart}_${dlEnd}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+      setDownloadOpen(false);
+    } finally {
+      setDownloading(false);
+    }
+  }
+
   async function handleDelete(item: ReservationRecord) {
     if (!currentUser) return;
 
@@ -227,6 +340,48 @@ export default function ReservationsPage() {
 
   return (
     <>
+      {/* Memo popover */}
+      {memoPopover && (
+        <>
+          <div className="fixed inset-0 z-[9994]" onClick={() => setMemoPopover(null)} />
+          <div className="fixed left-1/2 top-1/2 z-[9995] w-[420px] max-w-[90vw] -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-[#edf0f3] bg-white shadow-2xl">
+            <div className="flex items-center justify-between border-b border-[#edf0f3] px-5 py-4">
+              <div>
+                <div className="font-bold text-gray-800">{memoPopover.item.name} 메모</div>
+                <div className="text-xs text-gray-400">{memoPopover.item.reservationDate} · {memoPopover.item.reservationTime}</div>
+              </div>
+              <button onClick={() => setMemoPopover(null)} className="text-gray-400 hover:text-gray-600">✕</button>
+            </div>
+            <div className="max-h-[360px] overflow-y-auto p-5">
+              {memoPopover.loading ? (
+                <div className="py-8 text-center text-sm text-gray-400">메모 로딩 중...</div>
+              ) : memoPopover.notes.length === 0 ? (
+                <div className="py-8 text-center text-sm text-gray-400">등록된 메모가 없습니다.</div>
+              ) : (
+                <div className="space-y-3">
+                  {memoPopover.notes.map((note) => (
+                    <div key={note.id} className="rounded-xl border border-[#edf0f3] bg-[#f8fafc] p-3">
+                      <div className="mb-1 text-sm leading-relaxed text-gray-700">{note.memoText}</div>
+                      <div className="text-xs text-gray-400">
+                        {note.createdBy}
+                        {note.createdAt ? (() => {
+                          try {
+                            const d = typeof (note.createdAt as any).toDate === "function"
+                              ? (note.createdAt as any).toDate()
+                              : new Date(note.createdAt as any);
+                            return " · " + d.getFullYear() + "." + String(d.getMonth() + 1).padStart(2, "0") + "." + String(d.getDate()).padStart(2, "0") + " " + String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0");
+                          } catch { return ""; }
+                        })() : ""}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </>
+      )}
+
       {invoiceMenu && (
         <>
           <div className="fixed inset-0 z-[9998]" onClick={closeInvoiceMenu} />
@@ -307,6 +462,58 @@ export default function ReservationsPage() {
         >
           새로고침
         </button>
+
+        <div className="relative">
+          <button
+            onClick={() => setDownloadOpen((v) => !v)}
+            className="rounded-xl border border-gray-200 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+          >
+            📥 다운로드
+          </button>
+
+          {downloadOpen && (
+            <>
+              <div className="fixed inset-0 z-[9990]" onClick={() => setDownloadOpen(false)} />
+              <div className="absolute right-0 top-full z-[9991] mt-2 w-[280px] rounded-2xl border border-[#edf0f3] bg-white p-4 shadow-xl">
+                <div className="mb-3 text-sm font-bold text-gray-700">예약 데이터 다운로드</div>
+                <div className="mb-2 text-xs text-gray-400">선택한 기간의 예약을 CSV로 내보냅니다. (Google 스프레드시트에서 열기 가능)</div>
+                <div className="mb-2 flex flex-col gap-2">
+                  <div>
+                    <label className="mb-1 block text-xs font-semibold text-gray-500">시작일</label>
+                    <input
+                      type="date"
+                      value={dlStart}
+                      onChange={(e) => setDlStart(e.target.value)}
+                      className="w-full rounded-xl border border-[#dfe3e8] px-3 py-2 text-sm focus:border-[#1d9e75] focus:outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-semibold text-gray-500">종료일</label>
+                    <input
+                      type="date"
+                      value={dlEnd}
+                      onChange={(e) => setDlEnd(e.target.value)}
+                      className="w-full rounded-xl border border-[#dfe3e8] px-3 py-2 text-sm focus:border-[#1d9e75] focus:outline-none"
+                    />
+                  </div>
+                </div>
+                <div className="mb-3 text-xs text-gray-400">
+                  해당 기간 예약: {reservations.filter((r) => {
+                    const d = r.reservationDate || "";
+                    return d >= dlStart && d <= dlEnd;
+                  }).length}건
+                </div>
+                <button
+                  onClick={handleDownload}
+                  disabled={downloading}
+                  className="w-full rounded-xl bg-emerald-600 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
+                >
+                  {downloading ? "생성 중..." : "CSV 다운로드"}
+                </button>
+              </div>
+            </>
+          )}
+        </div>
       </div>
 
       <div className="px-5 pb-3 text-sm text-gray-500">
@@ -508,7 +715,10 @@ export default function ReservationsPage() {
                         </td>
 
                         <td className="border-b border-gray-100 px-4 py-3 text-xs text-gray-500">
-                          <button className="text-emerald-700 hover:underline">
+                          <button
+                            onClick={() => openMemoPopover(item)}
+                            className="text-emerald-700 hover:underline"
+                          >
                             전체보기
                           </button>
                         </td>
