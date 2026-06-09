@@ -542,7 +542,7 @@ export default function ReservationsPage() {
 
           <button
             onClick={() => setFilterDate("")}
-            className="h-10 rounded-xl border border-[#dfe3e8] bg-white px-4 text-sm text-gray-400 transition hover:-translate-y-0.5 hover:bg-gray-50 active:scale-95"
+            className="h-10 rounded-xl border border-[#dfe3e8] bg-white px-4 text-sm text-gray-700 transition hover:-translate-y-0.5 hover:bg-gray-50 active:scale-95"
           >
             날짜 초기화
           </button>

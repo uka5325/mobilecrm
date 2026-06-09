@@ -51,7 +51,7 @@ export function EditDrawer({ open, onClose, reservation, doctors, currentUser }:
 
   const birthPreview = useMemo(() => parseBirthInfo(form.birthInput), [form.birthInput]);
 
-  const parsedDoctors = doctorsInput.split(",").map((s) => s.trim()).filter(Boolean);
+  const parsedDoctors = doctorsInput.split(/[,，、]/).map((s) => s.trim()).filter(Boolean);
 
   async function handleUpdate() {
     if (!reservation) return;
@@ -204,7 +204,7 @@ export function EditDrawer({ open, onClose, reservation, doctors, currentUser }:
                     key={d.uid}
                     type="button"
                     onClick={() => {
-                      const names = doctorsInput.split(",").map((s) => s.trim()).filter(Boolean);
+                      const names = doctorsInput.split(/[,，、]/).map((s) => s.trim()).filter(Boolean);
                       if (!names.includes(d.displayName)) {
                         setDoctorsInput(names.concat(d.displayName).join(", "));
                       }
