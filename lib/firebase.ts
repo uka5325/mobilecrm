@@ -3,6 +3,7 @@ import {
   indexedDBLocalPersistence,
   browserLocalPersistence,
   browserSessionPersistence,
+  browserPopupRedirectResolver,
   initializeAuth,
   getAuth,
 } from "firebase/auth";
@@ -37,6 +38,7 @@ function createAuth() {
         browserLocalPersistence,
         browserSessionPersistence,
       ],
+      popupRedirectResolver: browserPopupRedirectResolver,
     });
   } catch {
     // Already initialized (e.g. HMR re-evaluation)

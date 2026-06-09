@@ -38,14 +38,14 @@ export function ChartCanvas({ open, existingUrl, onSave, onClose, saving, onErro
     c.getContext("2d")!.clearRect(0, 0, c.width, c.height);
   }, [open, existingUrl]);
 
-  // Sync canvas pixel dimensions to the img's natural size after it loads
-  // so pen coordinates and save compositing are always pixel-accurate
+  // Sync canvas pixel dimensions to the img's display size so that
+  // pen/eraser sizes feel natural on screen (not mapped to huge natural resolution)
   function onImgLoad() {
     const img = imgRef.current;
     const c   = drawRef.current;
     if (!img || !c) return;
-    c.width  = img.naturalWidth;
-    c.height = img.naturalHeight;
+    c.width  = img.offsetWidth  || img.naturalWidth;
+    c.height = img.offsetHeight || img.naturalHeight;
     c.getContext("2d")!.clearRect(0, 0, c.width, c.height);
   }
 
