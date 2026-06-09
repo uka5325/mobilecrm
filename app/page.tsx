@@ -144,7 +144,7 @@ export default function HomePage() {
       <div className="grid min-h-0 grid-cols-1 gap-[18px] xl:grid-cols-[1.4fr_1fr]">
         <section className="min-w-0">
           {/* Mobile: 2×2 grid / PC: TODAY OVERVIEW spans 2 rows on left, date spans 2 cols top-right */}
-          <div className="mb-[18px] grid grid-cols-2 gap-3 xl:grid-cols-[180px_1fr_1fr] xl:grid-rows-2">
+          <div className="mb-[18px] grid grid-cols-2 gap-3 xl:grid-cols-[180px_1fr_1fr] xl:grid-rows-[1fr_1fr]">
             {/* TODAY OVERVIEW — mobile col1 row1, PC col1 rows1-2 */}
             <div className="xl:row-span-2 flex flex-col justify-center rounded-[12px] border border-black/10 bg-white px-5 py-4 shadow-[0_2px_16px_rgba(0,0,0,0.06)]">
               <div className="text-xs font-bold text-[#1d9e75]">TODAY OVERVIEW</div>
@@ -152,7 +152,7 @@ export default function HomePage() {
             </div>
 
             {/* 오늘 날짜 — mobile col2 row1, PC col2-3 row1 */}
-            <div className="xl:col-span-2 rounded-[12px] border border-black/10 bg-white p-[18px] shadow-[0_2px_16px_rgba(0,0,0,0.06)]">
+            <div className="xl:col-span-2 flex flex-col justify-center rounded-[12px] border border-black/10 bg-white p-[18px] shadow-[0_2px_16px_rgba(0,0,0,0.06)]">
               <div className="mb-2.5 text-xs text-[#6b7280]">오늘 날짜</div>
               <div className="text-[22px] font-bold text-[#1a1a1a]">
                 {todayDisplayString()}
@@ -160,7 +160,7 @@ export default function HomePage() {
             </div>
 
             {/* 오늘 예약 — mobile col1 row2, PC col2 row2 */}
-            <div className="rounded-[12px] border border-black/10 bg-white p-[18px] shadow-[0_2px_16px_rgba(0,0,0,0.06)]">
+            <div className="flex flex-col justify-center rounded-[12px] border border-black/10 bg-white p-[18px] shadow-[0_2px_16px_rgba(0,0,0,0.06)]">
               <div className="mb-2.5 text-xs text-[#6b7280]">오늘 예약</div>
               <div className="text-[26px] font-bold text-[#1a1a1a]">
                 {loading ? "-" : todayReservations.length}
@@ -168,7 +168,7 @@ export default function HomePage() {
             </div>
 
             {/* 오늘 내원자 — mobile col2 row2, PC col3 row2 */}
-            <div className="rounded-[12px] border border-black/10 bg-white p-[18px] shadow-[0_2px_16px_rgba(0,0,0,0.06)]">
+            <div className="flex flex-col justify-center rounded-[12px] border border-black/10 bg-white p-[18px] shadow-[0_2px_16px_rgba(0,0,0,0.06)]">
               <div className="mb-2.5 text-xs text-[#6b7280]">오늘 내원자</div>
               <div className="text-[26px] font-bold text-[#1d9e75]">
                 {loading ? "-" : todayVisitors}
