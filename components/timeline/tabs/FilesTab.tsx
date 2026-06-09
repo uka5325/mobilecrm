@@ -14,6 +14,7 @@ import {
   type PhotoRecord,
 } from "@/lib/reservationFiles";
 import { ChartCanvas } from "@/components/timeline/tabs/ChartCanvas";
+import { compressImage } from "@/lib/imageCompress";
 
 type Props = {
   reservationDocId: string;
@@ -46,7 +47,7 @@ export function FilesTab({ reservationDocId, reservationId, patientId, currentUs
   const [charts, setCharts] = useState<ChartRecord[]>([]);
   const [photosLoading, setPhotosLoading] = useState(true);
   const [chartsLoading, setChartsLoading] = useState(true);
-  const [photoUploading, setPhotoUploading] = useState(false);
+  const [photoUploading, setPhotoUploading] = useState<false | "compressing" | "uploading">(false);
   const [chartSaving, setChartSaving] = useState(false);
 
   // 상담차트 캔버스 모달
@@ -92,16 +93,16 @@ export function FilesTab({ reservationDocId, reservationId, patientId, currentUs
 
   async function handlePhotoFiles(files: FileList | null) {
     if (!files || files.length === 0) return;
-    setPhotoUploading(true);
+    setPhotoUploading("compressing");
     setError("");
     try {
-      const uploaded: PhotoRecord[] = [];
-      for (const file of Array.from(files)) {
-        const record = await uploadReservationPhoto(
-          reservationDocId, reservationId, patientId, file, currentUser
-        );
-        uploaded.push(record);
-      }
+      const compressed = await Promise.all(Array.from(files).map((f) => compressImage(f)));
+      setPhotoUploading("uploading");
+      const uploaded = await Promise.all(
+        compressed.map((f) =>
+          uploadReservationPhoto(reservationDocId, reservationId, patientId, f, currentUser)
+        )
+      );
       setPhotos((prev) => [...uploaded, ...prev]);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
@@ -219,10 +220,10 @@ export function FilesTab({ reservationDocId, reservationId, patientId, currentUs
           <button
             type="button"
             onClick={() => photoInputRef.current?.click()}
-            disabled={photoUploading}
+            disabled={!!photoUploading}
             className="rounded-lg border border-[#dfe3e8] bg-white px-3 py-1.5 text-xs text-gray-700 transition hover:-translate-y-0.5 hover:bg-gray-50 active:scale-95 disabled:opacity-50"
           >
-            {photoUploading ? "업로드 중..." : "+ 사진 추가"}
+            {photoUploading === "compressing" ? "압축 중..." : photoUploading === "uploading" ? "업로드 중..." : "+ 사진 추가"}
           </button>
           <input
             ref={photoInputRef}
