@@ -10,9 +10,10 @@ type Props = {
   onSave: (blob: Blob) => Promise<void>;
   onClose: () => void;
   saving: boolean;
+  onError?: (msg: string) => void;
 };
 
-export function ChartCanvas({ open, existingUrl, onSave, onClose, saving }: Props) {
+export function ChartCanvas({ open, existingUrl, onSave, onClose, saving, onError }: Props) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [tool, setTool] = useState<Tool>("pen");
   const [isDrawing, setIsDrawing] = useState(false);
@@ -48,7 +49,8 @@ export function ChartCanvas({ open, existingUrl, onSave, onClose, saving }: Prop
         objectUrl = URL.createObjectURL(blob);
         img.src = objectUrl;
       } catch {
-        // fallback: direct src (local object URLs don't need fetch)
+        // fallback: crossOrigin anonymous keeps canvas untainted for same-origin CORS resources
+        img.crossOrigin = "anonymous";
         img.src = existingUrl!;
       }
 
@@ -156,6 +158,7 @@ export function ChartCanvas({ open, existingUrl, onSave, onClose, saving }: Prop
         objectUrl = URL.createObjectURL(blob);
         img.src = objectUrl;
       } catch {
+        img.crossOrigin = "anonymous";
         img.src = existingUrl!;
       }
       img.onload = () => {
@@ -170,13 +173,17 @@ export function ChartCanvas({ open, existingUrl, onSave, onClose, saving }: Prop
   async function handleSave() {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    canvas.toBlob(
-      async (blob: Blob | null) => {
-        if (!blob) return;
-        await onSave(blob);
-      },
-      "image/png"
-    );
+    try {
+      canvas.toBlob(
+        async (blob: Blob | null) => {
+          if (!blob) return;
+          await onSave(blob);
+        },
+        "image/png"
+      );
+    } catch {
+      onError?.("이미지를 저장할 수 없습니다. 차트를 닫고 다시 열어 주세요.");
+    }
   }
 
   if (!open) return null;

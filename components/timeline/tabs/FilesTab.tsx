@@ -428,6 +428,7 @@ export function FilesTab({ reservationDocId, reservationId, patientId, currentUs
         open={canvasOpen}
         existingUrl={baseImageUrl}
         onSave={handleSaveChart}
+        onError={(msg) => setError(msg)}
         onClose={() => {
           if (!chartSaving) {
             setCanvasOpen(false);
