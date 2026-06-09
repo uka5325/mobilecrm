@@ -44,21 +44,7 @@ export function ChartCanvas({ open, existingUrl, onSave, onClose, saving, onErro
 
       const img = new Image();
 
-      // fetch → blob URL so the canvas stays untainted (avoids CORS taint issue)
-      try {
-        // Use Firebase SDK to bypass CORS — works for gs:// and https://firebasestorage URLs
-        // Firebase HTTPS download URLs encode the path in the `/o/` segment
-        const httpsMatch = existingUrl!.match(/\/o\/([^?]+)/);
-        const storagePath = httpsMatch ? decodeURIComponent(httpsMatch[1]) : existingUrl!;
-        const storageRef = ref(storage, storagePath);
-        const blob = await getBlob(storageRef);
-        objectUrl = URL.createObjectURL(blob);
-        img.src = objectUrl;
-      } catch {
-        // fallback for local blob: URLs (new chart from file — no CORS issue)
-        img.src = existingUrl!;
-      }
-
+      // onload must be set before src to avoid missing it on synchronous blob loads
       img.onload = () => {
         const maxW = Math.min(window.innerWidth - 48, 700);
         const scale = Math.min(maxW / img.naturalWidth, 900 / img.naturalHeight, 1);
@@ -69,6 +55,18 @@ export function ChartCanvas({ open, existingUrl, onSave, onClose, saving, onErro
         ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
         if (objectUrl) URL.revokeObjectURL(objectUrl);
       };
+
+      try {
+        const httpsMatch = existingUrl!.match(/\/o\/([^?]+)/);
+        const storagePath = httpsMatch ? decodeURIComponent(httpsMatch[1]) : existingUrl!;
+        const storageRef = ref(storage, storagePath);
+        const blob = await getBlob(storageRef);
+        objectUrl = URL.createObjectURL(blob);
+        img.src = objectUrl;
+      } catch {
+        // fallback for local blob: URLs (new chart from file — no CORS issue)
+        img.src = existingUrl!;
+      }
     }
 
     loadImage();
@@ -157,8 +155,11 @@ export function ChartCanvas({ open, existingUrl, onSave, onClose, saving, onErro
       if (!ctx) return;
       const img = new Image();
       let objectUrl: string | null = null;
+      img.onload = () => {
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        if (objectUrl) URL.revokeObjectURL(objectUrl);
+      };
       try {
-        // Firebase HTTPS download URLs encode the path in the `/o/` segment
         const httpsMatch = existingUrl!.match(/\/o\/([^?]+)/);
         const storagePath = httpsMatch ? decodeURIComponent(httpsMatch[1]) : existingUrl!;
         const storageRef = ref(storage, storagePath);
@@ -168,10 +169,6 @@ export function ChartCanvas({ open, existingUrl, onSave, onClose, saving, onErro
       } catch {
         img.src = existingUrl!;
       }
-      img.onload = () => {
-        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-        if (objectUrl) URL.revokeObjectURL(objectUrl);
-      };
     }
 
     redraw();
