@@ -7,6 +7,7 @@ import {
   query,
   serverTimestamp,
   setDoc,
+  Timestamp,
   updateDoc,
   where,
 } from "firebase/firestore";
@@ -380,22 +381,63 @@ export async function getInvoiceTemplate(templateId = "template_mn") {
   return mapTemplate(snap.id, snap.data());
 }
 
-export async function getInvoiceSections(templateId = "template_mn") {
-  const snap = await getDocs(collection(db, "invoiceTemplateSections"));
+const INV_CACHE_TTL = 10 * 60 * 1000;
 
-  return snap.docs
+function getInvLocalCache<T>(key: string): T | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = localStorage.getItem(key);
+    const ts = Number(localStorage.getItem(key + "_ts") || 0);
+    if (raw && Date.now() - ts < INV_CACHE_TTL) return JSON.parse(raw) as T;
+  } catch {}
+  return null;
+}
+
+function setInvLocalCache(key: string, data: unknown) {
+  if (typeof window === "undefined") return;
+  setTimeout(() => {
+    try {
+      localStorage.setItem(key, JSON.stringify(data));
+      localStorage.setItem(key + "_ts", String(Date.now()));
+    } catch {}
+  }, 0);
+}
+
+export async function getInvoiceSections(templateId = "template_mn") {
+  const cacheKey = "crm_inv_sections_" + templateId;
+  const cached = getInvLocalCache<ReturnType<typeof mapSection>[]>(cacheKey);
+  if (cached) return cached;
+
+  const snap = await getDocs(
+    query(
+      collection(db, "invoiceTemplateSections"),
+      where("templateId", "==", templateId)
+    )
+  );
+
+  const result = snap.docs
     .map((docSnap) => mapSection(docSnap.id, docSnap.data()))
-    .filter((section) => section.templateId === templateId && section.active)
+    .filter((section) => section.active)
     .sort((a, b) => a.sortOrder - b.sortOrder);
+
+  setInvLocalCache(cacheKey, result);
+  return result;
 }
 
 export async function getInvoiceItemMasters() {
+  const cacheKey = "crm_inv_items";
+  const cached = getInvLocalCache<ReturnType<typeof mapItem>[]>(cacheKey);
+  if (cached) return cached;
+
   const snap = await getDocs(collection(db, "invoiceItems"));
 
-  return snap.docs
+  const result = snap.docs
     .map((docSnap) => mapItem(docSnap.id, docSnap.data()))
     .filter((item) => item.active)
     .sort((a, b) => a.sortOrder - b.sortOrder);
+
+  setInvLocalCache(cacheKey, result);
+  return result;
 }
 
 export async function getReservationByDocId(reservationDocId: string) {
@@ -612,9 +654,19 @@ export type InvoiceListFilter = {
 };
 
 export async function getInvoices(filters?: InvoiceListFilter): Promise<InvoiceRecord[]> {
-  let q = query(
+  const now = new Date();
+  const start = filters?.startDate
+    ? new Date(filters.startDate + "T00:00:00")
+    : new Date(now.getFullYear(), now.getMonth(), 1);
+  const end = filters?.endDate
+    ? new Date(filters.endDate + "T23:59:59")
+    : now;
+
+  const q = query(
     collection(db, "invoices"),
     where("isDeleted", "==", false),
+    where("createdAt", ">=", Timestamp.fromDate(start)),
+    where("createdAt", "<=", Timestamp.fromDate(end)),
     orderBy("createdAt", "desc")
   );
 
@@ -632,22 +684,8 @@ export async function getInvoices(filters?: InvoiceListFilter): Promise<InvoiceR
   }
 
   if (filters?.patientName) {
-    const q2 = filters.patientName.toLowerCase();
-    records = records.filter((r) => r.patientName.toLowerCase().includes(q2));
-  }
-
-  if (filters?.startDate) {
-    records = records.filter((r) => {
-      const d = toDate(r.createdAt);
-      return d ? d.toISOString().slice(0, 10) >= filters.startDate! : true;
-    });
-  }
-
-  if (filters?.endDate) {
-    records = records.filter((r) => {
-      const d = toDate(r.createdAt);
-      return d ? d.toISOString().slice(0, 10) <= filters.endDate! : true;
-    });
+    const search = filters.patientName.toLowerCase();
+    records = records.filter((r) => r.patientName.toLowerCase().includes(search));
   }
 
   return records;

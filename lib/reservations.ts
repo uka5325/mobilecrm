@@ -314,7 +314,9 @@ export async function getDoctors(): Promise<DoctorOption[]> {
   if (_doctorsPromise) return _doctorsPromise;
 
   _doctorsPromise = (async () => {
-    const snap = await getDocs(collection(db, "staff"));
+    const snap = await getDocs(
+      query(collection(db, "staff"), where("role", "==", "doctor"), where("active", "==", true))
+    );
 
     const doctors = snap.docs
       .map((docSnap) => {
