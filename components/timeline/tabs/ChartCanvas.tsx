@@ -24,52 +24,56 @@ export function ChartCanvas({ open, existingUrl, onSave, onClose, saving, onErro
   // 기존 이미지 or 빈 흰 배경 초기화
   useEffect(() => {
     if (!open) return;
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
 
-    ctx.fillStyle = "#ffffff";
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-    if (!existingUrl) return;
-
-    let objectUrl: string | null = null;
-
-    async function loadImage() {
+    async function init() {
       const canvas = canvasRef.current;
       if (!canvas) return;
-      const ctx = canvas.getContext("2d");
-      if (!ctx) return;
 
-      const img = new Image();
-
-      // onload must be set before src to avoid missing it on synchronous blob loads
-      img.onload = () => {
-        const maxW = Math.min(window.innerWidth - 48, 700);
-        const scale = Math.min(maxW / img.naturalWidth, 900 / img.naturalHeight, 1);
-        canvas.width = Math.round(img.naturalWidth * scale);
-        canvas.height = Math.round(img.naturalHeight * scale);
+      if (!existingUrl) {
+        const ctx = canvas.getContext("2d")!;
+        canvas.width = 700;
+        canvas.height = 900;
         ctx.fillStyle = "#ffffff";
         ctx.fillRect(0, 0, canvas.width, canvas.height);
-        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-        if (objectUrl) URL.revokeObjectURL(objectUrl);
-      };
-
-      try {
-        const httpsMatch = existingUrl!.match(/\/o\/([^?]+)/);
-        const storagePath = httpsMatch ? decodeURIComponent(httpsMatch[1]) : existingUrl!;
-        const storageRef = ref(storage, storagePath);
-        const blob = await getBlob(storageRef);
-        objectUrl = URL.createObjectURL(blob);
-        img.src = objectUrl;
-      } catch {
-        // fallback for local blob: URLs (new chart from file — no CORS issue)
-        img.src = existingUrl!;
+        return;
       }
+
+      // Download via Firebase SDK so canvas stays untainted
+      let src = existingUrl;
+      let isBlobUrl = false;
+      try {
+        const match = existingUrl.match(/\/o\/([^?]+)/);
+        const path = match ? decodeURIComponent(match[1]) : existingUrl;
+        const blob = await getBlob(ref(storage, path));
+        src = URL.createObjectURL(blob);
+        isBlobUrl = true;
+      } catch {
+        // fallback: local blob: URLs (새 차트 from file) need no special handling
+      }
+
+      await new Promise<void>((resolve) => {
+        const img = new Image();
+        img.onload = () => {
+          const c = canvasRef.current;
+          if (!c) { resolve(); return; }
+          const maxW = Math.min(window.innerWidth - 48, 700);
+          const scale = Math.min(maxW / img.naturalWidth, 900 / img.naturalHeight, 1);
+          c.width = Math.round(img.naturalWidth * scale);
+          c.height = Math.round(img.naturalHeight * scale);
+          // Get fresh ctx after resize — old ctx ref is invalidated by dimension change
+          const ctx = c.getContext("2d")!;
+          ctx.fillStyle = "#ffffff";
+          ctx.fillRect(0, 0, c.width, c.height);
+          ctx.drawImage(img, 0, 0, c.width, c.height);
+          if (isBlobUrl) URL.revokeObjectURL(src);
+          resolve();
+        };
+        img.onerror = () => resolve();
+        img.src = src;
+      });
     }
 
-    loadImage();
+    init();
   }, [open, existingUrl]);
 
   // 도구 변경 시 커서 스타일 업데이트
@@ -138,39 +142,42 @@ export function ChartCanvas({ open, existingUrl, onSave, onClose, saving, onErro
   }
 
   function resetCanvas() {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-
-    ctx.fillStyle = "#ffffff";
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-    if (!existingUrl) return;
-
     async function redraw() {
       const canvas = canvasRef.current;
       if (!canvas) return;
-      const ctx = canvas.getContext("2d");
-      if (!ctx) return;
-      const img = new Image();
-      let objectUrl: string | null = null;
-      img.onload = () => {
-        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-        if (objectUrl) URL.revokeObjectURL(objectUrl);
-      };
-      try {
-        const httpsMatch = existingUrl!.match(/\/o\/([^?]+)/);
-        const storagePath = httpsMatch ? decodeURIComponent(httpsMatch[1]) : existingUrl!;
-        const storageRef = ref(storage, storagePath);
-        const blob = await getBlob(storageRef);
-        objectUrl = URL.createObjectURL(blob);
-        img.src = objectUrl;
-      } catch {
-        img.src = existingUrl!;
-      }
-    }
 
+      if (!existingUrl) {
+        const ctx = canvas.getContext("2d")!;
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        return;
+      }
+
+      let src = existingUrl;
+      let isBlobUrl = false;
+      try {
+        const match = existingUrl.match(/\/o\/([^?]+)/);
+        const path = match ? decodeURIComponent(match[1]) : existingUrl;
+        const blob = await getBlob(ref(storage, path));
+        src = URL.createObjectURL(blob);
+        isBlobUrl = true;
+      } catch {
+        // fallback
+      }
+
+      const img = new Image();
+      img.onload = () => {
+        const c = canvasRef.current;
+        if (!c) return;
+        const ctx = c.getContext("2d")!;
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(0, 0, c.width, c.height);
+        ctx.drawImage(img, 0, 0, c.width, c.height);
+        if (isBlobUrl) URL.revokeObjectURL(src);
+      };
+      img.onerror = () => {};
+      img.src = src;
+    }
     redraw();
   }
 
