@@ -1,10 +1,12 @@
 import {
   signInWithEmailAndPassword,
+  signInWithPopup,
+  GoogleAuthProvider,
   signOut,
   onAuthStateChanged,
   User,
 } from "firebase/auth";
-import { doc, getDoc } from "firebase/firestore";
+import { collection, doc, getDocs, getDoc, query, where } from "firebase/firestore";
 import { auth, db } from "./firebase";
 
 export type StaffRole =
@@ -75,6 +77,57 @@ export async function loginWithEmail(email: string, password: string) {
       success: false,
       message: LOGIN_FAIL_MESSAGE,
     };
+  }
+}
+
+async function getStaffByEmail(email: string): Promise<StaffUser | null> {
+  const snap = await getDocs(
+    query(collection(db, "staff"), where("email", "==", email.toLowerCase().trim()))
+  );
+  if (snap.empty) return null;
+  const d = snap.docs[0];
+  const data = d.data();
+  return {
+    uid: d.id,
+    email: String(data.email || ""),
+    displayName: String(data.displayName || ""),
+    role: (data.role || "staff") as StaffRole,
+    active: data.active === true,
+    staffCode: data.staffCode ? String(data.staffCode) : undefined,
+  };
+}
+
+const googleProvider = new GoogleAuthProvider();
+
+export async function loginWithGoogle() {
+  try {
+    const credential = await signInWithPopup(auth, googleProvider);
+    const user = credential.user;
+
+    // UID로 먼저 찾고, 없으면 이메일로 fallback
+    let staff = await getStaffByUid(user.uid);
+    if (!staff && user.email) {
+      staff = await getStaffByEmail(user.email);
+    }
+
+    if (!staff || !staff.active) {
+      await signOut(auth);
+      return {
+        success: false,
+        message: "이 Google 계정은 등록된 직원 계정이 아닙니다. 관리자에게 문의하세요.",
+      };
+    }
+
+    return { success: true, user: staff, redirect: "/" };
+  } catch (error: unknown) {
+    if (process.env.NODE_ENV === "development") {
+      console.error("[Auth] Google 로그인 실패:", error);
+    }
+    const code = (error as { code?: string }).code;
+    if (code === "auth/popup-closed-by-user" || code === "auth/cancelled-popup-request") {
+      return { success: false, message: "" };
+    }
+    return { success: false, message: "Google 로그인에 실패했습니다. 다시 시도해 주세요." };
   }
 }
 
