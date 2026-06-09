@@ -15,54 +15,55 @@ type Props = {
   onError?: (msg: string) => void;
 };
 
+const DEFAULT_W = 700;
+const DEFAULT_H = 900;
+
 export function ChartCanvas({ open, existingUrl, onSave, onClose, saving, onError }: Props) {
-  // drawRef: transparent canvas for pen/eraser strokes only — never loaded with external images
   const drawRef = useRef<HTMLCanvasElement | null>(null);
-  // imgRef: displays the existing chart as a plain <img> (same as viewer — always works)
-  const imgRef = useRef<HTMLImageElement | null>(null);
-  const containerRef = useRef<HTMLDivElement | null>(null);
+  const imgRef  = useRef<HTMLImageElement | null>(null);
 
   const [tool, setTool] = useState<Tool>("pen");
   const [isDrawing, setIsDrawing] = useState(false);
   const lastPos = useRef<{ x: number; y: number } | null>(null);
-  // natural dimensions of the existing image, needed for compositing at save time
-  const imgSizeRef = useRef<{ w: number; h: number } | null>(null);
 
-  // Reset drawing canvas whenever chart opens
+  // Clear drawing layer every time a chart is opened
   useEffect(() => {
     if (!open) return;
-    const canvas = drawRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d")!;
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    const c = drawRef.current;
+    if (!c) return;
+    if (!existingUrl) {
+      c.width  = DEFAULT_W;
+      c.height = DEFAULT_H;
+    }
+    c.getContext("2d")!.clearRect(0, 0, c.width, c.height);
   }, [open, existingUrl]);
 
-  // Track natural image size once the background img loads
-  function handleImgLoad() {
+  // Sync canvas pixel dimensions to the img's natural size after it loads
+  // so pen coordinates and save compositing are always pixel-accurate
+  function onImgLoad() {
     const img = imgRef.current;
-    if (!img) return;
-    imgSizeRef.current = { w: img.naturalWidth, h: img.naturalHeight };
+    const c   = drawRef.current;
+    if (!img || !c) return;
+    c.width  = img.naturalWidth;
+    c.height = img.naturalHeight;
+    c.getContext("2d")!.clearRect(0, 0, c.width, c.height);
   }
 
   // ─── Drawing ────────────────────────────────────────────────────────────────
 
   function getPos(e: PointerEvent<HTMLCanvasElement>) {
-    const canvas = drawRef.current;
-    if (!canvas) return { x: 0, y: 0 };
-    const rect = canvas.getBoundingClientRect();
-    const scaleX = canvas.width / rect.width;
-    const scaleY = canvas.height / rect.height;
+    const c = drawRef.current;
+    if (!c) return { x: 0, y: 0 };
+    const r = c.getBoundingClientRect();
     return {
-      x: (e.clientX - rect.left) * scaleX,
-      y: (e.clientY - rect.top) * scaleY,
+      x: (e.clientX - r.left) * (c.width  / r.width),
+      y: (e.clientY - r.top)  * (c.height / r.height),
     };
   }
 
   function startDraw(e: PointerEvent<HTMLCanvasElement>) {
     e.preventDefault();
-    const canvas = drawRef.current;
-    if (!canvas) return;
-    canvas.setPointerCapture(e.pointerId);
+    drawRef.current?.setPointerCapture(e.pointerId);
     setIsDrawing(true);
     lastPos.current = getPos(e);
   }
@@ -70,20 +71,21 @@ export function ChartCanvas({ open, existingUrl, onSave, onClose, saving, onErro
   function draw(e: PointerEvent<HTMLCanvasElement>) {
     e.preventDefault();
     if (!isDrawing) return;
-    const canvas = drawRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d")!;
-    const pos = getPos(e);
+    const c = drawRef.current;
+    if (!c) return;
+    const ctx  = c.getContext("2d")!;
+    const pos  = getPos(e);
     const prev = lastPos.current ?? pos;
 
+    // Eraser uses destination-out → removes drawn pixels, revealing img below
     ctx.globalCompositeOperation = tool === "eraser" ? "destination-out" : "source-over";
-    ctx.strokeStyle = tool === "pen" ? "#111827" : "rgba(0,0,0,1)";
-    ctx.lineWidth = tool === "pen" ? 2.5 : 24;
-    ctx.lineCap = "round";
-    ctx.lineJoin = "round";
+    ctx.strokeStyle = "#111827";
+    ctx.lineWidth   = tool === "pen" ? 2.5 : 24;
+    ctx.lineCap     = "round";
+    ctx.lineJoin    = "round";
     ctx.beginPath();
     ctx.moveTo(prev.x, prev.y);
-    ctx.lineTo(pos.x, pos.y);
+    ctx.lineTo(pos.x,  pos.y);
     ctx.stroke();
 
     lastPos.current = pos;
@@ -96,58 +98,66 @@ export function ChartCanvas({ open, existingUrl, onSave, onClose, saving, onErro
   }
 
   function resetCanvas() {
-    const canvas = drawRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d")!;
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    const c = drawRef.current;
+    if (!c) return;
+    c.getContext("2d")!.clearRect(0, 0, c.width, c.height);
   }
 
-  // ─── Save: composite background image + drawing layer ───────────────────────
+  // ─── Save ───────────────────────────────────────────────────────────────────
 
   async function handleSave() {
     const drawCanvas = drawRef.current;
     if (!drawCanvas) return;
 
-    try {
-      if (!existingUrl) {
-        // New blank chart — just save the drawing on a white background
-        const out = document.createElement("canvas");
-        out.width = drawCanvas.width;
-        out.height = drawCanvas.height;
-        const ctx = out.getContext("2d")!;
-        ctx.fillStyle = "#ffffff";
-        ctx.fillRect(0, 0, out.width, out.height);
-        ctx.drawImage(drawCanvas, 0, 0);
-        out.toBlob(async (blob) => { if (blob) await onSave(blob); }, "image/png");
-        return;
-      }
+    if (!existingUrl) {
+      // Blank new chart — white background + strokes
+      const out = document.createElement("canvas");
+      out.width  = drawCanvas.width;
+      out.height = drawCanvas.height;
+      const ctx  = out.getContext("2d")!;
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, out.width, out.height);
+      ctx.drawImage(drawCanvas, 0, 0);
+      out.toBlob(async (b) => { if (b) await onSave(b); }, "image/png");
+      return;
+    }
 
-      // Existing chart — download original via Firebase SDK (untainted), overlay strokes
+    // Composite: original image (via Firebase SDK) + drawing layer
+    try {
       const match = existingUrl.match(/\/o\/([^?]+)/);
-      const path = match ? decodeURIComponent(match[1]) : existingUrl;
-      const blob = await getBlob(ref(storage, path));
-      const src = URL.createObjectURL(blob);
+      const path  = match ? decodeURIComponent(match[1]) : existingUrl;
+
+      // Try Firebase SDK first, fall back to direct fetch with the download token
+      let blobSrc: string;
+      try {
+        const blob = await getBlob(ref(storage, path));
+        blobSrc = URL.createObjectURL(blob);
+      } catch {
+        const res = await fetch(existingUrl);
+        if (!res.ok) throw new Error(`fetch failed: ${res.status}`);
+        blobSrc = URL.createObjectURL(await res.blob());
+      }
 
       await new Promise<void>((resolve, reject) => {
         const img = new Image();
         img.onload = () => {
           const out = document.createElement("canvas");
-          out.width = img.naturalWidth;
+          out.width  = img.naturalWidth;
           out.height = img.naturalHeight;
-          const ctx = out.getContext("2d")!;
+          const ctx  = out.getContext("2d")!;
           ctx.fillStyle = "#ffffff";
           ctx.fillRect(0, 0, out.width, out.height);
           ctx.drawImage(img, 0, 0);
-          // Scale drawing canvas strokes to match original image dimensions
+          // Scale strokes to original resolution
           ctx.drawImage(drawCanvas, 0, 0, out.width, out.height);
-          URL.revokeObjectURL(src);
+          URL.revokeObjectURL(blobSrc);
           out.toBlob(async (b) => {
             if (b) { await onSave(b); resolve(); }
-            else reject(new Error("toBlob failed"));
+            else    reject(new Error("toBlob returned null"));
           }, "image/png");
         };
-        img.onerror = () => { URL.revokeObjectURL(src); reject(new Error("img load failed")); };
-        img.src = src;
+        img.onerror = () => { URL.revokeObjectURL(blobSrc); reject(new Error("이미지 로드 실패")); };
+        img.src = blobSrc;
       });
     } catch (e) {
       onError?.(`저장에 실패했습니다. (${e instanceof Error ? e.message : String(e)})`);
@@ -159,9 +169,9 @@ export function ChartCanvas({ open, existingUrl, onSave, onClose, saving, onErro
   return (
     <>
       <div className="fixed inset-0 z-[1100] bg-black/60" onClick={saving ? undefined : onClose} />
-
       <div className="fixed inset-0 z-[1101] flex flex-col items-center justify-center p-3">
         <div className="flex w-full max-w-3xl flex-col rounded-2xl bg-white shadow-2xl" style={{ maxHeight: "calc(100vh - 24px)" }}>
+
           {/* 헤더 */}
           <div className="flex shrink-0 items-center justify-between border-b px-4 py-3">
             <div className="text-sm font-semibold text-gray-800">
@@ -190,35 +200,45 @@ export function ChartCanvas({ open, existingUrl, onSave, onClose, saving, onErro
 
           {/* 캔버스 영역 */}
           <div className="min-h-0 flex-1 overflow-auto bg-gray-100 p-2">
-            {/* Container: img (background) + canvas (drawing layer) overlaid */}
-            <div ref={containerRef} className="relative mx-auto w-fit rounded border border-gray-200 bg-white shadow-sm" style={{ maxWidth: "100%" }}>
-              {existingUrl && (
-                <img
-                  ref={imgRef}
-                  src={existingUrl}
-                  alt="차트 배경"
-                  onLoad={handleImgLoad}
-                  className="block"
-                  style={{ maxWidth: "min(700px, calc(100vw - 48px))", height: "auto" }}
-                  draggable={false}
+            <div className="relative mx-auto w-fit rounded border border-gray-200 bg-white shadow-sm" style={{ maxWidth: "min(700px, calc(100vw - 48px))" }}>
+              {existingUrl ? (
+                <>
+                  {/* Background: plain <img> — always renders regardless of CORS */}
+                  <img
+                    ref={imgRef}
+                    src={existingUrl}
+                    alt=""
+                    onLoad={onImgLoad}
+                    draggable={false}
+                    className="block"
+                    style={{ width: "100%", height: "auto", userSelect: "none" }}
+                  />
+                  {/* Drawing layer: transparent canvas covering the img */}
+                  <canvas
+                    ref={drawRef}
+                    className="absolute inset-0 touch-none"
+                    style={{ width: "100%", height: "100%", cursor: tool === "pen" ? "crosshair" : "cell" }}
+                    onPointerDown={startDraw}
+                    onPointerMove={draw}
+                    onPointerUp={endDraw}
+                    onPointerCancel={endDraw}
+                    onPointerLeave={endDraw}
+                  />
+                </>
+              ) : (
+                <canvas
+                  ref={drawRef}
+                  width={DEFAULT_W}
+                  height={DEFAULT_H}
+                  className="block touch-none"
+                  style={{ maxWidth: "100%", height: "auto", cursor: tool === "pen" ? "crosshair" : "cell" }}
+                  onPointerDown={startDraw}
+                  onPointerMove={draw}
+                  onPointerUp={endDraw}
+                  onPointerCancel={endDraw}
+                  onPointerLeave={endDraw}
                 />
               )}
-              <canvas
-                ref={drawRef}
-                width={700}
-                height={existingUrl ? undefined : 900}
-                className="touch-none"
-                style={
-                  existingUrl
-                    ? { position: "absolute", inset: 0, width: "100%", height: "100%", cursor: tool === "pen" ? "crosshair" : "cell" }
-                    : { display: "block", maxWidth: "100%", height: "auto", cursor: tool === "pen" ? "crosshair" : "cell" }
-                }
-                onPointerDown={startDraw}
-                onPointerMove={draw}
-                onPointerUp={endDraw}
-                onPointerCancel={endDraw}
-                onPointerLeave={endDraw}
-              />
             </div>
           </div>
 
@@ -233,6 +253,7 @@ export function ChartCanvas({ open, existingUrl, onSave, onClose, saving, onErro
               {saving ? "저장 중..." : "저장"}
             </button>
           </div>
+
         </div>
       </div>
     </>
