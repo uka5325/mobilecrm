@@ -79,6 +79,9 @@ export function DetailDrawer({ open, reservation, doctors, currentUser, statusCo
   const [logsError, setLogsError] = useState("");
 
   const [memoText, setMemoText] = useState("");
+  const [memoError, setMemoError] = useState("");
+  const [memoSuccess, setMemoSuccess] = useState("");
+  const [invoiceActionMessage, setInvoiceActionMessage] = useState("");
   const [notes, setNotes] = useState<ReservationNote[]>([]);
 
   useEffect(() => {
@@ -88,6 +91,9 @@ export function DetailDrawer({ open, reservation, doctors, currentUser, statusCo
     setDetailError("");
     setDetailMessage("");
     setMemoText("");
+    setMemoError("");
+    setMemoSuccess("");
+    setInvoiceActionMessage("");
     setNotes([]);
     setLogs([]);
     setLogsError("");
@@ -286,7 +292,9 @@ export function DetailDrawer({ open, reservation, doctors, currentUser, statusCo
   async function handleAddMemo() {
     if (!selectedReservation) return;
     const text = memoText.trim();
-    if (!text) { alert("메모 내용을 입력하세요."); return; }
+    setMemoError("");
+    setMemoSuccess("");
+    if (!text) { setMemoError("메모 내용을 입력하세요."); return; }
 
     try {
       const result = await addReservationNote({
@@ -297,15 +305,15 @@ export function DetailDrawer({ open, reservation, doctors, currentUser, statusCo
         staff: currentUser,
       });
 
-      if (!result.success) { alert(result.message || "메모 저장 실패"); return; }
+      if (!result.success) { setMemoError(result.message || "메모 저장 실패"); return; }
 
       setMemoText("");
+      setMemoSuccess("메모가 저장되었습니다.");
       await loadNotes(selectedReservation);
       await loadLogs(selectedReservation);
       await onRefreshLatestLog(selectedReservation);
-      alert("메모 저장 완료");
     } catch {
-      alert("메모 저장 중 오류가 발생했습니다.");
+      setMemoError("메모 저장 중 오류가 발생했습니다.");
     }
   }
 
@@ -318,7 +326,7 @@ export function DetailDrawer({ open, reservation, doctors, currentUser, statusCo
       memoText: newText,
       staff: currentUser,
     });
-    if (!result.success) { alert(result.message || "메모 수정 실패"); return; }
+    if (!result.success) { setMemoError(result.message || "메모 수정 실패"); return; }
     await loadNotes(selectedReservation);
     await loadLogs(selectedReservation);
     await onRefreshLatestLog(selectedReservation);
@@ -340,7 +348,7 @@ export function DetailDrawer({ open, reservation, doctors, currentUser, statusCo
 
   async function handleDeleteInvoice() {
     if (!selectedReservation) return;
-    if (!selectedReservation.invoiceId) { alert("삭제할 인보이스가 없습니다."); return; }
+    if (!selectedReservation.invoiceId) { setInvoiceActionMessage("삭제할 인보이스가 없습니다."); return; }
     if (!confirm("연결된 인보이스를 삭제할까요?\n삭제 후 다시 생성할 수 있습니다.")) return;
 
     try {
@@ -385,9 +393,9 @@ export function DetailDrawer({ open, reservation, doctors, currentUser, statusCo
       setSelectedReservation(updated);
       await loadLogs(updated);
       await onRefreshLatestLog(updated);
-      alert("인보이스가 삭제 처리되었습니다.");
+      setInvoiceActionMessage("인보이스가 삭제 처리되었습니다.");
     } catch {
-      alert("인보이스 삭제 중 오류가 발생했습니다.");
+      setInvoiceActionMessage("인보이스 삭제 중 오류가 발생했습니다.");
     }
   }
 
@@ -479,6 +487,8 @@ export function DetailDrawer({ open, reservation, doctors, currentUser, statusCo
               detailMessage={detailMessage}
               detailSaving={detailSaving}
               memoText={memoText}
+              memoError={memoError}
+              memoSuccess={memoSuccess}
               recentNotes={recentNotes}
               onFormChange={(updates) => setDetailForm((p) => ({ ...p, ...updates }))}
               onToggleDoctor={toggleDetailDoctor}
@@ -504,6 +514,8 @@ export function DetailDrawer({ open, reservation, doctors, currentUser, statusCo
             <NotesTab
               memoText={memoText}
               notes={notes}
+              memoError={memoError}
+              memoSuccess={memoSuccess}
               onMemoTextChange={setMemoText}
               onAddMemo={handleAddMemo}
               onUpdateNote={handleUpdateNote}
@@ -519,6 +531,7 @@ export function DetailDrawer({ open, reservation, doctors, currentUser, statusCo
             <InvoiceTab
               reservationDocId={selectedReservation.id}
               invoiceId={selectedReservation.invoiceId || ""}
+              actionMessage={invoiceActionMessage}
               onDelete={handleDeleteInvoice}
             />
           )}

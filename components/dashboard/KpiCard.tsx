@@ -1,4 +1,6 @@
-export function KpiCard({
+import { memo } from "react";
+
+export const KpiCard = memo(function KpiCard({
   label,
   value,
   sub,
@@ -32,4 +34,4 @@ export function KpiCard({
       </div>
     </div>
   );
-}
+});

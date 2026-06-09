@@ -134,8 +134,9 @@ export async function uploadReservationPhoto(
   staff: StaffUser
 ): Promise<PhotoRecord> {
   const ts = Date.now();
+  const uid = typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID().slice(0, 8) : Math.random().toString(36).slice(2, 10);
   const safeName = sanitizeFileName(file.name);
-  const storagePath = `reservationFiles/${reservationDocId}/photos/${ts}_${safeName}`;
+  const storagePath = `reservationFiles/${reservationDocId}/photos/${ts}_${uid}_${safeName}`;
   const storageRef = ref(storage, storagePath);
 
   await uploadBytes(storageRef, file, { contentType: file.type });
@@ -226,7 +227,8 @@ export async function uploadReservationChart(
   staff: StaffUser
 ): Promise<ChartRecord> {
   const ts = Date.now();
-  const storagePath = `reservationFiles/${reservationDocId}/charts/${ts}.png`;
+  const uid = typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID().slice(0, 8) : Math.random().toString(36).slice(2, 10);
+  const storagePath = `reservationFiles/${reservationDocId}/charts/${ts}_${uid}.png`;
   const storageRef = ref(storage, storagePath);
 
   await uploadBytes(storageRef, blob, { contentType: "image/png" });
@@ -278,7 +280,8 @@ export async function updateReservationChart(
 ): Promise<ChartRecord> {
   // 기존 Storage 파일 삭제 후 같은 경로에 재업로드
   const ts = Date.now();
-  const storagePath = `reservationFiles/${reservationDocId}/charts/${ts}.png`;
+  const uid = typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID().slice(0, 8) : Math.random().toString(36).slice(2, 10);
+  const storagePath = `reservationFiles/${reservationDocId}/charts/${ts}_${uid}.png`;
   const storageRef = ref(storage, storagePath);
 
   await uploadBytes(storageRef, blob, { contentType: "image/png" });

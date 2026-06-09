@@ -1,4 +1,6 @@
-export function KpiTable({ headers, rows }: { headers: string[]; rows: string[][] }) {
+import { memo } from "react";
+
+export const KpiTable = memo(function KpiTable({ headers, rows }: { headers: string[]; rows: string[][] }) {
   return (
     <div className="overflow-x-auto">
       <table className="w-full border-collapse text-sm">
@@ -24,10 +26,10 @@ export function KpiTable({ headers, rows }: { headers: string[]; rows: string[][
             </tr>
           ) : (
             rows.map((row, rowIndex) => (
-              <tr key={`${row.join("-")}-${rowIndex}`}>
+              <tr key={rowIndex}>
                 {row.map((cell, cellIndex) => (
                   <td
-                    key={`${cell}-${cellIndex}`}
+                    key={cellIndex}
                     className="whitespace-nowrap border-b border-[#f1f3f5] px-3 py-3 text-gray-700"
                   >
                     {cell}
@@ -40,4 +42,4 @@ export function KpiTable({ headers, rows }: { headers: string[]; rows: string[][
       </table>
     </div>
   );
-}
+});

@@ -6,13 +6,15 @@ import { NoteCard } from "@/components/timeline/NoteCard";
 type Props = {
   memoText: string;
   notes: ReservationNote[];
+  memoError?: string;
+  memoSuccess?: string;
   onMemoTextChange: (text: string) => void;
   onAddMemo: () => void;
   onUpdateNote: (note: ReservationNote, text: string) => Promise<void>;
   onDeleteNote: (note: ReservationNote) => Promise<void>;
 };
 
-export function NotesTab({ memoText, notes, onMemoTextChange, onAddMemo, onUpdateNote, onDeleteNote }: Props) {
+export function NotesTab({ memoText, notes, memoError, memoSuccess, onMemoTextChange, onAddMemo, onUpdateNote, onDeleteNote }: Props) {
   return (
     <div>
       <textarea
@@ -28,6 +30,12 @@ export function NotesTab({ memoText, notes, onMemoTextChange, onAddMemo, onUpdat
       >
         메모 추가
       </button>
+      {memoError && (
+        <div className="mt-2 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-600">{memoError}</div>
+      )}
+      {memoSuccess && (
+        <div className="mt-2 rounded-lg bg-emerald-50 px-3 py-2 text-xs text-emerald-700">{memoSuccess}</div>
+      )}
 
       <div className="mt-4 space-y-3">
         {notes.length === 0 ? (

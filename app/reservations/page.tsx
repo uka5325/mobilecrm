@@ -83,6 +83,7 @@ export default function ReservationsPage() {
   const [dlStart, setDlStart] = useState(() => todayString().slice(0, 7) + "-01");
   const [dlEnd, setDlEnd] = useState(todayString);
   const [downloading, setDownloading] = useState(false);
+  const [pageError, setPageError] = useState("");
 
   const filteredReservations = useMemo(() => {
     const keyword = search.trim().toLowerCase();
@@ -199,7 +200,7 @@ export default function ReservationsPage() {
       });
     } catch (error) {
       console.error(error);
-      alert("인보이스 삭제 중 오류가 발생했습니다.");
+      setPageError("인보이스 삭제 중 오류가 발생했습니다.");
     }
   }
 
@@ -273,7 +274,7 @@ export default function ReservationsPage() {
       setInlineEditId(null);
       setInlineForm(null);
     } catch {
-      alert("수정 중 오류가 발생했습니다.");
+      setPageError("수정 중 오류가 발생했습니다.");
     } finally {
       setInlineSaving(false);
     }
@@ -410,7 +411,7 @@ export default function ReservationsPage() {
     const result = await deleteReservation(item.id, item.reservationId, currentUser);
 
     if (!result.success) {
-      alert(result.message || "예약 삭제 권한이 없습니다.");
+      setPageError(result.message || "예약 삭제 권한이 없습니다.");
       return;
     }
 
@@ -521,6 +522,12 @@ export default function ReservationsPage() {
             </button>
           </div>
         </>
+      )}
+
+      {pageError && (
+        <div className="mb-3 rounded-lg bg-red-50 px-4 py-2 text-sm text-red-600" onClick={() => setPageError("")}>
+          {pageError} <span className="ml-2 cursor-pointer text-red-400">✕</span>
+        </div>
       )}
 
       <div className="-mx-6 mb-4 rounded-t-2xl border border-[#edf0f3] bg-[#ecfdf5] px-6 py-4 lg:-mx-8 lg:px-8">

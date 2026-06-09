@@ -1,4 +1,6 @@
-export function Panel({ title, rightText, children }: { title: string; rightText?: string; children: React.ReactNode }) {
+import { memo } from "react";
+
+export const Panel = memo(function Panel({ title, rightText, children }: { title: string; rightText?: string; children: React.ReactNode }) {
   return (
     <section className="rounded-[18px] border border-[#edf0f3] bg-white p-5 shadow-[0_2px_14px_rgba(0,0,0,0.04)]">
       <div className="mb-3 flex items-center justify-between">
@@ -9,4 +11,4 @@ export function Panel({ title, rightText, children }: { title: string; rightText
       {children}
     </section>
   );
-}
+});

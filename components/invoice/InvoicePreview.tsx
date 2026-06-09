@@ -142,7 +142,7 @@ export function InvoicePreview({
                   {sec.titleLocal || sec.titleKo}
                 </div>
                 {sec.lines.slice(0, 2).map((line, i) => (
-                  <div key={i} className="text-[10px] text-gray-600">
+                  <div key={`${line.ko ?? line.local ?? i}-${i}`} className="text-[10px] text-gray-600">
                     {line.local || line.ko}
                   </div>
                 ))}

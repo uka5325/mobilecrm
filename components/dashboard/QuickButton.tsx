@@ -1,4 +1,6 @@
-export function QuickButton({ children, onClick }: { children: React.ReactNode; onClick: () => void }) {
+import { memo } from "react";
+
+export const QuickButton = memo(function QuickButton({ children, onClick }: { children: React.ReactNode; onClick: () => void }) {
   return (
     <button
       onClick={onClick}
@@ -7,4 +9,4 @@ export function QuickButton({ children, onClick }: { children: React.ReactNode; 
       {children}
     </button>
   );
-}
+});

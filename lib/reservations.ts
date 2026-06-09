@@ -309,10 +309,13 @@ function makeDoctorOptionsFromReservations(
 }
 
 let _doctorsPromise: Promise<DoctorOption[]> | null = null;
+let _doctorsCachedAt = 0;
+const DOCTORS_TTL_MS = 10 * 60 * 1000;
 
 export async function getDoctors(): Promise<DoctorOption[]> {
-  if (_doctorsPromise) return _doctorsPromise;
+  if (_doctorsPromise && Date.now() - _doctorsCachedAt < DOCTORS_TTL_MS) return _doctorsPromise;
 
+  _doctorsCachedAt = Date.now();
   _doctorsPromise = (async () => {
     const snap = await getDocs(
       query(collection(db, "staff"), where("role", "==", "doctor"), where("active", "==", true))
@@ -341,6 +344,7 @@ export async function getDoctors(): Promise<DoctorOption[]> {
 
 export function invalidateDoctorsCache() {
   _doctorsPromise = null;
+  _doctorsCachedAt = 0;
 }
 
 export async function getAllReservations(): Promise<{
@@ -349,7 +353,7 @@ export async function getAllReservations(): Promise<{
 }> {
   const fromDate = (() => {
     const d = new Date();
-    d.setFullYear(d.getFullYear() - 2);
+    d.setMonth(d.getMonth() - 12);
     return d.toISOString().slice(0, 10);
   })();
 

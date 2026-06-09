@@ -34,7 +34,15 @@ export function useCurrentUser() {
         }
       } catch {}
 
-      const staff = await getStaffByUid(user.uid);
+      let staff = null;
+      try {
+        staff = await getStaffByUid(user.uid);
+      } catch {
+        setCurrentUser(null);
+        setAuthReady(true);
+        router.replace("/login");
+        return;
+      }
 
       if (!staff || !staff.active) {
         setCurrentUser(null);
@@ -42,6 +50,10 @@ export function useCurrentUser() {
         router.replace("/login");
         return;
       }
+
+      try {
+        sessionStorage.setItem(STAFF_CACHE_KEY, JSON.stringify(staff));
+      } catch {}
 
       setCurrentUser(staff);
       setAuthReady(true);

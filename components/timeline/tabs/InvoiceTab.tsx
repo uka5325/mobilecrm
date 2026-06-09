@@ -5,10 +5,11 @@ import { useRouter } from "next/navigation";
 type Props = {
   reservationDocId: string;
   invoiceId: string;
+  actionMessage?: string;
   onDelete: () => void;
 };
 
-export function InvoiceTab({ reservationDocId, invoiceId, onDelete }: Props) {
+export function InvoiceTab({ reservationDocId, invoiceId, actionMessage, onDelete }: Props) {
   const router = useRouter();
 
   return (
@@ -32,6 +33,10 @@ export function InvoiceTab({ reservationDocId, invoiceId, onDelete }: Props) {
         >
           인보이스 삭제
         </button>
+      )}
+
+      {actionMessage && (
+        <div className="rounded-lg bg-gray-50 px-3 py-2 text-center text-xs text-gray-600">{actionMessage}</div>
       )}
     </div>
   );

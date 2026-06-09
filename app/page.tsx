@@ -77,6 +77,7 @@ export default function HomePage() {
 
   const [loading, setLoading] = useState(true);
   const [memoLoading, setMemoLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
 
   useEffect(() => {
     const unsubscribe = listenCurrentUser(async (user: User | null) => {
@@ -97,7 +98,7 @@ export default function HomePage() {
       setReservations(data.reservations || []);
     } catch (error) {
       console.error(error);
-      alert("홈 데이터를 불러오지 못했습니다.");
+      setLoadError("홈 데이터를 불러오지 못했습니다.");
     } finally {
       setLoading(false);
     }
@@ -137,6 +138,9 @@ export default function HomePage() {
 
   return (
     <div className="space-y-[18px]">
+      {loadError && (
+        <div className="rounded-lg bg-red-50 px-4 py-2 text-sm text-red-600">{loadError}</div>
+      )}
       <div className="grid min-h-0 grid-cols-1 gap-[18px] xl:grid-cols-[1.4fr_1fr]">
         <section className="min-w-0">
           {/* Mobile: 2×2 grid / PC: TODAY OVERVIEW spans 2 rows on left, date spans 2 cols top-right */}

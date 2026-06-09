@@ -187,7 +187,7 @@ export default function DashboardPage() {
     const range = setQuickRange(type);
     setStartDate(range.start);
     setEndDate(range.end);
-    setTimeout(() => { loadData(); }, 0);
+    loadData();
   }
 
   function resetFilters() {

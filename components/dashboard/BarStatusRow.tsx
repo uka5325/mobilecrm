@@ -1,4 +1,6 @@
-export function BarStatusRow({ label, count, percentage }: { label: string; count: number; percentage: number }) {
+import { memo } from "react";
+
+export const BarStatusRow = memo(function BarStatusRow({ label, count, percentage }: { label: string; count: number; percentage: number }) {
   const safePercentage = Math.min(Math.max(percentage, 0), 100);
 
   return (
@@ -13,4 +15,4 @@ export function BarStatusRow({ label, count, percentage }: { label: string; coun
       </div>
     </div>
   );
-}
+});
