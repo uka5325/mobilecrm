@@ -1,6 +1,8 @@
 "use client";
 
 import { type PointerEvent, useEffect, useRef, useState } from "react";
+import { getBlob, ref } from "firebase/storage";
+import { storage } from "@/lib/firebase";
 
 type Tool = "pen" | "eraser";
 
@@ -44,13 +46,13 @@ export function ChartCanvas({ open, existingUrl, onSave, onClose, saving, onErro
 
       // fetch → blob URL so the canvas stays untainted (avoids CORS taint issue)
       try {
-        const res = await fetch(existingUrl!, { mode: "cors" });
-        const blob = await res.blob();
+        // Use Firebase SDK to bypass CORS — works for gs:// and https://firebasestorage URLs
+        const storageRef = ref(storage, existingUrl!);
+        const blob = await getBlob(storageRef);
         objectUrl = URL.createObjectURL(blob);
         img.src = objectUrl;
       } catch {
-        // fallback: crossOrigin anonymous keeps canvas untainted for same-origin CORS resources
-        img.crossOrigin = "anonymous";
+        // fallback for local blob: URLs (new chart from file — no CORS issue)
         img.src = existingUrl!;
       }
 
@@ -153,12 +155,11 @@ export function ChartCanvas({ open, existingUrl, onSave, onClose, saving, onErro
       const img = new Image();
       let objectUrl: string | null = null;
       try {
-        const res = await fetch(existingUrl!, { mode: "cors" });
-        const blob = await res.blob();
+        const storageRef = ref(storage, existingUrl!);
+        const blob = await getBlob(storageRef);
         objectUrl = URL.createObjectURL(blob);
         img.src = objectUrl;
       } catch {
-        img.crossOrigin = "anonymous";
         img.src = existingUrl!;
       }
       img.onload = () => {
