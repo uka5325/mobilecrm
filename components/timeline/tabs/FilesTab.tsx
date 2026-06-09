@@ -48,7 +48,7 @@ export function FilesTab({ reservationDocId, reservationId, patientId, currentUs
   const [charts, setCharts] = useState<ChartRecord[]>([]);
   const [photosLoading, setPhotosLoading] = useState(true);
   const [chartsLoading, setChartsLoading] = useState(true);
-  const [photoUploading, setPhotoUploading] = useState<false | "compressing" | "uploading">(false);
+  const [uploadingCount, setUploadingCount] = useState(0);
   const [chartSaving, setChartSaving] = useState(false);
 
   // 상담차트 캔버스 모달
@@ -94,65 +94,60 @@ export function FilesTab({ reservationDocId, reservationId, patientId, currentUs
 
   async function handlePhotoFiles(files: FileList | null) {
     if (!files || files.length === 0) return;
-    setPhotoUploading("compressing");
     setError("");
+    if (photoInputRef.current) photoInputRef.current.value = "";
+    const fileArr = Array.from(files);
+    setUploadingCount((n) => n + fileArr.length);
     const objectUrls: string[] = [];
-    try {
-      const fileArr = Array.from(files);
-      const compressed = await Promise.all(fileArr.map((f) => compressImage(f)));
 
-      setPhotoUploading("uploading");
+    // Run this batch independently — does not block the button
+    (async () => {
+      try {
+        const compressed = await Promise.all(fileArr.map((f) => compressImage(f)));
 
-      // Upload to Storage in parallel
-      const storageResults = await Promise.all(
-        compressed.map((f) => uploadPhotoToStorage(reservationDocId, f).then((r) => ({ f, ...r })))
-      );
+        const storageResults = await Promise.all(
+          compressed.map((f) => uploadPhotoToStorage(reservationDocId, f).then((r) => ({ f, ...r })))
+        );
 
-      // Show optimistic items immediately using object URLs
-      const optimisticItems: PhotoRecord[] = storageResults.map(({ f, fileUrl, storagePath }) => {
-        const oUrl = URL.createObjectURL(f);
-        objectUrls.push(oUrl);
-        const tempId = `tmp_${Math.random().toString(36).slice(2)}`;
-        return {
-          id: tempId,
-          reservationDocId,
-          reservationId,
-          patientId,
-          fileName: f.name,
-          fileUrl: oUrl,
-          storagePath,
-          fileSize: f.size,
-          uploadedAt: null,
-          uploadedBy: currentUser.displayName,
-          uploadedByUid: currentUser.uid,
-          isDeleted: false,
-        };
-      });
-      setPhotos((prev) => [...optimisticItems, ...prev]);
-      setPhotoUploading(false);
-      if (photoInputRef.current) photoInputRef.current.value = "";
+        // Show optimistic items immediately
+        const optimisticItems: PhotoRecord[] = storageResults.map(({ f, storagePath }) => {
+          const oUrl = URL.createObjectURL(f);
+          objectUrls.push(oUrl);
+          return {
+            id: `tmp_${Math.random().toString(36).slice(2)}`,
+            reservationDocId,
+            reservationId,
+            patientId,
+            fileName: f.name,
+            fileUrl: oUrl,
+            storagePath,
+            fileSize: f.size,
+            uploadedAt: null,
+            uploadedBy: currentUser.displayName,
+            uploadedByUid: currentUser.uid,
+            isDeleted: false,
+          };
+        });
+        setPhotos((prev) => [...optimisticItems, ...prev]);
+        setUploadingCount((n) => n - fileArr.length);
 
-      // Save to Firestore in background, then swap optimistic items for real records
-      storageResults.forEach(({ f, fileUrl, storagePath }, i) => {
-        const tempId = optimisticItems[i].id;
-        savePhotoRecord(reservationDocId, reservationId, patientId, f, storagePath, fileUrl, currentUser)
-          .then((record) => {
-            URL.revokeObjectURL(objectUrls[i]);
-            setPhotos((prev) => prev.map((p) => (p.id === tempId ? record : p)));
-          })
-          .catch(() => {
-            // Keep optimistic item visible; silent failure (log already fire-and-forgot)
-          });
-      });
-      return;
-    } catch (e) {
-      objectUrls.forEach((u) => URL.revokeObjectURL(u));
-      const msg = e instanceof Error ? e.message : String(e);
-      setError(`사진 업로드에 실패했습니다. (${msg})`);
-    } finally {
-      setPhotoUploading(false);
-      if (photoInputRef.current) photoInputRef.current.value = "";
-    }
+        // Persist to Firestore in background
+        storageResults.forEach(({ f, fileUrl, storagePath }, i) => {
+          const tempId = optimisticItems[i].id;
+          savePhotoRecord(reservationDocId, reservationId, patientId, f, storagePath, fileUrl, currentUser)
+            .then((record) => {
+              URL.revokeObjectURL(objectUrls[i]);
+              setPhotos((prev) => prev.map((p) => (p.id === tempId ? record : p)));
+            })
+            .catch(() => {});
+        });
+      } catch (e) {
+        objectUrls.forEach((u) => URL.revokeObjectURL(u));
+        setUploadingCount((n) => n - fileArr.length);
+        const msg = e instanceof Error ? e.message : String(e);
+        setError(`사진 업로드에 실패했습니다. (${msg})`);
+      }
+    })();
   }
 
   async function handleDeletePhoto(photo: PhotoRecord) {
@@ -258,14 +253,18 @@ export function FilesTab({ reservationDocId, reservationId, patientId, currentUs
             {!photosLoading && (
               <span className="ml-1.5 text-xs font-normal text-gray-400">{photos.length}장</span>
             )}
+            {uploadingCount > 0 && (
+              <span className="ml-2 rounded-full bg-blue-50 px-2 py-0.5 text-xs font-normal text-blue-500">
+                업로드 중 {uploadingCount}장
+              </span>
+            )}
           </div>
           <button
             type="button"
             onClick={() => photoInputRef.current?.click()}
-            disabled={!!photoUploading}
-            className="rounded-lg border border-[#dfe3e8] bg-white px-3 py-1.5 text-xs text-gray-700 transition hover:-translate-y-0.5 hover:bg-gray-50 active:scale-95 disabled:opacity-50"
+            className="rounded-lg border border-[#dfe3e8] bg-white px-3 py-1.5 text-xs text-gray-700 transition hover:-translate-y-0.5 hover:bg-gray-50 active:scale-95"
           >
-            {photoUploading === "compressing" ? "압축 중..." : photoUploading === "uploading" ? "업로드 중..." : "+ 사진 추가"}
+            + 사진 추가
           </button>
           <input
             ref={photoInputRef}
