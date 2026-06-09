@@ -95,8 +95,9 @@ export function FilesTab({ reservationDocId, reservationId, patientId, currentUs
   async function handlePhotoFiles(files: FileList | null) {
     if (!files || files.length === 0) return;
     setError("");
-    if (photoInputRef.current) photoInputRef.current.value = "";
     const fileArr = Array.from(files);
+    // Reset input after extracting files — iOS Safari cancels the upload if reset too early
+    setTimeout(() => { if (photoInputRef.current) photoInputRef.current.value = ""; }, 0);
     setUploadingCount((n) => n + fileArr.length);
     const objectUrls: string[] = [];
 
