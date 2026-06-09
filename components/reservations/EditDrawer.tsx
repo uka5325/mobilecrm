@@ -17,7 +17,7 @@ type Props = {
 export function EditDrawer({ open, onClose, reservation, doctors, currentUser }: Props) {
   const [saving, setSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
-  const [selectedDoctors, setSelectedDoctors] = useState<string[]>([]);
+  const [doctorsInput, setDoctorsInput] = useState("");
   const [form, setForm] = useState({
     name: "",
     birthInput: "",
@@ -43,7 +43,7 @@ export function EditDrawer({ open, onClose, reservation, doctors, currentUser }:
         coordinators: reservation.coordinators.join(", "),
         depositAmount: reservation.depositAmount || "",
       });
-      setSelectedDoctors(reservation.doctors || []);
+      setDoctorsInput((reservation.doctors || []).join(", "));
       setErrorMessage("");
       setSaving(false);
     }
@@ -51,17 +51,13 @@ export function EditDrawer({ open, onClose, reservation, doctors, currentUser }:
 
   const birthPreview = useMemo(() => parseBirthInfo(form.birthInput), [form.birthInput]);
 
-  function toggleDoctor(name: string) {
-    setSelectedDoctors((prev) =>
-      prev.includes(name) ? prev.filter((d) => d !== name) : [...prev, name]
-    );
-  }
+  const parsedDoctors = doctorsInput.split(",").map((s) => s.trim()).filter(Boolean);
 
   async function handleUpdate() {
     if (!reservation) return;
     if (!form.name.trim()) { setErrorMessage("이름을 입력하세요."); return; }
     if (!form.reservationDate) { setErrorMessage("예약날짜를 선택하세요."); return; }
-    if (!selectedDoctors.length) { setErrorMessage("지정원장을 선택하세요."); return; }
+    if (!parsedDoctors.length) { setErrorMessage("지정원장을 입력하세요."); return; }
 
     setSaving(true);
     setErrorMessage("");
@@ -80,7 +76,7 @@ export function EditDrawer({ open, onClose, reservation, doctors, currentUser }:
           consultArea: form.consultArea,
           reservationDate: form.reservationDate,
           reservationTime: form.reservationTime,
-          doctors: selectedDoctors,
+          doctors: parsedDoctors,
           coordinators: form.coordinators.split(",").map((s) => s.trim()).filter(Boolean),
           depositAmount: form.depositAmount,
         },
@@ -194,27 +190,32 @@ export function EditDrawer({ open, onClose, reservation, doctors, currentUser }:
           </div>
 
           <div>
-            <label className="text-xs text-gray-500">지정원장 *</label>
-            <div className="mt-2 flex flex-wrap gap-2">
-              {doctors.length === 0 ? (
-                <p className="text-sm text-gray-400">등록된 원장이 없습니다.</p>
-              ) : (
-                doctors.map((doctor) => {
-                  const on = selectedDoctors.includes(doctor.displayName);
-                  return (
-                    <button
-                      key={doctor.uid}
-                      onClick={() => toggleDoctor(doctor.displayName)}
-                      className={`rounded-xl border px-3 py-2 text-sm transition ${
-                        on ? "border-black bg-black text-white" : "border-gray-300 bg-white"
-                      }`}
-                    >
-                      {doctor.displayName}
-                    </button>
-                  );
-                })
-              )}
-            </div>
+            <label className="text-xs text-gray-500">지정원장 * (쉼표로 2명 구분 가능)</label>
+            <input
+              value={doctorsInput}
+              onChange={(e) => setDoctorsInput(e.target.value)}
+              placeholder="예: 홍길동 / 홍길동, 김철수"
+              className="mt-1 h-10 w-full rounded-xl border border-[#dfe3e8] px-3 text-sm outline-none transition focus:border-black"
+            />
+            {doctors.length > 0 && (
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {doctors.map((d) => (
+                  <button
+                    key={d.uid}
+                    type="button"
+                    onClick={() => {
+                      const names = doctorsInput.split(",").map((s) => s.trim()).filter(Boolean);
+                      if (!names.includes(d.displayName)) {
+                        setDoctorsInput(names.concat(d.displayName).join(", "));
+                      }
+                    }}
+                    className="rounded-lg border border-[#dfe3e8] px-2.5 py-1 text-xs text-gray-600 transition hover:-translate-y-0.5 active:scale-95"
+                  >
+                    {d.displayName}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
 
           <div>

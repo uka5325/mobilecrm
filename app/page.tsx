@@ -129,33 +129,43 @@ export default function HomePage() {
     return reservations.filter(isTodayReservation);
   }, [reservations]);
 
+  const todayVisitors = useMemo(() => {
+    return todayReservations.filter(
+      (r) => r.operationStatus && r.operationStatus !== "내원전" && r.operationStatus !== "부도"
+    ).length;
+  }, [todayReservations]);
+
   return (
     <div className="space-y-[18px]">
       <div className="grid min-h-0 grid-cols-1 gap-[18px] xl:grid-cols-[1.4fr_1fr]">
         <section className="min-w-0">
-          <div className="mb-[18px] rounded-[12px] border border-black/10 bg-white p-5 shadow-[0_2px_16px_rgba(0,0,0,0.06)]">
-            <div className="mb-1.5 text-xs font-bold text-[#1d9e75]">
-              TODAY OVERVIEW
+          <div className="mb-[18px] flex flex-col gap-3 xl:flex-row xl:items-stretch">
+            {/* TODAY OVERVIEW — PC에서만 표시 */}
+            <div className="hidden xl:flex xl:min-w-[160px] xl:flex-col xl:justify-center rounded-[12px] border border-black/10 bg-white px-5 py-4 shadow-[0_2px_16px_rgba(0,0,0,0.06)]">
+              <div className="text-xs font-bold text-[#1d9e75]">TODAY OVERVIEW</div>
             </div>
 
-            <div className="text-sm leading-7 text-[#1a1a1a]">
-              좌측 메뉴에서 주요 기능으로 이동할 수 있습니다. 홈 화면에서는
-              오늘 날짜와 오늘 예약 현황만 간단히 확인합니다.
-            </div>
-          </div>
-
-          <div className="mb-[18px] grid grid-cols-1 gap-3 md:grid-cols-2">
-            <div className="rounded-[12px] border border-black/10 bg-white p-[18px] shadow-[0_2px_16px_rgba(0,0,0,0.06)]">
-              <div className="mb-2.5 text-xs text-[#6b7280]">오늘 날짜</div>
-              <div className="text-[22px] font-bold text-[#1a1a1a]">
-                {todayDisplayString()}
+            {/* 날짜 + 오늘 예약 + 오늘 내원자 */}
+            <div className="grid flex-1 grid-cols-1 gap-3 sm:grid-cols-3">
+              <div className="rounded-[12px] border border-black/10 bg-white p-[18px] shadow-[0_2px_16px_rgba(0,0,0,0.06)]">
+                <div className="mb-2.5 text-xs text-[#6b7280]">오늘 날짜</div>
+                <div className="text-[22px] font-bold text-[#1a1a1a]">
+                  {todayDisplayString()}
+                </div>
               </div>
-            </div>
 
-            <div className="rounded-[12px] border border-black/10 bg-white p-[18px] shadow-[0_2px_16px_rgba(0,0,0,0.06)]">
-              <div className="mb-2.5 text-xs text-[#6b7280]">오늘 예약</div>
-              <div className="text-[26px] font-bold text-[#1a1a1a]">
-                {loading ? "-" : todayReservations.length}
+              <div className="rounded-[12px] border border-black/10 bg-white p-[18px] shadow-[0_2px_16px_rgba(0,0,0,0.06)]">
+                <div className="mb-2.5 text-xs text-[#6b7280]">오늘 예약</div>
+                <div className="text-[26px] font-bold text-[#1a1a1a]">
+                  {loading ? "-" : todayReservations.length}
+                </div>
+              </div>
+
+              <div className="rounded-[12px] border border-black/10 bg-white p-[18px] shadow-[0_2px_16px_rgba(0,0,0,0.06)]">
+                <div className="mb-2.5 text-xs text-[#6b7280]">오늘 내원자</div>
+                <div className="text-[26px] font-bold text-[#1d9e75]">
+                  {loading ? "-" : todayVisitors}
+                </div>
               </div>
             </div>
           </div>

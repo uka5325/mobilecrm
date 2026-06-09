@@ -201,7 +201,7 @@ export default function DashboardPage() {
   return (
     <div className="space-y-5">
       <section className="rounded-[18px] border border-[#edf0f3] bg-white p-5 shadow-[0_2px_14px_rgba(0,0,0,0.04)]">
-        <div className="grid grid-cols-1 items-end gap-3 md:grid-cols-2 xl:grid-cols-6">
+        <div className="grid grid-cols-2 items-end gap-3 xl:grid-cols-6">
           <div>
             <label className="mb-1 block text-xs text-gray-500">시작일</label>
             <input
@@ -237,7 +237,7 @@ export default function DashboardPage() {
           </div>
 
           <div>
-            <label className="mb-1 block text-xs text-gray-500">담당 실장</label>
+            <label className="mb-1 block text-xs text-gray-500">실장</label>
             <select
               value={managerFilter}
               onChange={(e) => setManagerFilter(e.target.value)}

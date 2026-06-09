@@ -542,7 +542,7 @@ export default function ReservationsPage() {
 
           <button
             onClick={() => setFilterDate("")}
-            className="h-10 rounded-xl border border-[#dfe3e8] bg-white px-4 text-sm text-gray-400 hover:bg-gray-50"
+            className="h-10 rounded-xl border border-[#dfe3e8] bg-white px-4 text-sm text-gray-400 transition hover:-translate-y-0.5 hover:bg-gray-50 active:scale-95"
           >
             날짜 초기화
           </button>
@@ -557,7 +557,7 @@ export default function ReservationsPage() {
           </button>
           <button
             onClick={() => setImportDrawerOpen(true)}
-            className="h-10 rounded-xl border border-[#dfe3e8] bg-white px-4 text-sm text-gray-700 hover:bg-gray-50"
+            className="h-10 rounded-xl border border-[#dfe3e8] bg-white px-4 text-sm text-gray-700 transition hover:-translate-y-0.5 hover:bg-gray-50 active:scale-95"
           >
             🔗 외부 링크 가져오기
           </button>
@@ -565,7 +565,7 @@ export default function ReservationsPage() {
           <div className="relative ml-auto">
             <button
               onClick={() => setDownloadOpen((v) => !v)}
-              className="h-10 rounded-xl border border-[#dfe3e8] bg-white px-4 text-sm text-gray-700 hover:bg-gray-50"
+              className="h-10 rounded-xl border border-[#dfe3e8] bg-white px-4 text-sm text-gray-700 transition hover:-translate-y-0.5 hover:bg-gray-50 active:scale-95"
             >
               📥 다운로드
             </button>

@@ -9,6 +9,7 @@ import {
   setDoc,
   updateDoc,
   where,
+  writeBatch,
 } from "firebase/firestore";
 import {
   EmailAuthProvider,
@@ -571,7 +572,12 @@ export async function updateStaffFromSettings(
     updatedByUid: actor.uid,
   };
 
+  const ref = doc(db, "staff", id);
+  let oldDisplayName = "";
+
   if (payload.displayName !== undefined) {
+    const oldSnap = await getDoc(ref);
+    oldDisplayName = cleanText(oldSnap.data()?.displayName);
     updatePayload.displayName = cleanText(payload.displayName);
   }
 
@@ -587,9 +593,23 @@ export async function updateStaffFromSettings(
     updatePayload.orderNo = Number(payload.orderNo || 999999);
   }
 
-  const ref = doc(db, "staff", id);
   await updateDoc(ref, updatePayload);
   invalidateDoctorsCache();
+
+  const newDisplayName = typeof updatePayload.displayName === "string" ? updatePayload.displayName : "";
+  if (oldDisplayName && newDisplayName && oldDisplayName !== newDisplayName) {
+    const resSnap = await getDocs(
+      query(collection(db, "reservations"), where("doctors", "array-contains", oldDisplayName))
+    );
+    for (let i = 0; i < resSnap.docs.length; i += 400) {
+      const batch = writeBatch(db);
+      resSnap.docs.slice(i, i + 400).forEach((d) => {
+        const doctors = (d.data().doctors as string[] | undefined) || [];
+        batch.update(d.ref, { doctors: doctors.map((n) => (n === oldDisplayName ? newDisplayName : n)) });
+      });
+      await batch.commit();
+    }
+  }
 
   await createLog({
     action: "settings_update",
