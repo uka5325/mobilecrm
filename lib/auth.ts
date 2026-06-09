@@ -1,4 +1,5 @@
 import {
+  sendPasswordResetEmail,
   signInWithEmailAndPassword,
   signInWithPopup,
   GoogleAuthProvider,
@@ -181,4 +182,18 @@ export function listenCurrentUser(
   callback: (user: User | null) => void
 ) {
   return onAuthStateChanged(auth, callback);
+}
+
+export async function resetPassword(email: string) {
+  if (!email) return { success: false, message: "이메일을 입력하세요." };
+  try {
+    await sendPasswordResetEmail(auth, email.trim());
+    return { success: true };
+  } catch (error) {
+    const code = (error as { code?: string }).code;
+    if (code === "auth/user-not-found") {
+      return { success: false, message: "등록된 이메일이 없습니다." };
+    }
+    return { success: false, message: "재설정 메일 전송에 실패했습니다." };
+  }
 }

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { loginWithEmail, loginWithGoogle } from "@/lib/auth";
+import { loginWithEmail, loginWithGoogle, resetPassword } from "@/lib/auth";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -13,6 +13,8 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
+  const [resetSent, setResetSent] = useState(false);
+  const [resetLoading, setResetLoading] = useState(false);
 
   async function handleLogin(e?: React.FormEvent<HTMLFormElement>) {
     if (e) e.preventDefault();
@@ -44,6 +46,18 @@ export default function LoginPage() {
       setErrorMessage("로그인 중 오류가 발생했습니다.");
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function handleResetPassword() {
+    setResetLoading(true);
+    setErrorMessage("");
+    const result = await resetPassword(email);
+    setResetLoading(false);
+    if (!result.success) {
+      setErrorMessage(result.message || "재설정 메일 전송에 실패했습니다.");
+    } else {
+      setResetSent(true);
     }
   }
 
@@ -204,6 +218,21 @@ export default function LoginPage() {
                 <div className="mt-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-[13px] text-red-700">
                   {errorMessage}
                 </div>
+              )}
+
+              {resetSent ? (
+                <div className="mt-3 rounded-md border border-green-200 bg-green-50 px-3 py-2 text-[13px] text-green-700">
+                  비밀번호 재설정 메일을 보냈습니다. 받은 편지함을 확인하세요.
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleResetPassword}
+                  disabled={resetLoading || loading}
+                  className="mt-2 w-full text-right text-xs text-[#9ca3af] hover:text-[#6b7280] disabled:opacity-50"
+                >
+                  {resetLoading ? "전송 중..." : "비밀번호를 잊으셨나요?"}
+                </button>
               )}
 
               <div className="my-5 flex items-center gap-3">
