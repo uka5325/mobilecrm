@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import type { MouseEvent } from "react";
 import { useRouter } from "next/navigation";
 import { doc, serverTimestamp, updateDoc } from "firebase/firestore";
@@ -17,15 +17,12 @@ import { useReservationData } from "@/hooks/useReservationData";
 import { getReservationBirthInfo } from "@/lib/reservationUtils";
 import { db } from "@/lib/firebase";
 import { todayString } from "@/lib/dateUtils";
-import {
-  getStatusColor,
-  getSoftStatusColor,
-  getStatusSelectStyle,
-} from "@/lib/colorUtils";
-import { formatDateGroup, normalizeTimeText } from "@/lib/timelineUtils";
 import { CreateDrawer } from "@/components/reservations/CreateDrawer";
 import { EditDrawer } from "@/components/reservations/EditDrawer";
 import { ImportDrawer } from "@/components/reservations/ImportDrawer";
+import { MemoPopover, type MemoPopoverState } from "@/components/reservations/MemoPopover";
+import { InvoiceContextMenu, type InvoiceMenuState } from "@/components/reservations/InvoiceContextMenu";
+import { ReservationsTable } from "@/components/reservations/ReservationsTable";
 import { getReservationNotes, updateReservationNote, deleteReservationNote, type ReservationNote } from "@/lib/reservationNotes";
 import { toDate } from "@/lib/settingsUtils";
 
@@ -38,11 +35,6 @@ const STATUS_LIST: ReservationStatus[] = [
   "부도",
 ];
 
-type InvoiceMenuState = {
-  id: string;
-  x: number;
-  y: number;
-} | null;
 
 export default function ReservationsPage() {
   const router = useRouter();
@@ -73,10 +65,8 @@ export default function ReservationsPage() {
 
   const [invoiceMenu, setInvoiceMenu] = useState<InvoiceMenuState>(null);
 
-  type MemoPopover = { item: ReservationRecord; notes: ReservationNote[]; loading: boolean } | null;
-  const [memoPopover, setMemoPopover] = useState<MemoPopover>(null);
-  const memoPopoverRef = useRef<HTMLDivElement | null>(null);
-  const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
+  const [memoPopover, setMemoPopover] = useState<MemoPopoverState>(null);
+const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
   const [editingNoteText, setEditingNoteText] = useState("");
 
   const [downloadOpen, setDownloadOpen] = useState(false);
@@ -419,110 +409,30 @@ export default function ReservationsPage() {
 
   return (
     <>
-      {/* Memo popover */}
-      {memoPopover && (
-        <>
-          <div className="fixed inset-0 z-[9994]" onClick={() => setMemoPopover(null)} />
-          <div className="fixed left-1/2 top-1/2 z-[9995] w-[420px] max-w-[90vw] -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-[#edf0f3] bg-white shadow-2xl">
-            <div className="flex items-center justify-between border-b border-[#edf0f3] px-5 py-4">
-              <div>
-                <div className="font-bold text-gray-800">{memoPopover.item.name} 메모</div>
-                <div className="text-xs text-gray-400">{memoPopover.item.reservationDate} · {memoPopover.item.reservationTime}</div>
-              </div>
-              <button onClick={() => setMemoPopover(null)} className="text-gray-400 hover:text-gray-600">✕</button>
-            </div>
-            <div className="max-h-[360px] overflow-y-auto p-5">
-              {memoPopover.loading ? (
-                <div className="py-8 text-center text-sm text-gray-400">메모 로딩 중...</div>
-              ) : memoPopover.notes.length === 0 ? (
-                <div className="py-8 text-center text-sm text-gray-400">등록된 메모가 없습니다.</div>
-              ) : (
-                <div className="space-y-3">
-                  {memoPopover.notes.map((note) => (
-                    <div key={note.id} className="rounded-xl border border-[#edf0f3] bg-[#f8fafc] p-3">
-                      <div className="mb-1.5 flex items-start gap-2">
-                        <span className="mt-0.5 shrink-0 rounded-lg bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-700">
-                          {note.createdBy || "알 수 없음"}
-                        </span>
-                        {editingNoteId === note.id ? (
-                          <textarea
-                            className="flex-1 rounded-lg border border-[#dfe3e8] px-2 py-1 text-sm focus:border-emerald-500 focus:outline-none"
-                            rows={2}
-                            value={editingNoteText}
-                            onChange={(e) => setEditingNoteText(e.target.value)}
-                          />
-                        ) : (
-                          <span className="flex-1 text-sm leading-relaxed text-gray-700">{note.memoText}</span>
-                        )}
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <div className="flex gap-2">
-                          {editingNoteId === note.id ? (
-                            <>
-                              <button onClick={() => handleMemoUpdate(note)} className="text-xs text-emerald-600 hover:underline">저장</button>
-                              <button onClick={() => setEditingNoteId(null)} className="text-xs text-gray-400 hover:underline">취소</button>
-                            </>
-                          ) : (
-                            <>
-                              <button onClick={() => { setEditingNoteId(note.id); setEditingNoteText(note.memoText); }} className="text-xs text-blue-500 hover:underline">수정</button>
-                              <button onClick={() => handleMemoDelete(note)} className="text-xs text-red-400 hover:underline">삭제</button>
-                            </>
-                          )}
-                        </div>
-                        <div className="text-xs text-gray-400">
-                          {(() => {
-                            const d = toDate(note.createdAt);
-                            if (!d) return "";
-                            return d.getFullYear() + "." + String(d.getMonth() + 1).padStart(2, "0") + "." + String(d.getDate()).padStart(2, "0") + " " + String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0");
-                          })()}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-        </>
-      )}
+      <MemoPopover
+        memoPopover={memoPopover}
+        editingNoteId={editingNoteId}
+        editingNoteText={editingNoteText}
+        onClose={() => setMemoPopover(null)}
+        onEditStart={(id, text) => { setEditingNoteId(id); setEditingNoteText(text); }}
+        onEditCancel={() => setEditingNoteId(null)}
+        onEditTextChange={setEditingNoteText}
+        onUpdate={handleMemoUpdate}
+        onDelete={handleMemoDelete}
+      />
 
-      {invoiceMenu && (
-        <>
-          <div className="fixed inset-0 z-[9998]" onClick={closeInvoiceMenu} />
-
-          <div
-            className="fixed z-[9999] w-[170px] overflow-hidden rounded-xl border border-gray-200 bg-white p-1 text-sm shadow-xl"
-            style={{
-              left: invoiceMenu.x,
-              top: invoiceMenu.y,
-            }}
-          >
-            <button
-              type="button"
-              onClick={() => {
-                const item = reservations.find((r) => r.id === invoiceMenu.id);
-                if (item) openInvoicePage(item);
-              }}
-              className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-gray-700 hover:bg-gray-50"
-            >
-              <span>📂</span>
-              <span>인보이스 보기</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => {
-                const item = reservations.find((r) => r.id === invoiceMenu.id);
-                if (item) handleDeleteInvoiceOnly(item);
-              }}
-              className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-red-600 hover:bg-red-50"
-            >
-              <span>🧹</span>
-              <span>인보이스 삭제</span>
-            </button>
-          </div>
-        </>
-      )}
+      <InvoiceContextMenu
+        invoiceMenu={invoiceMenu}
+        onClose={closeInvoiceMenu}
+        onView={() => {
+          const item = reservations.find((r) => r.id === invoiceMenu?.id);
+          if (item) openInvoicePage(item);
+        }}
+        onDelete={() => {
+          const item = reservations.find((r) => r.id === invoiceMenu?.id);
+          if (item) handleDeleteInvoiceOnly(item);
+        }}
+      />
 
       {pageError && (
         <div className="mb-3 rounded-lg bg-red-50 px-4 py-2 text-sm text-red-600" onClick={() => setPageError("")}>
@@ -627,245 +537,24 @@ export default function ReservationsPage() {
         전체 {reservations.length}건 / 표시 {filteredReservations.length}건
       </div>
 
-      <div className="-mx-4 sm:-mx-6 lg:-mx-8">
-        <div className="overflow-x-auto border-y border-gray-100 bg-white">
-          <table className="min-w-[1380px] w-full table-fixed border-collapse text-sm">
-            <colgroup>
-              <col className="w-[200px]" />
-              <col className="w-[110px]" />
-              <col className="w-[80px]" />
-              <col className="w-[130px]" />
-              <col className="w-[120px]" />
-              <col className="w-[90px]" />
-              <col className="w-[100px]" />
-              <col className="w-[90px]" />
-              <col className="w-[100px]" />
-              <col className="w-[80px]" />
-              <col className="w-[120px]" />
-              <col className="w-[110px]" />
-            </colgroup>
-
-            <thead className="bg-gray-50">
-              <tr>
-                {[
-                  "이름",
-                  "생년월일",
-                  "국적",
-                  "상담부위",
-                  "원장",
-                  "실장",
-                  "상태",
-                  "수술예약",
-                  "예약금",
-                  "메모",
-                  "연락처",
-                  "관리",
-                ].map((head) => (
-                  <th
-                    key={head}
-                    className="border-b border-gray-200 px-4 py-3 text-left text-xs font-semibold text-gray-500"
-                  >
-                    {head}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-
-            <tbody>
-              {loading ? (
-                <tr>
-                  <td colSpan={12} className="py-12 text-center text-gray-400">
-                    데이터 로딩 중...
-                  </td>
-                </tr>
-              ) : groupedReservations.length === 0 ? (
-                <tr>
-                  <td colSpan={12} className="py-12 text-center text-gray-400">
-                    예약이 없습니다.
-                  </td>
-                </tr>
-              ) : (
-                (() => {
-                  const rows: React.ReactNode[] = [];
-                  let lastDate = "";
-                  let lastTime = "";
-
-                  groupedReservations.forEach((item) => {
-                    const date = item.reservationDate || "날짜 미정";
-                    const time = normalizeTimeText(item.reservationTime || "");
-                    const birthInfo = getReservationBirthInfo(item);
-                    const currentStatus = item.operationStatus || "내원전";
-
-                    if (!filterDate && date !== lastDate) {
-                      rows.push(
-                        <tr key={`date-${date}`} className="bg-gray-100">
-                          <td
-                            colSpan={12}
-                            className="border-y border-gray-200 px-6 py-3 text-sm font-bold text-gray-900"
-                          >
-                            📅 {formatDateGroup(date)}
-                          </td>
-                        </tr>
-                      );
-                      lastDate = date;
-                      lastTime = "";
-                    }
-
-                    if (!filterDate && time !== lastTime) {
-                      rows.push(
-                        <tr
-                          key={`time-${date}-${time}`}
-                          className="bg-gray-50"
-                        >
-                          <td
-                            colSpan={12}
-                            className="border-b border-gray-100 px-6 py-2 text-sm font-bold text-emerald-700"
-                          >
-                            ⏰ {time}
-                          </td>
-                        </tr>
-                      );
-                      lastTime = time;
-                    }
-
-                    const isEditing = inlineEditId === item.id;
-                    const f = inlineForm;
-                    const cellCls = "border-b border-gray-100 px-2 py-2";
-                    const inputCls = "w-full rounded-lg border border-[#dfe3e8] px-2 py-1 text-xs focus:border-[#1d9e75] focus:outline-none";
-
-                    rows.push(
-                      <tr key={item.id} className={isEditing ? "bg-emerald-50" : "hover:bg-gray-50"}>
-                        {/* 이름 */}
-                        <td className={`${cellCls} px-4`}>
-                          {isEditing ? (
-                            <input className={inputCls} value={f!.name} onChange={(e) => setInlineForm((p) => p && ({ ...p, name: e.target.value }))} />
-                          ) : (
-                            <div className="flex items-center gap-2">
-                              <button type="button" onClick={(e) => handleInvoiceButtonClick(e, item)}
-                                className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-semibold shadow-sm transition hover:shadow active:scale-95 ${item.invoiceId ? "border border-emerald-200 bg-emerald-50 text-emerald-700" : "border border-gray-200 bg-gray-50 text-gray-400"}`}
-                                title={item.invoiceId ? "인보이스 메뉴" : "인보이스 생성"}>
-                                {item.invoiceId ? "🧾" : "+"}
-                              </button>
-                              <span className="truncate font-semibold text-gray-900">{item.name}</span>
-                            </div>
-                          )}
-                        </td>
-
-                        {/* 생년월일 */}
-                        <td className={cellCls}>
-                          {isEditing ? (
-                            <input className={inputCls} value={f!.birthInput} onChange={(e) => setInlineForm((p) => p && ({ ...p, birthInput: e.target.value }))} placeholder="891210-1" />
-                          ) : (
-                            <span className="text-gray-500">{birthInfo.birthDisplay}</span>
-                          )}
-                        </td>
-
-                        {/* 국적 */}
-                        <td className={cellCls}>
-                          {isEditing ? (
-                            <input className={inputCls} value={f!.nationality} onChange={(e) => setInlineForm((p) => p && ({ ...p, nationality: e.target.value }))} />
-                          ) : (
-                            <span className="text-gray-500">{item.nationality}</span>
-                          )}
-                        </td>
-
-                        {/* 상담부위 */}
-                        <td className={cellCls}>
-                          {isEditing ? (
-                            <input className={inputCls} value={f!.consultArea} onChange={(e) => setInlineForm((p) => p && ({ ...p, consultArea: e.target.value }))} />
-                          ) : item.consultArea}
-                        </td>
-
-                        {/* 원장 */}
-                        <td className={cellCls}>
-                          {isEditing ? (
-                            <input className={inputCls} value={f!.doctors.join(", ")} onChange={(e) => setInlineForm((p) => p && ({ ...p, doctors: e.target.value.split(",").map((s) => s.trim()).filter(Boolean) }))} placeholder="쉼표 구분" />
-                          ) : item.doctors.join(", ")}
-                        </td>
-
-                        {/* 실장 */}
-                        <td className={cellCls}>
-                          {isEditing ? (
-                            <input className={inputCls} value={f!.coordinators} onChange={(e) => setInlineForm((p) => p && ({ ...p, coordinators: e.target.value }))} placeholder="쉼표 구분" />
-                          ) : (
-                            <span className="text-gray-500">{item.coordinators.join(", ")}</span>
-                          )}
-                        </td>
-
-                        {/* 상태 */}
-                        <td className={cellCls}>
-                          <select
-                            value={currentStatus}
-                            onChange={(e) => handleStatusChange(item, e.target.value as ReservationStatus)}
-                            className="rounded-full border px-2 py-1 text-xs font-semibold outline-none transition"
-                            style={getStatusSelectStyle(currentStatus, statusColors)}
-                          >
-                            {STATUS_LIST.map((status) => (
-                              <option key={status} value={status}>{status}</option>
-                            ))}
-                          </select>
-                        </td>
-
-                        {/* 수술예약 */}
-                        <td className={`${cellCls} text-center`}>
-                          <button onClick={() => handleSurgeryToggle(item)}
-                            className={`rounded-full px-2 py-1 text-xs ${item.surgeryReserved ? "bg-purple-50 text-purple-700" : "bg-gray-100 text-gray-500"}`}>
-                            {item.surgeryReserved ? "예약" : "미예약"}
-                          </button>
-                        </td>
-
-                        {/* 예약금 */}
-                        <td className={cellCls}>
-                          {isEditing ? (
-                            <input className={inputCls} value={f!.depositAmount} onChange={(e) => setInlineForm((p) => p && ({ ...p, depositAmount: e.target.value }))} />
-                          ) : (
-                            <span className="text-gray-600">{item.depositAmount || "—"}</span>
-                          )}
-                        </td>
-
-                        {/* 메모 */}
-                        <td className={`${cellCls} text-xs text-gray-500`}>
-                          <button onClick={() => openMemoPopover(item)} className="text-emerald-700 hover:underline">전체보기</button>
-                        </td>
-
-                        {/* 연락처 */}
-                        <td className={cellCls}>
-                          {isEditing ? (
-                            <input className={inputCls} value={f!.phone} onChange={(e) => setInlineForm((p) => p && ({ ...p, phone: e.target.value }))} />
-                          ) : (
-                            <span className="text-gray-500">{item.phone}</span>
-                          )}
-                        </td>
-
-                        {/* 관리 */}
-                        <td className={`${cellCls} text-center`}>
-                          {isEditing ? (
-                            <div className="flex justify-center gap-1">
-                              <button onClick={() => saveInlineEdit(item)} disabled={inlineSaving} className="rounded-lg bg-emerald-600 px-2 py-1 text-xs text-white disabled:opacity-50">
-                                {inlineSaving ? "…" : "저장"}
-                              </button>
-                              <button onClick={() => { setInlineEditId(null); setInlineForm(null); }} className="rounded-lg border border-gray-200 px-2 py-1 text-xs text-gray-500">
-                                취소
-                              </button>
-                            </div>
-                          ) : (
-                            <>
-                              <button onClick={() => startInlineEdit(item)} className="px-2 py-1 text-xs text-blue-600 hover:underline">수정</button>
-                              <button onClick={() => handleDelete(item)} className="px-2 py-1 text-xs text-red-500 hover:underline">삭제</button>
-                            </>
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  });
-
-                  return rows;
-                })()
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      <ReservationsTable
+        items={groupedReservations}
+        loading={loading}
+        filterDate={filterDate}
+        statusColors={statusColors}
+        inlineEditId={inlineEditId}
+        inlineForm={inlineForm}
+        inlineSaving={inlineSaving}
+        onFormChange={setInlineForm}
+        onStatusChange={handleStatusChange}
+        onSurgeryToggle={handleSurgeryToggle}
+        onOpenMemo={openMemoPopover}
+        onInvoiceButtonClick={handleInvoiceButtonClick}
+        onStartEdit={startInlineEdit}
+        onSaveEdit={saveInlineEdit}
+        onCancelEdit={() => { setInlineEditId(null); setInlineForm(null); }}
+        onDelete={handleDelete}
+      />
 
       {currentUser && (
         <CreateDrawer

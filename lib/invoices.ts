@@ -1,4 +1,5 @@
 import {
+  addDoc,
   collection,
   doc,
   getDoc,
@@ -6,7 +7,6 @@ import {
   orderBy,
   query,
   serverTimestamp,
-  setDoc,
   Timestamp,
   updateDoc,
   where,
@@ -536,7 +536,6 @@ export async function createInvoiceDraftFromReservation(
 
   const birthInfo = getReservationBirthInfo(reservation);
   const invoiceId = makeInvoiceId(reservation);
-  const invoiceDocRef = doc(db, "invoices", invoiceId);
 
   const items = buildInvoiceItemsFromMasters(itemMasters);
   const discounts = buildInitialDiscounts();
@@ -593,11 +592,12 @@ export async function createInvoiceDraftFromReservation(
     isDeleted: false,
   };
 
-  await setDoc(invoiceDocRef, payload);
+  const invoiceDocRef = await addDoc(collection(db, "invoices"), payload);
+  const invoiceDocId = invoiceDocRef.id;
 
   await updateDoc(doc(db, "reservations", reservationDocId), {
     invoiceId,
-    invoiceDocId: invoiceId,
+    invoiceDocId,
     invoiceStatus: "draft",
     invoiceUpdatedAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
@@ -608,7 +608,7 @@ export async function createInvoiceDraftFromReservation(
   await createLog({
     action: "invoice_create",
     targetType: "invoice",
-    targetId: invoiceId,
+    targetId: invoiceDocId,
     patientId: reservation.patientId,
     reservationId: reservation.reservationId,
     staff,
@@ -616,13 +616,14 @@ export async function createInvoiceDraftFromReservation(
     before: null,
     after: {
       invoiceId,
+      invoiceDocId,
       templateId,
     },
   });
 
   return {
     success: true,
-    invoice: mapInvoiceDoc(invoiceId, payload),
+    invoice: mapInvoiceDoc(invoiceDocId, { ...payload, invoiceId }),
     alreadyExists: false,
   };
 }

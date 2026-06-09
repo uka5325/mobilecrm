@@ -1,0 +1,117 @@
+"use client";
+
+import type { ReservationNote } from "@/lib/reservationNotes";
+import type { ReservationRecord } from "@/lib/reservations";
+import { toDate } from "@/lib/settingsUtils";
+
+export type MemoPopoverState = {
+  item: ReservationRecord;
+  notes: ReservationNote[];
+  loading: boolean;
+} | null;
+
+type Props = {
+  memoPopover: MemoPopoverState;
+  editingNoteId: string | null;
+  editingNoteText: string;
+  onClose: () => void;
+  onEditStart: (noteId: string, text: string) => void;
+  onEditCancel: () => void;
+  onEditTextChange: (text: string) => void;
+  onUpdate: (note: ReservationNote) => void;
+  onDelete: (note: ReservationNote) => void;
+};
+
+export function MemoPopover({
+  memoPopover,
+  editingNoteId,
+  editingNoteText,
+  onClose,
+  onEditStart,
+  onEditCancel,
+  onEditTextChange,
+  onUpdate,
+  onDelete,
+}: Props) {
+  if (!memoPopover) return null;
+
+  return (
+    <>
+      <div className="fixed inset-0 z-[9994]" onClick={onClose} />
+      <div className="fixed left-1/2 top-1/2 z-[9995] w-[420px] max-w-[90vw] -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-[#edf0f3] bg-white shadow-2xl">
+        <div className="flex items-center justify-between border-b border-[#edf0f3] px-5 py-4">
+          <div>
+            <div className="font-bold text-gray-800">{memoPopover.item.name} 메모</div>
+            <div className="text-xs text-gray-400">
+              {memoPopover.item.reservationDate} · {memoPopover.item.reservationTime}
+            </div>
+          </div>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600">✕</button>
+        </div>
+
+        <div className="max-h-[360px] overflow-y-auto p-5">
+          {memoPopover.loading ? (
+            <div className="py-8 text-center text-sm text-gray-400">메모 로딩 중...</div>
+          ) : memoPopover.notes.length === 0 ? (
+            <div className="py-8 text-center text-sm text-gray-400">등록된 메모가 없습니다.</div>
+          ) : (
+            <div className="space-y-3">
+              {memoPopover.notes.map((note) => (
+                <div key={note.id} className="rounded-xl border border-[#edf0f3] bg-[#f8fafc] p-3">
+                  <div className="mb-1.5 flex items-start gap-2">
+                    <span className="mt-0.5 shrink-0 rounded-lg bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-700">
+                      {note.createdBy || "알 수 없음"}
+                    </span>
+                    {editingNoteId === note.id ? (
+                      <textarea
+                        className="flex-1 rounded-lg border border-[#dfe3e8] px-2 py-1 text-sm focus:border-emerald-500 focus:outline-none"
+                        rows={2}
+                        value={editingNoteText}
+                        onChange={(e) => onEditTextChange(e.target.value)}
+                      />
+                    ) : (
+                      <span className="flex-1 text-sm leading-relaxed text-gray-700">{note.memoText}</span>
+                    )}
+                  </div>
+
+                  <div className="flex items-center justify-between">
+                    <div className="flex gap-2">
+                      {editingNoteId === note.id ? (
+                        <>
+                          <button onClick={() => onUpdate(note)} className="text-xs text-emerald-600 hover:underline">저장</button>
+                          <button onClick={onEditCancel} className="text-xs text-gray-400 hover:underline">취소</button>
+                        </>
+                      ) : (
+                        <>
+                          <button
+                            onClick={() => onEditStart(note.id, note.memoText)}
+                            className="text-xs text-blue-500 hover:underline"
+                          >수정</button>
+                          <button onClick={() => onDelete(note)} className="text-xs text-red-400 hover:underline">삭제</button>
+                        </>
+                      )}
+                    </div>
+
+                    <div className="text-xs text-gray-400">
+                      {(() => {
+                        const d = toDate(note.createdAt);
+                        if (!d) return "";
+                        return (
+                          d.getFullYear() + "." +
+                          String(d.getMonth() + 1).padStart(2, "0") + "." +
+                          String(d.getDate()).padStart(2, "0") + " " +
+                          String(d.getHours()).padStart(2, "0") + ":" +
+                          String(d.getMinutes()).padStart(2, "0")
+                        );
+                      })()}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </>
+  );
+}
