@@ -127,7 +127,14 @@ export async function loginWithGoogle() {
     if (code === "auth/popup-closed-by-user" || code === "auth/cancelled-popup-request") {
       return { success: false, message: "" };
     }
-    return { success: false, message: "Google 로그인에 실패했습니다. 다시 시도해 주세요." };
+    if (code === "auth/operation-not-allowed") {
+      return { success: false, message: "Google 로그인이 비활성화되어 있습니다. Firebase Console → Authentication → Sign-in method에서 Google을 활성화하세요." };
+    }
+    if (code === "auth/unauthorized-domain") {
+      return { success: false, message: "이 도메인은 Firebase에서 허용되지 않습니다. Firebase Console → Authentication → Settings → Authorized domains에 현재 도메인을 추가하세요." };
+    }
+    const msg = (error as { message?: string }).message || String(error);
+    return { success: false, message: `Google 로그인 실패 (${code ?? msg})` };
   }
 }
 
