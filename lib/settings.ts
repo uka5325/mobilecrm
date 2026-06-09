@@ -581,10 +581,14 @@ export async function createStaffFromSettings(
 ): Promise<void> {
   assertCanManageSettings(actor);
 
+  const token = await auth.currentUser?.getIdToken();
   const res = await fetch("/api/staff/create", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ ...params, callerUid: actor.uid }),
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify({ ...params }),
   });
 
   const data = (await res.json()) as { success: boolean; message?: string };

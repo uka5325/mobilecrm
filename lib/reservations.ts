@@ -10,6 +10,7 @@ import {
   serverTimestamp,
   updateDoc,
   where,
+  writeBatch,
 } from "firebase/firestore";
 import { db } from "./firebase";
 import type { StaffUser } from "./auth";
@@ -640,12 +641,12 @@ export async function createReservation(
     isDeleted: false,
   };
 
-  await addDoc(collection(db, "patients"), patientPayload);
-
-  const reservationRef = await addDoc(
-    collection(db, "reservations"),
-    reservationPayload
-  );
+  const batch = writeBatch(db);
+  const patientRef = doc(collection(db, "patients"));
+  const reservationRef = doc(collection(db, "reservations"));
+  batch.set(patientRef, patientPayload);
+  batch.set(reservationRef, reservationPayload);
+  await batch.commit();
 
   await createLog({
     action: "reservation_create",

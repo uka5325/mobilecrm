@@ -860,27 +860,33 @@ export default function ReservationsPage() {
         </div>
       </div>
 
-      <CreateDrawer
-        open={drawerOpen}
-        onClose={() => setDrawerOpen(false)}
-        doctors={doctors}
-        currentUser={currentUser!}
-        initialDate={filterDate || undefined}
-      />
+      {currentUser && (
+        <CreateDrawer
+          open={drawerOpen}
+          onClose={() => setDrawerOpen(false)}
+          doctors={doctors}
+          currentUser={currentUser}
+          initialDate={filterDate || undefined}
+        />
+      )}
 
-      <EditDrawer
-        open={editDrawerOpen}
-        onClose={() => { setEditDrawerOpen(false); setEditingReservation(null); }}
-        reservation={editingReservation}
-        doctors={doctors}
-        currentUser={currentUser!}
-      />
+      {currentUser && (
+        <EditDrawer
+          open={editDrawerOpen}
+          onClose={() => { setEditDrawerOpen(false); setEditingReservation(null); }}
+          reservation={editingReservation}
+          doctors={doctors}
+          currentUser={currentUser}
+        />
+      )}
 
-      <ImportDrawer
-        open={importDrawerOpen}
-        onClose={() => setImportDrawerOpen(false)}
-        currentUser={currentUser!}
-      />
+      {currentUser && (
+        <ImportDrawer
+          open={importDrawerOpen}
+          onClose={() => setImportDrawerOpen(false)}
+          currentUser={currentUser}
+        />
+      )}
 
     </>
   );

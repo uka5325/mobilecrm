@@ -361,24 +361,28 @@ export default function TimelinePage() {
           </div>
         </div>
 
-      <DetailDrawer
-        open={detailOpen}
-        reservation={selectedReservation}
-        doctors={doctors}
-        currentUser={currentUser!}
-        statusColors={statusColors}
-        clickedDoctorName={clickedDoctorName}
-        onClose={closeDetail}
-        onRefreshLatestLog={refreshLatestLog}
-      />
+      {currentUser && (
+        <DetailDrawer
+          open={detailOpen}
+          reservation={selectedReservation}
+          doctors={doctors}
+          currentUser={currentUser}
+          statusColors={statusColors}
+          clickedDoctorName={clickedDoctorName}
+          onClose={closeDetail}
+          onRefreshLatestLog={refreshLatestLog}
+        />
+      )}
 
-      <NewReservationDrawer
-        open={newOpen}
-        onClose={() => setNewOpen(false)}
-        doctors={doctors}
-        currentUser={currentUser!}
-        initialDate={selectedDate}
-      />
+      {currentUser && (
+        <NewReservationDrawer
+          open={newOpen}
+          onClose={() => setNewOpen(false)}
+          doctors={doctors}
+          currentUser={currentUser}
+          initialDate={selectedDate}
+        />
+      )}
 
     </div>
   );

@@ -104,8 +104,10 @@ export function DetailDrawer({ open, reservation, doctors, currentUser, statusCo
       depositAmount: reservation.depositAmount || "",
     });
 
-    loadLogs(reservation);
-    loadNotes(reservation);
+    const mounted = { current: true };
+    loadLogs(reservation, mounted);
+    loadNotes(reservation, mounted);
+    return () => { mounted.current = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, reservation?.id]);
 
@@ -113,26 +115,29 @@ export function DetailDrawer({ open, reservation, doctors, currentUser, statusCo
   const selectedStatus = selectedReservation?.operationStatus || "내원전";
   const recentNotes = notes.slice(0, 3);
 
-  async function loadLogs(item: ReservationRecord) {
+  async function loadLogs(item: ReservationRecord, mounted?: { current: boolean }) {
     setLogsLoading(true);
     setLogsError("");
     setLogs([]);
     try {
       const list = await getLogsByReservationId(item.reservationId, item.id);
+      if (mounted && !mounted.current) return;
       setLogs(list);
     } catch {
+      if (mounted && !mounted.current) return;
       setLogsError("로그를 불러오지 못했습니다.");
     } finally {
-      setLogsLoading(false);
+      if (!mounted || mounted.current) setLogsLoading(false);
     }
   }
 
-  async function loadNotes(item: ReservationRecord) {
+  async function loadNotes(item: ReservationRecord, mounted?: { current: boolean }) {
     try {
       const list = await getReservationNotes(item.reservationId, item.id, item.patientId);
+      if (mounted && !mounted.current) return;
       setNotes(list);
     } catch {
-      setNotes([]);
+      if (!mounted || mounted.current) setNotes([]);
     }
   }
 

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { createReservationsBatch } from "@/lib/reservations";
+import { auth } from "@/lib/firebase";
 import type { StaffUser } from "@/lib/auth";
 
 type Props = {
@@ -35,9 +36,13 @@ export function ImportDrawer({ open, onClose, currentUser }: Props) {
     setImportResultMessage("");
 
     try {
+      const token = await auth.currentUser?.getIdToken();
       const response = await fetch("/api/import-sheet", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify({ url: importUrl.trim() }),
       });
 

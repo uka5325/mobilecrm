@@ -79,7 +79,7 @@ export default function DashboardPage() {
       setStaff(staffRows);
     } catch (err) {
       console.error(err);
-      setError("대시보드 데이터를 불러오지 못했습니다. Firestore 권한 또는 인덱스를 확인해 주세요.");
+      setError("대시보드 데이터를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.");
     } finally {
       setLoading(false);
     }

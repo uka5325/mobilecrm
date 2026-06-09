@@ -11,6 +11,19 @@ type RequestBody = {
 };
 
 export async function POST(req: NextRequest) {
+  // 토큰으로 호출자 검증 (클라이언트 callerUid 신뢰 제거)
+  const authHeader = req.headers.get("authorization");
+  if (!authHeader?.startsWith("Bearer ")) {
+    return NextResponse.json({ success: false, message: "인증이 필요합니다." }, { status: 401 });
+  }
+  let callerUid: string;
+  try {
+    const decoded = await adminAuth.verifyIdToken(authHeader.slice(7));
+    callerUid = decoded.uid;
+  } catch {
+    return NextResponse.json({ success: false, message: "인증이 유효하지 않습니다." }, { status: 401 });
+  }
+
   let body: RequestBody;
   try {
     body = (await req.json()) as RequestBody;
@@ -18,9 +31,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: false, message: "잘못된 요청입니다." }, { status: 400 });
   }
 
-  const { email, password, displayName, role, staffCode, callerUid } = body;
+  const { email, password, displayName, role, staffCode } = body;
 
-  if (!email || !password || !displayName || !role || !callerUid) {
+  if (!email || !password || !displayName || !role) {
     return NextResponse.json({ success: false, message: "필수 항목이 누락되었습니다." }, { status: 400 });
   }
 
