@@ -232,6 +232,8 @@ function cleanRole(value: unknown): SettingsStaffRole | string {
 ============================================================ */
 
 const STATUS_COLOR_CACHE_KEY = "crm_visit_status_colors";
+const STATUS_COLOR_TTL_KEY = "crm_visit_status_colors_ts";
+const STATUS_COLOR_TTL_MS = 5 * 60 * 1000;
 
 export function getCachedVisitStatusColors(): VisitStatusColorMap | null {
   if (typeof window === "undefined") return null;
@@ -247,10 +249,17 @@ function setCachedVisitStatusColors(colors: VisitStatusColorMap) {
   if (typeof window === "undefined") return;
   try {
     localStorage.setItem(STATUS_COLOR_CACHE_KEY, JSON.stringify(colors));
+    localStorage.setItem(STATUS_COLOR_TTL_KEY, String(Date.now()));
   } catch {}
 }
 
 export async function getVisitStatusColors(): Promise<VisitStatusColorMap> {
+  const cached = getCachedVisitStatusColors();
+  if (cached) {
+    const ts = Number(localStorage.getItem(STATUS_COLOR_TTL_KEY) || 0);
+    if (Date.now() - ts < STATUS_COLOR_TTL_MS) return cached;
+  }
+
   const ref = doc(db, "appSettings", "visitStatusColors");
   const snap = await getDoc(ref);
 
@@ -367,11 +376,28 @@ export async function saveGeneralSettings(
    오늘의 메모
 ============================================================ */
 
+const MEMO_CACHE_PREFIX = "crm_memos_";
+
+function invalidateMemoCache(memoDate: string) {
+  if (typeof window === "undefined") return;
+  try {
+    sessionStorage.removeItem(MEMO_CACHE_PREFIX + memoDate);
+  } catch {}
+}
+
 export async function getConferenceMemos(
   memoDate: string,
   limit = 50
 ): Promise<ConferenceMemo[]> {
   const targetDate = normalizeDateOnly(memoDate);
+  const cacheKey = MEMO_CACHE_PREFIX + targetDate;
+
+  if (typeof window !== "undefined") {
+    try {
+      const raw = sessionStorage.getItem(cacheKey);
+      if (raw) return JSON.parse(raw) as ConferenceMemo[];
+    } catch {}
+  }
 
   const q = query(
     collection(db, "conferenceMemos"),
@@ -380,7 +406,7 @@ export async function getConferenceMemos(
 
   const snap = await getDocs(q);
 
-  return snap.docs
+  const result = snap.docs
     .map((docSnap) => {
       const data = docSnap.data() as Omit<ConferenceMemo, "id">;
 
@@ -399,6 +425,12 @@ export async function getConferenceMemos(
     .filter((memo) => memo.deleted !== true)
     .sort((a, b) => toMillis(b.createdAt) - toMillis(a.createdAt))
     .slice(0, limit);
+
+  setTimeout(() => {
+    try { sessionStorage.setItem(cacheKey, JSON.stringify(result)); } catch {}
+  }, 0);
+
+  return result;
 }
 
 export async function addConferenceMemo(
@@ -436,10 +468,11 @@ export async function addConferenceMemo(
     },
   });
 
+  invalidateMemoCache(targetDate);
   return docRef.id;
 }
 
-export async function deleteConferenceMemo(memoId: string, staff: StaffUser) {
+export async function deleteConferenceMemo(memoId: string, staff: StaffUser, memoDate?: string) {
   assertCanEditMemo(staff);
 
   const id = cleanText(memoId);
@@ -462,6 +495,7 @@ export async function deleteConferenceMemo(memoId: string, staff: StaffUser) {
     after: { deleted: true },
   });
 
+  if (memoDate) invalidateMemoCache(normalizeDateOnly(memoDate));
   return true;
 }
 

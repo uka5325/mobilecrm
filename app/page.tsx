@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { User } from "firebase/auth";
 import {
-  getAllReservations,
+  getTimelineReservations,
   type ReservationRecord,
 } from "@/lib/reservations";
 import { getStaffByUid, listenCurrentUser } from "@/lib/auth";
@@ -93,7 +93,7 @@ export default function HomePage() {
     setLoading(true);
 
     try {
-      const data = await getAllReservations();
+      const data = await getTimelineReservations(todayString());
       setReservations(data.reservations || []);
     } catch (error) {
       console.error(error);
