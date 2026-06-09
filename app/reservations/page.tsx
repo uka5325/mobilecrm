@@ -459,7 +459,7 @@ const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
 
           <button
             onClick={() => setFilterDate("")}
-            className="h-10 rounded-xl border border-[#dfe3e8] bg-white px-4 text-sm text-gray-700 transition hover:-translate-y-0.5 hover:bg-gray-50 active:scale-95"
+            className="h-10 w-[110px] rounded-xl border border-[#dfe3e8] bg-white px-4 text-sm text-gray-700 transition hover:-translate-y-0.5 hover:bg-gray-50 active:scale-95"
           >
             날짜 초기화
           </button>
@@ -482,7 +482,7 @@ const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
           <div className="relative ml-auto">
             <button
               onClick={() => setDownloadOpen((v) => !v)}
-              className="h-10 rounded-xl border border-[#dfe3e8] bg-white px-4 text-sm text-gray-700 transition hover:-translate-y-0.5 hover:bg-gray-50 active:scale-95"
+              className="h-10 w-[110px] rounded-xl border border-[#dfe3e8] bg-white px-4 text-sm text-gray-700 transition hover:-translate-y-0.5 hover:bg-gray-50 active:scale-95"
             >
               📥 다운로드
             </button>
