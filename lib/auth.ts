@@ -39,6 +39,23 @@ const ROLE_LEVEL: Record<StaffRole, number> = {
 // 계정 존재 여부나 활성화 상태를 외부에서 추론할 수 없도록 합니다.
 const LOGIN_FAIL_MESSAGE = "이메일 또는 비밀번호가 올바르지 않습니다.";
 
+async function getStaffByEmail(email: string): Promise<StaffUser | null> {
+  const snap = await getDocs(
+    query(collection(db, "staff"), where("email", "==", email.toLowerCase().trim()))
+  );
+  if (snap.empty) return null;
+  const d = snap.docs[0];
+  const data = d.data();
+  return {
+    uid: d.id,
+    email: String(data.email || ""),
+    displayName: String(data.displayName || ""),
+    role: (data.role || "staff") as StaffRole,
+    active: data.active === true,
+    staffCode: data.staffCode ? String(data.staffCode) : undefined,
+  };
+}
+
 export async function loginWithEmail(email: string, password: string) {
   if (!email || !password) {
     return {
@@ -54,7 +71,11 @@ export async function loginWithEmail(email: string, password: string) {
       password.trim()
     );
 
-    const staff = await getStaffByUid(credential.user.uid);
+    // Google 연동으로 UID가 바뀐 경우를 위해 이메일로도 fallback 조회
+    let staff = await getStaffByUid(credential.user.uid);
+    if (!staff) {
+      staff = await getStaffByEmail(email);
+    }
 
     if (!staff || !staff.active) {
       await signOut(auth);
@@ -78,23 +99,6 @@ export async function loginWithEmail(email: string, password: string) {
       message: LOGIN_FAIL_MESSAGE,
     };
   }
-}
-
-async function getStaffByEmail(email: string): Promise<StaffUser | null> {
-  const snap = await getDocs(
-    query(collection(db, "staff"), where("email", "==", email.toLowerCase().trim()))
-  );
-  if (snap.empty) return null;
-  const d = snap.docs[0];
-  const data = d.data();
-  return {
-    uid: d.id,
-    email: String(data.email || ""),
-    displayName: String(data.displayName || ""),
-    role: (data.role || "staff") as StaffRole,
-    active: data.active === true,
-    staffCode: data.staffCode ? String(data.staffCode) : undefined,
-  };
 }
 
 const googleProvider = new GoogleAuthProvider();
