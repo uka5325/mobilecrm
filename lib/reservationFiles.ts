@@ -126,22 +126,37 @@ export async function getReservationPhotos(
   );
 }
 
-export async function uploadReservationPhoto(
+export type PendingPhoto = {
+  tempId: string;
+  fileName: string;
+  fileSize: number;
+  objectUrl: string;
+  storagePath: string;
+};
+
+export async function uploadPhotoToStorage(
   reservationDocId: string,
-  reservationId: string,
-  patientId: string,
-  file: File,
-  staff: StaffUser
-): Promise<PhotoRecord> {
+  file: File
+): Promise<{ storagePath: string; fileUrl: string }> {
   const ts = Date.now();
   const uid = typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID().slice(0, 8) : Math.random().toString(36).slice(2, 10);
   const safeName = sanitizeFileName(file.name);
   const storagePath = `reservationFiles/${reservationDocId}/photos/${ts}_${uid}_${safeName}`;
   const storageRef = ref(storage, storagePath);
-
   await uploadBytes(storageRef, file, { contentType: file.type });
   const fileUrl = await getDownloadURL(storageRef);
+  return { storagePath, fileUrl };
+}
 
+export async function savePhotoRecord(
+  reservationDocId: string,
+  reservationId: string,
+  patientId: string,
+  file: File,
+  storagePath: string,
+  fileUrl: string,
+  staff: StaffUser
+): Promise<PhotoRecord> {
   const docRef = await addDoc(collection(db, "reservationPhotos"), {
     reservationDocId,
     reservationId,
@@ -156,7 +171,8 @@ export async function uploadReservationPhoto(
     isDeleted: false,
   });
 
-  await createLog({
+  // fire-and-forget — log failure must not block the caller
+  createLog({
     action: "file_upload",
     targetType: "file",
     targetId: docRef.id,
@@ -164,7 +180,7 @@ export async function uploadReservationPhoto(
     message: `사진 추가: ${file.name}`,
     reservationId,
     patientId,
-  });
+  }).catch(() => {});
 
   return mapPhotoDoc(docRef.id, {
     reservationDocId, reservationId, patientId,
@@ -172,6 +188,17 @@ export async function uploadReservationPhoto(
     fileSize: file.size, uploadedAt: null,
     uploadedBy: staff.displayName, uploadedByUid: staff.uid, isDeleted: false,
   });
+}
+
+export async function uploadReservationPhoto(
+  reservationDocId: string,
+  reservationId: string,
+  patientId: string,
+  file: File,
+  staff: StaffUser
+): Promise<PhotoRecord> {
+  const { storagePath, fileUrl } = await uploadPhotoToStorage(reservationDocId, file);
+  return savePhotoRecord(reservationDocId, reservationId, patientId, file, storagePath, fileUrl, staff);
 }
 
 export async function deleteReservationPhoto(
@@ -250,7 +277,7 @@ export async function uploadReservationChart(
     isDeleted: false,
   });
 
-  await createLog({
+  createLog({
     action: "file_upload",
     targetType: "file",
     targetId: docRef.id,
@@ -258,7 +285,7 @@ export async function uploadReservationChart(
     message: `상담차트 생성: ${label}`,
     reservationId,
     patientId,
-  });
+  }).catch(() => {});
 
   return mapChartDoc(docRef.id, {
     reservationDocId, reservationId, patientId, label, chartUrl, storagePath,
@@ -298,7 +325,7 @@ export async function updateReservationChart(
     updatedByUid: staff.uid,
   });
 
-  await createLog({
+  createLog({
     action: "file_upload",
     targetType: "file",
     targetId: chartId,
@@ -306,7 +333,7 @@ export async function updateReservationChart(
     message: `상담차트 수정: ${label}`,
     reservationId,
     patientId,
-  });
+  }).catch(() => {});
 
   return mapChartDoc(chartId, {
     reservationDocId, reservationId, patientId, label, chartUrl, storagePath,

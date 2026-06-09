@@ -1,7 +1,7 @@
 export async function compressImage(
   file: File,
-  maxPx = 1920,
-  quality = 0.82
+  maxPx = 1280,
+  quality = 0.75
 ): Promise<File> {
   return new Promise((resolve) => {
     const img = new Image();

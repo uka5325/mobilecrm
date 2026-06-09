@@ -7,9 +7,10 @@ import {
   deleteReservationPhoto,
   getReservationCharts,
   getReservationPhotos,
+  uploadPhotoToStorage,
+  savePhotoRecord,
   uploadReservationChart,
   updateReservationChart,
-  uploadReservationPhoto,
   type ChartRecord,
   type PhotoRecord,
 } from "@/lib/reservationFiles";
@@ -95,16 +96,57 @@ export function FilesTab({ reservationDocId, reservationId, patientId, currentUs
     if (!files || files.length === 0) return;
     setPhotoUploading("compressing");
     setError("");
+    const objectUrls: string[] = [];
     try {
-      const compressed = await Promise.all(Array.from(files).map((f) => compressImage(f)));
+      const fileArr = Array.from(files);
+      const compressed = await Promise.all(fileArr.map((f) => compressImage(f)));
+
       setPhotoUploading("uploading");
-      const uploaded = await Promise.all(
-        compressed.map((f) =>
-          uploadReservationPhoto(reservationDocId, reservationId, patientId, f, currentUser)
-        )
+
+      // Upload to Storage in parallel
+      const storageResults = await Promise.all(
+        compressed.map((f) => uploadPhotoToStorage(reservationDocId, f).then((r) => ({ f, ...r })))
       );
-      setPhotos((prev) => [...uploaded, ...prev]);
+
+      // Show optimistic items immediately using object URLs
+      const optimisticItems: PhotoRecord[] = storageResults.map(({ f, fileUrl, storagePath }) => {
+        const oUrl = URL.createObjectURL(f);
+        objectUrls.push(oUrl);
+        const tempId = `tmp_${Math.random().toString(36).slice(2)}`;
+        return {
+          id: tempId,
+          reservationDocId,
+          reservationId,
+          patientId,
+          fileName: f.name,
+          fileUrl: oUrl,
+          storagePath,
+          fileSize: f.size,
+          uploadedAt: null,
+          uploadedBy: currentUser.displayName,
+          uploadedByUid: currentUser.uid,
+          isDeleted: false,
+        };
+      });
+      setPhotos((prev) => [...optimisticItems, ...prev]);
+      setPhotoUploading(false);
+      if (photoInputRef.current) photoInputRef.current.value = "";
+
+      // Save to Firestore in background, then swap optimistic items for real records
+      storageResults.forEach(({ f, fileUrl, storagePath }, i) => {
+        const tempId = optimisticItems[i].id;
+        savePhotoRecord(reservationDocId, reservationId, patientId, f, storagePath, fileUrl, currentUser)
+          .then((record) => {
+            URL.revokeObjectURL(objectUrls[i]);
+            setPhotos((prev) => prev.map((p) => (p.id === tempId ? record : p)));
+          })
+          .catch(() => {
+            // Keep optimistic item visible; silent failure (log already fire-and-forgot)
+          });
+      });
+      return;
     } catch (e) {
+      objectUrls.forEach((u) => URL.revokeObjectURL(u));
       const msg = e instanceof Error ? e.message : String(e);
       setError(`사진 업로드에 실패했습니다. (${msg})`);
     } finally {
