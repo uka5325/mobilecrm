@@ -18,6 +18,7 @@ import {
 import { auth, db } from "./firebase";
 import type { StaffUser } from "./auth";
 import { createLog } from "./logs";
+import { invalidateDoctorsCache } from "./reservations";
 import { cleanText } from "./stringUtils";
 import { toMillis } from "./settingsUtils";
 
@@ -554,6 +555,7 @@ export async function updateStaffFromSettings(
 
   const ref = doc(db, "staff", id);
   await updateDoc(ref, updatePayload);
+  invalidateDoctorsCache();
 
   await createLog({
     action: "settings_update",
@@ -589,6 +591,7 @@ export async function createStaffFromSettings(
   if (!data.success) {
     throw new Error(data.message || "직원 생성에 실패했습니다.");
   }
+  invalidateDoctorsCache();
 }
 
 export async function deactivateStaffFromSettings(
