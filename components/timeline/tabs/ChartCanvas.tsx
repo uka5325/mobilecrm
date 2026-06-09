@@ -29,11 +29,30 @@ export function ChartCanvas({ open, existingUrl, onSave, onClose, saving }: Prop
     ctx.fillStyle = "#ffffff";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    if (existingUrl) {
+    if (!existingUrl) return;
+
+    let objectUrl: string | null = null;
+
+    async function loadImage() {
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return;
+
       const img = new Image();
-      img.crossOrigin = "anonymous";
+
+      // fetch → blob URL so the canvas stays untainted (avoids CORS taint issue)
+      try {
+        const res = await fetch(existingUrl!, { mode: "cors" });
+        const blob = await res.blob();
+        objectUrl = URL.createObjectURL(blob);
+        img.src = objectUrl;
+      } catch {
+        // fallback: direct src (local object URLs don't need fetch)
+        img.src = existingUrl!;
+      }
+
       img.onload = () => {
-        // 이미지 비율에 맞게 캔버스 크기 조정
         const maxW = Math.min(window.innerWidth - 48, 700);
         const scale = Math.min(maxW / img.naturalWidth, 900 / img.naturalHeight, 1);
         canvas.width = Math.round(img.naturalWidth * scale);
@@ -41,12 +60,11 @@ export function ChartCanvas({ open, existingUrl, onSave, onClose, saving }: Prop
         ctx.fillStyle = "#ffffff";
         ctx.fillRect(0, 0, canvas.width, canvas.height);
         ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        if (objectUrl) URL.revokeObjectURL(objectUrl);
       };
-      img.onerror = () => {
-        // 이미지 로드 실패해도 빈 캔버스 유지
-      };
-      img.src = existingUrl;
     }
+
+    loadImage();
   }, [open, existingUrl]);
 
   // 도구 변경 시 커서 스타일 업데이트
@@ -123,15 +141,30 @@ export function ChartCanvas({ open, existingUrl, onSave, onClose, saving }: Prop
     ctx.fillStyle = "#ffffff";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    // 기존 이미지가 있으면 다시 그려서 필기만 제거
-    if (existingUrl) {
+    if (!existingUrl) return;
+
+    async function redraw() {
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return;
       const img = new Image();
-      img.crossOrigin = "anonymous";
+      let objectUrl: string | null = null;
+      try {
+        const res = await fetch(existingUrl!, { mode: "cors" });
+        const blob = await res.blob();
+        objectUrl = URL.createObjectURL(blob);
+        img.src = objectUrl;
+      } catch {
+        img.src = existingUrl!;
+      }
       img.onload = () => {
         ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        if (objectUrl) URL.revokeObjectURL(objectUrl);
       };
-      img.src = existingUrl;
     }
+
+    redraw();
   }
 
   async function handleSave() {

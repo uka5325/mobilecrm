@@ -79,8 +79,9 @@ export function FilesTab({ reservationDocId, reservationId, patientId, currentUs
       ]);
       setPhotos(p);
       setCharts(c);
-    } catch {
-      setError("파일 목록을 불러오지 못했습니다.");
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      setError(`파일 목록을 불러오지 못했습니다. (${msg})`);
     } finally {
       setPhotosLoading(false);
       setChartsLoading(false);
@@ -102,8 +103,9 @@ export function FilesTab({ reservationDocId, reservationId, patientId, currentUs
         uploaded.push(record);
       }
       setPhotos((prev) => [...uploaded, ...prev]);
-    } catch {
-      setError("사진 업로드에 실패했습니다.");
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      setError(`사진 업로드에 실패했습니다. (${msg})`);
     } finally {
       setPhotoUploading(false);
       if (photoInputRef.current) photoInputRef.current.value = "";
@@ -178,8 +180,9 @@ export function FilesTab({ reservationDocId, reservationId, patientId, currentUs
       setCanvasOpen(false);
       setEditingChart(null);
       setBaseImageUrl(undefined);
-    } catch {
-      setError("차트 저장에 실패했습니다.");
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      setError(`차트 저장에 실패했습니다. (${msg})`);
     } finally {
       setChartSaving(false);
     }
