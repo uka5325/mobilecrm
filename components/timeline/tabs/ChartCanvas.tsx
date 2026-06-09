@@ -1,8 +1,6 @@
 "use client";
 
 import { type PointerEvent, useEffect, useRef, useState } from "react";
-import { getBlob, ref } from "firebase/storage";
-import { storage } from "@/lib/firebase";
 
 type Tool = "pen" | "eraser";
 
@@ -43,16 +41,16 @@ export function ChartCanvas({ open, existingUrl, onSave, onClose, saving, onErro
     setLoading(true);
 
     (async () => {
-      // Get image as blob URL so the canvas stays untainted (enables toBlob/save)
+      // Fetch via same-origin proxy → canvas stays untainted → toBlob works
       let src = existingUrl;
       let isBlobUrl = false;
 
       try {
-        const match = existingUrl.match(/\/o\/([^?]+)/);
-        const path  = match ? decodeURIComponent(match[1]) : existingUrl;
-        const blob  = await getBlob(ref(storage, path));
-        src = URL.createObjectURL(blob);
-        isBlobUrl = true;
+        const res = await fetch(`/api/proxy-image?url=${encodeURIComponent(existingUrl)}`);
+        if (res.ok) {
+          src = URL.createObjectURL(await res.blob());
+          isBlobUrl = true;
+        }
       } catch {
         // fallback: direct URL — canvas may be tainted, save might fail
       }
@@ -156,11 +154,8 @@ export function ChartCanvas({ open, existingUrl, onSave, onClose, saving, onErro
       let src = existingUrl;
       let isBlobUrl = false;
       try {
-        const match = existingUrl.match(/\/o\/([^?]+)/);
-        const path  = match ? decodeURIComponent(match[1]) : existingUrl;
-        const blob  = await getBlob(ref(storage, path));
-        src = URL.createObjectURL(blob);
-        isBlobUrl = true;
+        const res = await fetch(`/api/proxy-image?url=${encodeURIComponent(existingUrl)}`);
+        if (res.ok) { src = URL.createObjectURL(await res.blob()); isBlobUrl = true; }
       } catch { /* fallback */ }
 
       const img = new Image();
