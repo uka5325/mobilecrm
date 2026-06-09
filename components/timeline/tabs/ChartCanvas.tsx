@@ -1,7 +1,7 @@
 "use client";
 
 import { type PointerEvent, useEffect, useRef, useState } from "react";
-import { getBlob, ref } from "firebase/storage";
+import { getBlob, ref, refFromURL } from "firebase/storage";
 import { storage } from "@/lib/firebase";
 
 type Tool = "pen" | "eraser";
@@ -47,7 +47,7 @@ export function ChartCanvas({ open, existingUrl, onSave, onClose, saving, onErro
       // fetch → blob URL so the canvas stays untainted (avoids CORS taint issue)
       try {
         // Use Firebase SDK to bypass CORS — works for gs:// and https://firebasestorage URLs
-        const storageRef = ref(storage, existingUrl!);
+        const storageRef = existingUrl!.startsWith("https://") ? refFromURL(storage, existingUrl!) : ref(storage, existingUrl!);
         const blob = await getBlob(storageRef);
         objectUrl = URL.createObjectURL(blob);
         img.src = objectUrl;
@@ -155,7 +155,7 @@ export function ChartCanvas({ open, existingUrl, onSave, onClose, saving, onErro
       const img = new Image();
       let objectUrl: string | null = null;
       try {
-        const storageRef = ref(storage, existingUrl!);
+        const storageRef = existingUrl!.startsWith("https://") ? refFromURL(storage, existingUrl!) : ref(storage, existingUrl!);
         const blob = await getBlob(storageRef);
         objectUrl = URL.createObjectURL(blob);
         img.src = objectUrl;
