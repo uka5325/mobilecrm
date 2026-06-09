@@ -27,13 +27,14 @@ import { todayString } from "@/lib/dateUtils";
 import { getBirthGenderNationalityText, splitComma } from "@/lib/timelineUtils";
 import { getReadableTextColor, getStatusColor } from "@/lib/colorUtils";
 import { InfoTab } from "@/components/timeline/tabs/InfoTab";
+import { FilesTab } from "@/components/timeline/tabs/FilesTab";
 import { NotesTab } from "@/components/timeline/tabs/NotesTab";
 import { LogsTab } from "@/components/timeline/tabs/LogsTab";
 import { InvoiceTab } from "@/components/timeline/tabs/InvoiceTab";
 
 const DETAIL_STATUS_LIST: ReservationStatus[] = ["대기", "원상중", "후상중", "귀가", "부도"];
 
-type DetailTab = "info" | "notes" | "logs" | "invoice";
+type DetailTab = "info" | "files" | "notes" | "logs" | "invoice";
 
 type DetailForm = {
   name: string;
@@ -449,13 +450,13 @@ export function DetailDrawer({ open, reservation, doctors, currentUser, statusCo
         </div>
 
         <div className="flex shrink-0 border-b border-[#edf0f3]">
-          {(["info", "notes", "logs", "invoice"] as const).map((key) => {
-            const label = { info: "기본정보", notes: "메모", logs: "로그", invoice: "인보이스" }[key];
+          {(["info", "files", "notes", "logs", "invoice"] as const).map((key) => {
+            const label = { info: "기본정보", files: "파일", notes: "메모", logs: "로그", invoice: "인보이스" }[key];
             return (
               <button
                 key={key}
                 onClick={() => setActiveTab(key)}
-                className={`flex-1 border-b-2 py-2.5 text-center text-sm transition hover:bg-gray-50 active:scale-[0.98] ${
+                className={`flex-1 border-b-2 py-2 text-center text-xs transition hover:bg-gray-50 active:scale-[0.98] ${
                   activeTab === key
                     ? "border-[#1d9e75] font-semibold text-[#1d9e75]"
                     : "border-transparent text-gray-500"
@@ -487,6 +488,15 @@ export function DetailDrawer({ open, reservation, doctors, currentUser, statusCo
               onUpdateNote={handleUpdateNote}
               onDeleteNote={handleDeleteNote}
               onShowAllNotes={() => setActiveTab("notes")}
+            />
+          )}
+
+          {activeTab === "files" && selectedReservation && (
+            <FilesTab
+              reservationDocId={selectedReservation.id}
+              reservationId={selectedReservation.reservationId}
+              patientId={selectedReservation.patientId}
+              currentUser={currentUser}
             />
           )}
 
