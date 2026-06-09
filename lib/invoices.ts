@@ -405,16 +405,17 @@ export async function getReservationByDocId(reservationDocId: string) {
 }
 
 export async function getInvoiceByReservationDocId(reservationDocId: string) {
-  const snap = await getDocs(collection(db, "invoices"));
+  const snap = await getDocs(
+    query(
+      collection(db, "invoices"),
+      where("reservationDocId", "==", reservationDocId),
+      where("isDeleted", "==", false)
+    )
+  );
 
-  const found = snap.docs
-    .map((docSnap) => mapInvoiceDoc(docSnap.id, docSnap.data()))
-    .find(
-      (invoice) =>
-        invoice.reservationDocId === reservationDocId && !invoice.isDeleted
-    );
-
-  return found || null;
+  if (snap.empty) return null;
+  const docSnap = snap.docs[0];
+  return mapInvoiceDoc(docSnap.id, docSnap.data());
 }
 
 export function buildInitialDiscounts(): InvoiceDiscount[] {

@@ -307,25 +307,37 @@ function makeDoctorOptionsFromReservations(
   }));
 }
 
+let _doctorsPromise: Promise<DoctorOption[]> | null = null;
+
 export async function getDoctors(): Promise<DoctorOption[]> {
-  const snap = await getDocs(collection(db, "staff"));
+  if (_doctorsPromise) return _doctorsPromise;
 
-  const doctors = snap.docs
-    .map((docSnap) => {
-      const data = docSnap.data();
-      return {
-        uid: docSnap.id,
-        displayName: cleanText(data.displayName || data["display_name"] || data.name),
-        email: cleanText(data.email),
-        orderNo: cleanNumber(data.orderNo ?? data["order_no"]),
-        role: String(data.role || ""),
-        active: data.active,
-      };
-    })
-    .filter((d) => d.displayName && d.role === "doctor" && d.active !== false);
+  _doctorsPromise = (async () => {
+    const snap = await getDocs(collection(db, "staff"));
 
-  setCachedDoctors(sortDoctors(doctors));
-  return sortDoctors(doctors);
+    const doctors = snap.docs
+      .map((docSnap) => {
+        const data = docSnap.data();
+        return {
+          uid: docSnap.id,
+          displayName: cleanText(data.displayName || data["display_name"] || data.name),
+          email: cleanText(data.email),
+          orderNo: cleanNumber(data.orderNo ?? data["order_no"]),
+          role: String(data.role || ""),
+          active: data.active,
+        };
+      })
+      .filter((d) => d.displayName && d.role === "doctor" && d.active !== false);
+
+    setCachedDoctors(sortDoctors(doctors));
+    return sortDoctors(doctors);
+  })();
+
+  return _doctorsPromise;
+}
+
+export function invalidateDoctorsCache() {
+  _doctorsPromise = null;
 }
 
 export async function getAllReservations(): Promise<{

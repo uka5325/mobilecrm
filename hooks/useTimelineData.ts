@@ -29,13 +29,16 @@ function getCachedTimelineData(date: string): { reservations: ReservationRecord[
 
 function setCachedTimelineData(date: string, reservations: ReservationRecord[], doctors: DoctorOption[]) {
   if (typeof window === "undefined") return;
-  try {
-    const keysToRemove = Object.keys(sessionStorage).filter(
-      (k) => k.startsWith(TIMELINE_CACHE_PREFIX) && k !== TIMELINE_CACHE_PREFIX + date
-    );
-    keysToRemove.forEach((k) => sessionStorage.removeItem(k));
-    sessionStorage.setItem(TIMELINE_CACHE_PREFIX + date, JSON.stringify({ reservations, doctors }));
-  } catch {}
+  // defer off the critical render path to avoid blocking the main thread
+  setTimeout(() => {
+    try {
+      const keysToRemove = Object.keys(sessionStorage).filter(
+        (k) => k.startsWith(TIMELINE_CACHE_PREFIX) && k !== TIMELINE_CACHE_PREFIX + date
+      );
+      keysToRemove.forEach((k) => sessionStorage.removeItem(k));
+      sessionStorage.setItem(TIMELINE_CACHE_PREFIX + date, JSON.stringify({ reservations, doctors }));
+    } catch {}
+  }, 0);
 }
 
 export function useTimelineData(

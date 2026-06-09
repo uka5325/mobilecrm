@@ -71,11 +71,12 @@ export default function TimelinePage() {
   }
 
   function handleTimelineScroll() {
-    const scrollTop = timelineScrollRef.current?.scrollTop || 0;
-
-    if (timeScaleRef.current) {
-      timeScaleRef.current.style.transform = `translateY(-${scrollTop}px)`;
-    }
+    requestAnimationFrame(() => {
+      const scrollTop = timelineScrollRef.current?.scrollTop || 0;
+      if (timeScaleRef.current) {
+        timeScaleRef.current.style.transform = `translateY(-${scrollTop}px)`;
+      }
+    });
   }
 
   const kpi = useMemo(() => {

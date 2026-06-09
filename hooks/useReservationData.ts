@@ -26,9 +26,12 @@ function getCachedData(): { reservations: ReservationRecord[]; doctors: DoctorOp
 
 function setCachedData(reservations: ReservationRecord[], doctors: DoctorOption[]) {
   if (typeof window === "undefined") return;
-  try {
-    sessionStorage.setItem(CACHE_KEY, JSON.stringify({ reservations, doctors }));
-  } catch {}
+  // defer off the critical render path to avoid blocking the main thread
+  setTimeout(() => {
+    try {
+      sessionStorage.setItem(CACHE_KEY, JSON.stringify({ reservations, doctors }));
+    } catch {}
+  }, 0);
 }
 
 export function useReservationData(
