@@ -1,8 +1,10 @@
 import { initializeApp, getApps, type FirebaseApp } from "firebase/app";
 import {
+  indexedDBLocalPersistence,
   browserLocalPersistence,
+  browserSessionPersistence,
+  initializeAuth,
   getAuth,
-  setPersistence,
 } from "firebase/auth";
 import {
   initializeFirestore,
@@ -24,13 +26,25 @@ const firebaseConfig = {
 
 const app = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
 
-export const auth = getAuth(app);
-
-if (typeof window !== "undefined") {
-  setPersistence(auth, browserLocalPersistence).catch((error) => {
-    console.error("[Firebase auth persistence error]", error);
-  });
+// Use initializeAuth with IndexedDB first so OAuth state survives
+// iOS Safari's storage partitioning across redirect cycles.
+// Falls back to localStorage then sessionStorage on older browsers.
+function createAuth() {
+  try {
+    return initializeAuth(app, {
+      persistence: [
+        indexedDBLocalPersistence,
+        browserLocalPersistence,
+        browserSessionPersistence,
+      ],
+    });
+  } catch {
+    // Already initialized (e.g. HMR re-evaluation)
+    return getAuth(app);
+  }
 }
+
+export const auth = createAuth();
 
 function createDb(app: FirebaseApp) {
   try {

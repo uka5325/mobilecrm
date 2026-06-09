@@ -77,16 +77,26 @@ export function ChartCanvas({ open, existingUrl, onSave, onClose, saving, onErro
     const pos  = getPos(e);
     const prev = lastPos.current ?? pos;
 
-    // Eraser uses destination-out → removes drawn pixels, revealing img below
-    ctx.globalCompositeOperation = tool === "eraser" ? "destination-out" : "source-over";
-    ctx.strokeStyle = "#111827";
-    ctx.lineWidth   = tool === "pen" ? 2.5 : 24;
-    ctx.lineCap     = "round";
-    ctx.lineJoin    = "round";
-    ctx.beginPath();
-    ctx.moveTo(prev.x, prev.y);
-    ctx.lineTo(pos.x,  pos.y);
-    ctx.stroke();
+    if (tool === "eraser") {
+      // clearRect along the stroke path for reliable erasing
+      const steps = Math.ceil(Math.hypot(pos.x - prev.x, pos.y - prev.y) / 4) + 1;
+      for (let i = 0; i <= steps; i++) {
+        const t  = steps === 0 ? 0 : i / steps;
+        const cx = prev.x + (pos.x - prev.x) * t;
+        const cy = prev.y + (pos.y - prev.y) * t;
+        ctx.clearRect(cx - 12, cy - 12, 24, 24);
+      }
+    } else {
+      ctx.globalCompositeOperation = "source-over";
+      ctx.strokeStyle = "#111827";
+      ctx.lineWidth   = 2.5;
+      ctx.lineCap     = "round";
+      ctx.lineJoin    = "round";
+      ctx.beginPath();
+      ctx.moveTo(prev.x, prev.y);
+      ctx.lineTo(pos.x,  pos.y);
+      ctx.stroke();
+    }
 
     lastPos.current = pos;
   }
@@ -122,42 +132,50 @@ export function ChartCanvas({ open, existingUrl, onSave, onClose, saving, onErro
       return;
     }
 
-    // Composite: original image (via Firebase SDK) + drawing layer
+    // Composite: original image + drawing layer
     try {
       const match = existingUrl.match(/\/o\/([^?]+)/);
       const path  = match ? decodeURIComponent(match[1]) : existingUrl;
 
-      // Try Firebase SDK first, fall back to direct fetch with the download token
-      let blobSrc: string;
+      // Get an untainted blob URL: Firebase SDK → fetch fallback
+      let blobSrc: string | null = null;
+      let isBlobUrl = false;
       try {
-        const blob = await getBlob(ref(storage, path));
-        blobSrc = URL.createObjectURL(blob);
+        blobSrc = URL.createObjectURL(await getBlob(ref(storage, path)));
+        isBlobUrl = true;
       } catch {
-        const res = await fetch(existingUrl);
-        if (!res.ok) throw new Error(`fetch failed: ${res.status}`);
-        blobSrc = URL.createObjectURL(await res.blob());
+        try {
+          const res = await fetch(existingUrl);
+          if (res.ok) { blobSrc = URL.createObjectURL(await res.blob()); isBlobUrl = true; }
+        } catch { /* both failed — will try with existingUrl directly */ }
       }
 
       await new Promise<void>((resolve, reject) => {
-        const img = new Image();
-        img.onload = () => {
+        const bgImg = new Image();
+        bgImg.onload = () => {
           const out = document.createElement("canvas");
-          out.width  = img.naturalWidth;
-          out.height = img.naturalHeight;
+          out.width  = bgImg.naturalWidth  || drawCanvas.width;
+          out.height = bgImg.naturalHeight || drawCanvas.height;
           const ctx  = out.getContext("2d")!;
           ctx.fillStyle = "#ffffff";
           ctx.fillRect(0, 0, out.width, out.height);
-          ctx.drawImage(img, 0, 0);
-          // Scale strokes to original resolution
+          try { ctx.drawImage(bgImg, 0, 0, out.width, out.height); } catch { /* tainted */ }
           ctx.drawImage(drawCanvas, 0, 0, out.width, out.height);
-          URL.revokeObjectURL(blobSrc);
-          out.toBlob(async (b) => {
-            if (b) { await onSave(b); resolve(); }
-            else    reject(new Error("toBlob returned null"));
-          }, "image/png");
+          if (isBlobUrl && blobSrc) URL.revokeObjectURL(blobSrc);
+          try {
+            out.toBlob(async (b) => {
+              if (b) { await onSave(b); resolve(); }
+              else reject(new Error("toBlob returned null"));
+            }, "image/png");
+          } catch (err) {
+            reject(err);
+          }
         };
-        img.onerror = () => { URL.revokeObjectURL(blobSrc); reject(new Error("이미지 로드 실패")); };
-        img.src = blobSrc;
+        bgImg.onerror = () => {
+          if (isBlobUrl && blobSrc) URL.revokeObjectURL(blobSrc);
+          reject(new Error("이미지 로드 실패"));
+        };
+        bgImg.src = blobSrc ?? existingUrl;
       });
     } catch (e) {
       onError?.(`저장에 실패했습니다. (${e instanceof Error ? e.message : String(e)})`);
