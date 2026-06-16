@@ -2,14 +2,13 @@ import * as admin from "firebase-admin";
 
 if (!admin.apps.length) {
   const key = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
-  if (!key) {
-    throw new Error("FIREBASE_SERVICE_ACCOUNT_KEY 환경변수가 설정되지 않았습니다.");
+  if (key) {
+    admin.initializeApp({
+      credential: admin.credential.cert(JSON.parse(key) as admin.ServiceAccount),
+    });
   }
-  admin.initializeApp({
-    credential: admin.credential.cert(JSON.parse(key) as admin.ServiceAccount),
-  });
 }
 
-export const adminAuth = admin.auth();
-export const adminDb = admin.firestore();
+export const adminAuth = admin.apps.length ? admin.auth() : null!;
+export const adminDb = admin.apps.length ? admin.firestore() : null!;
 export const FieldValue = admin.firestore.FieldValue;
