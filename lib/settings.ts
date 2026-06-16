@@ -9,6 +9,7 @@ import {
   setDoc,
   updateDoc,
   where,
+  writeBatch,
 } from "firebase/firestore";
 import {
   EmailAuthProvider,
@@ -18,6 +19,9 @@ import {
 import { auth, db } from "./firebase";
 import type { StaffUser } from "./auth";
 import { createLog } from "./logs";
+import { invalidateDoctorsCache } from "./reservations";
+import { cleanText } from "./stringUtils";
+import { toMillis } from "./settingsUtils";
 
 export type VisitStatus =
   | "내원전"
@@ -213,23 +217,6 @@ function todayString() {
   );
 }
 
-function toMillis(value: any) {
-  try {
-    if (!value) return 0;
-    if (typeof value.toMillis === "function") return value.toMillis();
-    if (typeof value.toDate === "function") return value.toDate().getTime();
-    if (value instanceof Date) return value.getTime();
-
-    const d = new Date(value);
-    return Number.isNaN(d.getTime()) ? 0 : d.getTime();
-  } catch {
-    return 0;
-  }
-}
-
-function cleanText(value: unknown) {
-  return String(value ?? "").trim();
-}
 
 function cleanRole(value: unknown): SettingsStaffRole | string {
   const role = cleanText(value).toLowerCase();
@@ -245,14 +232,44 @@ function cleanRole(value: unknown): SettingsStaffRole | string {
    내원상태 색상 설정
 ============================================================ */
 
+const STATUS_COLOR_CACHE_KEY = "crm_visit_status_colors";
+const STATUS_COLOR_TTL_KEY = "crm_visit_status_colors_ts";
+const STATUS_COLOR_TTL_MS = 5 * 60 * 1000;
+
+export function getCachedVisitStatusColors(): VisitStatusColorMap | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = localStorage.getItem(STATUS_COLOR_CACHE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+function setCachedVisitStatusColors(colors: VisitStatusColorMap) {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(STATUS_COLOR_CACHE_KEY, JSON.stringify(colors));
+    localStorage.setItem(STATUS_COLOR_TTL_KEY, String(Date.now()));
+  } catch {}
+}
+
 export async function getVisitStatusColors(): Promise<VisitStatusColorMap> {
+  const cached = getCachedVisitStatusColors();
+  if (cached) {
+    const ts = Number(localStorage.getItem(STATUS_COLOR_TTL_KEY) || 0);
+    if (Date.now() - ts < STATUS_COLOR_TTL_MS) return cached;
+  }
+
   const ref = doc(db, "appSettings", "visitStatusColors");
   const snap = await getDoc(ref);
 
   if (!snap.exists()) return DEFAULT_VISIT_STATUS_COLORS;
 
   const data = snap.data() as Partial<VisitStatusColorSetting>;
-  return normalizeVisitStatusColors(data.colors);
+  const colors = normalizeVisitStatusColors(data.colors);
+  setCachedVisitStatusColors(colors);
+  return colors;
 }
 
 export async function saveVisitStatusColors(
@@ -285,6 +302,7 @@ export async function saveVisitStatusColors(
     after: { colors: normalizedColors },
   });
 
+  setCachedVisitStatusColors(normalizedColors);
   return normalizedColors;
 }
 
@@ -359,11 +377,28 @@ export async function saveGeneralSettings(
    오늘의 메모
 ============================================================ */
 
+const MEMO_CACHE_PREFIX = "crm_memos_";
+
+function invalidateMemoCache(memoDate: string) {
+  if (typeof window === "undefined") return;
+  try {
+    sessionStorage.removeItem(MEMO_CACHE_PREFIX + memoDate);
+  } catch {}
+}
+
 export async function getConferenceMemos(
   memoDate: string,
   limit = 50
 ): Promise<ConferenceMemo[]> {
   const targetDate = normalizeDateOnly(memoDate);
+  const cacheKey = MEMO_CACHE_PREFIX + targetDate;
+
+  if (typeof window !== "undefined") {
+    try {
+      const raw = sessionStorage.getItem(cacheKey);
+      if (raw) return JSON.parse(raw) as ConferenceMemo[];
+    } catch {}
+  }
 
   const q = query(
     collection(db, "conferenceMemos"),
@@ -372,7 +407,7 @@ export async function getConferenceMemos(
 
   const snap = await getDocs(q);
 
-  return snap.docs
+  const result = snap.docs
     .map((docSnap) => {
       const data = docSnap.data() as Omit<ConferenceMemo, "id">;
 
@@ -391,6 +426,12 @@ export async function getConferenceMemos(
     .filter((memo) => memo.deleted !== true)
     .sort((a, b) => toMillis(b.createdAt) - toMillis(a.createdAt))
     .slice(0, limit);
+
+  setTimeout(() => {
+    try { sessionStorage.setItem(cacheKey, JSON.stringify(result)); } catch {}
+  }, 0);
+
+  return result;
 }
 
 export async function addConferenceMemo(
@@ -428,10 +469,11 @@ export async function addConferenceMemo(
     },
   });
 
+  invalidateMemoCache(targetDate);
   return docRef.id;
 }
 
-export async function deleteConferenceMemo(memoId: string, staff: StaffUser) {
+export async function deleteConferenceMemo(memoId: string, staff: StaffUser, memoDate?: string) {
   assertCanEditMemo(staff);
 
   const id = cleanText(memoId);
@@ -454,6 +496,7 @@ export async function deleteConferenceMemo(memoId: string, staff: StaffUser) {
     after: { deleted: true },
   });
 
+  if (memoDate) invalidateMemoCache(normalizeDateOnly(memoDate));
   return true;
 }
 
@@ -466,7 +509,7 @@ export async function getStaffListForSettings(): Promise<SettingsStaffRecord[]> 
 
   return snap.docs
     .map((docSnap) => {
-      const data = docSnap.data() as Partial<SettingsStaffRecord>;
+      const data = docSnap.data();
 
       return {
         id: docSnap.id,
@@ -474,18 +517,18 @@ export async function getStaffListForSettings(): Promise<SettingsStaffRecord[]> 
         email: cleanText(data.email),
         displayName: cleanText(
           data.displayName ||
-            (data as any).display_name ||
+            data["display_name"] ||
             data.email ||
             docSnap.id
         ),
         role: cleanRole(data.role),
         active: data.active !== false,
-        staffCode: cleanText(data.staffCode || (data as any).staff_code),
+        staffCode: cleanText(data.staffCode || data["staff_code"]),
         orderNo:
           typeof data.orderNo === "number"
             ? data.orderNo
-            : typeof (data as any).order_no === "number"
-              ? (data as any).order_no
+            : typeof data["order_no"] === "number"
+              ? data["order_no"] as number
               : 999999,
         createdAt: data.createdAt,
         updatedAt: data.updatedAt,
@@ -529,7 +572,12 @@ export async function updateStaffFromSettings(
     updatedByUid: actor.uid,
   };
 
+  const ref = doc(db, "staff", id);
+  let oldDisplayName = "";
+
   if (payload.displayName !== undefined) {
+    const oldSnap = await getDoc(ref);
+    oldDisplayName = cleanText(oldSnap.data()?.displayName);
     updatePayload.displayName = cleanText(payload.displayName);
   }
 
@@ -545,8 +593,23 @@ export async function updateStaffFromSettings(
     updatePayload.orderNo = Number(payload.orderNo || 999999);
   }
 
-  const ref = doc(db, "staff", id);
   await updateDoc(ref, updatePayload);
+  invalidateDoctorsCache();
+
+  const newDisplayName = typeof updatePayload.displayName === "string" ? updatePayload.displayName : "";
+  if (oldDisplayName && newDisplayName && oldDisplayName !== newDisplayName) {
+    const resSnap = await getDocs(
+      query(collection(db, "reservations"), where("doctors", "array-contains", oldDisplayName))
+    );
+    for (let i = 0; i < resSnap.docs.length; i += 400) {
+      const batch = writeBatch(db);
+      resSnap.docs.slice(i, i + 400).forEach((d) => {
+        const doctors = (d.data().doctors as string[] | undefined) || [];
+        batch.update(d.ref, { doctors: doctors.map((n) => (n === oldDisplayName ? newDisplayName : n)) });
+      });
+      await batch.commit();
+    }
+  }
 
   await createLog({
     action: "settings_update",
@@ -558,6 +621,35 @@ export async function updateStaffFromSettings(
   });
 
   return true;
+}
+
+export async function createStaffFromSettings(
+  params: {
+    email: string;
+    password: string;
+    displayName: string;
+    role: SettingsStaffRole;
+    staffCode?: string;
+  },
+  actor: StaffUser
+): Promise<void> {
+  assertCanManageSettings(actor);
+
+  const token = await auth.currentUser?.getIdToken();
+  const res = await fetch("/api/staff/create", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify({ ...params }),
+  });
+
+  const data = (await res.json()) as { success: boolean; message?: string };
+  if (!data.success) {
+    throw new Error(data.message || "직원 생성에 실패했습니다.");
+  }
+  invalidateDoctorsCache();
 }
 
 export async function deactivateStaffFromSettings(

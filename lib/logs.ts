@@ -8,6 +8,8 @@ import {
 } from "firebase/firestore";
 import { db } from "./firebase";
 import { StaffUser } from "./auth";
+import { cleanText } from "./stringUtils";
+import { toMillis } from "./settingsUtils";
 
 export type LogAction =
   | "login"
@@ -75,30 +77,15 @@ export type LogRecord = {
   before?: unknown;
   after?: unknown;
 
-  createdAt?: any;
+  createdAt?: unknown;
 };
 
-function cleanText(value: unknown) {
-  return String(value || "").trim();
+
+function getLogTime(value: unknown) {
+  return toMillis(value);
 }
 
-function getLogTime(value: any) {
-  try {
-    const date =
-      value && typeof value.toDate === "function"
-        ? value.toDate()
-        : value instanceof Date
-          ? value
-          : new Date(value);
-
-    const time = date.getTime();
-    return Number.isFinite(time) ? time : 0;
-  } catch {
-    return 0;
-  }
-}
-
-function mapLogDoc(id: string, data: any): LogRecord {
+function mapLogDoc(id: string, data: Record<string, unknown>): LogRecord {
   return {
     id,
 
@@ -210,29 +197,33 @@ export async function getLatestLogsByReservationIds(reservationIds: string[]) {
   const result: Record<string, LogRecord> = {};
 
   async function fetchByField(fieldName: "reservationId" | "targetId") {
+    const chunks: string[][] = [];
     for (let i = 0; i < ids.length; i += 30) {
-      const chunk = ids.slice(i, i + 30);
-
-      const q = query(collection(db, "logs"), where(fieldName, "in", chunk));
-      const snap = await getDocs(q);
-
+      chunks.push(ids.slice(i, i + 30));
+    }
+    const snaps = await Promise.all(
+      chunks.map((chunk) =>
+        getDocs(query(collection(db, "logs"), where(fieldName, "in", chunk)))
+      )
+    );
+    snaps.forEach((snap) => {
       snap.docs.forEach((docSnap) => {
         const log = mapLogDoc(docSnap.id, docSnap.data());
         const keys = [log.reservationId, log.targetId].filter(Boolean);
-
         keys.forEach((key) => {
           const prev = result[key];
-
           if (!prev || getLogTime(log.createdAt) > getLogTime(prev.createdAt)) {
             result[key] = log;
           }
         });
       });
-    }
+    });
   }
 
-  await fetchByField("reservationId");
-  await fetchByField("targetId");
+  await Promise.all([
+    fetchByField("reservationId"),
+    fetchByField("targetId"),
+  ]);
 
   return result;
 }

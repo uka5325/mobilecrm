@@ -17,6 +17,7 @@ const menuItems = [
   { href: "/timeline", label: "타임라인", icon: "📋" },
   { href: "/reservations", label: "예약관리", icon: "👥" },
   { href: "/dashboard", label: "KPI 대시보드", icon: "📊" },
+  { href: "/invoice", label: "인보이스", icon: "🧾" },
   { href: "/settings", label: "설정", icon: "⚙️" },
 ];
 
@@ -36,6 +37,10 @@ const pageInfo: Record<string, { title: string; description: string }> = {
   "/dashboard": {
     title: "KPI 대시보드",
     description: "상담회 주요 지표를 확인합니다.",
+  },
+  "/invoice": {
+    title: "인보이스",
+    description: "생성된 고객 인보이스를 조회하고 템플릿을 관리합니다.",
   },
   "/settings": {
     title: "설정",
@@ -314,7 +319,23 @@ export default function AppShell({ children }: AppShellProps) {
             실시간 운영 시스템
           </div>
 
-          <nav className="mt-8 flex flex-col gap-[7px]">
+          <div className="mt-4 flex items-center gap-2 rounded-lg bg-[#182430] px-3 py-2.5">
+            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#1d9e75] text-xs font-bold text-white">
+              {avatarText}
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="truncate text-xs font-medium text-white">{displayName}</div>
+              {roleName && <div className="truncate text-[10px] text-[#9aa7b5]">{roleName}</div>}
+            </div>
+            <button
+              onClick={handleLogout}
+              className="shrink-0 rounded-md px-2 py-1 text-[11px] text-[#9aa7b5] transition hover:bg-[#0f1923] hover:text-white active:scale-95"
+            >
+              로그아웃
+            </button>
+          </div>
+
+          <nav className="mt-5 flex flex-col gap-[7px]">
             {menuItems.map((item) => {
               const active =
                 item.href === "/"
@@ -368,14 +389,32 @@ export default function AppShell({ children }: AppShellProps) {
       </aside>
 
       <header className="bg-[#0f1923] px-5 py-5 lg:hidden">
-        <div className="flex items-center gap-4">
-          <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-[#1d9e75] text-xl text-white">
-            🏥
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-4">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-[#1d9e75] text-xl text-white">
+              🏥
+            </div>
+
+            <div>
+              <div className="text-xl font-semibold text-white">상담회 CRM</div>
+              <div className="text-xs text-[#9aa7b5]">실시간 운영 시스템</div>
+            </div>
           </div>
 
-          <div>
-            <div className="text-xl font-semibold text-white">상담회 CRM</div>
-            <div className="text-xs text-[#9aa7b5]">실시간 운영 시스템</div>
+          <div className="flex shrink-0 items-center gap-2">
+            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[#1d9e75] text-xs font-bold text-white">
+              {avatarText}
+            </div>
+            <div className="hidden sm:block">
+              <div className="text-xs font-medium text-white">{displayName}</div>
+              {roleName && <div className="text-[10px] text-[#9aa7b5]">{roleName}</div>}
+            </div>
+            <button
+              onClick={handleLogout}
+              className="rounded-lg border border-[#ffffff30] px-2.5 py-1.5 text-xs text-[#c3ccd6] transition hover:bg-[#1d9e75] hover:text-white active:scale-95"
+            >
+              로그아웃
+            </button>
           </div>
         </div>
 
@@ -390,11 +429,15 @@ export default function AppShell({ children }: AppShellProps) {
               <Link
                 key={item.href}
                 href={item.href}
-                className={`flex shrink-0 items-center gap-2 rounded-lg px-4 py-3 text-sm font-medium transition-all duration-150 ${
-                  active
-                    ? "bg-[#1d9e75] text-white shadow-sm"
-                    : "bg-[#182430] text-[#b7c1cc] hover:bg-[#203141] hover:text-white active:scale-[0.96]"
-                }`}
+                className="flex shrink-0 items-center gap-2 rounded-lg px-4 py-3 text-sm font-medium transition-all duration-150 hover:-translate-y-[1px] active:scale-[0.96]"
+                style={{
+                  backgroundColor: active ? "#123f39" : "#182430",
+                  color: active ? "#ffffff" : "#c3ccd6",
+                  border: active
+                    ? "1px solid rgba(255,255,255,0.75)"
+                    : "1px solid transparent",
+                  boxShadow: active ? "0 2px 10px rgba(0,0,0,0.12)" : "none",
+                }}
               >
                 <span>{item.icon}</span>
                 <span>{item.label}</span>
@@ -409,46 +452,13 @@ export default function AppShell({ children }: AppShellProps) {
           isTimelinePage ? "p-6 lg:p-8" : "p-6 lg:p-8"
         }`}
       >
-        <div
-          className={`flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between ${
-            isTimelinePage ? "mb-5" : "mb-6"
-          }`}
-        >
-          <div>
-            <h1 className="text-[26px] font-bold leading-tight text-[#1a1a1a]">
-              {currentPage.title}
-            </h1>
-            <p className="mt-2 text-sm leading-5 text-[#6b7280]">
-              {currentPage.description}
-            </p>
-          </div>
-
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2">
-              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[#1d9e75] text-xs font-bold text-white">
-                {avatarText}
-              </div>
-
-              <div>
-                <div className="text-sm font-medium text-[#1a1a1a]">
-                  {displayName}
-                </div>
-
-                {roleName && (
-                  <div className="mt-0.5 text-[11px] text-gray-400">
-                    {roleName}
-                  </div>
-                )}
-              </div>
-            </div>
-
-            <button
-              onClick={handleLogout}
-              className="rounded-lg border border-[#e5e7eb] bg-white px-4 py-3 text-sm text-[#1a1a1a] shadow-[0_2px_16px_rgba(0,0,0,0.06)] transition-all duration-150 hover:-translate-y-[1px] hover:bg-[#1d9e75] hover:text-white active:scale-[0.97]"
-            >
-              로그아웃
-            </button>
-          </div>
+        <div className={isTimelinePage ? "mb-5" : "mb-6"}>
+          <h1 className="text-[26px] font-bold leading-tight text-[#1a1a1a]">
+            {currentPage.title}
+          </h1>
+          <p className="mt-2 text-sm leading-5 text-[#6b7280]">
+            {currentPage.description}
+          </p>
         </div>
 
         {children}

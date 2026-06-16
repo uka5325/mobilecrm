@@ -12,6 +12,7 @@ import {
 import { db } from "./firebase";
 import type { StaffUser } from "./auth";
 import { createLog } from "./logs";
+import { cleanText } from "./stringUtils";
 
 export type InvoiceCurrency = "KRW" | "USD" | "JPY" | "CNY" | "MNT" | "VND";
 
@@ -179,9 +180,6 @@ export type SaveInvoiceTemplateParams = {
   sortOrder?: number;
 };
 
-function cleanText(value: unknown) {
-  return String(value ?? "").trim();
-}
 
 function cleanNumber(value: unknown, fallback = 0) {
   if (typeof value === "number" && Number.isFinite(value)) return value;
@@ -229,7 +227,7 @@ function sortByOrder<
   });
 }
 
-function mapCategory(id: string, data: any): InvoiceCategory {
+function mapCategory(id: string, data: Record<string, unknown>): InvoiceCategory {
   return {
     id,
     categoryId: cleanText(data.categoryId || id),
@@ -248,7 +246,7 @@ function mapCategory(id: string, data: any): InvoiceCategory {
   };
 }
 
-function mapItem(id: string, data: any): InvoiceItem {
+function mapItem(id: string, data: Record<string, unknown>): InvoiceItem {
   return {
     id,
     itemId: cleanText(data.itemId || id),
@@ -281,7 +279,7 @@ function mapItem(id: string, data: any): InvoiceItem {
   };
 }
 
-function mapSection(id: string, data: any): InvoiceTemplateSection {
+function mapSection(id: string, data: Record<string, unknown>): InvoiceTemplateSection {
   return {
     id,
     sectionId: cleanText(data.sectionId || id),
@@ -304,7 +302,7 @@ function mapSection(id: string, data: any): InvoiceTemplateSection {
   };
 }
 
-function mapTemplate(id: string, data: any): InvoiceTemplate {
+function mapTemplate(id: string, data: Record<string, unknown>): InvoiceTemplate {
   return {
     id,
     templateId: cleanText(data.templateId || id),

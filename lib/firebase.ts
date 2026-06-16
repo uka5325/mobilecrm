@@ -1,12 +1,19 @@
-import { initializeApp, getApps, getApp, FirebaseApp } from "firebase/app";
+import { initializeApp, getApps, getApp, type FirebaseApp } from "firebase/app";
 import {
+  indexedDBLocalPersistence,
   browserLocalPersistence,
+  browserSessionPersistence,
+  browserPopupRedirectResolver,
+  initializeAuth,
   getAuth,
-  Auth,
-  setPersistence,
 } from "firebase/auth";
-import { Firestore, getFirestore } from "firebase/firestore";
-import { FirebaseStorage, getStorage } from "firebase/storage";
+import {
+  initializeFirestore,
+  getFirestore,
+  persistentLocalCache,
+  persistentMultipleTabManager,
+} from "firebase/firestore";
+import { getStorage } from "firebase/storage";
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -25,12 +32,37 @@ function getFirebaseApp(): FirebaseApp | null {
 
 const app = getFirebaseApp();
 
-export const auth: Auth = app ? getAuth(app) : (null as unknown as Auth);
-export const db: Firestore = app ? getFirestore(app) : (null as unknown as Firestore);
-export const storage: FirebaseStorage = app ? getStorage(app) : (null as unknown as FirebaseStorage);
-
-if (typeof window !== "undefined" && auth) {
-  setPersistence(auth, browserLocalPersistence).catch((error) => {
-    console.error("[Firebase auth persistence error]", error);
-  });
+// Use initializeAuth with IndexedDB first so OAuth state survives
+// iOS Safari's storage partitioning across redirect cycles.
+// Falls back to localStorage then sessionStorage on older browsers.
+function createAuth() {
+  if (!app) return null as unknown as ReturnType<typeof getAuth>;
+  try {
+    return initializeAuth(app, {
+      persistence: [
+        indexedDBLocalPersistence,
+        browserLocalPersistence,
+        browserSessionPersistence,
+      ],
+      popupRedirectResolver: browserPopupRedirectResolver,
+    });
+  } catch {
+    return getAuth(app);
+  }
 }
+
+function createDb(firebaseApp: FirebaseApp) {
+  try {
+    return initializeFirestore(firebaseApp, {
+      localCache: persistentLocalCache({
+        tabManager: persistentMultipleTabManager(),
+      }),
+    });
+  } catch {
+    return getFirestore(firebaseApp);
+  }
+}
+
+export const auth = createAuth();
+export const db = app ? createDb(app) : (null as unknown as ReturnType<typeof getFirestore>);
+export const storage = app ? getStorage(app) : (null as unknown as ReturnType<typeof getStorage>);

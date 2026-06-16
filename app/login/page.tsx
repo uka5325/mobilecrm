@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { loginWithEmail } from "@/lib/auth";
+import { loginWithEmail, loginWithGoogle, resetPassword } from "@/lib/auth";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -11,7 +11,10 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
 
   const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
+  const [resetSent, setResetSent] = useState(false);
+  const [resetLoading, setResetLoading] = useState(false);
 
   async function handleLogin(e?: React.FormEvent<HTMLFormElement>) {
     if (e) e.preventDefault();
@@ -40,10 +43,39 @@ export default function LoginPage() {
       }
 
       router.push("/");
-    } catch (error) {
+    } catch {
       setErrorMessage("로그인 중 오류가 발생했습니다.");
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function handleResetPassword() {
+    setResetLoading(true);
+    setErrorMessage("");
+    const result = await resetPassword(email);
+    setResetLoading(false);
+    if (!result.success) {
+      setErrorMessage(result.message || "재설정 메일 전송에 실패했습니다.");
+    } else {
+      setResetSent(true);
+    }
+  }
+
+  async function handleGoogleLogin() {
+    setErrorMessage("");
+    setGoogleLoading(true);
+    try {
+      const result = await loginWithGoogle();
+      if (!result.success) {
+        if (result.message) setErrorMessage(result.message);
+        return;
+      }
+      router.push("/");
+    } catch {
+      setErrorMessage("Google 로그인 중 오류가 발생했습니다.");
+    } finally {
+      setGoogleLoading(false);
     }
   }
 
@@ -188,6 +220,46 @@ export default function LoginPage() {
                   {errorMessage}
                 </div>
               )}
+
+              {resetSent ? (
+                <div className="mt-3 rounded-md border border-green-200 bg-green-50 px-3 py-2 text-[13px] text-green-700">
+                  비밀번호 재설정 메일을 보냈습니다. 받은 편지함을 확인하세요.
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleResetPassword}
+                  disabled={resetLoading || loading}
+                  className="mt-2 w-full text-right text-xs text-[#9ca3af] hover:text-[#6b7280] disabled:opacity-50"
+                >
+                  {resetLoading ? "전송 중..." : "비밀번호를 잊으셨나요?"}
+                </button>
+              )}
+
+              <div className="my-5 flex items-center gap-3">
+                <div className="h-px flex-1 bg-black/8" />
+                <span className="text-xs text-[#9ca3af]">또는</span>
+                <div className="h-px flex-1 bg-black/8" />
+              </div>
+
+              <button
+                type="button"
+                onClick={handleGoogleLogin}
+                disabled={googleLoading || loading}
+                className="flex w-full items-center justify-center gap-2.5 rounded-md border border-black/10 bg-white py-[11px] text-sm font-medium text-[#1a1a1a] transition hover:bg-[#f9fafb] disabled:cursor-not-allowed disabled:opacity-60 max-[700px]:py-4 max-[700px]:text-base"
+              >
+                {googleLoading ? (
+                  <span className="h-4 w-4 animate-spin rounded-full border-2 border-gray-300 border-t-gray-600" />
+                ) : (
+                  <svg width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M17.64 9.20455C17.64 8.56636 17.5827 7.95273 17.4764 7.36364H9V10.845H13.8436C13.635 11.97 13.0009 12.9232 12.0477 13.5614V15.8195H14.9564C16.6582 14.2527 17.64 11.9455 17.64 9.20455Z" fill="#4285F4"/>
+                    <path d="M9 18C11.43 18 13.4673 17.1941 14.9564 15.8195L12.0477 13.5614C11.2418 14.1014 10.2109 14.4204 9 14.4204C6.65591 14.4204 4.67182 12.8373 3.96409 10.71H0.957275V13.0418C2.43818 15.9832 5.48182 18 9 18Z" fill="#34A853"/>
+                    <path d="M3.96409 10.71C3.78409 10.17 3.68182 9.59318 3.68182 9C3.68182 8.40682 3.78409 7.83 3.96409 7.29V4.95818H0.957275C0.347727 6.17318 0 7.54773 0 9C0 10.4523 0.347727 11.8268 0.957275 13.0418L3.96409 10.71Z" fill="#FBBC05"/>
+                    <path d="M9 3.57955C10.3214 3.57955 11.5077 4.03364 12.4405 4.92545L15.0218 2.34409C13.4632 0.891818 11.4259 0 9 0C5.48182 0 2.43818 2.01682 0.957275 4.95818L3.96409 7.29C4.67182 5.16273 6.65591 3.57955 9 3.57955Z" fill="#EA4335"/>
+                  </svg>
+                )}
+                Google로 로그인
+              </button>
             </form>
 
             <div className="mt-5 flex flex-wrap gap-[5px] max-[700px]:gap-2">

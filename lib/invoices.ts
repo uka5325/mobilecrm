@@ -1,15 +1,21 @@
 import {
+  addDoc,
   collection,
   doc,
   getDoc,
   getDocs,
+  orderBy,
+  query,
   serverTimestamp,
-  setDoc,
+  Timestamp,
   updateDoc,
+  where,
 } from "firebase/firestore";
 import { db } from "./firebase";
 import type { StaffUser } from "./auth";
-import type { ReservationRecord } from "./reservations";
+import { mapReservationDoc, type ReservationRecord } from "./reservations";
+import { cleanText } from "./stringUtils";
+import { toDate } from "./settingsUtils";
 import { createLog } from "./logs";
 import { getReservationBirthInfo } from "./reservationUtils";
 
@@ -154,10 +160,6 @@ export type InvoiceUpdatePayload = {
   status?: "draft" | "confirmed" | "void";
 };
 
-function cleanText(value: unknown) {
-  return String(value || "").trim();
-}
-
 function toNumber(value: unknown) {
   if (typeof value === "number") return value;
   const cleaned = String(value || "").replace(/[^0-9.-]/g, "");
@@ -183,56 +185,7 @@ function makeInvoiceId(reservation: ReservationRecord) {
   return `INV-${yy}${mm}${dd}-${namePart}-${birthPart}`;
 }
 
-function mapReservationDoc(id: string, data: any): ReservationRecord {
-  const doctors = Array.isArray(data.doctors) ? data.doctors : [];
-  const coordinators = Array.isArray(data.coordinators) ? data.coordinators : [];
-  const name = cleanText(data.name || data.patientName);
-
-  return {
-    id,
-    reservationId: cleanText(data.reservationId || id),
-    patientId: cleanText(data.patientId),
-
-    name,
-    patientName: name,
-    birth: cleanText(data.birth),
-    birthInput: cleanText(data.birthInput),
-    gender: cleanText(data.gender),
-    phone: cleanText(data.phone),
-    nationality: cleanText(data.nationality),
-
-    reservationDate: cleanText(data.reservationDate),
-    reservationTime: cleanText(data.reservationTime),
-
-    operationStatus: data.operationStatus || "내원전",
-    surgeryReserved: data.surgeryReserved === true,
-    surgeryReservedAt: cleanText(data.surgeryReservedAt),
-
-    depositAmount: cleanText(data.depositAmount),
-    consultArea: cleanText(data.consultArea),
-
-    doctors,
-    coordinators,
-
-    doctorStatusMap: data.doctorStatusMap || {},
-    doctorStatusMetaMap: data.doctorStatusMetaMap || {},
-
-    invoiceUrl: cleanText(data.invoiceUrl),
-    invoiceId: cleanText(data.invoiceId),
-    invoiceSheetName: cleanText(data.invoiceSheetName),
-
-    createdAt: data.createdAt,
-    createdBy: cleanText(data.createdBy),
-    createdByUid: cleanText(data.createdByUid),
-    updatedAt: data.updatedAt,
-    updatedBy: cleanText(data.updatedBy),
-    updatedByUid: cleanText(data.updatedByUid),
-
-    isDeleted: data.isDeleted === true,
-  };
-}
-
-function mapTemplate(id: string, data: any): InvoiceTemplate {
+function mapTemplate(id: string, data: Record<string, unknown>): InvoiceTemplate {
   return {
     templateId: cleanText(data.templateId || id),
     language: cleanText(data.language),
@@ -243,14 +196,17 @@ function mapTemplate(id: string, data: any): InvoiceTemplate {
     mainTitle: cleanText(data.mainTitle),
     invoiceTitle: cleanText(data.invoiceTitle),
 
-    patientInfoLabels: {
-      name: cleanText(data.patientInfoLabels?.name),
-      birth: cleanText(data.patientInfoLabels?.birth),
-      doctor: cleanText(data.patientInfoLabels?.doctor),
-      surgerySchedule: cleanText(data.patientInfoLabels?.surgerySchedule),
-      totalAmount: cleanText(data.patientInfoLabels?.totalAmount),
-      deposit: cleanText(data.patientInfoLabels?.deposit),
-    },
+    patientInfoLabels: (() => {
+      const labels = data.patientInfoLabels as Record<string, unknown> | undefined;
+      return {
+        name: cleanText(labels?.name),
+        birth: cleanText(labels?.birth),
+        doctor: cleanText(labels?.doctor),
+        surgerySchedule: cleanText(labels?.surgerySchedule),
+        totalAmount: cleanText(labels?.totalAmount),
+        deposit: cleanText(labels?.deposit),
+      };
+    })(),
 
     regularPriceLabel: cleanText(data.regularPriceLabel),
     eventPriceLabel: cleanText(data.eventPriceLabel),
@@ -262,7 +218,7 @@ function mapTemplate(id: string, data: any): InvoiceTemplate {
   };
 }
 
-function mapSection(id: string, data: any): InvoiceTemplateSection {
+function mapSection(id: string, data: Record<string, unknown>): InvoiceTemplateSection {
   return {
     sectionId: cleanText(data.sectionId || id),
     templateId: cleanText(data.templateId),
@@ -274,15 +230,15 @@ function mapSection(id: string, data: any): InvoiceTemplateSection {
     sortOrder: toNumber(data.sortOrder),
     active: data.active === true,
     lines: Array.isArray(data.lines)
-      ? data.lines.map((line: any) => ({
-          ko: cleanText(line.ko),
-          local: cleanText(line.local),
+      ? data.lines.map((line: unknown) => ({
+          ko: cleanText((line as Record<string, unknown>)?.ko),
+          local: cleanText((line as Record<string, unknown>)?.local),
         }))
       : [],
   };
 }
 
-function mapItem(id: string, data: any): InvoiceItemMaster {
+function mapItem(id: string, data: Record<string, unknown>): InvoiceItemMaster {
   return {
     itemId: cleanText(data.itemId || id),
     categoryId: cleanText(data.categoryId),
@@ -303,7 +259,7 @@ function mapItem(id: string, data: any): InvoiceItemMaster {
   };
 }
 
-function mapInvoiceDoc(id: string, data: any): InvoiceRecord {
+function mapInvoiceDoc(id: string, data: Record<string, unknown>): InvoiceRecord {
   return {
     id,
     invoiceId: cleanText(data.invoiceId || id),
@@ -324,13 +280,13 @@ function mapInvoiceDoc(id: string, data: any): InvoiceRecord {
 
     language: cleanText(data.language || "mn"),
     templateId: cleanText(data.templateId || "template_mn"),
-    templateSnapshot: data.templateSnapshot || null,
+    templateSnapshot: (data.templateSnapshot as InvoiceTemplate) || null,
     sectionsSnapshot: Array.isArray(data.sectionsSnapshot)
-      ? data.sectionsSnapshot
+      ? (data.sectionsSnapshot as InvoiceTemplateSection[])
       : [],
 
-    items: Array.isArray(data.items) ? data.items : [],
-    discounts: Array.isArray(data.discounts) ? data.discounts : [],
+    items: Array.isArray(data.items) ? (data.items as InvoiceItemSnapshot[]) : [],
+    discounts: Array.isArray(data.discounts) ? (data.discounts as InvoiceDiscount[]) : [],
 
     depositAmount: toNumber(data.depositAmount),
 
@@ -343,7 +299,7 @@ function mapInvoiceDoc(id: string, data: any): InvoiceRecord {
     memo: cleanText(data.memo),
     internalMemo: cleanText(data.internalMemo),
 
-    status: data.status || "draft",
+    status: (["draft", "confirmed", "void"].includes(String(data.status)) ? data.status : "draft") as "draft" | "confirmed" | "void",
 
     createdAt: data.createdAt,
     createdBy: cleanText(data.createdBy),
@@ -425,22 +381,63 @@ export async function getInvoiceTemplate(templateId = "template_mn") {
   return mapTemplate(snap.id, snap.data());
 }
 
-export async function getInvoiceSections(templateId = "template_mn") {
-  const snap = await getDocs(collection(db, "invoiceTemplateSections"));
+const INV_CACHE_TTL = 10 * 60 * 1000;
 
-  return snap.docs
+function getInvLocalCache<T>(key: string): T | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = localStorage.getItem(key);
+    const ts = Number(localStorage.getItem(key + "_ts") || 0);
+    if (raw && Date.now() - ts < INV_CACHE_TTL) return JSON.parse(raw) as T;
+  } catch {}
+  return null;
+}
+
+function setInvLocalCache(key: string, data: unknown) {
+  if (typeof window === "undefined") return;
+  setTimeout(() => {
+    try {
+      localStorage.setItem(key, JSON.stringify(data));
+      localStorage.setItem(key + "_ts", String(Date.now()));
+    } catch {}
+  }, 0);
+}
+
+export async function getInvoiceSections(templateId = "template_mn") {
+  const cacheKey = "crm_inv_sections_" + templateId;
+  const cached = getInvLocalCache<ReturnType<typeof mapSection>[]>(cacheKey);
+  if (cached) return cached;
+
+  const snap = await getDocs(
+    query(
+      collection(db, "invoiceTemplateSections"),
+      where("templateId", "==", templateId)
+    )
+  );
+
+  const result = snap.docs
     .map((docSnap) => mapSection(docSnap.id, docSnap.data()))
-    .filter((section) => section.templateId === templateId && section.active)
+    .filter((section) => section.active)
     .sort((a, b) => a.sortOrder - b.sortOrder);
+
+  setInvLocalCache(cacheKey, result);
+  return result;
 }
 
 export async function getInvoiceItemMasters() {
+  const cacheKey = "crm_inv_items";
+  const cached = getInvLocalCache<ReturnType<typeof mapItem>[]>(cacheKey);
+  if (cached) return cached;
+
   const snap = await getDocs(collection(db, "invoiceItems"));
 
-  return snap.docs
+  const result = snap.docs
     .map((docSnap) => mapItem(docSnap.id, docSnap.data()))
     .filter((item) => item.active)
     .sort((a, b) => a.sortOrder - b.sortOrder);
+
+  setInvLocalCache(cacheKey, result);
+  return result;
 }
 
 export async function getReservationByDocId(reservationDocId: string) {
@@ -450,16 +447,19 @@ export async function getReservationByDocId(reservationDocId: string) {
 }
 
 export async function getInvoiceByReservationDocId(reservationDocId: string) {
-  const snap = await getDocs(collection(db, "invoices"));
+  const snap = await getDocs(
+    query(
+      collection(db, "invoices"),
+      where("reservationDocId", "==", reservationDocId)
+    )
+  );
 
-  const found = snap.docs
-    .map((docSnap) => mapInvoiceDoc(docSnap.id, docSnap.data()))
-    .find(
-      (invoice) =>
-        invoice.reservationDocId === reservationDocId && !invoice.isDeleted
-    );
+  for (const docSnap of snap.docs) {
+    const inv = mapInvoiceDoc(docSnap.id, docSnap.data());
+    if (!inv.isDeleted) return inv;
+  }
 
-  return found || null;
+  return null;
 }
 
 export function buildInitialDiscounts(): InvoiceDiscount[] {
@@ -536,7 +536,6 @@ export async function createInvoiceDraftFromReservation(
 
   const birthInfo = getReservationBirthInfo(reservation);
   const invoiceId = makeInvoiceId(reservation);
-  const invoiceDocRef = doc(db, "invoices", invoiceId);
 
   const items = buildInvoiceItemsFromMasters(itemMasters);
   const discounts = buildInitialDiscounts();
@@ -593,11 +592,12 @@ export async function createInvoiceDraftFromReservation(
     isDeleted: false,
   };
 
-  await setDoc(invoiceDocRef, payload);
+  const invoiceDocRef = await addDoc(collection(db, "invoices"), payload);
+  const invoiceDocId = invoiceDocRef.id;
 
   await updateDoc(doc(db, "reservations", reservationDocId), {
     invoiceId,
-    invoiceDocId: invoiceId,
+    invoiceDocId,
     invoiceStatus: "draft",
     invoiceUpdatedAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
@@ -608,7 +608,7 @@ export async function createInvoiceDraftFromReservation(
   await createLog({
     action: "invoice_create",
     targetType: "invoice",
-    targetId: invoiceId,
+    targetId: invoiceDocId,
     patientId: reservation.patientId,
     reservationId: reservation.reservationId,
     staff,
@@ -616,13 +616,14 @@ export async function createInvoiceDraftFromReservation(
     before: null,
     after: {
       invoiceId,
+      invoiceDocId,
       templateId,
     },
   });
 
   return {
     success: true,
-    invoice: mapInvoiceDoc(invoiceId, payload),
+    invoice: mapInvoiceDoc(invoiceDocId, { ...payload, invoiceId }),
     alreadyExists: false,
   };
 }
@@ -643,6 +644,64 @@ export async function getOrCreateInvoiceDraft(
   }
 
   return createInvoiceDraftFromReservation(reservationDocId, staff, templateId);
+}
+
+export type InvoiceListFilter = {
+  startDate?: string;
+  endDate?: string;
+  status?: "draft" | "confirmed" | "void" | "";
+  doctorName?: string;
+  patientName?: string;
+};
+
+export async function getInvoices(filters?: InvoiceListFilter): Promise<InvoiceRecord[]> {
+  const now = new Date();
+  const start = filters?.startDate
+    ? new Date(filters.startDate + "T00:00:00")
+    : new Date(now.getFullYear(), now.getMonth(), 1);
+  const end = filters?.endDate
+    ? new Date(filters.endDate + "T23:59:59")
+    : now;
+
+  const q = query(
+    collection(db, "invoices"),
+    where("isDeleted", "==", false),
+    where("createdAt", ">=", Timestamp.fromDate(start)),
+    where("createdAt", "<=", Timestamp.fromDate(end)),
+    orderBy("createdAt", "desc")
+  );
+
+  const snap = await getDocs(q);
+  let records = snap.docs.map((docSnap) => mapInvoiceDoc(docSnap.id, docSnap.data()));
+
+  if (filters?.status) {
+    records = records.filter((r) => r.status === filters.status);
+  }
+
+  if (filters?.doctorName) {
+    records = records.filter((r) =>
+      r.doctors.some((d) => d.includes(filters.doctorName!))
+    );
+  }
+
+  if (filters?.patientName) {
+    const search = filters.patientName.toLowerCase();
+    records = records.filter((r) => r.patientName.toLowerCase().includes(search));
+  }
+
+  return records;
+}
+
+export async function saveInvoiceTemplateOrder(
+  templateId: string,
+  categoryOrder: string[],
+  sectionOrder: string[]
+) {
+  await updateDoc(doc(db, "invoiceTemplates", templateId), {
+    categoryOrder,
+    sectionOrder,
+    updatedAt: serverTimestamp(),
+  });
 }
 
 export async function updateInvoice(

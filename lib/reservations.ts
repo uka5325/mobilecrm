@@ -10,9 +10,11 @@ import {
   serverTimestamp,
   updateDoc,
   where,
+  writeBatch,
 } from "firebase/firestore";
 import { db } from "./firebase";
 import type { StaffUser } from "./auth";
+import { cleanText } from "./stringUtils";
 import { createLog } from "./logs";
 import { parseBirthInfo } from "./reservationUtils";
 
@@ -48,6 +50,7 @@ export type ReservationRecord = {
   reservationTime: string;
 
   operationStatus: ReservationStatus;
+  preConsStatus: string;
   surgeryReserved: boolean;
   surgeryReservedAt?: string;
 
@@ -70,6 +73,8 @@ export type ReservationRecord = {
 
   invoiceUrl: string;
   invoiceId: string;
+  invoiceDocId?: string;
+  invoiceStatus?: string;
   invoiceSheetName: string;
 
   createdAt?: unknown;
@@ -99,9 +104,6 @@ export type CreateReservationParams = {
   patientId?: string;
 };
 
-function cleanText(value: unknown) {
-  return String(value || "").trim();
-}
 
 function cleanNumber(value: unknown, fallback = 999999) {
   const num = Number(value);
@@ -150,7 +152,7 @@ function normalizeDuplicateKey(params: CreateReservationParams) {
   ].join("__");
 }
 
-function mapReservationDoc(id: string, data: any): ReservationRecord {
+export function mapReservationDoc(id: string, data: Record<string, unknown>): ReservationRecord {
   const name = cleanText(data.name || data.patientName);
 
   return {
@@ -170,6 +172,7 @@ function mapReservationDoc(id: string, data: any): ReservationRecord {
     reservationTime: cleanText(data.reservationTime),
 
     operationStatus: normalizeReservationStatus(data.operationStatus),
+    preConsStatus: cleanText(data.preConsStatus),
     surgeryReserved: data.surgeryReserved === true,
     surgeryReservedAt: cleanText(data.surgeryReservedAt),
 
@@ -178,16 +181,22 @@ function mapReservationDoc(id: string, data: any): ReservationRecord {
 
     doctors: Array.isArray(data.doctors)
       ? data.doctors.map(cleanText).filter(Boolean)
+      : typeof data.doctors === "string" && data.doctors
+      ? data.doctors.split("|").map(cleanText).filter(Boolean)
       : [],
     coordinators: Array.isArray(data.coordinators)
       ? data.coordinators.map(cleanText).filter(Boolean)
+      : typeof data.coordinators === "string" && data.coordinators
+      ? data.coordinators.split("|").map(cleanText).filter(Boolean)
       : [],
 
-    doctorStatusMap: data.doctorStatusMap || {},
-    doctorStatusMetaMap: data.doctorStatusMetaMap || {},
+    doctorStatusMap: (data.doctorStatusMap as Record<string, string>) || {},
+    doctorStatusMetaMap: (data.doctorStatusMetaMap as ReservationRecord["doctorStatusMetaMap"]) || {},
 
     invoiceUrl: cleanText(data.invoiceUrl),
     invoiceId: cleanText(data.invoiceId),
+    invoiceDocId: cleanText(data.invoiceDocId) || undefined,
+    invoiceStatus: cleanText(data.invoiceStatus) || undefined,
     invoiceSheetName: cleanText(data.invoiceSheetName),
 
     createdAt: data.createdAt,
@@ -252,6 +261,23 @@ async function hasDuplicateReservation(params: CreateReservationParams) {
     );
 }
 
+const DOCTORS_CACHE_KEY = "crm_doctors_v1";
+
+function getCachedDoctors(): DoctorOption[] | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = localStorage.getItem(DOCTORS_CACHE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch { return null; }
+}
+
+function setCachedDoctors(doctors: DoctorOption[]) {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(DOCTORS_CACHE_KEY, JSON.stringify(doctors));
+  } catch {}
+}
+
 function sortDoctors(doctors: DoctorOption[]) {
   return [...doctors].sort((a, b) => {
     return (
@@ -282,39 +308,61 @@ function makeDoctorOptionsFromReservations(
   }));
 }
 
+let _doctorsPromise: Promise<DoctorOption[]> | null = null;
+let _doctorsCachedAt = 0;
+const DOCTORS_TTL_MS = 10 * 60 * 1000;
+
 export async function getDoctors(): Promise<DoctorOption[]> {
-  const q = query(
-    collection(db, "staff"),
-    where("role", "==", "doctor"),
-    where("active", "==", true)
-  );
+  if (_doctorsPromise && Date.now() - _doctorsCachedAt < DOCTORS_TTL_MS) return _doctorsPromise;
 
-  const snap = await getDocs(q);
+  _doctorsCachedAt = Date.now();
+  _doctorsPromise = (async () => {
+    const snap = await getDocs(
+      query(collection(db, "staff"), where("role", "==", "doctor"), where("active", "==", true))
+    );
 
-  const doctors = snap.docs
-    .map((docSnap) => {
-      const data = docSnap.data();
+    const doctors = snap.docs
+      .map((docSnap) => {
+        const data = docSnap.data();
+        return {
+          uid: docSnap.id,
+          displayName: cleanText(data.displayName || data["display_name"] || data.name),
+          email: cleanText(data.email),
+          orderNo: cleanNumber(data.orderNo ?? data["order_no"]),
+          role: String(data.role || ""),
+          active: data.active,
+        };
+      })
+      .filter((d) => d.displayName && d.role === "doctor" && d.active !== false);
 
-      return {
-        uid: docSnap.id,
-        displayName: cleanText(
-          data.displayName || data.display_name || data.name
-        ),
-        email: cleanText(data.email),
-        orderNo: cleanNumber(data.orderNo ?? data.order_no),
-      };
-    })
-    .filter((doctor) => doctor.displayName);
+    setCachedDoctors(sortDoctors(doctors));
+    return sortDoctors(doctors);
+  })();
 
-  return sortDoctors(doctors);
+  return _doctorsPromise;
+}
+
+export function invalidateDoctorsCache() {
+  _doctorsPromise = null;
+  _doctorsCachedAt = 0;
 }
 
 export async function getAllReservations(): Promise<{
   reservations: ReservationRecord[];
   doctors: DoctorOption[];
 }> {
+  const fromDate = (() => {
+    const d = new Date();
+    d.setMonth(d.getMonth() - 12);
+    return d.toISOString().slice(0, 10);
+  })();
+
   const reservationSnap = await getDocs(
-    query(collection(db, "reservations"), orderBy("reservationDate", "desc"))
+    query(
+      collection(db, "reservations"),
+      where("reservationDate", ">=", fromDate),
+      orderBy("reservationDate", "desc")
+    )
   );
 
   const reservations = reservationSnap.docs
@@ -348,12 +396,13 @@ export function subscribeAllReservations(
   }) => void,
   onError?: (error: Error) => void
 ) {
-  let currentDoctors: DoctorOption[] = [];
+  let currentDoctors: DoctorOption[] = getCachedDoctors() ?? [];
   let currentReservations: ReservationRecord[] = [];
+  let reservationsReady = false;
 
   function emit() {
+    if (!reservationsReady) return;
     const fallbackDoctors = makeDoctorOptionsFromReservations(currentReservations);
-
     callback({
       reservations: currentReservations,
       doctors: currentDoctors.length ? currentDoctors : fallbackDoctors,
@@ -365,14 +414,20 @@ export function subscribeAllReservations(
       currentDoctors = loadedDoctors;
       emit();
     })
-    .catch((error) => {
-      console.error("[getDoctors error in subscribeAllReservations]", error);
-      currentDoctors = [];
-      emit();
-    });
+    .catch(() => {});
+
+  const sixMonthsAgo = (() => {
+    const d = new Date();
+    d.setMonth(d.getMonth() - 6);
+    return d.toISOString().slice(0, 10);
+  })();
 
   return onSnapshot(
-    query(collection(db, "reservations"), orderBy("reservationDate", "desc")),
+    query(
+      collection(db, "reservations"),
+      where("reservationDate", ">=", sixMonthsAgo),
+      orderBy("reservationDate", "desc")
+    ),
     (snap) => {
       currentReservations = snap.docs
         .map((docSnap) => mapReservationDoc(docSnap.id, docSnap.data()))
@@ -382,7 +437,7 @@ export function subscribeAllReservations(
           const bb = `${b.reservationDate} ${b.reservationTime} ${b.name}`;
           return aa.localeCompare(bb);
         });
-
+      reservationsReady = true;
       emit();
     },
     (error) => {
@@ -400,12 +455,13 @@ export function subscribeTimelineReservations(
   }) => void,
   onError?: (error: Error) => void
 ) {
-  let currentDoctors: DoctorOption[] = [];
+  let currentDoctors: DoctorOption[] = getCachedDoctors() ?? [];
   let currentReservations: ReservationRecord[] = [];
+  let reservationsReady = false;
 
   function emit() {
+    if (!reservationsReady) return;
     const fallbackDoctors = makeDoctorOptionsFromReservations(currentReservations);
-
     callback({
       reservations: currentReservations,
       doctors: currentDoctors.length ? currentDoctors : fallbackDoctors,
@@ -413,38 +469,38 @@ export function subscribeTimelineReservations(
   }
 
   getDoctors()
-    .then((loadedDoctors) => {
-      currentDoctors = loadedDoctors;
+    .then((doctors) => {
+      currentDoctors = doctors;
       emit();
     })
-    .catch((error) => {
-      console.error("[getDoctors error in subscribeTimelineReservations]", error);
-      currentDoctors = [];
-      emit();
-    });
+    .catch(() => {});
 
-  return onSnapshot(
+  const unsubReservations = onSnapshot(
     query(
       collection(db, "reservations"),
-      where("reservationDate", "==", date),
-      where("isDeleted", "==", false)
+      where("reservationDate", "==", date)
     ),
     (snap) => {
       currentReservations = snap.docs
         .map((docSnap) => mapReservationDoc(docSnap.id, docSnap.data()))
+        .filter((item) => !item.isDeleted)
         .sort((a, b) => {
           const aa = `${a.reservationTime} ${a.name}`;
           const bb = `${b.reservationTime} ${b.name}`;
           return aa.localeCompare(bb);
         });
-
+      reservationsReady = true;
       emit();
     },
     (error) => {
       console.error("[reservations snapshot error in subscribeTimelineReservations]", error);
+      reservationsReady = true;
+      emit();
       onError?.(error);
     }
   );
+
+  return unsubReservations;
 }
 
 export async function getTimelineReservations(date: string): Promise<{
@@ -591,12 +647,12 @@ export async function createReservation(
     isDeleted: false,
   };
 
-  await addDoc(collection(db, "patients"), patientPayload);
-
-  const reservationRef = await addDoc(
-    collection(db, "reservations"),
-    reservationPayload
-  );
+  const batch = writeBatch(db);
+  const patientRef = doc(collection(db, "patients"));
+  const reservationRef = doc(collection(db, "reservations"));
+  batch.set(patientRef, patientPayload);
+  batch.set(reservationRef, reservationPayload);
+  await batch.commit();
 
   await createLog({
     action: "reservation_create",
@@ -653,6 +709,55 @@ export async function createReservationsBatch(
   };
 }
 
+export async function updateDoctorStatus(
+  reservationDocId: string,
+  reservationId: string,
+  doctorName: string,
+  newStatus: ReservationStatus,
+  staff: StaffUser,
+  options?: { previousOperationStatus?: string }
+) {
+  const ref = doc(db, "reservations", reservationDocId);
+
+  const updateData: Record<string, unknown> = {
+    [`doctorStatusMap.${doctorName}`]: newStatus,
+    [`doctorStatusMetaMap.${doctorName}.status`]: newStatus,
+    [`doctorStatusMetaMap.${doctorName}.updatedAt`]: new Date().toISOString(),
+    [`doctorStatusMetaMap.${doctorName}.updatedBy`]: staff.displayName,
+    [`doctorStatusMetaMap.${doctorName}.updatedRole`]: staff.role,
+    updatedAt: serverTimestamp(),
+    updatedBy: staff.displayName,
+    updatedByUid: staff.uid,
+  };
+
+  if (newStatus === "원상중") {
+    // 대시보드/KPI 카운팅을 위해 전역 operationStatus도 업데이트
+    updateData.operationStatus = "원상중";
+    // 다른 doctor 카드가 이전 상태를 유지하도록 preConsStatus 저장
+    if (options?.previousOperationStatus !== undefined) {
+      updateData.preConsStatus = options.previousOperationStatus;
+    }
+  } else {
+    // 원상중 해제 시 preConsStatus 초기화
+    updateData.preConsStatus = "";
+  }
+
+  await updateDoc(ref, updateData);
+
+  await createLog({
+    action: "reservation_update",
+    targetType: "reservation",
+    targetId: reservationId,
+    reservationId,
+    staff,
+    message: `${staff.displayName}님이 ${doctorName} 원상중 상태를 변경했습니다.`,
+    before: null,
+    after: { doctorStatusMap: { [doctorName]: newStatus } },
+  });
+
+  return { success: true };
+}
+
 export async function updateReservationStatus(
   reservationDocId: string,
   reservationId: string,
@@ -663,6 +768,7 @@ export async function updateReservationStatus(
 
   await updateDoc(ref, {
     operationStatus: newStatus,
+    preConsStatus: "",
     updatedAt: serverTimestamp(),
     updatedBy: staff.displayName,
     updatedByUid: staff.uid,
