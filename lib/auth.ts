@@ -7,7 +7,7 @@ import {
   onAuthStateChanged,
   User,
 } from "firebase/auth";
-import { collection, doc, getDocs, getDoc, query, where } from "firebase/firestore";
+import { collection, doc, getDocsFromServer, getDocFromServer, query, where } from "firebase/firestore";
 import { auth, db } from "./firebase";
 
 export type StaffRole =
@@ -41,7 +41,7 @@ const ROLE_LEVEL: Record<StaffRole, number> = {
 const LOGIN_FAIL_MESSAGE = "이메일 또는 비밀번호가 올바르지 않습니다.";
 
 async function getStaffByEmail(email: string): Promise<StaffUser | null> {
-  const snap = await getDocs(
+  const snap = await getDocsFromServer(
     query(collection(db, "staff"), where("email", "==", email.toLowerCase().trim()))
   );
   if (snap.empty) return null;
@@ -153,20 +153,7 @@ export async function logout() {
 
 export async function getStaffByUid(uid: string): Promise<StaffUser | null> {
   const ref = doc(db, "staff", uid);
-  let snap;
-  for (let i = 0; i < 3; i++) {
-    try {
-      snap = await getDoc(ref);
-      break;
-    } catch (e: unknown) {
-      if ((e as { code?: string }).code === "unavailable" && i < 2) {
-        await new Promise((r) => setTimeout(r, 800 * (i + 1)));
-        continue;
-      }
-      throw e;
-    }
-  }
-  if (!snap) throw new Error("Firestore 연결 실패");
+  const snap = await getDocFromServer(ref);
 
   if (!snap.exists()) return null;
 
