@@ -72,6 +72,9 @@ export async function loginWithEmail(email: string, password: string) {
       password.trim()
     );
 
+    // Ensure the ID token is propagated to Firestore before reading
+    await credential.user.getIdToken();
+
     // Google 연동으로 UID가 바뀐 경우를 위해 이메일로도 fallback 조회
     let staff = await getStaffByUid(credential.user.uid);
     if (!staff) {
