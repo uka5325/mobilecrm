@@ -7,7 +7,7 @@ import {
   initializeAuth,
   getAuth,
 } from "firebase/auth";
-import { getFirestore } from "firebase/firestore";
+import { getFirestore, enableNetwork } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
 
 const firebaseConfig = {
@@ -44,5 +44,10 @@ function createAuth() {
 }
 
 export const auth = createAuth();
-export const db = app ? getFirestore(app) : (null as unknown as ReturnType<typeof getFirestore>);
+
+const _db = app ? getFirestore(app) : null;
+if (_db && typeof window !== "undefined") {
+  enableNetwork(_db).catch(() => {});
+}
+export const db = _db as ReturnType<typeof getFirestore>;
 export const storage = app ? getStorage(app) : (null as unknown as ReturnType<typeof getStorage>);
