@@ -7,12 +7,7 @@ import {
   initializeAuth,
   getAuth,
 } from "firebase/auth";
-import {
-  initializeFirestore,
-  getFirestore,
-  persistentLocalCache,
-  persistentMultipleTabManager,
-} from "firebase/firestore";
+import { initializeFirestore, getFirestore } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
 
 const firebaseConfig = {
@@ -53,11 +48,7 @@ function createAuth() {
 
 function createDb(firebaseApp: FirebaseApp) {
   try {
-    return initializeFirestore(firebaseApp, {
-      localCache: persistentLocalCache({
-        tabManager: persistentMultipleTabManager(),
-      }),
-    });
+    return initializeFirestore(firebaseApp, {});
   } catch {
     return getFirestore(firebaseApp);
   }
