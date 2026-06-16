@@ -68,12 +68,12 @@ export async function loginWithEmail(email: string, password: string) {
       redirect: "/",
     };
   } catch (error) {
-    if (process.env.NODE_ENV === "development") {
-      console.error("[Auth] 로그인 실패:", error);
-    }
+    const code = (error as { code?: string }).code ?? "";
+    console.error("[Auth] 로그인 실패:", code, error);
     return {
       success: false,
       message: LOGIN_FAIL_MESSAGE,
+      _debug: code,
     };
   }
 }
