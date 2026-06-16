@@ -150,7 +150,20 @@ export async function logout() {
 
 export async function getStaffByUid(uid: string): Promise<StaffUser | null> {
   const ref = doc(db, "staff", uid);
-  const snap = await getDoc(ref);
+  let snap;
+  for (let i = 0; i < 3; i++) {
+    try {
+      snap = await getDoc(ref);
+      break;
+    } catch (e: unknown) {
+      if ((e as { code?: string }).code === "unavailable" && i < 2) {
+        await new Promise((r) => setTimeout(r, 800 * (i + 1)));
+        continue;
+      }
+      throw e;
+    }
+  }
+  if (!snap) throw new Error("Firestore 연결 실패");
 
   if (!snap.exists()) return null;
 
