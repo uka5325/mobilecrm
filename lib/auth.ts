@@ -72,28 +72,21 @@ export async function loginWithEmail(email: string, password: string) {
       password.trim()
     );
 
-    // Ensure the ID token is propagated to Firestore before reading
-    await credential.user.getIdToken();
+    const idToken = await credential.user.getIdToken();
 
-    // Google 연동으로 UID가 바뀐 경우를 위해 이메일로도 fallback 조회
-    let staff = await getStaffByUid(credential.user.uid);
-    if (!staff) {
-      staff = await getStaffByEmail(email);
-    }
+    const res = await fetch("/api/verify-staff", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ idToken }),
+    });
+    const data = await res.json();
 
-    if (!staff || !staff.active) {
+    if (!data.success) {
       await signOut(auth);
-      return {
-        success: false,
-        message: LOGIN_FAIL_MESSAGE,
-      };
+      return { success: false, message: LOGIN_FAIL_MESSAGE };
     }
 
-    return {
-      success: true,
-      user: staff,
-      redirect: "/",
-    };
+    return { success: true, user: data.user, redirect: "/" };
   } catch (error) {
     const code = (error as { code?: string }).code ?? "";
     console.error("[Auth] 로그인 실패:", code, error);
