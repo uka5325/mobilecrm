@@ -1,11 +1,12 @@
-import { initializeApp, getApps } from "firebase/app";
+import { initializeApp, getApps, getApp, FirebaseApp } from "firebase/app";
 import {
   browserLocalPersistence,
   getAuth,
+  Auth,
   setPersistence,
 } from "firebase/auth";
-import { getFirestore } from "firebase/firestore";
-import { getStorage } from "firebase/storage";
+import { Firestore, getFirestore } from "firebase/firestore";
+import { FirebaseStorage, getStorage } from "firebase/storage";
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -17,16 +18,19 @@ const firebaseConfig = {
   measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID,
 };
 
-const app = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
+function getFirebaseApp(): FirebaseApp | null {
+  if (!firebaseConfig.apiKey) return null;
+  return getApps().length ? getApp() : initializeApp(firebaseConfig);
+}
 
-export const auth = getAuth(app);
+const app = getFirebaseApp();
 
-if (typeof window !== "undefined") {
+export const auth: Auth = app ? getAuth(app) : (null as unknown as Auth);
+export const db: Firestore = app ? getFirestore(app) : (null as unknown as Firestore);
+export const storage: FirebaseStorage = app ? getStorage(app) : (null as unknown as FirebaseStorage);
+
+if (typeof window !== "undefined" && auth) {
   setPersistence(auth, browserLocalPersistence).catch((error) => {
     console.error("[Firebase auth persistence error]", error);
   });
 }
-
-export const db = getFirestore(app);
-export const storage = getStorage(app);
-
