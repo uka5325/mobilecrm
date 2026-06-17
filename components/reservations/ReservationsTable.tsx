@@ -15,8 +15,8 @@ const APPT_TYPE_COLORS: Record<AppointmentType, string> = {
 type InlineForm = {
   name: string; birthInput: string; phone: string; nationality: string;
   consultArea: string; reservationDate: string; reservationTime: string;
-  coordinators: string; depositAmount: string; hospital: string;
-  appointmentType: AppointmentType; completed: boolean;
+  coordinators: string; depositAmount: string; surgeryCost: string; hospital: string;
+  appointmentType: AppointmentType;
 } | null;
 
 type Props = {
@@ -33,6 +33,7 @@ type Props = {
   onSaveEdit: (item: ReservationRecord) => void;
   onCancelEdit: () => void;
   onDelete: (item: ReservationRecord) => void;
+  onAddReservation: (item: ReservationRecord) => void;
 };
 
 export function ReservationsTable({
@@ -49,6 +50,7 @@ export function ReservationsTable({
   onSaveEdit,
   onCancelEdit,
   onDelete,
+  onAddReservation,
 }: Props) {
   const cellCls = "border-b border-gray-100 px-2 py-2";
   const inputCls = "w-full rounded-lg border border-[#dfe3e8] px-2 py-1 text-xs focus:border-[#1d9e75] focus:outline-none";
@@ -145,22 +147,6 @@ export function ReservationsTable({
             )}
           </td>
 
-          {/* 완료 */}
-          <td className={`${cellCls} text-center`}>
-            {isEditing ? (
-              <button
-                onClick={() => onFormChange((p) => p && ({ ...p, completed: !p.completed }))}
-                className={`rounded-full px-2 py-1 text-xs ${f!.completed ? "bg-emerald-100 text-emerald-700" : "bg-gray-100 text-gray-500"}`}
-              >
-                {f!.completed ? "완료" : "미완료"}
-              </button>
-            ) : (
-              <span className={`rounded-full px-2 py-1 text-xs ${item.completed ? "bg-emerald-100 text-emerald-700" : "bg-gray-100 text-gray-500"}`}>
-                {item.completed ? "완료" : "미완료"}
-              </span>
-            )}
-          </td>
-
           {/* 생년월일 */}
           <td className={cellCls}>
             {isEditing ? (
@@ -179,7 +165,7 @@ export function ReservationsTable({
             )}
           </td>
 
-          {/* 상담부위 */}
+          {/* 상담부위/수술항목 */}
           <td className={cellCls}>
             {isEditing ? (
               <input className={inputCls} value={f!.consultArea} onChange={(e) => onFormChange((p) => p && ({ ...p, consultArea: e.target.value }))} />
@@ -214,6 +200,15 @@ export function ReservationsTable({
             )}
           </td>
 
+          {/* 수술비용 */}
+          <td className={cellCls}>
+            {isEditing ? (
+              <input className={inputCls} value={f!.surgeryCost} onChange={(e) => onFormChange((p) => p && ({ ...p, surgeryCost: e.target.value }))} />
+            ) : (
+              <span className="text-gray-600">{item.surgeryCost || "—"}</span>
+            )}
+          </td>
+
           {/* 메모 */}
           <td className={`${cellCls} text-xs text-gray-500`}>
             <button onClick={() => onOpenMemo(item)} className="text-emerald-700 hover:underline">전체보기</button>
@@ -231,10 +226,11 @@ export function ReservationsTable({
                 </button>
               </div>
             ) : (
-              <>
+              <div className="flex justify-center gap-0.5">
                 <button onClick={() => onStartEdit(item)} className="px-2 py-1 text-xs text-blue-600 hover:underline">수정</button>
+                <button onClick={() => onAddReservation(item)} className="px-2 py-1 text-xs text-emerald-600 hover:underline">추가</button>
                 <button onClick={() => onDelete(item)} className="px-2 py-1 text-xs text-red-500 hover:underline">삭제</button>
-              </>
+              </div>
             )}
           </td>
         </tr>
@@ -247,25 +243,25 @@ export function ReservationsTable({
   return (
     <div className="-mx-4 sm:-mx-6 lg:-mx-8">
       <div className="overflow-x-auto border-y border-gray-100 bg-white">
-        <table className="min-w-[1400px] w-full table-fixed border-collapse text-sm">
+        <table className="min-w-[1500px] w-full table-fixed border-collapse text-sm">
           <colgroup>
-            <col className="w-[160px]" />
-            <col className="w-[140px]" />
+            <col className="w-[150px]" />
+            <col className="w-[130px]" />
             <col className="w-[80px]" />
-            <col className="w-[80px]" />
-            <col className="w-[110px]" />
+            <col className="w-[100px]" />
             <col className="w-[70px]" />
             <col className="w-[120px]" />
             <col className="w-[90px]" />
             <col className="w-[80px]" />
             <col className="w-[100px]" />
-            <col className="w-[70px]" />
             <col className="w-[100px]" />
+            <col className="w-[70px]" />
+            <col className="w-[120px]" />
           </colgroup>
 
           <thead className="bg-gray-50">
             <tr>
-              {["이름", "병원명", "유형", "완료", "생년월일", "국적", "상담부위", "담당자", "수술예약", "예약금", "메모", "관리"].map((head) => (
+              {["이름", "병원명", "유형", "생년월일", "국적", "상담부위/수술항목", "담당자", "수술예약", "예약금", "수술비용", "메모", "관리"].map((head) => (
                 <th key={head} className="border-b border-gray-200 px-4 py-3 text-left text-xs font-semibold text-gray-500">
                   {head}
                 </th>

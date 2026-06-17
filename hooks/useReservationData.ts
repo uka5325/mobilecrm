@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
+  fetchAllReservationsOnce,
   subscribeAllReservations,
   type DoctorOption,
   type ReservationRecord,
@@ -79,5 +80,16 @@ export function useReservationData(
     return () => unsubscribe();
   }, [authReady, currentUser]);
 
-  return { reservations, doctors, statusColors, loading };
+  const refresh = useCallback(async () => {
+    try {
+      const data = await fetchAllReservationsOnce();
+      setReservations(data.reservations);
+      setDoctors(data.doctors);
+      setCachedData(data.reservations, data.doctors);
+    } catch (e) {
+      console.error("[useReservationData] refresh error:", e);
+    }
+  }, []);
+
+  return { reservations, doctors, statusColors, loading, refresh };
 }

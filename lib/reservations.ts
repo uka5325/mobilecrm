@@ -70,6 +70,7 @@ export type ReservationRecord = {
   surgeryReservedAt?: string;
 
   depositAmount: string;
+  surgeryCost: string;
   consultArea: string;
 
   doctors: string[];
@@ -118,6 +119,7 @@ export type CreateReservationParams = {
   doctors?: string[];
   coordinators?: string[];
   depositAmount?: string;
+  surgeryCost?: string;
   reservationId?: string;
   patientId?: string;
 };
@@ -206,6 +208,7 @@ export function mapReservationDoc(id: string, data: Record<string, unknown>): Re
     surgeryReservedAt: cleanText(data.surgeryReservedAt),
 
     depositAmount: cleanText(data.depositAmount),
+    surgeryCost: cleanText(data.surgeryCost),
     consultArea: cleanText(data.consultArea),
 
     doctors: Array.isArray(data.doctors)
@@ -362,6 +365,45 @@ export async function getAllReservations(): Promise<{
 }
 
 const ALL_RESERVATIONS_POLL_MS = 8000;
+
+export async function fetchAllReservationsOnce(): Promise<{
+  reservations: ReservationRecord[];
+  doctors: DoctorOption[];
+}> {
+  const sixMonthsAgo = (() => {
+    const d = new Date();
+    d.setMonth(d.getMonth() - 6);
+    return d.toISOString().slice(0, 10);
+  })();
+
+  const result = await callReservationsApi("read_all", { from: sixMonthsAgo });
+  const rawReservations = (result.reservations as Record<string, unknown>[] | undefined) || [];
+  const rawDoctors = (result.doctors as Record<string, unknown>[] | undefined) || [];
+
+  const reservations = rawReservations
+    .map((r) => mapReservationDoc(String(r.id || ""), r))
+    .filter((item) => !item.isDeleted)
+    .sort((a, b) => {
+      const aa = `${a.reservationDate} ${a.reservationTime} ${a.name}`;
+      const bb = `${b.reservationDate} ${b.reservationTime} ${b.name}`;
+      return aa.localeCompare(bb);
+    });
+
+  const doctors: DoctorOption[] = rawDoctors
+    .map((d) => ({
+      uid: String(d.id || ""),
+      displayName: cleanText(d.displayName || d["display_name"] || d.name),
+      email: cleanText(d.email),
+      orderNo: cleanNumber(d.orderNo ?? d["order_no"]),
+    }))
+    .filter((d) => d.displayName)
+    .sort((a, b) => a.orderNo - b.orderNo || a.displayName.localeCompare(b.displayName));
+
+  return {
+    reservations,
+    doctors: doctors.length ? doctors : makeDoctorOptionsFromReservations(reservations),
+  };
+}
 
 export function subscribeAllReservations(
   callback: (data: {
@@ -599,6 +641,7 @@ export async function createReservation(
     surgeryReservedAt: "",
 
     depositAmount: cleanText(params.depositAmount),
+    surgeryCost: cleanText(params.surgeryCost),
     consultArea: cleanText(params.consultArea),
 
     doctors,
@@ -823,6 +866,9 @@ export type UpdateReservationParams = {
   doctors?: string[];
   coordinators?: string[];
   depositAmount?: string;
+  surgeryCost?: string;
+  currentDoctorStatusMap?: Record<string, string>;
+  currentDoctorStatusMetaMap?: ReservationRecord["doctorStatusMetaMap"];
 };
 
 export async function updateReservationFull(
@@ -851,19 +897,8 @@ export async function updateReservationFull(
     params.gender || ""
   );
 
-  // Read current reservation server-side to preserve doctor statuses
-  const readResult = await callReservationsApi("read_one", { reservationDocId });
-  const currentReservation =
-    readResult.success && readResult.reservation
-      ? mapReservationDoc(
-          String((readResult.reservation as Record<string, unknown>).id || ""),
-          readResult.reservation as Record<string, unknown>
-        )
-      : null;
-
-  const previousDoctorStatusMap = currentReservation?.doctorStatusMap || {};
-  const previousDoctorStatusMetaMap =
-    currentReservation?.doctorStatusMetaMap || {};
+  const previousDoctorStatusMap = params.currentDoctorStatusMap || {};
+  const previousDoctorStatusMetaMap = params.currentDoctorStatusMetaMap || {};
 
   const doctorStatusMap: Record<string, ReservationStatus | string> = {};
   const doctorStatusMetaMap: ReservationRecord["doctorStatusMetaMap"] = {};
@@ -897,6 +932,7 @@ export async function updateReservationFull(
 
     consultArea: cleanText(params.consultArea),
     depositAmount: cleanText(params.depositAmount),
+    surgeryCost: cleanText(params.surgeryCost),
 
     doctors,
     coordinators: Array.isArray(params.coordinators)
@@ -952,6 +988,7 @@ export async function updateReservationFull(
       doctors,
       coordinators: params.coordinators || [],
       depositAmount: cleanText(params.depositAmount),
+      surgeryCost: cleanText(params.surgeryCost),
     },
   }).catch((e) => console.warn("[updateReservationFull] log write failed:", e));
 

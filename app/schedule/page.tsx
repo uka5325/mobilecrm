@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import {
   type ReservationRecord,
   type AppointmentType,
   APPOINTMENT_TYPE_COLORS,
   subscribeAllReservations,
+  fetchAllReservationsOnce,
 } from "@/lib/reservations";
 import { todayString } from "@/lib/dateUtils";
 import { DetailDrawer } from "@/components/timeline/DetailDrawer";
@@ -66,7 +67,23 @@ function isToday(dateStr: string) {
   return dateStr === todayString();
 }
 
-const HOUR_HEIGHT = 64;
+function formatUpdatedAt(updatedAt: unknown): string {
+  if (!updatedAt) return "";
+  try {
+    const ms = typeof updatedAt === "number" ? updatedAt : Number(updatedAt);
+    if (!ms) return "";
+    const d = new Date(ms);
+    const mm = String(d.getMonth() + 1).padStart(2, "0");
+    const dd = String(d.getDate()).padStart(2, "0");
+    const hh = String(d.getHours()).padStart(2, "0");
+    const min = String(d.getMinutes()).padStart(2, "0");
+    return `${mm}/${dd} ${hh}:${min}`;
+  } catch {
+    return "";
+  }
+}
+
+const HOUR_HEIGHT = 72;
 const START_HOUR = 8;
 const END_HOUR = 22;
 const TOTAL_HOURS = END_HOUR - START_HOUR;
@@ -103,12 +120,21 @@ function useScheduleData(startDate: string, endDate: string, authReady: boolean)
     return () => unsub();
   }, [authReady]);
 
+  const refresh = useCallback(async () => {
+    try {
+      const data = await fetchAllReservationsOnce();
+      setAllReservations(data.reservations);
+    } catch (e) {
+      console.error("[useScheduleData] refresh error:", e);
+    }
+  }, []);
+
   const reservations = useMemo(
     () => allReservations.filter((r) => r.reservationDate >= startDate && r.reservationDate <= endDate),
     [allReservations, startDate, endDate]
   );
 
-  return { reservations, loading };
+  return { reservations, loading, refresh };
 }
 
 function DayCard({
@@ -124,25 +150,30 @@ function DayCard({
   const time = item.reservationTime || "";
   const minutes = timeToMinutes(time);
   const cardTop = top ?? minutesToPx(minutes);
-  const info = getBirthGenderText(item);
+  const areaLabel = item.appointmentType === "상담" ? "상담부위" : "수술항목";
+  const updatedAtStr = formatUpdatedAt(item.updatedAt);
 
   return (
     <button
       onClick={onClick}
-      className="absolute left-1 right-1 overflow-hidden rounded-lg px-2 py-1.5 text-left text-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md active:scale-[0.99]"
-      style={{ top: cardTop, height: HOUR_HEIGHT - 2, backgroundColor: color, opacity: item.completed ? 0.6 : 1 }}
+      className="absolute left-1 right-1 overflow-hidden rounded-lg px-2 py-1 text-left text-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md active:scale-[0.99] flex flex-col"
+      style={{ top: cardTop, height: HOUR_HEIGHT - 4, backgroundColor: color }}
     >
-      <div className="truncate text-[11px] font-bold leading-tight">
-        {item.name}{info ? ` · ${info}` : ""}
+      <div className="truncate text-[12px] font-bold leading-tight">
+        {item.name}
       </div>
-      {(item.hospital || time) && (
-        <div className="mt-0.5 truncate text-[10px] opacity-90">
-          {[item.hospital, time].filter(Boolean).join(" · ")}
+      <div className="mt-0.5 truncate text-[10px] opacity-90 leading-tight">
+        {[time, item.hospital].filter(Boolean).join(" · ")}
+        {item.consultArea ? ` · ${item.consultArea}` : ""}
+      </div>
+      {item.consultArea && item.hospital && time && (
+        <div className="mt-0.5 truncate text-[9px] opacity-75 leading-tight">
+          {areaLabel}: {item.consultArea}
         </div>
       )}
-      {item.consultArea && (
-        <div className="mt-0.5 truncate text-[10px] opacity-80">{item.consultArea}</div>
-      )}
+      <div className="mt-auto truncate text-[9px] opacity-60 leading-tight">
+        {[item.updatedBy, updatedAtStr].filter(Boolean).join(" · ")}
+      </div>
     </button>
   );
 }
@@ -168,6 +199,24 @@ function buildStackedPositions(items: ReservationRecord[]): { item: ReservationR
   return result;
 }
 
+function TimeColumn({ totalHeight }: { totalHeight: number }) {
+  const hours = Array.from({ length: Math.ceil(totalHeight / HOUR_HEIGHT) }, (_, i) => START_HOUR + i);
+  return (
+    <div className="flex w-16 shrink-0 flex-col border-r border-[#edf0f3] bg-white">
+      <div className="h-[48px] shrink-0 border-b border-[#edf0f3]" />
+      {hours.map((h) => (
+        <div
+          key={h}
+          className="flex items-start justify-center border-b border-[#f1f3f5] pt-1 text-xs text-gray-400"
+          style={{ height: HOUR_HEIGHT }}
+        >
+          {h < 24 ? `${String(h).padStart(2, "0")}:00` : ""}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function DayView({
   dateStr,
   reservations,
@@ -182,19 +231,12 @@ function DayView({
     return Array.from(set).sort();
   }, [reservations]);
 
-  const hours = Array.from({ length: TOTAL_HOURS }, (_, i) => START_HOUR + i);
+  const baseHeight = TOTAL_HOURS * HOUR_HEIGHT;
 
   if (hospitals.length === 0) {
     return (
       <div className="flex min-h-0 flex-1 overflow-hidden rounded-b-2xl">
-        <div className="flex w-16 shrink-0 flex-col border-r border-[#edf0f3]">
-          <div className="h-[48px] shrink-0 border-b border-[#edf0f3]" />
-          {hours.map((h) => (
-            <div key={h} className="flex items-start justify-center border-b border-[#f1f3f5] pt-1 text-xs text-gray-400" style={{ height: HOUR_HEIGHT }}>
-              {String(h).padStart(2, "0")}:00
-            </div>
-          ))}
-        </div>
+        <TimeColumn totalHeight={baseHeight} />
         <div className="flex flex-1 items-center justify-center text-sm text-gray-400 p-8">
           {dateStr} 예약이 없습니다.
         </div>
@@ -202,42 +244,43 @@ function DayView({
     );
   }
 
+  const columnData = hospitals.map((hospital) => {
+    const items = reservations.filter((r) => (r.hospital || "미지정") === hospital);
+    const positioned = buildStackedPositions(items);
+    const totalHeight = Math.max(
+      baseHeight,
+      positioned.length > 0 ? Math.max(...positioned.map((p) => p.top + HOUR_HEIGHT + 8)) : 0
+    );
+    return { hospital, items, positioned, totalHeight };
+  });
+
+  const maxTotalHeight = Math.max(...columnData.map((c) => c.totalHeight));
+
   return (
     <div className="flex min-h-0 flex-1 overflow-auto rounded-b-2xl">
-      <div className="flex w-16 shrink-0 flex-col border-r border-[#edf0f3] bg-white">
-        <div className="h-[48px] shrink-0 border-b border-[#edf0f3]" />
-        {hours.map((h) => (
-          <div key={h} className="flex items-start justify-center border-b border-[#f1f3f5] pt-1 text-xs text-gray-400" style={{ height: HOUR_HEIGHT }}>
-            {String(h).padStart(2, "0")}:00
-          </div>
-        ))}
-      </div>
+      <TimeColumn totalHeight={maxTotalHeight} />
 
       <div className="flex flex-1 overflow-x-auto">
-        {hospitals.map((hospital) => {
-          const items = reservations.filter((r) => (r.hospital || "미지정") === hospital);
-          const positioned = buildStackedPositions(items);
-          const totalHeight = Math.max(
-            TOTAL_HOURS * HOUR_HEIGHT,
-            positioned.length > 0 ? Math.max(...positioned.map((p) => p.top + HOUR_HEIGHT)) : 0
-          );
-          return (
-            <div key={hospital} className="flex flex-col border-r border-[#edf0f3]" style={{ minWidth: 200, width: `${Math.max(200, Math.floor(100 / hospitals.length))}%`, maxWidth: 320 }}>
-              <div className="flex h-[48px] shrink-0 items-center justify-center gap-2 border-b border-[#edf0f3] bg-white px-3">
-                <span className="truncate text-sm font-semibold">{hospital}</span>
-                <span className="shrink-0 text-xs text-gray-400">{items.length}건</span>
-              </div>
-              <div className="relative" style={{ height: totalHeight }}>
-                {hours.map((h) => (
-                  <div key={h} className="border-b border-[#f1f3f5]" style={{ height: HOUR_HEIGHT }} />
-                ))}
-                {positioned.map(({ item, top }) => (
-                  <DayCard key={item.id} item={item} top={top} onClick={() => onCardClick(item)} />
-                ))}
-              </div>
+        {columnData.map(({ hospital, items, positioned, totalHeight }) => (
+          <div
+            key={hospital}
+            className="flex flex-col border-r border-[#edf0f3]"
+            style={{ minWidth: 200, width: `${Math.max(200, Math.floor(100 / hospitals.length))}%`, maxWidth: 320 }}
+          >
+            <div className="flex h-[48px] shrink-0 items-center justify-center gap-2 border-b border-[#edf0f3] bg-white px-3">
+              <span className="truncate text-sm font-semibold">{hospital}</span>
+              <span className="shrink-0 text-xs text-gray-400">{items.length}건</span>
             </div>
-          );
-        })}
+            <div className="relative" style={{ height: Math.max(totalHeight, maxTotalHeight) }}>
+              {Array.from({ length: Math.ceil(maxTotalHeight / HOUR_HEIGHT) }, (_, i) => (
+                <div key={i} className="border-b border-[#f1f3f5]" style={{ height: HOUR_HEIGHT }} />
+              ))}
+              {positioned.map(({ item, top }) => (
+                <DayCard key={item.id} item={item} top={top} onClick={() => onCardClick(item)} />
+              ))}
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   );
@@ -253,28 +296,27 @@ function WeekView({
   onCardClick: (item: ReservationRecord) => void;
 }) {
   const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
-  const hours = Array.from({ length: TOTAL_HOURS }, (_, i) => START_HOUR + i);
+  const baseHeight = TOTAL_HOURS * HOUR_HEIGHT;
+
+  const dayData = days.map((day) => {
+    const dayItems = reservations.filter((r) => r.reservationDate === day);
+    const positioned = buildStackedPositions(dayItems);
+    const totalHeight = Math.max(
+      baseHeight,
+      positioned.length > 0 ? Math.max(...positioned.map((p) => p.top + HOUR_HEIGHT + 8)) : 0
+    );
+    return { day, dayItems, positioned, totalHeight };
+  });
+
+  const maxTotalHeight = Math.max(...dayData.map((d) => d.totalHeight));
 
   return (
     <div className="flex min-h-0 flex-1 overflow-auto rounded-b-2xl">
-      <div className="flex w-14 shrink-0 flex-col border-r border-[#edf0f3] bg-white">
-        <div className="h-[52px] shrink-0 border-b border-[#edf0f3]" />
-        {hours.map((h) => (
-          <div key={h} className="flex items-start justify-center border-b border-[#f1f3f5] pt-1 text-xs text-gray-400" style={{ height: HOUR_HEIGHT }}>
-            {String(h).padStart(2, "0")}
-          </div>
-        ))}
-      </div>
+      <TimeColumn totalHeight={maxTotalHeight} />
 
       <div className="flex flex-1 overflow-x-auto">
-        {days.map((day) => {
-          const dayItems = reservations.filter((r) => r.reservationDate === day);
+        {dayData.map(({ day, dayItems, positioned }) => {
           const today = isToday(day);
-          const positioned = buildStackedPositions(dayItems);
-          const totalHeight = Math.max(
-            TOTAL_HOURS * HOUR_HEIGHT,
-            positioned.length > 0 ? Math.max(...positioned.map((p) => p.top + HOUR_HEIGHT)) : 0
-          );
           return (
             <div key={day} className="flex flex-col border-r border-[#edf0f3]" style={{ minWidth: 100, flex: 1 }}>
               <div className={`flex h-[52px] shrink-0 flex-col items-center justify-center border-b border-[#edf0f3] ${today ? "bg-emerald-50" : "bg-white"}`}>
@@ -283,9 +325,9 @@ function WeekView({
                 </span>
                 <span className={`text-[10px] ${today ? "text-emerald-500" : "text-gray-400"}`}>{dayItems.length}건</span>
               </div>
-              <div className="relative" style={{ height: totalHeight }}>
-                {hours.map((h) => (
-                  <div key={h} className="border-b border-[#f1f3f5]" style={{ height: HOUR_HEIGHT }} />
+              <div className="relative" style={{ height: maxTotalHeight }}>
+                {Array.from({ length: Math.ceil(maxTotalHeight / HOUR_HEIGHT) }, (_, i) => (
+                  <div key={i} className="border-b border-[#f1f3f5]" style={{ height: HOUR_HEIGHT }} />
                 ))}
                 {positioned.map(({ item, top }) => (
                   <DayCard key={item.id} item={item} top={top} onClick={() => onCardClick(item)} />
@@ -364,7 +406,7 @@ function MonthView({
                     key={item.id}
                     onClick={(e) => { e.stopPropagation(); onCardClick(item); }}
                     className="w-full truncate rounded px-1 py-0.5 text-left text-[10px] font-semibold text-white"
-                    style={{ backgroundColor: getAppointmentColor(item.appointmentType), opacity: item.completed ? 0.7 : 1 }}
+                    style={{ backgroundColor: getAppointmentColor(item.appointmentType) }}
                   >
                     {item.reservationTime && <span className="mr-0.5 opacity-90">{item.reservationTime.slice(0, 5)}</span>}
                     {item.name}
@@ -406,7 +448,7 @@ export default function SchedulePage() {
     return { startDate: getMonthStart(baseDate), endDate: getMonthEnd(baseDate) };
   }, [viewMode, baseDate]);
 
-  const { reservations, loading } = useScheduleData(startDate, endDate, authReady);
+  const { reservations, loading, refresh } = useScheduleData(startDate, endDate, authReady);
 
   const kpi = useMemo(() => {
     const counts: Record<string, number> = { 상담: 0, 수술: 0, 치료: 0, 경과: 0 };
@@ -560,6 +602,7 @@ export default function SchedulePage() {
           currentUser={currentUser}
           onClose={() => { setDetailOpen(false); setSelectedReservation(null); }}
           onRefreshLatestLog={async () => {}}
+          onRefresh={refresh}
         />
       )}
 
@@ -569,6 +612,7 @@ export default function SchedulePage() {
           onClose={() => setNewOpen(false)}
           currentUser={currentUser}
           initialDate={baseDate}
+          onCreated={refresh}
         />
       )}
     </div>

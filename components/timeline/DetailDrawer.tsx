@@ -23,6 +23,7 @@ import { InfoTab } from "@/components/timeline/tabs/InfoTab";
 import { FilesTab } from "@/components/timeline/tabs/FilesTab";
 import { NotesTab } from "@/components/timeline/tabs/NotesTab";
 import { LogsTab } from "@/components/timeline/tabs/LogsTab";
+import { NewReservationDrawer } from "@/components/timeline/NewReservationDrawer";
 
 type DetailTab = "info" | "files" | "notes" | "logs";
 
@@ -36,9 +37,9 @@ type DetailForm = {
   reservationTime: string;
   hospital: string;
   appointmentType: AppointmentType;
-  completed: boolean;
   coordinators: string;
   depositAmount: string;
+  surgeryCost: string;
 };
 
 type Props = {
@@ -47,9 +48,10 @@ type Props = {
   currentUser: StaffUser;
   onClose: () => void;
   onRefreshLatestLog: (item: ReservationRecord) => Promise<void>;
+  onRefresh?: () => void;
 };
 
-export function DetailDrawer({ open, reservation, currentUser, onClose, onRefreshLatestLog }: Props) {
+export function DetailDrawer({ open, reservation, currentUser, onClose, onRefreshLatestLog, onRefresh }: Props) {
   const [activeTab, setActiveTab] = useState<DetailTab>("info");
   const [selectedReservation, setSelectedReservation] = useState<ReservationRecord | null>(null);
 
@@ -57,11 +59,13 @@ export function DetailDrawer({ open, reservation, currentUser, onClose, onRefres
   const [detailMessage, setDetailMessage] = useState("");
   const [detailSaving, setDetailSaving] = useState(false);
 
+  const [addReservationOpen, setAddReservationOpen] = useState(false);
+
   const [detailForm, setDetailForm] = useState<DetailForm>({
     name: "", birthInput: "", phone: "", nationality: "",
     consultArea: "", reservationDate: todayString(),
     reservationTime: "", hospital: "", appointmentType: "상담",
-    completed: false, coordinators: "", depositAmount: "",
+    coordinators: "", depositAmount: "", surgeryCost: "",
   });
 
   const [logs, setLogs] = useState<LogRecord[]>([]);
@@ -96,9 +100,9 @@ export function DetailDrawer({ open, reservation, currentUser, onClose, onRefres
       reservationTime: reservation.reservationTime || "",
       hospital: reservation.hospital || "",
       appointmentType: reservation.appointmentType || "상담",
-      completed: reservation.completed || false,
       coordinators: (reservation.coordinators || []).join(", "),
       depositAmount: reservation.depositAmount || "",
+      surgeryCost: reservation.surgeryCost || "",
     });
 
     const mounted = { current: true };
@@ -162,9 +166,11 @@ export function DetailDrawer({ open, reservation, currentUser, onClose, onRefres
           reservationTime: detailForm.reservationTime,
           hospital: detailForm.hospital,
           appointmentType: detailForm.appointmentType,
-          completed: detailForm.completed,
           coordinators: splitComma(detailForm.coordinators),
           depositAmount: detailForm.depositAmount,
+          surgeryCost: detailForm.surgeryCost,
+          currentDoctorStatusMap: selectedReservation.doctorStatusMap,
+          currentDoctorStatusMetaMap: selectedReservation.doctorStatusMetaMap,
         },
         currentUser
       );
@@ -184,9 +190,9 @@ export function DetailDrawer({ open, reservation, currentUser, onClose, onRefres
         reservationTime: detailForm.reservationTime,
         hospital: detailForm.hospital,
         appointmentType: detailForm.appointmentType,
-        completed: detailForm.completed,
         coordinators: splitComma(detailForm.coordinators),
         depositAmount: detailForm.depositAmount,
+        surgeryCost: detailForm.surgeryCost,
       };
 
       setSelectedReservation(updated);
@@ -294,7 +300,9 @@ export function DetailDrawer({ open, reservation, currentUser, onClose, onRefres
                 </div>
               )}
               {selectedReservation.consultArea && (
-                <div className="mt-0.5 text-xs text-gray-400">{selectedReservation.consultArea}</div>
+                <div className="mt-0.5 text-xs text-gray-400">
+                  {selectedReservation.appointmentType === "상담" ? "상담부위" : "수술항목"}: {selectedReservation.consultArea}
+                </div>
               )}
             </div>
             <button
@@ -305,16 +313,24 @@ export function DetailDrawer({ open, reservation, currentUser, onClose, onRefres
             </button>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            {selectedReservation.appointmentType === "상담" && (
+              <button
+                onClick={handleSurgeryToggle}
+                className={`rounded-lg border px-3 py-1.5 text-xs font-semibold transition hover:-translate-y-0.5 hover:shadow-md active:scale-95 ${
+                  selectedReservation.surgeryReserved
+                    ? "border-purple-600 bg-purple-600 text-white"
+                    : "border-purple-400 bg-white text-purple-700"
+                }`}
+              >
+                수술예약 {selectedReservation.surgeryReserved ? "✓" : "—"}
+              </button>
+            )}
             <button
-              onClick={handleSurgeryToggle}
-              className={`rounded-lg border px-3 py-1.5 text-xs font-semibold transition hover:-translate-y-0.5 hover:shadow-md active:scale-95 ${
-                selectedReservation.surgeryReserved
-                  ? "border-purple-600 bg-purple-600 text-white"
-                  : "border-purple-400 bg-white text-purple-700"
-              }`}
+              onClick={() => setAddReservationOpen(true)}
+              className="rounded-lg border border-emerald-500 bg-white px-3 py-1.5 text-xs font-semibold text-emerald-700 transition hover:-translate-y-0.5 hover:shadow-md active:scale-95"
             >
-              수술예약 {selectedReservation.surgeryReserved ? "✓" : "—"}
+              + 추가 예약
             </button>
           </div>
         </div>
@@ -387,6 +403,26 @@ export function DetailDrawer({ open, reservation, currentUser, onClose, onRefres
           )}
         </div>
       </div>
+
+      {addReservationOpen && (
+        <NewReservationDrawer
+          open={addReservationOpen}
+          onClose={() => setAddReservationOpen(false)}
+          currentUser={currentUser}
+          initialDate={selectedReservation.reservationDate}
+          initialPatient={{
+            name: selectedReservation.name,
+            birthInput: selectedReservation.birthInput || selectedReservation.birth,
+            phone: selectedReservation.phone,
+            nationality: selectedReservation.nationality,
+            patientId: selectedReservation.patientId,
+          }}
+          onCreated={() => {
+            setAddReservationOpen(false);
+            onRefresh?.();
+          }}
+        />
+      )}
     </>
   );
 }
