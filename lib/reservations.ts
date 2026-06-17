@@ -25,6 +25,17 @@ export type DoctorOption = {
   orderNo: number;
 };
 
+export type AppointmentType = "상담" | "수술" | "치료" | "경과";
+
+export const APPOINTMENT_TYPES: AppointmentType[] = ["상담", "수술", "치료", "경과"];
+
+export const APPOINTMENT_TYPE_COLORS: Record<AppointmentType, string> = {
+  상담: "#2563eb",
+  수술: "#ef4444",
+  치료: "#16a34a",
+  경과: "#f59e0b",
+};
+
 export type ReservationStatus =
   | "내원전"
   | "대기"
@@ -48,6 +59,10 @@ export type ReservationRecord = {
 
   reservationDate: string;
   reservationTime: string;
+
+  hospital: string;
+  appointmentType: AppointmentType;
+  completed: boolean;
 
   operationStatus: ReservationStatus;
   preConsStatus: string;
@@ -97,7 +112,10 @@ export type CreateReservationParams = {
   consultArea?: string;
   reservationDate: string;
   reservationTime?: string;
-  doctors: string[];
+  hospital?: string;
+  appointmentType?: AppointmentType;
+  completed?: boolean;
+  doctors?: string[];
   coordinators?: string[];
   depositAmount?: string;
   reservationId?: string;
@@ -148,8 +166,15 @@ function normalizeDuplicateKey(params: CreateReservationParams) {
     cleanText(params.reservationDate),
     cleanText(params.reservationTime),
     cleanText(params.phone).replace(/[^0-9+]/g, ""),
+    cleanText(params.hospital),
     doctors,
   ].join("__");
+}
+
+function normalizeAppointmentType(value: unknown): AppointmentType {
+  const v = cleanText(value);
+  if (v === "상담" || v === "수술" || v === "치료" || v === "경과") return v;
+  return "상담";
 }
 
 export function mapReservationDoc(id: string, data: Record<string, unknown>): ReservationRecord {
@@ -170,6 +195,10 @@ export function mapReservationDoc(id: string, data: Record<string, unknown>): Re
 
     reservationDate: cleanText(data.reservationDate),
     reservationTime: cleanText(data.reservationTime),
+
+    hospital: cleanText(data.hospital),
+    appointmentType: normalizeAppointmentType(data.appointmentType),
+    completed: data.completed === true,
 
     operationStatus: normalizeReservationStatus(data.operationStatus),
     preConsStatus: cleanText(data.preConsStatus),
@@ -544,6 +573,7 @@ export async function createReservation(
 ) {
   const name = cleanText(params.name);
   const reservationDate = cleanText(params.reservationDate);
+  const hospital = cleanText(params.hospital);
   const doctors = Array.isArray(params.doctors)
     ? params.doctors.map(cleanText).filter(Boolean)
     : [];
@@ -554,10 +584,6 @@ export async function createReservation(
 
   if (!reservationDate) {
     return { success: false, message: "예약날짜를 선택하세요." };
-  }
-
-  if (!doctors.length) {
-    return { success: false, message: "지정원장을 선택하세요." };
   }
 
   const isDuplicate = await hasDuplicateReservation(params);
@@ -618,6 +644,10 @@ export async function createReservation(
     reservationDate,
     reservationTime: cleanText(params.reservationTime),
 
+    hospital,
+    appointmentType: (params.appointmentType || "상담") as AppointmentType,
+    completed: params.completed === true,
+
     operationStatus: "내원전" as ReservationStatus,
     surgeryReserved: false,
     surgeryReservedAt: "",
@@ -667,7 +697,8 @@ export async function createReservation(
       name,
       reservationDate,
       reservationTime: cleanText(params.reservationTime),
-      doctors,
+      hospital,
+      appointmentType: params.appointmentType || "상담",
     },
   });
 
@@ -834,7 +865,10 @@ export type UpdateReservationParams = {
   consultArea?: string;
   reservationDate: string;
   reservationTime?: string;
-  doctors: string[];
+  hospital?: string;
+  appointmentType?: AppointmentType;
+  completed?: boolean;
+  doctors?: string[];
   coordinators?: string[];
   depositAmount?: string;
 };
@@ -870,10 +904,6 @@ export async function updateReservationFull(
     return { success: false, message: "예약날짜를 선택하세요." };
   }
 
-  if (!doctors.length) {
-    return { success: false, message: "지정원장을 선택하세요." };
-  }
-
   const parsedBirth = parseBirthInfo(
     params.birthInput || params.birth || "",
     params.gender || ""
@@ -904,7 +934,7 @@ export async function updateReservationFull(
     };
   });
 
-  const reservationPatch = {
+  const reservationPatch: Record<string, unknown> = {
     name,
     patientName: name,
 
@@ -916,6 +946,10 @@ export async function updateReservationFull(
 
     reservationDate,
     reservationTime: cleanText(params.reservationTime),
+
+    hospital: cleanText(params.hospital),
+    appointmentType: params.appointmentType || currentReservation?.appointmentType || "상담",
+    completed: params.completed === true,
 
     consultArea: cleanText(params.consultArea),
     depositAmount: cleanText(params.depositAmount),
@@ -961,10 +995,9 @@ export async function updateReservationFull(
     after: {
       name,
       birth: parsedBirth.birth,
-      birthInput: parsedBirth.birthInput,
-      gender: parsedBirth.gender,
-      phone: cleanText(params.phone),
-      nationality: cleanText(params.nationality),
+      hospital: cleanText(params.hospital),
+      appointmentType: params.appointmentType,
+      completed: params.completed,
       consultArea: cleanText(params.consultArea),
       reservationDate,
       reservationTime: cleanText(params.reservationTime),

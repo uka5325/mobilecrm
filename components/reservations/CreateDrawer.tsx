@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { createReservation, type DoctorOption } from "@/lib/reservations";
+import { createReservation, APPOINTMENT_TYPES, type AppointmentType } from "@/lib/reservations";
 import { parseBirthInfo } from "@/lib/reservationUtils";
 import type { StaffUser } from "@/lib/auth";
 import { todayString } from "@/lib/dateUtils";
@@ -9,7 +9,6 @@ import { todayString } from "@/lib/dateUtils";
 type Props = {
   open: boolean;
   onClose: () => void;
-  doctors: DoctorOption[];
   currentUser: StaffUser;
   initialDate?: string;
 };
@@ -22,20 +21,21 @@ const EMPTY_FORM = (date: string) => ({
   consultArea: "",
   reservationDate: date,
   reservationTime: "",
+  hospital: "",
+  appointmentType: "상담" as AppointmentType,
+  completed: false,
   coordinators: "",
   depositAmount: "",
 });
 
-export function CreateDrawer({ open, onClose, doctors, currentUser, initialDate }: Props) {
+export function CreateDrawer({ open, onClose, currentUser, initialDate }: Props) {
   const [saving, setSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
-  const [selectedDoctors, setSelectedDoctors] = useState<string[]>([]);
   const [form, setForm] = useState(EMPTY_FORM(initialDate || todayString()));
 
   useEffect(() => {
     if (open) {
       setForm(EMPTY_FORM(initialDate || todayString()));
-      setSelectedDoctors([]);
       setErrorMessage("");
       setSaving(false);
     }
@@ -43,16 +43,9 @@ export function CreateDrawer({ open, onClose, doctors, currentUser, initialDate 
 
   const birthPreview = useMemo(() => parseBirthInfo(form.birthInput), [form.birthInput]);
 
-  function toggleDoctor(name: string) {
-    setSelectedDoctors((prev) =>
-      prev.includes(name) ? prev.filter((d) => d !== name) : [...prev, name]
-    );
-  }
-
   async function handleCreate() {
     if (!form.name.trim()) { setErrorMessage("이름을 입력하세요."); return; }
     if (!form.reservationDate) { setErrorMessage("예약날짜를 선택하세요."); return; }
-    if (!selectedDoctors.length) { setErrorMessage("지정원장을 선택하세요."); return; }
 
     setSaving(true);
     setErrorMessage("");
@@ -68,7 +61,9 @@ export function CreateDrawer({ open, onClose, doctors, currentUser, initialDate 
           consultArea: form.consultArea,
           reservationDate: form.reservationDate,
           reservationTime: form.reservationTime,
-          doctors: selectedDoctors,
+          hospital: form.hospital,
+          appointmentType: form.appointmentType,
+          completed: form.completed,
           coordinators: form.coordinators.split(",").map((s) => s.trim()).filter(Boolean),
           depositAmount: form.depositAmount,
         },
@@ -151,6 +146,44 @@ export function CreateDrawer({ open, onClose, doctors, currentUser, initialDate 
             </div>
           </div>
 
+          {/* 병원명 */}
+          <div>
+            <label className="text-xs text-gray-500">병원명</label>
+            <input
+              value={form.hospital}
+              onChange={(e) => setForm((p) => ({ ...p, hospital: e.target.value }))}
+              placeholder="예: 강남성형외과"
+              className="mt-1 w-full rounded-xl border border-[#dfe3e8] px-3 py-2 text-sm transition focus:border-[#1d9e75] focus:outline-none"
+            />
+          </div>
+
+          {/* 예약 유형 */}
+          <div>
+            <label className="text-xs text-gray-500">예약 유형 *</label>
+            <div className="mt-2 flex gap-2 flex-wrap">
+              {APPOINTMENT_TYPES.map((type) => {
+                const colors: Record<string, string> = {
+                  상담: "#2563eb", 수술: "#ef4444", 치료: "#16a34a", 경과: "#f59e0b",
+                };
+                const active = form.appointmentType === type;
+                return (
+                  <button
+                    key={type}
+                    onClick={() => setForm((p) => ({ ...p, appointmentType: type }))}
+                    className="rounded-xl border px-4 py-2 text-sm font-semibold transition hover:-translate-y-0.5 active:scale-95"
+                    style={{
+                      backgroundColor: active ? colors[type] : "#f9fafb",
+                      color: active ? "#fff" : "#374151",
+                      borderColor: active ? colors[type] : "#dfe3e8",
+                    }}
+                  >
+                    {type}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
           <div>
             <label className="text-xs text-gray-500">상담부위</label>
             <input
@@ -182,31 +215,7 @@ export function CreateDrawer({ open, onClose, doctors, currentUser, initialDate 
           </div>
 
           <div>
-            <label className="text-xs text-gray-500">지정원장 *</label>
-            <div className="mt-2 flex flex-wrap gap-2">
-              {doctors.length === 0 ? (
-                <p className="text-sm text-gray-400">등록된 원장이 없습니다.</p>
-              ) : (
-                doctors.map((doctor) => {
-                  const on = selectedDoctors.includes(doctor.displayName);
-                  return (
-                    <button
-                      key={doctor.uid}
-                      onClick={() => toggleDoctor(doctor.displayName)}
-                      className={`rounded-xl border px-3 py-2 text-sm transition hover:-translate-y-0.5 hover:shadow-md active:scale-95 ${
-                        on ? "border-black bg-black text-white" : "border-[#dfe3e8] bg-white text-gray-700"
-                      }`}
-                    >
-                      {doctor.displayName}
-                    </button>
-                  );
-                })
-              )}
-            </div>
-          </div>
-
-          <div>
-            <label className="text-xs text-gray-500">담당 실장</label>
+            <label className="text-xs text-gray-500">담당자</label>
             <input
               value={form.coordinators}
               onChange={(e) => setForm((p) => ({ ...p, coordinators: e.target.value }))}
@@ -223,6 +232,19 @@ export function CreateDrawer({ open, onClose, doctors, currentUser, initialDate 
               placeholder="100,000원 / 10,000엔"
               className="mt-1 w-full rounded-xl border border-[#dfe3e8] px-3 py-2 text-sm transition focus:border-[#1d9e75] focus:outline-none"
             />
+          </div>
+
+          {/* 완료 여부 */}
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setForm((p) => ({ ...p, completed: !p.completed }))}
+              className={`flex h-6 w-11 items-center rounded-full transition-colors ${form.completed ? "bg-emerald-500" : "bg-gray-200"}`}
+            >
+              <div className={`h-5 w-5 rounded-full bg-white shadow transition-transform ${form.completed ? "translate-x-5" : "translate-x-0.5"}`} />
+            </button>
+            <label className="text-sm text-gray-700 cursor-pointer" onClick={() => setForm((p) => ({ ...p, completed: !p.completed }))}>
+              완료 처리
+            </label>
           </div>
 
           {errorMessage && (

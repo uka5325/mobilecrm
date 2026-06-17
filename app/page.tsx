@@ -234,7 +234,7 @@ export default function HomePage() {
               <div className="mb-2.5 text-[15px] font-bold text-[#1a1a1a]">빠른 실행</div>
               <div className="text-xs leading-6 text-[#6b7280]">자주 사용하는 작업으로 바로 이동할 수 있습니다.</div>
               <div className="mt-3.5 flex flex-wrap gap-2">
-                <button onClick={() => router.push("/timeline")} className="rounded-[8px] border border-[#1d9e75] bg-[#1d9e75] px-3.5 py-2.5 text-xs text-white">타임라인 열기</button>
+                <button onClick={() => router.push("/schedule")} className="rounded-[8px] border border-[#1d9e75] bg-[#1d9e75] px-3.5 py-2.5 text-xs text-white">스케줄 열기</button>
                 <button onClick={() => router.push("/reservations")} className="rounded-[8px] border border-black/10 bg-[#f9fafb] px-3.5 py-2.5 text-xs text-[#1a1a1a]">예약관리</button>
                 <button onClick={() => router.push("/dashboard")} className="rounded-[8px] border border-black/10 bg-[#f9fafb] px-3.5 py-2.5 text-xs text-[#1a1a1a]">KPI 확인</button>
               </div>
@@ -264,18 +264,15 @@ export default function HomePage() {
 
             <div className="mt-3 flex flex-col gap-2.5">
               <div className="rounded-[8px] border border-black/10 bg-[#f9fafb] p-3 text-xs leading-6 text-[#6b7280]">
-                상담 상태 변경은 타임라인에서 고객카드를 클릭하여
-                처리합니다.
+                스케줄에서 일·주·월 단위로 상담·수술·치료·경과 일정을 확인할 수 있습니다.
               </div>
 
               <div className="rounded-[8px] border border-black/10 bg-[#f9fafb] p-3 text-xs leading-6 text-[#6b7280]">
-                예약 정보 수정, 메모, 로그 확인은 고객 상세 팝업에서
-                가능합니다.
+                예약 정보 수정, 메모, 로그 확인은 예약 상세 팝업에서 가능합니다.
               </div>
 
               <div className="rounded-[8px] border border-black/10 bg-[#f9fafb] p-3 text-xs leading-6 text-[#6b7280]">
-                인보이스 생성 및 확인은 고객 상세 팝업의 인보이스 탭에서
-                진행합니다.
+                KPI 대시보드에서 병원별·유형별 통계를 확인할 수 있습니다.
               </div>
             </div>
           </div>

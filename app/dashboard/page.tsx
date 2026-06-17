@@ -5,19 +5,19 @@ import { collection, getDocs, query, where } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { todayString } from "@/lib/dateUtils";
 import {
-  type StaffDoc,
   type ReservationDoc,
   type Counter,
   cleanText,
-  getStaffDisplayName,
+  getHospital,
+  getAppointmentType,
   getReservationDate,
   getReservationTime,
   getPatientName,
   getConsultArea,
-  getDoctors,
   getManagers,
   getStatus,
   isSurgeryReserved,
+  isCompleted,
   emptyCounter,
   accumulate,
   finalizeCounter,
@@ -33,14 +33,13 @@ import { KpiTable } from "@/components/dashboard/KpiTable";
 
 export default function DashboardPage() {
   const [reservations, setReservations] = useState<ReservationDoc[]>([]);
-  const [staff, setStaff] = useState<StaffDoc[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
   const [startDate, setStartDate] = useState(todayString());
   const [endDate, setEndDate] = useState(todayString());
-  const [doctorFilter, setDoctorFilter] = useState("");
-  const [managerFilter, setManagerFilter] = useState("");
+  const [hospitalFilter, setHospitalFilter] = useState("");
+  const [apptTypeFilter, setApptTypeFilter] = useState("");
   const [areaFilter, setAreaFilter] = useState("");
 
   async function loadData() {
@@ -60,23 +59,14 @@ export default function DashboardPage() {
         where("reservationDate", "<=", normalizedEnd)
       );
 
-      const [reservationSnap, staffSnap] = await Promise.all([
-        getDocs(reservationQuery),
-        getDocs(collection(db, "staff")),
-      ]);
+      const reservationSnap = await getDocs(reservationQuery);
 
       const reservationRows = reservationSnap.docs.map((docSnap) => ({
         id: docSnap.id,
         ...(docSnap.data() as Omit<ReservationDoc, "id">),
       }));
 
-      const staffRows = staffSnap.docs.map((docSnap) => ({
-        uid: docSnap.id,
-        ...(docSnap.data() as StaffDoc),
-      }));
-
       setReservations(reservationRows);
-      setStaff(staffRows);
     } catch (err) {
       console.error(err);
       setError("대시보드 데이터를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.");
@@ -90,42 +80,26 @@ export default function DashboardPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const doctors = useMemo(() => {
-    return staff
-      .filter((item) => item.active !== false)
-      .filter((item) => cleanText(item.role).toLowerCase() === "doctor")
-      .map((item) => ({
-        name: getStaffDisplayName(item),
-        orderNo: Number(item.orderNo || item.order_no || 999999),
-      }))
-      .filter((item) => item.name)
-      .sort((a, b) => a.orderNo - b.orderNo || a.name.localeCompare(b.name));
-  }, [staff]);
-
-  const managers = useMemo(() => {
-    return staff
-      .filter((item) => item.active !== false)
-      .filter((item) =>
-        ["admin", "coordinator", "staff"].includes(cleanText(item.role).toLowerCase())
+  const hospitals = useMemo(() => {
+    return Array.from(
+      new Set(
+        reservations
+          .map(getHospital)
+          .filter(Boolean)
       )
-      .map((item) => ({
-        name: getStaffDisplayName(item),
-        orderNo: Number(item.orderNo || item.order_no || 999999),
-      }))
-      .filter((item) => item.name)
-      .sort((a, b) => a.orderNo - b.orderNo || a.name.localeCompare(b.name));
-  }, [staff]);
+    ).sort();
+  }, [reservations]);
 
   const filteredRows = useMemo(() => {
     return reservations.filter((item) => {
       const date = getReservationDate(item);
       if (date < startDate || date > endDate) return false;
-      if (doctorFilter && !getDoctors(item).includes(doctorFilter)) return false;
-      if (managerFilter && !getManagers(item).includes(managerFilter)) return false;
+      if (hospitalFilter && getHospital(item) !== hospitalFilter) return false;
+      if (apptTypeFilter && getAppointmentType(item) !== apptTypeFilter) return false;
       if (areaFilter && getConsultArea(item) !== areaFilter) return false;
       return true;
     });
-  }, [reservations, startDate, endDate, doctorFilter, managerFilter, areaFilter]);
+  }, [reservations, startDate, endDate, hospitalFilter, apptTypeFilter, areaFilter]);
 
   const areaOptions = useMemo(() => {
     return Array.from(new Set(reservations.map(getConsultArea).filter(Boolean))).sort();
@@ -133,26 +107,20 @@ export default function DashboardPage() {
 
   const dashboard = useMemo(() => {
     const summary = emptyCounter("전체");
-    const doctorMap: Record<string, Counter> = {};
-    const managerMap: Record<string, Counter> = {};
+    const hospitalMap: Record<string, Counter> = {};
+    const apptTypeMap: Record<string, Counter> = {};
     const areaMap: Record<string, Counter> = {};
-
-    doctors.forEach((doctor) => {
-      doctorMap[doctor.name] = emptyCounter(doctor.name);
-    });
 
     filteredRows.forEach((item) => {
       accumulate(summary, item);
 
-      getDoctors(item).forEach((doctorName) => {
-        if (!doctorMap[doctorName]) doctorMap[doctorName] = emptyCounter(doctorName);
-        accumulate(doctorMap[doctorName], item);
-      });
+      const hospital = getHospital(item) || "미지정";
+      if (!hospitalMap[hospital]) hospitalMap[hospital] = emptyCounter(hospital);
+      accumulate(hospitalMap[hospital], item);
 
-      getManagers(item).forEach((managerName) => {
-        if (!managerMap[managerName]) managerMap[managerName] = emptyCounter(managerName);
-        accumulate(managerMap[managerName], item);
-      });
+      const apptType = getAppointmentType(item);
+      if (!apptTypeMap[apptType]) apptTypeMap[apptType] = emptyCounter(apptType);
+      accumulate(apptTypeMap[apptType], item);
 
       const area = getConsultArea(item);
       if (!areaMap[area]) areaMap[area] = emptyCounter(area);
@@ -161,27 +129,23 @@ export default function DashboardPage() {
 
     const finalizedSummary = finalizeCounter(summary);
 
-    const doctorRows = Object.values(doctorMap)
-      .filter((item) => item.total > 0 || doctors.some((d) => d.name === item.name))
-      .map((item) => finalizeCounter(item))
-      .sort((a, b) => {
-        const ao = doctors.find((d) => d.name === a.name)?.orderNo || 999999;
-        const bo = doctors.find((d) => d.name === b.name)?.orderNo || 999999;
-        return ao - bo || cleanText(a.name).localeCompare(cleanText(b.name));
-      });
-
-    const managerRows = Object.values(managerMap)
+    const hospitalRows = Object.values(hospitalMap)
       .filter((item) => item.total > 0)
       .map((item) => finalizeCounter(item))
       .sort((a, b) => b.total - a.total || cleanText(a.name).localeCompare(cleanText(b.name)));
+
+    const apptTypeRows = (["상담", "수술", "치료", "경과"] as const).map((type) => {
+      const counter = apptTypeMap[type] || emptyCounter(type);
+      return finalizeCounter(counter, summary.total);
+    });
 
     const areaRows = Object.values(areaMap)
       .filter((item) => item.total > 0)
       .map((item) => finalizeCounter(item, summary.total))
       .sort((a, b) => b.total - a.total || cleanText(a.name).localeCompare(cleanText(b.name)));
 
-    return { summary: finalizedSummary, doctorRows, managerRows, areaRows };
-  }, [filteredRows, doctors]);
+    return { summary: finalizedSummary, hospitalRows, apptTypeRows, areaRows };
+  }, [filteredRows]);
 
   function handleQuickRange(type: "today" | "week" | "month" | "last7" | "last30") {
     const range = setQuickRange(type);
@@ -191,12 +155,19 @@ export default function DashboardPage() {
   }
 
   function resetFilters() {
-    setDoctorFilter("");
-    setManagerFilter("");
+    setHospitalFilter("");
+    setApptTypeFilter("");
     setAreaFilter("");
   }
 
   const rangeText = startDate === endDate ? `${startDate} 기준` : `${startDate} ~ ${endDate}`;
+
+  const APPT_TYPE_COLORS: Record<string, string> = {
+    상담: "#2563eb",
+    수술: "#ef4444",
+    치료: "#16a34a",
+    경과: "#f59e0b",
+  };
 
   return (
     <div className="space-y-5">
@@ -223,30 +194,31 @@ export default function DashboardPage() {
           </div>
 
           <div>
-            <label className="mb-1 block text-xs text-gray-500">원장님</label>
+            <label className="mb-1 block text-xs text-gray-500">병원</label>
             <select
-              value={doctorFilter}
-              onChange={(e) => setDoctorFilter(e.target.value)}
+              value={hospitalFilter}
+              onChange={(e) => setHospitalFilter(e.target.value)}
               className="h-10 w-full rounded-xl border border-[#dfe3e8] bg-white px-3 text-sm outline-none transition focus:border-[#1d9e75] focus:ring-4 focus:ring-emerald-100"
             >
-              <option value="">전체 원장</option>
-              {doctors.map((doctor) => (
-                <option key={doctor.name} value={doctor.name}>{doctor.name}</option>
+              <option value="">전체 병원</option>
+              {hospitals.map((h) => (
+                <option key={h} value={h}>{h}</option>
               ))}
             </select>
           </div>
 
           <div>
-            <label className="mb-1 block text-xs text-gray-500">실장</label>
+            <label className="mb-1 block text-xs text-gray-500">예약 유형</label>
             <select
-              value={managerFilter}
-              onChange={(e) => setManagerFilter(e.target.value)}
+              value={apptTypeFilter}
+              onChange={(e) => setApptTypeFilter(e.target.value)}
               className="h-10 w-full rounded-xl border border-[#dfe3e8] bg-white px-3 text-sm outline-none transition focus:border-[#1d9e75] focus:ring-4 focus:ring-emerald-100"
             >
-              <option value="">전체 실장</option>
-              {managers.map((manager) => (
-                <option key={manager.name} value={manager.name}>{manager.name}</option>
-              ))}
+              <option value="">전체 유형</option>
+              <option value="상담">상담</option>
+              <option value="수술">수술</option>
+              <option value="치료">치료</option>
+              <option value="경과">경과</option>
             </select>
           </div>
 
@@ -291,19 +263,43 @@ export default function DashboardPage() {
         </div>
 
         <div className="mt-3 text-xs text-gray-400">
-          {error ? error : `Firestore 집계 모드 · 표시 ${filteredRows.length.toLocaleString("ko-KR")}건`}
+          {error ? error : `집계 모드 · 표시 ${filteredRows.length.toLocaleString("ko-KR")}건`}
         </div>
       </section>
 
+      {/* KPI 카드 */}
       <section className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-6">
         <KpiCard label="전체예약" value={dashboard.summary.total.toLocaleString("ko-KR")} sub={rangeText} />
         <KpiCard label="실제내원" value={dashboard.summary.visited.toLocaleString("ko-KR")} sub={`내원율 ${pctText(dashboard.summary.visitRate)}`} />
-        <KpiCard label="귀가" value={dashboard.summary.left.toLocaleString("ko-KR")} sub="상담 종료" />
+        <KpiCard label="완료" value={dashboard.summary.completedCount.toLocaleString("ko-KR")} sub="완료 처리된 건" />
         <KpiCard label="부도" value={dashboard.summary.noShow.toLocaleString("ko-KR")} sub={`부도율 ${pctText(dashboard.summary.noShowRate)}`} />
         <KpiCard label="수술예약" value={dashboard.summary.surgery.toLocaleString("ko-KR")} sub={`전환율 ${pctText(dashboard.summary.surgeryRate)}`} />
         <KpiCard label="예약금 합계" depositLines={formatDepositMap(dashboard.summary.depositByCurrency)} sub="통화별 분리 집계" compact />
       </section>
 
+      {/* 유형별 현황 */}
+      <section className="grid grid-cols-2 gap-3 md:grid-cols-4">
+        {(["상담", "수술", "치료", "경과"] as const).map((type) => {
+          const row = dashboard.apptTypeRows.find((r) => r.name === type);
+          const count = row?.total || 0;
+          const completed = row?.completedCount || 0;
+          return (
+            <div
+              key={type}
+              className="rounded-[14px] border border-black/5 bg-white p-4 shadow-[0_2px_10px_rgba(0,0,0,0.04)]"
+              style={{ borderLeftWidth: 4, borderLeftColor: APPT_TYPE_COLORS[type] }}
+            >
+              <div className="text-xs font-bold" style={{ color: APPT_TYPE_COLORS[type] }}>{type}</div>
+              <div className="mt-1 text-[24px] font-bold text-gray-900">{count.toLocaleString("ko-KR")}</div>
+              <div className="mt-0.5 text-xs text-gray-500">
+                완료 {completed}건 · 미완료 {count - completed}건
+              </div>
+            </div>
+          );
+        })}
+      </section>
+
+      {/* 핵심 현황 */}
       <Panel title="핵심 현황">
         <div className="space-y-4">
           <BarStatusRow label="전체예약" count={dashboard.summary.total} percentage={100} />
@@ -325,35 +321,21 @@ export default function DashboardPage() {
         </div>
       </Panel>
 
-      <section className="grid grid-cols-1 gap-5 xl:grid-cols-2">
-        <Panel title="원장님별 KPI">
-          <KpiTable
-            headers={["원장님", "상담", "내원", "수술예약", "전환율", "예약금"]}
-            rows={dashboard.doctorRows.map((row) => [
-              row.name || "미지정",
-              row.total.toLocaleString("ko-KR"),
-              row.visited.toLocaleString("ko-KR"),
-              row.surgery.toLocaleString("ko-KR"),
-              pctText(row.surgeryRate),
-              formatDepositMap(row.depositByCurrency).join(" / "),
-            ])}
-          />
-        </Panel>
-
-        <Panel title="담당 실장별 KPI">
-          <KpiTable
-            headers={["담당자", "배정", "내원", "수술예약", "전환율", "예약금"]}
-            rows={dashboard.managerRows.map((row) => [
-              row.name || "미지정",
-              row.total.toLocaleString("ko-KR"),
-              row.visited.toLocaleString("ko-KR"),
-              row.surgery.toLocaleString("ko-KR"),
-              pctText(row.surgeryRate),
-              formatDepositMap(row.depositByCurrency).join(" / "),
-            ])}
-          />
-        </Panel>
-      </section>
+      {/* 병원별 KPI */}
+      <Panel title="병원별 KPI">
+        <KpiTable
+          headers={["병원명", "상담", "내원", "수술예약", "완료", "전환율", "예약금"]}
+          rows={dashboard.hospitalRows.map((row) => [
+            row.name || "미지정",
+            row.total.toLocaleString("ko-KR"),
+            row.visited.toLocaleString("ko-KR"),
+            row.surgery.toLocaleString("ko-KR"),
+            row.completedCount.toLocaleString("ko-KR"),
+            pctText(row.surgeryRate),
+            formatDepositMap(row.depositByCurrency).join(" / "),
+          ])}
+        />
+      </Panel>
 
       <Panel title="상담부위별 KPI">
         <KpiTable
@@ -374,7 +356,7 @@ export default function DashboardPage() {
         rightText={`${filteredRows.length.toLocaleString("ko-KR")}건 표시`}
       >
         <KpiTable
-          headers={["날짜", "시간", "이름", "원장", "상담부위", "담당자", "상태", "수술예약", "예약금"]}
+          headers={["날짜", "시간", "이름", "병원", "유형", "완료", "상담부위", "담당자", "상태", "수술예약", "예약금"]}
           rows={filteredRows
             .slice()
             .sort((a, b) => {
@@ -387,7 +369,9 @@ export default function DashboardPage() {
               getReservationDate(row) || "-",
               getReservationTime(row) || "-",
               getPatientName(row),
-              getDoctors(row).join(", ") || "-",
+              getHospital(row) || "-",
+              getAppointmentType(row),
+              isCompleted(row) ? "완료" : "미완료",
               getConsultArea(row),
               getManagers(row).join(", ") || "-",
               getStatus(row),
