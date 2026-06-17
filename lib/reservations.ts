@@ -3,7 +3,6 @@ import {
   doc,
   getDoc,
   getDocs,
-  onSnapshot,
   orderBy,
   query,
   where,
@@ -428,6 +427,8 @@ export async function getAllReservations(): Promise<{
   };
 }
 
+const ALL_RESERVATIONS_POLL_MS = 8000;
+
 export function subscribeAllReservations(
   callback: (data: {
     reservations: ReservationRecord[];
@@ -435,40 +436,32 @@ export function subscribeAllReservations(
   }) => void,
   onError?: (error: Error) => void
 ) {
-  let currentDoctors: DoctorOption[] = getCachedDoctors() ?? [];
-  let currentReservations: ReservationRecord[] = [];
-  let reservationsReady = false;
+  let cancelled = false;
 
-  function emit() {
-    if (!reservationsReady) return;
-    const fallbackDoctors = makeDoctorOptionsFromReservations(currentReservations);
-    callback({
-      reservations: currentReservations,
-      doctors: currentDoctors.length ? currentDoctors : fallbackDoctors,
-    });
-  }
+  async function fetchAndEmit() {
+    if (cancelled) return;
 
-  getDoctors()
-    .then((loadedDoctors) => {
-      currentDoctors = loadedDoctors;
-      emit();
-    })
-    .catch(() => {});
+    const sixMonthsAgo = (() => {
+      const d = new Date();
+      d.setMonth(d.getMonth() - 6);
+      return d.toISOString().slice(0, 10);
+    })();
 
-  const sixMonthsAgo = (() => {
-    const d = new Date();
-    d.setMonth(d.getMonth() - 6);
-    return d.toISOString().slice(0, 10);
-  })();
+    try {
+      const [snap, doctors] = await Promise.all([
+        getDocs(
+          query(
+            collection(db, "reservations"),
+            where("reservationDate", ">=", sixMonthsAgo),
+            orderBy("reservationDate", "desc")
+          )
+        ),
+        getDoctors().catch(() => null as DoctorOption[] | null),
+      ]);
 
-  return onSnapshot(
-    query(
-      collection(db, "reservations"),
-      where("reservationDate", ">=", sixMonthsAgo),
-      orderBy("reservationDate", "desc")
-    ),
-    (snap) => {
-      currentReservations = snap.docs
+      if (cancelled) return;
+
+      const reservations = snap.docs
         .map((docSnap) => mapReservationDoc(docSnap.id, docSnap.data()))
         .filter((item) => !item.isDeleted)
         .sort((a, b) => {
@@ -476,15 +469,30 @@ export function subscribeAllReservations(
           const bb = `${b.reservationDate} ${b.reservationTime} ${b.name}`;
           return aa.localeCompare(bb);
         });
-      reservationsReady = true;
-      emit();
-    },
-    (error) => {
-      console.error("[reservations snapshot error in subscribeAllReservations]", error);
-      onError?.(error);
+
+      const fallbackDoctors = makeDoctorOptionsFromReservations(reservations);
+      callback({
+        reservations,
+        doctors: doctors?.length ? doctors : fallbackDoctors,
+      });
+    } catch (error) {
+      if (!cancelled) {
+        console.error("[subscribeAllReservations error]", error);
+        onError?.(error as Error);
+      }
     }
-  );
+  }
+
+  fetchAndEmit();
+  const intervalId = setInterval(fetchAndEmit, ALL_RESERVATIONS_POLL_MS);
+
+  return () => {
+    cancelled = true;
+    clearInterval(intervalId);
+  };
 }
+
+const TIMELINE_POLL_MS = 6000;
 
 export function subscribeTimelineReservations(
   date: string,
@@ -494,33 +502,25 @@ export function subscribeTimelineReservations(
   }) => void,
   onError?: (error: Error) => void
 ) {
-  let currentDoctors: DoctorOption[] = getCachedDoctors() ?? [];
-  let currentReservations: ReservationRecord[] = [];
-  let reservationsReady = false;
+  let cancelled = false;
 
-  function emit() {
-    if (!reservationsReady) return;
-    const fallbackDoctors = makeDoctorOptionsFromReservations(currentReservations);
-    callback({
-      reservations: currentReservations,
-      doctors: currentDoctors.length ? currentDoctors : fallbackDoctors,
-    });
-  }
+  async function fetchAndEmit() {
+    if (cancelled) return;
 
-  getDoctors()
-    .then((doctors) => {
-      currentDoctors = doctors;
-      emit();
-    })
-    .catch(() => {});
+    try {
+      const [snap, doctors] = await Promise.all([
+        getDocs(
+          query(
+            collection(db, "reservations"),
+            where("reservationDate", "==", date)
+          )
+        ),
+        getDoctors().catch(() => null as DoctorOption[] | null),
+      ]);
 
-  const unsubReservations = onSnapshot(
-    query(
-      collection(db, "reservations"),
-      where("reservationDate", "==", date)
-    ),
-    (snap) => {
-      currentReservations = snap.docs
+      if (cancelled) return;
+
+      const reservations = snap.docs
         .map((docSnap) => mapReservationDoc(docSnap.id, docSnap.data()))
         .filter((item) => !item.isDeleted)
         .sort((a, b) => {
@@ -528,18 +528,27 @@ export function subscribeTimelineReservations(
           const bb = `${b.reservationTime} ${b.name}`;
           return aa.localeCompare(bb);
         });
-      reservationsReady = true;
-      emit();
-    },
-    (error) => {
-      console.error("[reservations snapshot error in subscribeTimelineReservations]", error);
-      reservationsReady = true;
-      emit();
-      onError?.(error);
-    }
-  );
 
-  return unsubReservations;
+      const fallbackDoctors = makeDoctorOptionsFromReservations(reservations);
+      callback({
+        reservations,
+        doctors: doctors?.length ? doctors : fallbackDoctors,
+      });
+    } catch (error) {
+      if (!cancelled) {
+        console.error("[subscribeTimelineReservations error]", error);
+        onError?.(error as Error);
+      }
+    }
+  }
+
+  fetchAndEmit();
+  const intervalId = setInterval(fetchAndEmit, TIMELINE_POLL_MS);
+
+  return () => {
+    cancelled = true;
+    clearInterval(intervalId);
+  };
 }
 
 export async function getTimelineReservations(date: string): Promise<{
