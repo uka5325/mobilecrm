@@ -88,11 +88,12 @@ function getAppointmentColor(type: AppointmentType | string) {
   return APPOINTMENT_TYPE_COLORS[type as AppointmentType] || "#6b7280";
 }
 
-function useScheduleData(startDate: string, endDate: string) {
+function useScheduleData(startDate: string, endDate: string, authReady: boolean) {
   const [reservations, setReservations] = useState<ReservationRecord[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (!authReady) return;
     setLoading(true);
     const q = query(
       collection(db, "reservations"),
@@ -110,7 +111,7 @@ function useScheduleData(startDate: string, endDate: string) {
     }, () => setLoading(false));
 
     return () => unsub();
-  }, [startDate, endDate]);
+  }, [startDate, endDate, authReady]);
 
   return { reservations, loading };
 }
@@ -388,7 +389,7 @@ function MonthView({
 }
 
 export default function SchedulePage() {
-  const { currentUser } = useCurrentUser();
+  const { currentUser, authReady } = useCurrentUser();
   const [viewMode, setViewMode] = useState<ViewMode>("week");
   const [baseDate, setBaseDate] = useState(todayString());
   const [detailOpen, setDetailOpen] = useState(false);
@@ -410,7 +411,7 @@ export default function SchedulePage() {
     return { startDate: getMonthStart(baseDate), endDate: getMonthEnd(baseDate) };
   }, [viewMode, baseDate]);
 
-  const { reservations, loading } = useScheduleData(startDate, endDate);
+  const { reservations, loading } = useScheduleData(startDate, endDate, authReady);
 
   const kpi = useMemo(() => {
     const counts: Record<string, number> = { 상담: 0, 수술: 0, 치료: 0, 경과: 0 };
