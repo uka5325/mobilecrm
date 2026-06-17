@@ -153,7 +153,7 @@ function useScheduleData(startDate: string, endDate: string, authReady: boolean)
 
 // ─── DayCard ─────────────────────────────────────────────────────────────────
 function DayCard({ item, top, onClick }: { item: ReservationRecord; top: number; onClick: () => void }) {
-  const color = getAppointmentColor(item.appointmentType);
+  const color = item.completed ? "#9ca3af" : getAppointmentColor(item.appointmentType);
   const time = item.reservationTime || "";
   const areaLabel = item.appointmentType === "상담" ? "상담부위" : "수술항목";
   const logText = formatLog(item.updatedBy, item.updatedAt);
@@ -162,7 +162,7 @@ function DayCard({ item, top, onClick }: { item: ReservationRecord; top: number;
     <button
       onClick={onClick}
       className="absolute left-1 right-1 flex flex-col overflow-hidden rounded-md px-2 py-1 text-left text-white shadow-sm transition hover:brightness-110 active:scale-[0.99]"
-      style={{ top, height: CARD_HEIGHT, backgroundColor: color }}
+      style={{ top, height: CARD_HEIGHT, backgroundColor: color, opacity: item.completed ? 0.75 : 1 }}
     >
       {/* 이름 */}
       <div className="truncate text-[11px] font-bold leading-tight">{item.name}</div>
@@ -328,13 +328,13 @@ function DayView({
 
 // ─── WeekDayCard (compact for week view) ─────────────────────────────────────
 function WeekDayCard({ item, top, onClick }: { item: ReservationRecord; top: number; onClick: () => void }) {
-  const color = getAppointmentColor(item.appointmentType);
+  const color = item.completed ? "#9ca3af" : getAppointmentColor(item.appointmentType);
   const time = item.reservationTime ? item.reservationTime.slice(0, 5) : "";
   return (
     <button
       onClick={onClick}
       className="absolute left-0.5 right-0.5 overflow-hidden rounded px-1 text-left text-white shadow-sm transition hover:brightness-110 active:scale-[0.99]"
-      style={{ top, height: WEEK_CARD_H, backgroundColor: color }}
+      style={{ top, height: WEEK_CARD_H, backgroundColor: color, opacity: item.completed ? 0.75 : 1 }}
       title={[item.name, time, item.hospital, item.consultArea].filter(Boolean).join(" · ")}
     >
       <div className="truncate text-[10px] font-semibold leading-tight">
@@ -489,7 +489,7 @@ function MonthView({
                     key={item.id}
                     onClick={(e) => { e.stopPropagation(); onCardClick(item); }}
                     className="w-full truncate rounded px-1 py-0.5 text-left text-[10px] font-semibold text-white"
-                    style={{ backgroundColor: getAppointmentColor(item.appointmentType) }}
+                    style={{ backgroundColor: item.completed ? "#9ca3af" : getAppointmentColor(item.appointmentType), opacity: item.completed ? 0.75 : 1 }}
                   >
                     {item.reservationTime && <span className="mr-0.5 opacity-90">{item.reservationTime.slice(0, 5)}</span>}
                     {item.name}

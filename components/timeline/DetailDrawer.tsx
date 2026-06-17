@@ -24,6 +24,7 @@ import { FilesTab } from "@/components/timeline/tabs/FilesTab";
 import { NotesTab } from "@/components/timeline/tabs/NotesTab";
 import { LogsTab } from "@/components/timeline/tabs/LogsTab";
 import { NewReservationDrawer } from "@/components/timeline/NewReservationDrawer";
+import { CreateDrawer } from "@/components/reservations/CreateDrawer";
 
 type DetailTab = "info" | "files" | "notes" | "logs";
 
@@ -40,6 +41,7 @@ type DetailForm = {
   coordinators: string;
   depositAmount: string;
   surgeryCost: string;
+  completed: boolean;
 };
 
 type Props = {
@@ -65,7 +67,7 @@ export function DetailDrawer({ open, reservation, currentUser, onClose, onRefres
     name: "", birthInput: "", phone: "", nationality: "",
     consultArea: "", reservationDate: todayString(),
     reservationTime: "", hospital: "", appointmentType: "상담",
-    coordinators: "", depositAmount: "", surgeryCost: "",
+    coordinators: "", depositAmount: "", surgeryCost: "", completed: false,
   });
 
   const [logs, setLogs] = useState<LogRecord[]>([]);
@@ -103,6 +105,7 @@ export function DetailDrawer({ open, reservation, currentUser, onClose, onRefres
       coordinators: (reservation.coordinators || []).join(", "),
       depositAmount: reservation.depositAmount || "",
       surgeryCost: reservation.surgeryCost || "",
+      completed: reservation.completed === true,
     });
 
     const mounted = { current: true };
@@ -169,6 +172,7 @@ export function DetailDrawer({ open, reservation, currentUser, onClose, onRefres
           coordinators: splitComma(detailForm.coordinators),
           depositAmount: detailForm.depositAmount,
           surgeryCost: detailForm.surgeryCost,
+          completed: detailForm.completed,
           currentDoctorStatusMap: selectedReservation.doctorStatusMap,
           currentDoctorStatusMetaMap: selectedReservation.doctorStatusMetaMap,
         },
@@ -193,6 +197,7 @@ export function DetailDrawer({ open, reservation, currentUser, onClose, onRefres
         coordinators: splitComma(detailForm.coordinators),
         depositAmount: detailForm.depositAmount,
         surgeryCost: detailForm.surgeryCost,
+        completed: detailForm.completed,
       };
 
       setSelectedReservation(updated);
@@ -278,6 +283,16 @@ export function DetailDrawer({ open, reservation, currentUser, onClose, onRefres
   }
 
 
+  // Stable reference — only changes when patient switches, prevents form reset on parent re-render
+  const addReservationPatient = useMemo(() => !selectedReservation ? undefined : {
+    name: selectedReservation.name,
+    birthInput: selectedReservation.birthInput || selectedReservation.birth,
+    phone: selectedReservation.phone,
+    nationality: selectedReservation.nationality,
+    patientId: selectedReservation.patientId,
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedReservation?.patientId]);
+
   if (!open || !selectedReservation) return null;
 
   const birthGenderText = getBirthGenderText(selectedReservation);
@@ -314,6 +329,16 @@ export function DetailDrawer({ open, reservation, currentUser, onClose, onRefres
           </div>
 
           <div className="flex items-center gap-2 flex-wrap">
+            <button
+              onClick={() => setDetailForm((p) => ({ ...p, completed: !p.completed }))}
+              className={`rounded-lg border px-3 py-1.5 text-xs font-semibold transition hover:-translate-y-0.5 hover:shadow-md active:scale-95 ${
+                detailForm.completed
+                  ? "border-gray-500 bg-gray-500 text-white"
+                  : "border-gray-300 bg-white text-gray-600"
+              }`}
+            >
+              완료 {detailForm.completed ? "✓" : "—"}
+            </button>
             {selectedReservation.appointmentType === "상담" && (
               <button
                 onClick={handleSurgeryToggle}
@@ -404,25 +429,17 @@ export function DetailDrawer({ open, reservation, currentUser, onClose, onRefres
         </div>
       </div>
 
-      {addReservationOpen && (
-        <NewReservationDrawer
-          open={addReservationOpen}
-          onClose={() => setAddReservationOpen(false)}
-          currentUser={currentUser}
-          initialDate={selectedReservation.reservationDate}
-          initialPatient={{
-            name: selectedReservation.name,
-            birthInput: selectedReservation.birthInput || selectedReservation.birth,
-            phone: selectedReservation.phone,
-            nationality: selectedReservation.nationality,
-            patientId: selectedReservation.patientId,
-          }}
-          onCreated={() => {
-            setAddReservationOpen(false);
-            onRefresh?.();
-          }}
-        />
-      )}
+      <CreateDrawer
+        open={addReservationOpen}
+        onClose={() => setAddReservationOpen(false)}
+        currentUser={currentUser}
+        initialDate={selectedReservation.reservationDate}
+        initialPatient={addReservationPatient}
+        onCreated={() => {
+          setAddReservationOpen(false);
+          onRefresh?.();
+        }}
+      />
     </>
   );
 }
