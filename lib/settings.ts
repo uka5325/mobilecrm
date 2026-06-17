@@ -139,7 +139,7 @@ export type StaffUpdatePayload = {
 
 function canManageSettings(staff: StaffUser | null | undefined) {
   const role = String(staff?.role || "").toLowerCase();
-  return role === "admin" || role === "doctor";
+  return role === "admin";
 }
 
 function canEditMemo(staff: StaffUser | null | undefined) {
@@ -293,14 +293,14 @@ export async function saveVisitStatusColors(
     { merge: true }
   );
 
-  await createLog({
+  createLog({
     action: "settings_update",
     targetType: "settings",
     targetId: "visitStatusColors",
     staff,
     message: "내원상태 색상 설정을 변경했습니다.",
     after: { colors: normalizedColors },
-  });
+  }).catch((e) => console.warn("[saveVisitStatusColors] log write failed:", e));
 
   setCachedVisitStatusColors(normalizedColors);
   return normalizedColors;
@@ -357,7 +357,7 @@ export async function saveGeneralSettings(
   const ref = doc(db, "appSettings", "general");
   await setDoc(ref, nextSettings, { merge: true });
 
-  await createLog({
+  createLog({
     action: "settings_update",
     targetType: "settings",
     targetId: "general",
@@ -368,7 +368,7 @@ export async function saveGeneralSettings(
       appCountryLabel: country.label,
       appTimezone: country.timezone,
     },
-  });
+  }).catch((e) => console.warn("[saveGeneralSettings] log write failed:", e));
 
   return { ...nextSettings, updatedAt: undefined };
 }
@@ -457,7 +457,7 @@ export async function addConferenceMemo(
     deletedBy: "",
   });
 
-  await createLog({
+  createLog({
     action: "memo_create",
     targetType: "memo",
     targetId: docRef.id,
@@ -467,7 +467,7 @@ export async function addConferenceMemo(
       memoDate: targetDate,
       memoText: text,
     },
-  });
+  }).catch((e) => console.warn("[addConferenceMemo] log write failed:", e));
 
   invalidateMemoCache(targetDate);
   return docRef.id;
@@ -487,14 +487,14 @@ export async function deleteConferenceMemo(memoId: string, staff: StaffUser, mem
     deletedBy: staff.uid,
   });
 
-  await createLog({
+  createLog({
     action: "memo_delete",
     targetType: "memo",
     targetId: id,
     staff,
     message: "전체 메모를 삭제했습니다.",
     after: { deleted: true },
-  });
+  }).catch((e) => console.warn("[deleteConferenceMemo] log write failed:", e));
 
   if (memoDate) invalidateMemoCache(normalizeDateOnly(memoDate));
   return true;
@@ -611,14 +611,14 @@ export async function updateStaffFromSettings(
     }
   }
 
-  await createLog({
+  createLog({
     action: "settings_update",
     targetType: "settings",
     targetId: id,
     staff: actor,
     message: "직원 설정을 수정했습니다.",
     after: updatePayload,
-  });
+  }).catch((e) => console.warn("[updateStaffFromSettings] log write failed:", e));
 
   return true;
 }
@@ -699,14 +699,14 @@ export async function changeMyPassword(
   await reauthenticateWithCredential(user, credential);
   await updatePassword(user, next);
 
-  await createLog({
+  createLog({
     action: "settings_update",
     targetType: "settings",
     targetId: "password",
     staff,
     message: "내 비밀번호를 변경했습니다.",
     after: { changed: true },
-  });
+  }).catch((e) => console.warn("[changeMyPassword] log write failed:", e));
 
   return true;
 }
@@ -801,14 +801,14 @@ export async function saveAppointmentTypeColors(
     { merge: true }
   );
 
-  await createLog({
+  createLog({
     action: "settings_update",
     targetType: "settings",
     targetId: "appointmentTypeColors",
     staff,
     message: "유형별 색상 설정을 변경했습니다.",
     after: { colors: normalizedColors },
-  });
+  }).catch((e) => console.warn("[saveAppointmentTypeColors] log write failed:", e));
 
   setCachedAppointmentTypeColors(normalizedColors);
   return normalizedColors;
