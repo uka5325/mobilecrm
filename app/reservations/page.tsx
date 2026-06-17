@@ -5,10 +5,8 @@ import {
   deleteReservation,
   updateReservationFull,
   type ReservationRecord,
-  type ReservationStatus,
   type AppointmentType,
   toggleSurgeryReserved,
-  updateReservationStatus,
 } from "@/lib/reservations";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useReservationData } from "@/hooks/useReservationData";
@@ -24,7 +22,7 @@ import { toDate } from "@/lib/settingsUtils";
 
 export default function ReservationsPage() {
   const { currentUser, authReady } = useCurrentUser();
-  const { reservations, statusColors, loading } = useReservationData(
+  const { reservations, loading } = useReservationData(
     currentUser,
     authReady
   );
@@ -105,21 +103,6 @@ const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
       return aa.localeCompare(bb);
     });
   }, [filteredReservations]);
-
-  async function handleStatusChange(
-    item: ReservationRecord,
-    status: ReservationStatus
-  ) {
-    if (!currentUser) return;
-
-    await updateReservationStatus(
-      item.id,
-      item.reservationId,
-      status,
-      currentUser
-    );
-
-  }
 
   async function handleSurgeryToggle(item: ReservationRecord) {
     if (!currentUser) return;
@@ -446,12 +429,10 @@ const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
         items={groupedReservations}
         loading={loading}
         filterDate={filterDate}
-        statusColors={statusColors}
         inlineEditId={inlineEditId}
         inlineForm={inlineForm}
         inlineSaving={inlineSaving}
         onFormChange={setInlineForm}
-        onStatusChange={handleStatusChange}
         onSurgeryToggle={handleSurgeryToggle}
         onOpenMemo={openMemoPopover}
         onStartEdit={startInlineEdit}

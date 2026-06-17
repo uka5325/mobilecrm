@@ -1,7 +1,7 @@
 "use client";
 
-import { type DoctorOption } from "@/lib/reservations";
 import { type ReservationNote } from "@/lib/reservationNotes";
+import { type AppointmentType, APPOINTMENT_TYPES } from "@/lib/reservations";
 import { EditField } from "@/components/timeline/EditField";
 import { NoteCard } from "@/components/timeline/NoteCard";
 
@@ -13,6 +13,9 @@ type DetailForm = {
   consultArea: string;
   reservationDate: string;
   reservationTime: string;
+  hospital: string;
+  appointmentType: AppointmentType;
+  completed: boolean;
   coordinators: string;
   depositAmount: string;
 };
@@ -26,8 +29,6 @@ type BirthPreview = {
 type Props = {
   detailForm: DetailForm;
   birthPreview: BirthPreview;
-  detailDoctors: string[];
-  doctors: DoctorOption[];
   detailError: string;
   detailMessage: string;
   detailSaving: boolean;
@@ -36,7 +37,6 @@ type Props = {
   memoSuccess?: string;
   recentNotes: ReservationNote[];
   onFormChange: (updates: Partial<DetailForm>) => void;
-  onToggleDoctor: (name: string) => void;
   onSave: () => void;
   onMemoTextChange: (text: string) => void;
   onAddMemo: () => void;
@@ -45,11 +45,13 @@ type Props = {
   onShowAllNotes: () => void;
 };
 
+const TYPE_COLORS: Record<string, string> = {
+  상담: "#2563eb", 수술: "#ef4444", 치료: "#16a34a", 경과: "#f59e0b",
+};
+
 export function InfoTab({
   detailForm,
   birthPreview,
-  detailDoctors,
-  doctors,
   detailError,
   detailMessage,
   detailSaving,
@@ -58,7 +60,6 @@ export function InfoTab({
   memoSuccess,
   recentNotes,
   onFormChange,
-  onToggleDoctor,
   onSave,
   onMemoTextChange,
   onAddMemo,
@@ -107,6 +108,37 @@ export function InfoTab({
 
       <div className="mt-3">
         <EditField
+          label="병원명"
+          value={detailForm.hospital}
+          onChange={(value) => onFormChange({ hospital: value })}
+        />
+      </div>
+
+      <div className="mt-3">
+        <label className="text-xs text-gray-500">예약 유형</label>
+        <div className="mt-2 flex gap-2 flex-wrap">
+          {APPOINTMENT_TYPES.map((type) => {
+            const active = detailForm.appointmentType === type;
+            return (
+              <button
+                key={type}
+                onClick={() => onFormChange({ appointmentType: type })}
+                className="rounded-xl border px-3 py-1.5 text-sm font-semibold transition hover:-translate-y-0.5 active:scale-95"
+                style={{
+                  backgroundColor: active ? TYPE_COLORS[type] : "#f9fafb",
+                  color: active ? "#fff" : "#374151",
+                  borderColor: active ? TYPE_COLORS[type] : "#dfe3e8",
+                }}
+              >
+                {type}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="mt-3">
+        <EditField
           label="상담부위"
           value={detailForm.consultArea}
           onChange={(value) => onFormChange({ consultArea: value })}
@@ -137,28 +169,8 @@ export function InfoTab({
       </div>
 
       <div className="mt-3">
-        <label className="text-xs text-gray-500">지정원장</label>
-        <div className="mt-2 flex flex-wrap gap-2">
-          {doctors.map((doctor) => {
-            const on = detailDoctors.includes(doctor.displayName);
-            return (
-              <button
-                key={doctor.uid}
-                onClick={() => onToggleDoctor(doctor.displayName)}
-                className={`rounded-xl border px-3 py-2 text-sm transition hover:-translate-y-0.5 hover:shadow-md active:scale-95 ${
-                  on ? "border-black bg-black text-white" : "border-[#dfe3e8] bg-white text-gray-700"
-                }`}
-              >
-                {doctor.displayName}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      <div className="mt-3">
         <EditField
-          label="담당 실장"
+          label="담당자"
           value={detailForm.coordinators}
           onChange={(value) => onFormChange({ coordinators: value })}
         />
@@ -170,6 +182,18 @@ export function InfoTab({
           value={detailForm.depositAmount}
           onChange={(value) => onFormChange({ depositAmount: value })}
         />
+      </div>
+
+      <div className="mt-3 flex items-center gap-3">
+        <button
+          onClick={() => onFormChange({ completed: !detailForm.completed })}
+          className={`flex h-6 w-11 items-center rounded-full transition-colors ${detailForm.completed ? "bg-emerald-500" : "bg-gray-200"}`}
+        >
+          <div className={`h-5 w-5 rounded-full bg-white shadow transition-transform ${detailForm.completed ? "translate-x-5" : "translate-x-0.5"}`} />
+        </button>
+        <label className="cursor-pointer text-sm text-gray-700" onClick={() => onFormChange({ completed: !detailForm.completed })}>
+          완료 처리
+        </label>
       </div>
 
       {detailError && (

@@ -1,15 +1,9 @@
 "use client";
 
-import type { ReservationRecord, ReservationStatus, AppointmentType } from "@/lib/reservations";
+import type { ReservationRecord, AppointmentType } from "@/lib/reservations";
 import { APPOINTMENT_TYPES } from "@/lib/reservations";
-import type { VisitStatusColorMap } from "@/lib/settings";
 import { getReservationBirthInfo } from "@/lib/reservationUtils";
 import { formatDateGroup, normalizeTimeText } from "@/lib/timelineUtils";
-import { getStatusSelectStyle } from "@/lib/colorUtils";
-
-const STATUS_LIST: ReservationStatus[] = [
-  "내원전", "대기", "원상중", "후상중", "귀가", "부도",
-];
 
 const APPT_TYPE_COLORS: Record<AppointmentType, string> = {
   상담: "#2563eb",
@@ -29,12 +23,10 @@ type Props = {
   items: ReservationRecord[];
   loading: boolean;
   filterDate: string;
-  statusColors: VisitStatusColorMap;
   inlineEditId: string | null;
   inlineForm: InlineForm;
   inlineSaving: boolean;
   onFormChange: (updater: (prev: InlineForm) => InlineForm) => void;
-  onStatusChange: (item: ReservationRecord, status: ReservationStatus) => void;
   onSurgeryToggle: (item: ReservationRecord) => void;
   onOpenMemo: (item: ReservationRecord) => void;
   onStartEdit: (item: ReservationRecord) => void;
@@ -47,12 +39,10 @@ export function ReservationsTable({
   items,
   loading,
   filterDate,
-  statusColors,
   inlineEditId,
   inlineForm,
   inlineSaving,
   onFormChange,
-  onStatusChange,
   onSurgeryToggle,
   onOpenMemo,
   onStartEdit,
@@ -67,14 +57,14 @@ export function ReservationsTable({
     if (loading) {
       return (
         <tr>
-          <td colSpan={13} className="py-12 text-center text-gray-400">데이터 로딩 중...</td>
+          <td colSpan={12} className="py-12 text-center text-gray-400">데이터 로딩 중...</td>
         </tr>
       );
     }
     if (items.length === 0) {
       return (
         <tr>
-          <td colSpan={13} className="py-12 text-center text-gray-400">예약이 없습니다.</td>
+          <td colSpan={12} className="py-12 text-center text-gray-400">예약이 없습니다.</td>
         </tr>
       );
     }
@@ -87,13 +77,12 @@ export function ReservationsTable({
       const date = item.reservationDate || "날짜 미정";
       const time = normalizeTimeText(item.reservationTime || "");
       const birthInfo = getReservationBirthInfo(item);
-      const currentStatus = item.operationStatus || "내원전";
       const apptType = item.appointmentType || "상담";
 
       if (!filterDate && date !== lastDate) {
         rows.push(
           <tr key={`date-${date}`} className="bg-gray-100">
-            <td colSpan={13} className="border-y border-gray-200 px-6 py-3 text-sm font-bold text-gray-900">
+            <td colSpan={12} className="border-y border-gray-200 px-6 py-3 text-sm font-bold text-gray-900">
               📅 {formatDateGroup(date)}
             </td>
           </tr>
@@ -105,7 +94,7 @@ export function ReservationsTable({
       if (!filterDate && time !== lastTime) {
         rows.push(
           <tr key={`time-${date}-${time}`} className="bg-gray-50">
-            <td colSpan={13} className="border-b border-gray-100 px-6 py-2 text-sm font-bold text-emerald-700">
+            <td colSpan={12} className="border-b border-gray-100 px-6 py-2 text-sm font-bold text-emerald-700">
               ⏰ {time}
             </td>
           </tr>
@@ -206,20 +195,6 @@ export function ReservationsTable({
             )}
           </td>
 
-          {/* 상태 */}
-          <td className={cellCls}>
-            <select
-              value={currentStatus}
-              onChange={(e) => onStatusChange(item, e.target.value as ReservationStatus)}
-              className="rounded-full border px-2 py-1 text-xs font-semibold outline-none transition"
-              style={getStatusSelectStyle(currentStatus, statusColors)}
-            >
-              {STATUS_LIST.map((status) => (
-                <option key={status} value={status}>{status}</option>
-              ))}
-            </select>
-          </td>
-
           {/* 수술예약 */}
           <td className={`${cellCls} text-center`}>
             <button
@@ -272,7 +247,7 @@ export function ReservationsTable({
   return (
     <div className="-mx-4 sm:-mx-6 lg:-mx-8">
       <div className="overflow-x-auto border-y border-gray-100 bg-white">
-        <table className="min-w-[1500px] w-full table-fixed border-collapse text-sm">
+        <table className="min-w-[1400px] w-full table-fixed border-collapse text-sm">
           <colgroup>
             <col className="w-[160px]" />
             <col className="w-[140px]" />
@@ -282,7 +257,6 @@ export function ReservationsTable({
             <col className="w-[70px]" />
             <col className="w-[120px]" />
             <col className="w-[90px]" />
-            <col className="w-[100px]" />
             <col className="w-[80px]" />
             <col className="w-[100px]" />
             <col className="w-[70px]" />
@@ -291,7 +265,7 @@ export function ReservationsTable({
 
           <thead className="bg-gray-50">
             <tr>
-              {["이름", "병원명", "유형", "완료", "생년월일", "국적", "상담부위", "담당자", "상태", "수술예약", "예약금", "메모", "관리"].map((head) => (
+              {["이름", "병원명", "유형", "완료", "생년월일", "국적", "상담부위", "담당자", "수술예약", "예약금", "메모", "관리"].map((head) => (
                 <th key={head} className="border-b border-gray-200 px-4 py-3 text-left text-xs font-semibold text-gray-500">
                   {head}
                 </th>

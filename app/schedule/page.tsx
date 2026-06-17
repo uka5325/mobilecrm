@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { collection, onSnapshot, query, where, orderBy } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
@@ -14,9 +14,7 @@ import { todayString } from "@/lib/dateUtils";
 import { DetailDrawer } from "@/components/timeline/DetailDrawer";
 import { NewReservationDrawer } from "@/components/timeline/NewReservationDrawer";
 import { getBirthGenderText } from "@/lib/timelineUtils";
-import type { DoctorOption } from "@/lib/reservations";
-import type { VisitStatusColorMap } from "@/lib/settings";
-import { getVisitStatusColors } from "@/lib/settings";
+import { getConferenceMemos, type ConferenceMemo } from "@/lib/settings";
 
 type ViewMode = "day" | "week" | "month";
 
@@ -76,7 +74,7 @@ const END_HOUR = 22;
 const TOTAL_HOURS = END_HOUR - START_HOUR;
 
 function timeToMinutes(time: string) {
-  if (!time) return 0;
+  if (!time) return START_HOUR * 60;
   const [h, m] = time.split(":").map(Number);
   return h * 60 + (m || 0);
 }
@@ -117,29 +115,61 @@ function useScheduleData(startDate: string, endDate: string) {
   return { reservations, loading };
 }
 
-function DayCard({ item, onClick }: { item: ReservationRecord; onClick: () => void }) {
+function DayCard({
+  item,
+  top,
+  onClick,
+}: {
+  item: ReservationRecord;
+  top?: number;
+  onClick: () => void;
+}) {
   const color = getAppointmentColor(item.appointmentType);
   const time = item.reservationTime || "";
   const minutes = timeToMinutes(time);
-  const top = minutesToPx(minutes);
-  const height = Math.max(HOUR_HEIGHT * 0.8, 52);
+  const cardTop = top ?? minutesToPx(minutes);
   const info = getBirthGenderText(item);
 
   return (
     <button
       onClick={onClick}
       className="absolute left-1 right-1 overflow-hidden rounded-lg px-2 py-1.5 text-left text-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md active:scale-[0.99]"
-      style={{ top, height, backgroundColor: color, opacity: item.completed ? 0.6 : 1 }}
+      style={{ top: cardTop, height: HOUR_HEIGHT - 2, backgroundColor: color, opacity: item.completed ? 0.6 : 1 }}
     >
-      <div className="flex items-center gap-1 text-[11px] font-bold leading-tight">
-        <span className="truncate">{item.name}</span>
-        {time && <span className="shrink-0 opacity-90">{time}</span>}
+      <div className="truncate text-[11px] font-bold leading-tight">
+        {item.name}{info ? ` · ${info}` : ""}
       </div>
-      {info && <div className="mt-0.5 truncate text-[10px] opacity-90">{info}</div>}
-      {item.hospital && <div className="mt-0.5 truncate text-[10px] opacity-85">{item.hospital}</div>}
-      {item.completed && <div className="mt-0.5 text-[9px] opacity-80">✓ 완료</div>}
+      {(item.hospital || time) && (
+        <div className="mt-0.5 truncate text-[10px] opacity-90">
+          {[item.hospital, time].filter(Boolean).join(" · ")}
+        </div>
+      )}
+      {item.consultArea && (
+        <div className="mt-0.5 truncate text-[10px] opacity-80">{item.consultArea}</div>
+      )}
     </button>
   );
+}
+
+function buildStackedPositions(items: ReservationRecord[]): { item: ReservationRecord; top: number }[] {
+  const sorted = [...items].sort((a, b) => {
+    const ta = timeToMinutes(a.reservationTime || "00:00");
+    const tb = timeToMinutes(b.reservationTime || "00:00");
+    return ta - tb;
+  });
+
+  const result: { item: ReservationRecord; top: number }[] = [];
+  const timeCount = new Map<string, number>();
+
+  sorted.forEach((item) => {
+    const t = item.reservationTime || "";
+    const count = timeCount.get(t) || 0;
+    const basePx = minutesToPx(timeToMinutes(t || `${START_HOUR}:00`));
+    result.push({ item, top: basePx + count * HOUR_HEIGHT });
+    timeCount.set(t, count + 1);
+  });
+
+  return result;
 }
 
 function DayView({
@@ -156,8 +186,9 @@ function DayView({
     return Array.from(set).sort();
   }, [reservations]);
 
+  const hours = Array.from({ length: TOTAL_HOURS }, (_, i) => START_HOUR + i);
+
   if (hospitals.length === 0) {
-    const hours = Array.from({ length: TOTAL_HOURS }, (_, i) => START_HOUR + i);
     return (
       <div className="flex min-h-0 flex-1 overflow-hidden rounded-b-2xl">
         <div className="flex w-16 shrink-0 flex-col border-r border-[#edf0f3]">
@@ -175,8 +206,6 @@ function DayView({
     );
   }
 
-  const hours = Array.from({ length: TOTAL_HOURS }, (_, i) => START_HOUR + i);
-
   return (
     <div className="flex min-h-0 flex-1 overflow-auto rounded-b-2xl">
       <div className="flex w-16 shrink-0 flex-col border-r border-[#edf0f3] bg-white">
@@ -191,18 +220,23 @@ function DayView({
       <div className="flex flex-1 overflow-x-auto">
         {hospitals.map((hospital) => {
           const items = reservations.filter((r) => (r.hospital || "미지정") === hospital);
+          const positioned = buildStackedPositions(items);
+          const totalHeight = Math.max(
+            TOTAL_HOURS * HOUR_HEIGHT,
+            positioned.length > 0 ? Math.max(...positioned.map((p) => p.top + HOUR_HEIGHT)) : 0
+          );
           return (
             <div key={hospital} className="flex flex-col border-r border-[#edf0f3]" style={{ minWidth: 200, width: `${Math.max(200, Math.floor(100 / hospitals.length))}%`, maxWidth: 320 }}>
               <div className="flex h-[48px] shrink-0 items-center justify-center gap-2 border-b border-[#edf0f3] bg-white px-3">
                 <span className="truncate text-sm font-semibold">{hospital}</span>
                 <span className="shrink-0 text-xs text-gray-400">{items.length}건</span>
               </div>
-              <div className="relative" style={{ height: TOTAL_HOURS * HOUR_HEIGHT }}>
+              <div className="relative" style={{ height: totalHeight }}>
                 {hours.map((h) => (
                   <div key={h} className="border-b border-[#f1f3f5]" style={{ height: HOUR_HEIGHT }} />
                 ))}
-                {items.map((item) => (
-                  <DayCard key={item.id} item={item} onClick={() => onCardClick(item)} />
+                {positioned.map(({ item, top }) => (
+                  <DayCard key={item.id} item={item} top={top} onClick={() => onCardClick(item)} />
                 ))}
               </div>
             </div>
@@ -240,20 +274,25 @@ function WeekView({
         {days.map((day) => {
           const dayItems = reservations.filter((r) => r.reservationDate === day);
           const today = isToday(day);
+          const positioned = buildStackedPositions(dayItems);
+          const totalHeight = Math.max(
+            TOTAL_HOURS * HOUR_HEIGHT,
+            positioned.length > 0 ? Math.max(...positioned.map((p) => p.top + HOUR_HEIGHT)) : 0
+          );
           return (
-            <div key={day} className="flex flex-col border-r border-[#edf0f3]" style={{ minWidth: 120, flex: 1 }}>
+            <div key={day} className="flex flex-col border-r border-[#edf0f3]" style={{ minWidth: 100, flex: 1 }}>
               <div className={`flex h-[52px] shrink-0 flex-col items-center justify-center border-b border-[#edf0f3] ${today ? "bg-emerald-50" : "bg-white"}`}>
                 <span className={`text-xs font-bold ${today ? "text-emerald-700" : "text-gray-700"}`}>
                   {formatDayLabel(day)}
                 </span>
                 <span className={`text-[10px] ${today ? "text-emerald-500" : "text-gray-400"}`}>{dayItems.length}건</span>
               </div>
-              <div className="relative" style={{ height: TOTAL_HOURS * HOUR_HEIGHT }}>
+              <div className="relative" style={{ height: totalHeight }}>
                 {hours.map((h) => (
                   <div key={h} className="border-b border-[#f1f3f5]" style={{ height: HOUR_HEIGHT }} />
                 ))}
-                {dayItems.map((item) => (
-                  <DayCard key={item.id} item={item} onClick={() => onCardClick(item)} />
+                {positioned.map(({ item, top }) => (
+                  <DayCard key={item.id} item={item} top={top} onClick={() => onCardClick(item)} />
                 ))}
               </div>
             </div>
@@ -349,18 +388,17 @@ function MonthView({
 }
 
 export default function SchedulePage() {
-  const { currentUser, authReady } = useCurrentUser();
+  const { currentUser } = useCurrentUser();
   const [viewMode, setViewMode] = useState<ViewMode>("week");
   const [baseDate, setBaseDate] = useState(todayString());
   const [detailOpen, setDetailOpen] = useState(false);
   const [newOpen, setNewOpen] = useState(false);
   const [selectedReservation, setSelectedReservation] = useState<ReservationRecord | null>(null);
-  const [statusColors, setStatusColors] = useState<VisitStatusColorMap>({
-    내원전: "#6b7280", 대기: "#f59e0b", 원상중: "#2563eb", 후상중: "#14b8a6", 귀가: "#16a34a", 부도: "#dc2626",
-  });
+  const [todayMemos, setTodayMemos] = useState<ConferenceMemo[]>([]);
+  const [memoSectionOpen, setMemoSectionOpen] = useState(true);
 
   useEffect(() => {
-    getVisitStatusColors().then(setStatusColors).catch(() => {});
+    getConferenceMemos(todayString()).then(setTodayMemos).catch(() => {});
   }, []);
 
   const { startDate, endDate } = useMemo(() => {
@@ -413,8 +451,6 @@ export default function SchedulePage() {
     return `${y}년 ${m}월`;
   }, [viewMode, baseDate]);
 
-  const emptyDoctors: DoctorOption[] = [];
-
   return (
     <div className="-mx-6 -mb-6 mt-5 flex h-[calc(100vh-170px)] min-h-[640px] flex-col overflow-hidden rounded-2xl border border-[#edf0f3] bg-white">
       {/* 상단 컨트롤 */}
@@ -427,7 +463,6 @@ export default function SchedulePage() {
         </div>
 
         <div className="flex items-center gap-2">
-          {/* 뷰 모드 탭 */}
           <div className="flex rounded-lg border border-[#edf0f3] overflow-hidden">
             {(["day", "week", "month"] as ViewMode[]).map((mode) => (
               <button
@@ -468,6 +503,34 @@ export default function SchedulePage() {
         {loading && <span className="ml-auto text-xs text-gray-400 animate-pulse">로딩 중...</span>}
       </div>
 
+      {/* 오늘의 전체 메모 */}
+      <div className="shrink-0 border-b border-[#edf0f3]">
+        <button
+          onClick={() => setMemoSectionOpen((v) => !v)}
+          className="flex w-full items-center gap-2 px-5 py-1.5 text-xs text-gray-500 hover:bg-gray-50"
+        >
+          <span className="font-semibold">📝 오늘의 메모</span>
+          {todayMemos.length > 0 && (
+            <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700">{todayMemos.length}</span>
+          )}
+          <span className="ml-auto text-gray-300">{memoSectionOpen ? "▲" : "▼"}</span>
+        </button>
+        {memoSectionOpen && (
+          <div className="flex gap-2 overflow-x-auto px-5 pb-2">
+            {todayMemos.length === 0 ? (
+              <span className="text-xs text-gray-400">오늘 등록된 메모가 없습니다.</span>
+            ) : (
+              todayMemos.map((memo) => (
+                <div key={memo.id} className="min-w-[180px] max-w-[280px] shrink-0 rounded-lg bg-amber-50 px-3 py-1.5 text-xs">
+                  <div className="font-medium text-gray-800 line-clamp-2">{memo.memoText}</div>
+                  <div className="mt-0.5 text-[10px] text-gray-400">{memo.createdByName || memo.createdBy}</div>
+                </div>
+              ))
+            )}
+          </div>
+        )}
+      </div>
+
       {/* 뷰 영역 */}
       {viewMode === "day" && (
         <DayView
@@ -498,10 +561,7 @@ export default function SchedulePage() {
         <DetailDrawer
           open={detailOpen}
           reservation={selectedReservation}
-          doctors={emptyDoctors}
           currentUser={currentUser}
-          statusColors={statusColors}
-          clickedDoctorName={undefined}
           onClose={() => { setDetailOpen(false); setSelectedReservation(null); }}
           onRefreshLatestLog={async () => {}}
         />
@@ -511,7 +571,6 @@ export default function SchedulePage() {
         <NewReservationDrawer
           open={newOpen}
           onClose={() => setNewOpen(false)}
-          doctors={emptyDoctors}
           currentUser={currentUser}
           initialDate={baseDate}
         />

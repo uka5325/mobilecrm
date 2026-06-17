@@ -1,21 +1,15 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { doc, serverTimestamp, updateDoc } from "firebase/firestore";
 import {
   toggleSurgeryReserved,
-  updateDoctorStatus,
   updateReservationFull,
-  updateReservationStatus,
-  type DoctorOption,
+  type AppointmentType,
   type ReservationRecord,
-  type ReservationStatus,
 } from "@/lib/reservations";
 import type { StaffUser } from "@/lib/auth";
 import { parseBirthInfo } from "@/lib/reservationUtils";
-import { createLog, getLogsByReservationId, type LogRecord } from "@/lib/logs";
-import { db } from "@/lib/firebase";
-import { type VisitStatusColorMap } from "@/lib/settings";
+import { getLogsByReservationId, type LogRecord } from "@/lib/logs";
 import {
   addReservationNote,
   deleteReservationNote,
@@ -24,17 +18,13 @@ import {
   type ReservationNote,
 } from "@/lib/reservationNotes";
 import { todayString } from "@/lib/dateUtils";
-import { getBirthGenderNationalityText, splitComma } from "@/lib/timelineUtils";
-import { getReadableTextColor, getStatusColor } from "@/lib/colorUtils";
+import { getBirthGenderText, splitComma } from "@/lib/timelineUtils";
 import { InfoTab } from "@/components/timeline/tabs/InfoTab";
 import { FilesTab } from "@/components/timeline/tabs/FilesTab";
 import { NotesTab } from "@/components/timeline/tabs/NotesTab";
 import { LogsTab } from "@/components/timeline/tabs/LogsTab";
-import { InvoiceTab } from "@/components/timeline/tabs/InvoiceTab";
 
-const DETAIL_STATUS_LIST: ReservationStatus[] = ["대기", "원상중", "후상중", "귀가", "부도"];
-
-type DetailTab = "info" | "files" | "notes" | "logs" | "invoice";
+type DetailTab = "info" | "files" | "notes" | "logs";
 
 type DetailForm = {
   name: string;
@@ -44,6 +34,9 @@ type DetailForm = {
   consultArea: string;
   reservationDate: string;
   reservationTime: string;
+  hospital: string;
+  appointmentType: AppointmentType;
+  completed: boolean;
   coordinators: string;
   depositAmount: string;
 };
@@ -51,19 +44,15 @@ type DetailForm = {
 type Props = {
   open: boolean;
   reservation: ReservationRecord | null;
-  doctors: DoctorOption[];
   currentUser: StaffUser;
-  statusColors: VisitStatusColorMap;
-  clickedDoctorName?: string;
   onClose: () => void;
   onRefreshLatestLog: (item: ReservationRecord) => Promise<void>;
 };
 
-export function DetailDrawer({ open, reservation, doctors, currentUser, statusColors, clickedDoctorName, onClose, onRefreshLatestLog }: Props) {
+export function DetailDrawer({ open, reservation, currentUser, onClose, onRefreshLatestLog }: Props) {
   const [activeTab, setActiveTab] = useState<DetailTab>("info");
   const [selectedReservation, setSelectedReservation] = useState<ReservationRecord | null>(null);
 
-  const [detailDoctors, setDetailDoctors] = useState<string[]>([]);
   const [detailError, setDetailError] = useState("");
   const [detailMessage, setDetailMessage] = useState("");
   const [detailSaving, setDetailSaving] = useState(false);
@@ -71,7 +60,8 @@ export function DetailDrawer({ open, reservation, doctors, currentUser, statusCo
   const [detailForm, setDetailForm] = useState<DetailForm>({
     name: "", birthInput: "", phone: "", nationality: "",
     consultArea: "", reservationDate: todayString(),
-    reservationTime: "", coordinators: "", depositAmount: "",
+    reservationTime: "", hospital: "", appointmentType: "상담",
+    completed: false, coordinators: "", depositAmount: "",
   });
 
   const [logs, setLogs] = useState<LogRecord[]>([]);
@@ -81,7 +71,6 @@ export function DetailDrawer({ open, reservation, doctors, currentUser, statusCo
   const [memoText, setMemoText] = useState("");
   const [memoError, setMemoError] = useState("");
   const [memoSuccess, setMemoSuccess] = useState("");
-  const [invoiceActionMessage, setInvoiceActionMessage] = useState("");
   const [notes, setNotes] = useState<ReservationNote[]>([]);
 
   useEffect(() => {
@@ -93,12 +82,10 @@ export function DetailDrawer({ open, reservation, doctors, currentUser, statusCo
     setMemoText("");
     setMemoError("");
     setMemoSuccess("");
-    setInvoiceActionMessage("");
     setNotes([]);
     setLogs([]);
     setLogsError("");
     setSelectedReservation(reservation);
-    setDetailDoctors(reservation.doctors || []);
     setDetailForm({
       name: reservation.name || "",
       birthInput: reservation.birthInput || reservation.birth || "",
@@ -107,6 +94,9 @@ export function DetailDrawer({ open, reservation, doctors, currentUser, statusCo
       consultArea: reservation.consultArea || "",
       reservationDate: reservation.reservationDate || todayString(),
       reservationTime: reservation.reservationTime || "",
+      hospital: reservation.hospital || "",
+      appointmentType: reservation.appointmentType || "상담",
+      completed: reservation.completed || false,
       coordinators: (reservation.coordinators || []).join(", "),
       depositAmount: reservation.depositAmount || "",
     });
@@ -119,7 +109,6 @@ export function DetailDrawer({ open, reservation, doctors, currentUser, statusCo
   }, [open, reservation?.id]);
 
   const detailBirthPreview = useMemo(() => parseBirthInfo(detailForm.birthInput), [detailForm.birthInput]);
-  const selectedStatus = selectedReservation?.operationStatus || "내원전";
   const recentNotes = notes.slice(0, 3);
 
   async function loadLogs(item: ReservationRecord, mounted?: { current: boolean }) {
@@ -148,15 +137,10 @@ export function DetailDrawer({ open, reservation, doctors, currentUser, statusCo
     }
   }
 
-  function toggleDetailDoctor(name: string) {
-    setDetailDoctors((prev) => prev.includes(name) ? prev.filter((d) => d !== name) : [...prev, name]);
-  }
-
   async function handleSaveDetail() {
     if (!selectedReservation) return;
     if (!detailForm.name.trim()) { setDetailError("이름을 입력하세요."); return; }
     if (!detailForm.reservationDate) { setDetailError("예약날짜를 선택하세요."); return; }
-    if (!detailDoctors.length) { setDetailError("지정원장을 선택하세요."); return; }
 
     setDetailSaving(true);
     setDetailError("");
@@ -176,7 +160,9 @@ export function DetailDrawer({ open, reservation, doctors, currentUser, statusCo
           consultArea: detailForm.consultArea,
           reservationDate: detailForm.reservationDate,
           reservationTime: detailForm.reservationTime,
-          doctors: detailDoctors,
+          hospital: detailForm.hospital,
+          appointmentType: detailForm.appointmentType,
+          completed: detailForm.completed,
           coordinators: splitComma(detailForm.coordinators),
           depositAmount: detailForm.depositAmount,
         },
@@ -196,7 +182,9 @@ export function DetailDrawer({ open, reservation, doctors, currentUser, statusCo
         consultArea: detailForm.consultArea,
         reservationDate: detailForm.reservationDate,
         reservationTime: detailForm.reservationTime,
-        doctors: detailDoctors,
+        hospital: detailForm.hospital,
+        appointmentType: detailForm.appointmentType,
+        completed: detailForm.completed,
         coordinators: splitComma(detailForm.coordinators),
         depositAmount: detailForm.depositAmount,
       };
@@ -210,71 +198,6 @@ export function DetailDrawer({ open, reservation, doctors, currentUser, statusCo
     } finally {
       setDetailSaving(false);
     }
-  }
-
-  async function handleStatusChange(status: ReservationStatus) {
-    if (!selectedReservation) return;
-
-    // 원상중은 클릭한 doctor column에만 반영
-    if (status === "원상중" && clickedDoctorName) {
-      await updateDoctorStatus(
-        selectedReservation.id,
-        selectedReservation.reservationId,
-        clickedDoctorName,
-        "원상중",
-        currentUser,
-        { previousOperationStatus: selectedReservation.operationStatus }
-      );
-      const updated = {
-        ...selectedReservation,
-        operationStatus: "원상중" as ReservationStatus,
-        preConsStatus: selectedReservation.operationStatus,
-        doctorStatusMap: { ...selectedReservation.doctorStatusMap, [clickedDoctorName]: "원상중" },
-      };
-      setSelectedReservation(updated);
-      await loadLogs(updated);
-      await onRefreshLatestLog(updated);
-      return;
-    }
-
-    const nextStatus = status === "대기" && selectedReservation.operationStatus === "대기" ? "내원전" : status;
-
-    await updateReservationStatus(
-      selectedReservation.id,
-      selectedReservation.reservationId,
-      nextStatus,
-      currentUser
-    );
-
-    // 원상중이 남아있는 모든 doctor의 per-doctor status를 초기화 (두 카드 동시 반영)
-    const doctorStatusMap = selectedReservation.doctorStatusMap || {};
-    const doctorsWithConsStatus = Object.entries(doctorStatusMap)
-      .filter(([, s]) => s === "원상중")
-      .map(([d]) => d);
-
-    await Promise.all(
-      doctorsWithConsStatus.map((doctorName) =>
-        updateDoctorStatus(
-          selectedReservation.id,
-          selectedReservation.reservationId,
-          doctorName,
-          nextStatus,
-          currentUser
-        )
-      )
-    );
-
-    const newDoctorStatusMap = { ...doctorStatusMap };
-    doctorsWithConsStatus.forEach((d) => { newDoctorStatusMap[d] = nextStatus; });
-
-    const updated = {
-      ...selectedReservation,
-      operationStatus: nextStatus,
-      doctorStatusMap: newDoctorStatusMap,
-    };
-    setSelectedReservation(updated);
-    await loadLogs(updated);
-    await onRefreshLatestLog(updated);
   }
 
   async function handleSurgeryToggle() {
@@ -346,60 +269,10 @@ export function DetailDrawer({ open, reservation, doctors, currentUser, statusCo
     await onRefreshLatestLog(selectedReservation);
   }
 
-  async function handleDeleteInvoice() {
-    if (!selectedReservation) return;
-    if (!selectedReservation.invoiceId) { setInvoiceActionMessage("삭제할 인보이스가 없습니다."); return; }
-    if (!confirm("연결된 인보이스를 삭제할까요?\n삭제 후 다시 생성할 수 있습니다.")) return;
-
-    try {
-      const invoiceDocId = selectedReservation.invoiceDocId || selectedReservation.invoiceId;
-
-      await updateDoc(doc(db, "invoices", invoiceDocId), {
-        status: "void",
-        isDeleted: true,
-        updatedAt: serverTimestamp(),
-        updatedBy: currentUser.displayName,
-        updatedByUid: currentUser.uid,
-      });
-
-      await updateDoc(doc(db, "reservations", selectedReservation.id), {
-        invoiceId: "",
-        invoiceDocId: "",
-        invoiceStatus: "",
-        invoiceUpdatedAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-        updatedBy: currentUser.displayName,
-        updatedByUid: currentUser.uid,
-      });
-
-      await createLog({
-        action: "invoice_delete",
-        targetType: "invoice",
-        targetId: invoiceDocId,
-        staff: currentUser,
-        message: `${selectedReservation.name || "고객"} 인보이스를 삭제 처리했습니다.`,
-        patientId: selectedReservation.patientId || "",
-        reservationId: selectedReservation.reservationId || "",
-        invoiceId: selectedReservation.invoiceId || invoiceDocId,
-        before: {
-          invoiceId: selectedReservation.invoiceId || "",
-          invoiceDocId: selectedReservation.invoiceDocId || "",
-          invoiceStatus: selectedReservation.invoiceStatus || "",
-        },
-        after: { invoiceId: "", invoiceDocId: "", invoiceStatus: "void", isDeleted: true },
-      });
-
-      const updated: ReservationRecord = { ...selectedReservation, invoiceId: "", invoiceDocId: "", invoiceStatus: "" };
-      setSelectedReservation(updated);
-      await loadLogs(updated);
-      await onRefreshLatestLog(updated);
-      setInvoiceActionMessage("인보이스가 삭제 처리되었습니다.");
-    } catch {
-      setInvoiceActionMessage("인보이스 삭제 중 오류가 발생했습니다.");
-    }
-  }
 
   if (!open || !selectedReservation) return null;
+
+  const birthGenderText = getBirthGenderText(selectedReservation);
 
   return (
     <>
@@ -408,58 +281,45 @@ export function DetailDrawer({ open, reservation, doctors, currentUser, statusCo
       <div className="fixed right-0 top-0 z-[999] flex h-screen w-[420px] max-w-[calc(100vw-12px)] flex-col bg-white shadow-[-8px_0_30px_rgba(0,0,0,0.12)]">
         <div className="shrink-0 border-b border-[#edf0f3] px-5 py-4">
           <div className="mb-3 flex items-start justify-between">
-            <div>
+            <div className="min-w-0 flex-1">
               <div className="text-xl font-bold">{selectedReservation.name}</div>
-              <div className="mt-0.5 text-sm text-gray-500">
-                {getBirthGenderNationalityText(selectedReservation)}
-              </div>
+              {birthGenderText && (
+                <div className="mt-0.5 text-sm text-gray-500">{birthGenderText}</div>
+              )}
+              {(selectedReservation.hospital || selectedReservation.reservationTime) && (
+                <div className="mt-0.5 text-sm text-gray-500">
+                  {[selectedReservation.hospital, selectedReservation.reservationTime].filter(Boolean).join(" · ")}
+                </div>
+              )}
+              {selectedReservation.consultArea && (
+                <div className="mt-0.5 text-xs text-gray-400">{selectedReservation.consultArea}</div>
+              )}
             </div>
             <button
               onClick={onClose}
-              className="text-2xl leading-none text-gray-400 transition hover:scale-110 hover:text-gray-700 active:scale-95"
+              className="ml-3 shrink-0 text-2xl leading-none text-gray-400 transition hover:scale-110 hover:text-gray-700 active:scale-95"
             >
               ×
             </button>
           </div>
 
-          <div className="grid grid-cols-6 gap-1.5">
-            {DETAIL_STATUS_LIST.map((status) => {
-              const active = selectedStatus === status;
-              const label = status === "대기" ? "내원" : status;
-              const color = getStatusColor(status, statusColors);
-              const textColor = getReadableTextColor(color);
-              return (
-                <button
-                  key={status}
-                  onClick={() => handleStatusChange(status)}
-                  className="min-w-0 rounded-lg border px-1.5 py-1.5 text-xs font-semibold transition hover:-translate-y-0.5 hover:shadow-md active:scale-95"
-                  style={{
-                    borderColor: color,
-                    backgroundColor: active ? color : "#ffffff",
-                    color: active ? textColor : color,
-                  }}
-                >
-                  {label}
-                </button>
-              );
-            })}
-
+          <div className="flex items-center gap-2">
             <button
               onClick={handleSurgeryToggle}
-              className={`min-w-0 rounded-lg border px-1.5 py-1.5 text-xs font-semibold transition hover:-translate-y-0.5 hover:shadow-md active:scale-95 ${
+              className={`rounded-lg border px-3 py-1.5 text-xs font-semibold transition hover:-translate-y-0.5 hover:shadow-md active:scale-95 ${
                 selectedReservation.surgeryReserved
                   ? "border-purple-600 bg-purple-600 text-white"
                   : "border-purple-400 bg-white text-purple-700"
               }`}
             >
-              예약
+              수술예약 {selectedReservation.surgeryReserved ? "✓" : "—"}
             </button>
           </div>
         </div>
 
         <div className="flex shrink-0 border-b border-[#edf0f3]">
-          {(["info", "files", "notes", "logs", "invoice"] as const).map((key) => {
-            const label = { info: "기본정보", files: "파일", notes: "메모", logs: "로그", invoice: "인보이스" }[key];
+          {(["info", "files", "notes", "logs"] as const).map((key) => {
+            const label = { info: "기본정보", files: "파일", notes: "메모", logs: "로그" }[key];
             return (
               <button
                 key={key}
@@ -481,8 +341,6 @@ export function DetailDrawer({ open, reservation, doctors, currentUser, statusCo
             <InfoTab
               detailForm={detailForm}
               birthPreview={detailBirthPreview}
-              detailDoctors={detailDoctors}
-              doctors={doctors}
               detailError={detailError}
               detailMessage={detailMessage}
               detailSaving={detailSaving}
@@ -491,7 +349,6 @@ export function DetailDrawer({ open, reservation, doctors, currentUser, statusCo
               memoSuccess={memoSuccess}
               recentNotes={recentNotes}
               onFormChange={(updates) => setDetailForm((p) => ({ ...p, ...updates }))}
-              onToggleDoctor={toggleDetailDoctor}
               onSave={handleSaveDetail}
               onMemoTextChange={setMemoText}
               onAddMemo={handleAddMemo}
@@ -525,15 +382,6 @@ export function DetailDrawer({ open, reservation, doctors, currentUser, statusCo
 
           {activeTab === "logs" && (
             <LogsTab logs={logs} loading={logsLoading} error={logsError} />
-          )}
-
-          {activeTab === "invoice" && (
-            <InvoiceTab
-              reservationDocId={selectedReservation.id}
-              invoiceId={selectedReservation.invoiceId || ""}
-              actionMessage={invoiceActionMessage}
-              onDelete={handleDeleteInvoice}
-            />
           )}
         </div>
       </div>

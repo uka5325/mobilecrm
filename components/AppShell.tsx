@@ -313,9 +313,7 @@ export default function AppShell({ children }: AppShellProps) {
           <div className="text-base font-semibold text-white">모바일 CRM</div>
 
           <div className="mt-1 text-xs leading-relaxed text-[#9aa7b5]">
-            환자 유치 업체
-            <br />
-            예약 관리 시스템
+            예약관리 시스템
           </div>
 
           <div className="mt-4 flex items-center gap-2 rounded-lg bg-[#182430] px-3 py-2.5">
@@ -396,7 +394,7 @@ export default function AppShell({ children }: AppShellProps) {
 
             <div>
               <div className="text-xl font-semibold text-white">모바일 CRM</div>
-              <div className="text-xs text-[#9aa7b5]">환자 예약 관리 시스템</div>
+              <div className="text-xs text-[#9aa7b5]">예약관리 시스템</div>
             </div>
           </div>
 
