@@ -213,12 +213,44 @@ export function DetailDrawer({ open, reservation, currentUser, onClose, onRefres
     }
   }
 
+  async function handleCompletedToggle() {
+    if (!selectedReservation) return;
+    const next = !detailForm.completed;
+    setDetailForm((p) => ({ ...p, completed: next }));
+    await updateReservationFull(
+      selectedReservation.id,
+      selectedReservation.reservationId,
+      selectedReservation.patientId,
+      {
+        name: detailForm.name,
+        birthInput: detailForm.birthInput,
+        birth: detailForm.birthInput,
+        phone: detailForm.phone,
+        nationality: detailForm.nationality,
+        consultArea: detailForm.consultArea,
+        reservationDate: detailForm.reservationDate,
+        reservationTime: detailForm.reservationTime,
+        hospital: detailForm.hospital,
+        appointmentType: detailForm.appointmentType,
+        coordinators: splitComma(detailForm.coordinators),
+        depositAmount: detailForm.depositAmount,
+        surgeryCost: detailForm.surgeryCost,
+        completed: next,
+        currentDoctorStatusMap: selectedReservation.doctorStatusMap,
+        currentDoctorStatusMetaMap: selectedReservation.doctorStatusMetaMap,
+      },
+      currentUser
+    );
+    const updated = { ...selectedReservation, completed: next };
+    setSelectedReservation(updated);
+    onRefresh?.();
+    await onRefreshLatestLog(updated);
+  }
+
   async function handleSurgeryToggle() {
     if (!selectedReservation) return;
-
     const next = !selectedReservation.surgeryReserved;
     await toggleSurgeryReserved(selectedReservation.id, selectedReservation.reservationId, next, currentUser);
-
     const updated = { ...selectedReservation, surgeryReserved: next };
     setSelectedReservation(updated);
     await loadLogs(updated);
@@ -330,7 +362,7 @@ export function DetailDrawer({ open, reservation, currentUser, onClose, onRefres
 
           <div className="flex items-center gap-2 flex-wrap">
             <button
-              onClick={() => setDetailForm((p) => ({ ...p, completed: !p.completed }))}
+              onClick={handleCompletedToggle}
               className={`rounded-lg border px-3 py-1.5 text-xs font-semibold transition hover:-translate-y-0.5 hover:shadow-md active:scale-95 ${
                 detailForm.completed
                   ? "border-gray-500 bg-gray-500 text-white"
