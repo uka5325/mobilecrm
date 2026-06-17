@@ -927,7 +927,7 @@ export async function updateReservationFull(
     reservationTime: cleanText(params.reservationTime),
 
     hospital: cleanText(params.hospital),
-    appointmentType: params.appointmentType || currentReservation?.appointmentType || "상담",
+    appointmentType: params.appointmentType || "상담",
     completed: params.completed === true,
 
     consultArea: cleanText(params.consultArea),
