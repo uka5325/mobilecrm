@@ -12,6 +12,12 @@ type InitialPatient = {
   phone?: string;
   nationality?: string;
   patientId?: string;
+  hospital?: string;
+  consultArea?: string;
+  appointmentType?: AppointmentType;
+  coordinators?: string;
+  depositAmount?: string;
+  surgeryCost?: string;
 };
 
 type Props = {
@@ -28,14 +34,14 @@ const EMPTY_FORM = (date: string, patient?: InitialPatient) => ({
   birthInput: patient?.birthInput || "",
   phone: patient?.phone || "",
   nationality: patient?.nationality || "",
-  consultArea: "",
+  consultArea: patient?.consultArea || "",
   reservationDate: date,
   reservationTime: "",
-  hospital: "",
-  appointmentType: "상담" as AppointmentType,
-  coordinators: "",
-  depositAmount: "",
-  surgeryCost: "",
+  hospital: patient?.hospital || "",
+  appointmentType: (patient?.appointmentType || "상담") as AppointmentType,
+  coordinators: patient?.coordinators || "",
+  depositAmount: patient?.depositAmount || "",
+  surgeryCost: patient?.surgeryCost || "",
 });
 
 export function CreateDrawer({ open, onClose, currentUser, initialDate, initialPatient, onCreated }: Props) {

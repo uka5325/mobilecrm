@@ -63,6 +63,7 @@ export type ReservationRecord = {
   hospital: string;
   appointmentType: AppointmentType;
   completed: boolean;
+  cancelled: boolean;
 
   operationStatus: ReservationStatus;
   preConsStatus: string;
@@ -201,6 +202,7 @@ export function mapReservationDoc(id: string, data: Record<string, unknown>): Re
     hospital: cleanText(data.hospital),
     appointmentType: normalizeAppointmentType(data.appointmentType),
     completed: data.completed === true,
+    cancelled: data.cancelled === true,
 
     operationStatus: normalizeReservationStatus(data.operationStatus),
     preConsStatus: cleanText(data.preConsStatus),
@@ -863,6 +865,7 @@ export type UpdateReservationParams = {
   hospital?: string;
   appointmentType?: AppointmentType;
   completed?: boolean;
+  cancelled?: boolean;
   doctors?: string[];
   coordinators?: string[];
   depositAmount?: string;
@@ -929,6 +932,7 @@ export async function updateReservationFull(
     hospital: cleanText(params.hospital),
     appointmentType: params.appointmentType || "상담",
     completed: params.completed === true,
+    cancelled: params.cancelled === true,
 
     consultArea: cleanText(params.consultArea),
     depositAmount: cleanText(params.depositAmount),

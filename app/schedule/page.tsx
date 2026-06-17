@@ -153,7 +153,9 @@ function useScheduleData(startDate: string, endDate: string, authReady: boolean)
 
 // ─── DayCard ─────────────────────────────────────────────────────────────────
 function DayCard({ item, top, onClick }: { item: ReservationRecord; top: number; onClick: () => void }) {
-  const color = item.completed ? "#9ca3af" : getAppointmentColor(item.appointmentType);
+  const cancelled = item.cancelled === true;
+  const color = cancelled ? "#fef08a" : item.completed ? "#9ca3af" : getAppointmentColor(item.appointmentType);
+  const textColor = cancelled ? "#78350f" : "white";
   const time = item.reservationTime || "";
   const areaLabel = item.appointmentType === "상담" ? "상담부위" : "수술항목";
   const logText = formatLog(item.updatedBy, item.updatedAt);
@@ -161,22 +163,18 @@ function DayCard({ item, top, onClick }: { item: ReservationRecord; top: number;
   return (
     <button
       onClick={onClick}
-      className="absolute left-1 right-1 flex flex-col overflow-hidden rounded-md px-2 py-1 text-left text-white shadow-sm transition hover:brightness-110 active:scale-[0.99]"
-      style={{ top, height: CARD_HEIGHT, backgroundColor: color, opacity: item.completed ? 0.75 : 1 }}
+      className="absolute left-1 right-1 flex flex-col overflow-hidden rounded-md px-2 py-1 text-left shadow-sm transition hover:brightness-110 active:scale-[0.99]"
+      style={{ top, height: CARD_HEIGHT, backgroundColor: color, opacity: item.completed ? 0.75 : 1, color: textColor }}
     >
-      {/* 이름 */}
-      <div className="truncate text-[11px] font-bold leading-tight">{item.name}</div>
-      {/* 시간 · 병원 */}
-      <div className="truncate text-[10px] opacity-85 leading-tight">
+      <div className={`truncate text-[11px] font-bold leading-tight ${cancelled ? "line-through" : ""}`}>{item.name}</div>
+      <div className={`truncate text-[10px] opacity-85 leading-tight ${cancelled ? "line-through" : ""}`}>
         {[time, item.hospital].filter(Boolean).join(" · ")}
       </div>
-      {/* 상담부위 / 수술항목 */}
       {item.consultArea && (
-        <div className="truncate text-[9px] opacity-80 leading-tight">
+        <div className={`truncate text-[9px] opacity-80 leading-tight ${cancelled ? "line-through" : ""}`}>
           {areaLabel}: {item.consultArea}
         </div>
       )}
-      {/* 로그: 수정자 · 날짜시간 */}
       {logText && (
         <div className="mt-auto truncate text-[8px] opacity-55 leading-tight">{logText}</div>
       )}
@@ -328,16 +326,18 @@ function DayView({
 
 // ─── WeekDayCard (compact for week view) ─────────────────────────────────────
 function WeekDayCard({ item, top, onClick }: { item: ReservationRecord; top: number; onClick: () => void }) {
-  const color = item.completed ? "#9ca3af" : getAppointmentColor(item.appointmentType);
+  const cancelled = item.cancelled === true;
+  const color = cancelled ? "#fef08a" : item.completed ? "#9ca3af" : getAppointmentColor(item.appointmentType);
+  const textColor = cancelled ? "#78350f" : "white";
   const time = item.reservationTime ? item.reservationTime.slice(0, 5) : "";
   return (
     <button
       onClick={onClick}
-      className="absolute left-0.5 right-0.5 overflow-hidden rounded px-1 text-left text-white shadow-sm transition hover:brightness-110 active:scale-[0.99]"
-      style={{ top, height: WEEK_CARD_H, backgroundColor: color, opacity: item.completed ? 0.75 : 1 }}
+      className="absolute left-0.5 right-0.5 overflow-hidden rounded px-1 text-left shadow-sm transition hover:brightness-110 active:scale-[0.99]"
+      style={{ top, height: WEEK_CARD_H, backgroundColor: color, opacity: item.completed ? 0.75 : 1, color: textColor }}
       title={[item.name, time, item.hospital, item.consultArea].filter(Boolean).join(" · ")}
     >
-      <div className="truncate text-[10px] font-semibold leading-tight">
+      <div className={`truncate text-[10px] font-semibold leading-tight ${cancelled ? "line-through" : ""}`}>
         {time && <span className="mr-0.5 opacity-80">{time}</span>}
         {item.name}
       </div>
@@ -484,17 +484,22 @@ function MonthView({
                 {parseDate(dateStr).getDate()}
               </div>
               <div className="space-y-0.5">
-                {shown.map((item) => (
-                  <button
-                    key={item.id}
-                    onClick={(e) => { e.stopPropagation(); onCardClick(item); }}
-                    className="w-full truncate rounded px-1 py-0.5 text-left text-[10px] font-semibold text-white"
-                    style={{ backgroundColor: item.completed ? "#9ca3af" : getAppointmentColor(item.appointmentType), opacity: item.completed ? 0.75 : 1 }}
-                  >
-                    {item.reservationTime && <span className="mr-0.5 opacity-90">{item.reservationTime.slice(0, 5)}</span>}
-                    {item.name}
-                  </button>
-                ))}
+                {shown.map((item) => {
+                  const isCancelled = item.cancelled === true;
+                  const bg = isCancelled ? "#fef08a" : item.completed ? "#9ca3af" : getAppointmentColor(item.appointmentType);
+                  const tc = isCancelled ? "#78350f" : "white";
+                  return (
+                    <button
+                      key={item.id}
+                      onClick={(e) => { e.stopPropagation(); onCardClick(item); }}
+                      className={`w-full truncate rounded px-1 py-0.5 text-left text-[10px] font-semibold ${isCancelled ? "line-through" : ""}`}
+                      style={{ backgroundColor: bg, color: tc, opacity: item.completed ? 0.75 : 1 }}
+                    >
+                      {item.reservationTime && <span className="mr-0.5 opacity-90">{item.reservationTime.slice(0, 5)}</span>}
+                      {item.name}
+                    </button>
+                  );
+                })}
                 {more > 0 && (
                   <div className="text-right text-[10px] text-gray-400">+{more}건</div>
                 )}
