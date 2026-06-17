@@ -837,7 +837,7 @@ export async function toggleSurgeryReserved(
     updatedByUid: staff.uid,
   });
 
-  await createLog({
+  createLog({
     action: "reservation_update",
     targetType: "reservation",
     targetId: reservationId,
@@ -850,7 +850,7 @@ export async function toggleSurgeryReserved(
     after: {
       surgeryReserved: nextValue,
     },
-  });
+  }).catch((e) => console.warn("[toggleSurgeryReserved] log write failed:", e));
 
   return { success: true };
 }
@@ -1028,7 +1028,7 @@ export async function deleteReservation(
     updatedByUid: staff.uid,
   });
 
-  await createLog({
+  createLog({
     action: "reservation_delete",
     targetType: "reservation",
     targetId: reservationId,
@@ -1039,7 +1039,7 @@ export async function deleteReservation(
     after: {
       isDeleted: true,
     },
-  });
+  }).catch((e) => console.warn("[deleteReservation] log write failed:", e));
 
   return { success: true };
 }
