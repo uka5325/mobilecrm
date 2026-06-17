@@ -17,6 +17,7 @@ import {
   finalizeCounter,
   pctText,
   formatDepositMap,
+  getReservationTime,
   setQuickRange,
 } from "@/lib/dashboardUtils";
 import { QuickButton } from "@/components/dashboard/QuickButton";
