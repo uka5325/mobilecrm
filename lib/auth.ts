@@ -145,21 +145,21 @@ export async function logout() {
 }
 
 export async function getStaffByUid(uid: string): Promise<StaffUser | null> {
-  const ref = doc(db, "staff", uid);
-  const snap = await getDocFromServer(ref);
-
-  if (!snap.exists()) return null;
-
-  const data = snap.data();
-
-  return {
-    uid,
-    email: String(data.email || ""),
-    displayName: String(data.displayName || ""),
-    role: (data.role || "staff") as StaffRole,
-    active: data.active === true,
-    staffCode: data.staffCode ? String(data.staffCode) : undefined,
-  };
+  try {
+    const currentUser = auth.currentUser;
+    if (!currentUser) return null;
+    const idToken = await currentUser.getIdToken();
+    const res = await fetch("/api/verify-staff", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ idToken }),
+    });
+    const data = await res.json();
+    if (!data.success) return null;
+    return data.user as StaffUser;
+  } catch {
+    return null;
+  }
 }
 
 export function checkPermission(
