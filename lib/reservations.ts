@@ -963,7 +963,7 @@ export async function deleteReservation(
   reservationId: string,
   staff: StaffUser
 ) {
-  if (staff.role !== "admin" && staff.role !== "doctor") {
+  if (staff.role !== "admin") {
     return { success: false, message: "예약 삭제 권한이 없습니다." };
   }
 
