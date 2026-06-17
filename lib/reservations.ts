@@ -1,13 +1,4 @@
-import {
-  collection,
-  doc,
-  getDoc,
-  getDocs,
-  orderBy,
-  query,
-  where,
-} from "firebase/firestore";
-import { auth, db } from "./firebase";
+import { auth } from "./firebase";
 import type { StaffUser } from "./auth";
 import { cleanText } from "./stringUtils";
 import { createLog } from "./logs";
@@ -248,56 +239,6 @@ export function mapReservationDoc(id: string, data: Record<string, unknown>): Re
   };
 }
 
-async function hasDuplicateReservation(params: CreateReservationParams) {
-  const reservationId = cleanText(params.reservationId);
-
-  if (reservationId) {
-    const idSnap = await getDocs(
-      query(
-        collection(db, "reservations"),
-        where("reservationId", "==", reservationId),
-        where("isDeleted", "==", false)
-      )
-    );
-
-    if (!idSnap.empty) return true;
-  }
-
-  const reservationDate = cleanText(params.reservationDate);
-  const name = cleanText(params.name);
-
-  if (!reservationDate || !name) return false;
-
-  const snap = await getDocs(
-    query(
-      collection(db, "reservations"),
-      where("reservationDate", "==", reservationDate),
-      where("isDeleted", "==", false)
-    )
-  );
-
-  const key = normalizeDuplicateKey(params);
-
-  return snap.docs
-    .map((docSnap) => mapReservationDoc(docSnap.id, docSnap.data()))
-    .some(
-      (item) =>
-        normalizeDuplicateKey({
-          name: item.name,
-          birthInput: item.birthInput,
-          birth: item.birth,
-          gender: item.gender,
-          phone: item.phone,
-          nationality: item.nationality,
-          consultArea: item.consultArea,
-          reservationDate: item.reservationDate,
-          reservationTime: item.reservationTime,
-          doctors: item.doctors,
-          coordinators: item.coordinators,
-          depositAmount: item.depositAmount,
-        }) === key
-    );
-}
 
 const DOCTORS_CACHE_KEY = "crm_doctors_v1";
 
@@ -355,22 +296,18 @@ export async function getDoctors(): Promise<DoctorOption[]> {
 
   _doctorsCachedAt = Date.now();
   _doctorsPromise = (async () => {
-    const snap = await getDocs(
-      query(collection(db, "staff"), where("role", "==", "doctor"), where("active", "==", true))
-    );
+    const result = await callReservationsApi("read_doctors", {});
+    const rawDoctors = (result.doctors as Record<string, unknown>[] | undefined) || [];
 
-    const doctors = snap.docs
-      .map((docSnap) => {
-        const data = docSnap.data();
-        return {
-          uid: docSnap.id,
-          displayName: cleanText(data.displayName || data["display_name"] || data.name),
-          email: cleanText(data.email),
-          orderNo: cleanNumber(data.orderNo ?? data["order_no"]),
-          role: String(data.role || ""),
-          active: data.active,
-        };
-      })
+    const doctors = rawDoctors
+      .map((d) => ({
+        uid: String(d.id || ""),
+        displayName: cleanText(d.displayName || d["display_name"] || d.name),
+        email: cleanText(d.email),
+        orderNo: cleanNumber(d.orderNo ?? d["order_no"]),
+        role: String(d.role || ""),
+        active: d.active,
+      }))
       .filter((d) => d.displayName && d.role === "doctor" && d.active !== false);
 
     setCachedDoctors(sortDoctors(doctors));
@@ -395,16 +332,12 @@ export async function getAllReservations(): Promise<{
     return d.toISOString().slice(0, 10);
   })();
 
-  const reservationSnap = await getDocs(
-    query(
-      collection(db, "reservations"),
-      where("reservationDate", ">=", fromDate),
-      orderBy("reservationDate", "desc")
-    )
-  );
+  const result = await callReservationsApi("read_all", { from: fromDate });
+  const rawReservations = (result.reservations as Record<string, unknown>[] | undefined) || [];
+  const rawDoctors = (result.doctors as Record<string, unknown>[] | undefined) || [];
 
-  const reservations = reservationSnap.docs
-    .map((docSnap) => mapReservationDoc(docSnap.id, docSnap.data()))
+  const reservations = rawReservations
+    .map((r) => mapReservationDoc(String(r.id || ""), r))
     .filter((item) => !item.isDeleted)
     .sort((a, b) => {
       const aa = `${a.reservationDate} ${a.reservationTime} ${a.name}`;
@@ -412,14 +345,15 @@ export async function getAllReservations(): Promise<{
       return aa.localeCompare(bb);
     });
 
-  let doctors: DoctorOption[] = [];
-
-  try {
-    doctors = await getDoctors();
-  } catch (error) {
-    console.error("[getAllReservations getDoctors error]", error);
-    doctors = makeDoctorOptionsFromReservations(reservations);
-  }
+  const doctors: DoctorOption[] = rawDoctors
+    .map((d) => ({
+      uid: String(d.id || ""),
+      displayName: cleanText(d.displayName || d["display_name"] || d.name),
+      email: cleanText(d.email),
+      orderNo: cleanNumber(d.orderNo ?? d["order_no"]),
+    }))
+    .filter((d) => d.displayName)
+    .sort((a, b) => a.orderNo - b.orderNo || a.displayName.localeCompare(b.displayName));
 
   return {
     reservations,
@@ -448,21 +382,14 @@ export function subscribeAllReservations(
     })();
 
     try {
-      const [snap, doctors] = await Promise.all([
-        getDocs(
-          query(
-            collection(db, "reservations"),
-            where("reservationDate", ">=", sixMonthsAgo),
-            orderBy("reservationDate", "desc")
-          )
-        ),
-        getDoctors().catch(() => null as DoctorOption[] | null),
-      ]);
+      const result = await callReservationsApi("read_all", { from: sixMonthsAgo });
+      if (cancelled || !result.success) return;
 
-      if (cancelled) return;
+      const rawReservations = (result.reservations as Record<string, unknown>[] | undefined) || [];
+      const rawDoctors = (result.doctors as Record<string, unknown>[] | undefined) || [];
 
-      const reservations = snap.docs
-        .map((docSnap) => mapReservationDoc(docSnap.id, docSnap.data()))
+      const reservations = rawReservations
+        .map((r) => mapReservationDoc(String(r.id || ""), r))
         .filter((item) => !item.isDeleted)
         .sort((a, b) => {
           const aa = `${a.reservationDate} ${a.reservationTime} ${a.name}`;
@@ -470,10 +397,20 @@ export function subscribeAllReservations(
           return aa.localeCompare(bb);
         });
 
+      const doctors: DoctorOption[] = rawDoctors
+        .map((d) => ({
+          uid: String(d.id || ""),
+          displayName: cleanText(d.displayName || d["display_name"] || d.name),
+          email: cleanText(d.email),
+          orderNo: cleanNumber(d.orderNo ?? d["order_no"]),
+        }))
+        .filter((d) => d.displayName)
+        .sort((a, b) => a.orderNo - b.orderNo || a.displayName.localeCompare(b.displayName));
+
       const fallbackDoctors = makeDoctorOptionsFromReservations(reservations);
       callback({
         reservations,
-        doctors: doctors?.length ? doctors : fallbackDoctors,
+        doctors: doctors.length ? doctors : fallbackDoctors,
       });
     } catch (error) {
       if (!cancelled) {
@@ -508,20 +445,14 @@ export function subscribeTimelineReservations(
     if (cancelled) return;
 
     try {
-      const [snap, doctors] = await Promise.all([
-        getDocs(
-          query(
-            collection(db, "reservations"),
-            where("reservationDate", "==", date)
-          )
-        ),
-        getDoctors().catch(() => null as DoctorOption[] | null),
-      ]);
+      const result = await callReservationsApi("read_by_date", { date });
+      if (cancelled || !result.success) return;
 
-      if (cancelled) return;
+      const rawReservations = (result.reservations as Record<string, unknown>[] | undefined) || [];
+      const rawDoctors = (result.doctors as Record<string, unknown>[] | undefined) || [];
 
-      const reservations = snap.docs
-        .map((docSnap) => mapReservationDoc(docSnap.id, docSnap.data()))
+      const reservations = rawReservations
+        .map((r) => mapReservationDoc(String(r.id || ""), r))
         .filter((item) => !item.isDeleted)
         .sort((a, b) => {
           const aa = `${a.reservationTime} ${a.name}`;
@@ -529,10 +460,20 @@ export function subscribeTimelineReservations(
           return aa.localeCompare(bb);
         });
 
+      const doctors: DoctorOption[] = rawDoctors
+        .map((d) => ({
+          uid: String(d.id || ""),
+          displayName: cleanText(d.displayName || d["display_name"] || d.name),
+          email: cleanText(d.email),
+          orderNo: cleanNumber(d.orderNo ?? d["order_no"]),
+        }))
+        .filter((d) => d.displayName)
+        .sort((a, b) => a.orderNo - b.orderNo || a.displayName.localeCompare(b.displayName));
+
       const fallbackDoctors = makeDoctorOptionsFromReservations(reservations);
       callback({
         reservations,
-        doctors: doctors?.length ? doctors : fallbackDoctors,
+        doctors: doctors.length ? doctors : fallbackDoctors,
       });
     } catch (error) {
       if (!cancelled) {
@@ -555,30 +496,28 @@ export async function getTimelineReservations(date: string): Promise<{
   reservations: ReservationRecord[];
   doctors: DoctorOption[];
 }> {
-  const reservationSnap = await getDocs(
-    query(
-      collection(db, "reservations"),
-      where("reservationDate", "==", date),
-      where("isDeleted", "==", false)
-    )
-  );
+  const result = await callReservationsApi("read_by_date", { date });
+  const rawReservations = (result.reservations as Record<string, unknown>[] | undefined) || [];
+  const rawDoctors = (result.doctors as Record<string, unknown>[] | undefined) || [];
 
-  const reservations = reservationSnap.docs
-    .map((docSnap) => mapReservationDoc(docSnap.id, docSnap.data()))
+  const reservations = rawReservations
+    .map((r) => mapReservationDoc(String(r.id || ""), r))
+    .filter((item) => !item.isDeleted)
     .sort((a, b) => {
       const aa = `${a.reservationTime} ${a.name}`;
       const bb = `${b.reservationTime} ${b.name}`;
       return aa.localeCompare(bb);
     });
 
-  let doctors: DoctorOption[] = [];
-
-  try {
-    doctors = await getDoctors();
-  } catch (error) {
-    console.error("[getTimelineReservations getDoctors error]", error);
-    doctors = makeDoctorOptionsFromReservations(reservations);
-  }
+  const doctors: DoctorOption[] = rawDoctors
+    .map((d) => ({
+      uid: String(d.id || ""),
+      displayName: cleanText(d.displayName || d["display_name"] || d.name),
+      email: cleanText(d.email),
+      orderNo: cleanNumber(d.orderNo ?? d["order_no"]),
+    }))
+    .filter((d) => d.displayName)
+    .sort((a, b) => a.orderNo - b.orderNo || a.displayName.localeCompare(b.displayName));
 
   return {
     reservations,
@@ -603,16 +542,6 @@ export async function createReservation(
 
   if (!reservationDate) {
     return { success: false, message: "예약날짜를 선택하세요." };
-  }
-
-  const isDuplicate = await hasDuplicateReservation(params);
-
-  if (isDuplicate) {
-    return {
-      success: false,
-      message: "이미 등록된 예약으로 보여 저장하지 않았습니다.",
-      duplicate: true,
-    };
   }
 
   const patientId = cleanText(params.patientId) || makeDateBasedId("P");
@@ -896,16 +825,6 @@ export type UpdateReservationParams = {
   depositAmount?: string;
 };
 
-async function findPatientDocId(patientId: string) {
-  const snap = await getDocs(
-    query(collection(db, "patients"), where("patientId", "==", patientId))
-  );
-
-  if (snap.empty) return null;
-
-  return snap.docs[0].id;
-}
-
 export async function updateReservationFull(
   reservationDocId: string,
   reservationId: string,
@@ -932,13 +851,15 @@ export async function updateReservationFull(
     params.gender || ""
   );
 
-  const currentReservationSnap = await getDoc(
-    doc(db, "reservations", reservationDocId)
-  );
-
-  const currentReservation = currentReservationSnap.exists()
-    ? mapReservationDoc(currentReservationSnap.id, currentReservationSnap.data())
-    : null;
+  // Read current reservation server-side to preserve doctor statuses
+  const readResult = await callReservationsApi("read_one", { reservationDocId });
+  const currentReservation =
+    readResult.success && readResult.reservation
+      ? mapReservationDoc(
+          String((readResult.reservation as Record<string, unknown>).id || ""),
+          readResult.reservation as Record<string, unknown>
+        )
+      : null;
 
   const previousDoctorStatusMap = currentReservation?.doctorStatusMap || {};
   const previousDoctorStatusMetaMap =
@@ -989,22 +910,19 @@ export async function updateReservationFull(
     updatedByUid: staff.uid,
   };
 
-  const patientDocId = await findPatientDocId(patientId);
+  const patientPatch = {
+    name,
+    birth: parsedBirth.birth,
+    birthInput: parsedBirth.birthInput,
+    gender: parsedBirth.gender,
+    phone: cleanText(params.phone),
+    nationality: cleanText(params.nationality),
+  };
 
-  const patientPatch = patientDocId
-    ? {
-        name,
-        birth: parsedBirth.birth,
-        birthInput: parsedBirth.birthInput,
-        gender: parsedBirth.gender,
-        phone: cleanText(params.phone),
-        nationality: cleanText(params.nationality),
-      }
-    : undefined;
-
+  // Pass patientId so server can find the patientDocId
   const apiResult = await callReservationsApi("update", {
     reservationDocId,
-    patientDocId: patientDocId ?? undefined,
+    patientId,
     reservationPatch,
     patientPatch,
   });
