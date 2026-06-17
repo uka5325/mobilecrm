@@ -5,7 +5,6 @@ import type { SettingsStaffRole } from "@/lib/settings";
 
 const ROLES: { value: SettingsStaffRole; label: string }[] = [
   { value: "admin", label: "관리자 (Admin)" },
-  { value: "doctor", label: "의사 (Doctor)" },
   { value: "coordinator", label: "코디네이터" },
   { value: "staff", label: "스탭" },
   { value: "interpreter", label: "통역사" },

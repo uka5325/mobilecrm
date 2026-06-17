@@ -1,5 +1,4 @@
 import {
-  addDoc,
   collection,
   doc,
   getDoc,
@@ -17,6 +16,20 @@ import {
   updatePassword,
 } from "firebase/auth";
 import { auth, db } from "./firebase";
+
+async function callSettingsApi(action: string, payload: Record<string, unknown> = {}) {
+  const firebaseUser = auth.currentUser;
+  if (!firebaseUser) throw new Error("로그인 상태를 확인할 수 없습니다.");
+  const idToken = await firebaseUser.getIdToken();
+  const res = await fetch("/api/settings", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ idToken, action, payload }),
+  });
+  const data = await res.json() as Record<string, unknown> & { success: boolean; message?: string };
+  if (!data.success) throw new Error(data.message || "API 요청에 실패했습니다.");
+  return data;
+}
 import type { StaffUser } from "./auth";
 import { createLog } from "./logs";
 import { invalidateDoctorsCache } from "./reservations";
@@ -110,7 +123,6 @@ export type ConferenceMemo = {
 
 export type SettingsStaffRole =
   | "admin"
-  | "doctor"
   | "coordinator"
   | "staff"
   | "interpreter";
@@ -144,14 +156,14 @@ function canManageSettings(staff: StaffUser | null | undefined) {
 
 function canEditMemo(staff: StaffUser | null | undefined) {
   const role = String(staff?.role || "").toLowerCase();
-  return ["admin", "doctor", "coordinator", "staff"].includes(role);
+  return ["admin", "coordinator", "staff"].includes(role);
 }
 
 function assertCanManageSettings(staff: StaffUser) {
   if (!staff?.uid) throw new Error("로그인 정보를 확인할 수 없습니다.");
 
   if (!canManageSettings(staff)) {
-    throw new Error("설정 변경 권한이 없습니다. admin 또는 doctor만 변경할 수 있습니다.");
+    throw new Error("설정 변경 권한이 없습니다. admin만 변경할 수 있습니다.");
   }
 }
 
@@ -221,7 +233,7 @@ function todayString() {
 function cleanRole(value: unknown): SettingsStaffRole | string {
   const role = cleanText(value).toLowerCase();
 
-  if (["admin", "doctor", "coordinator", "staff", "interpreter"].includes(role)) {
+  if (["admin", "coordinator", "staff", "interpreter"].includes(role)) {
     return role as SettingsStaffRole;
   }
 
@@ -261,12 +273,9 @@ export async function getVisitStatusColors(): Promise<VisitStatusColorMap> {
     if (Date.now() - ts < STATUS_COLOR_TTL_MS) return cached;
   }
 
-  const ref = doc(db, "appSettings", "visitStatusColors");
-  const snap = await getDoc(ref);
-
-  if (!snap.exists()) return DEFAULT_VISIT_STATUS_COLORS;
-
-  const data = snap.data() as Partial<VisitStatusColorSetting>;
+  const result = await callSettingsApi("get_visit_status_colors");
+  const data = result.data as Partial<VisitStatusColorSetting> | null;
+  if (!data) return DEFAULT_VISIT_STATUS_COLORS;
   const colors = normalizeVisitStatusColors(data.colors);
   setCachedVisitStatusColors(colors);
   return colors;
@@ -279,19 +288,10 @@ export async function saveVisitStatusColors(
   assertCanManageSettings(staff);
 
   const normalizedColors = normalizeVisitStatusColors(colors);
-  const ref = doc(db, "appSettings", "visitStatusColors");
-
-  await setDoc(
-    ref,
-    {
-      id: "visitStatusColors",
-      colors: normalizedColors,
-      updatedAt: serverTimestamp(),
-      updatedBy: staff.displayName || staff.email || "",
-      updatedByUid: staff.uid,
-    },
-    { merge: true }
-  );
+  await callSettingsApi("save_visit_status_colors", {
+    colors: normalizedColors,
+    updatedBy: staff.displayName || staff.email || "",
+  });
 
   createLog({
     action: "settings_update",
@@ -315,15 +315,11 @@ export async function resetVisitStatusColors(staff: StaffUser) {
 ============================================================ */
 
 export async function getGeneralSettings(): Promise<GeneralSettings> {
-  const ref = doc(db, "appSettings", "general");
-  const snap = await getDoc(ref);
-
-  if (!snap.exists()) return DEFAULT_GENERAL_SETTINGS;
-
-  const data = snap.data() as Partial<GeneralSettings>;
+  const result = await callSettingsApi("get_general_settings");
+  const data = result.data as Partial<GeneralSettings> | null;
+  if (!data) return DEFAULT_GENERAL_SETTINGS;
   const appCountry = normalizeCountryKey(data.appCountry);
   const country = COUNTRY_TIMEZONES[appCountry] || COUNTRY_TIMEZONES.Korea;
-
   return {
     id: "general",
     appCountry,
@@ -344,33 +340,19 @@ export async function saveGeneralSettings(
   const normalizedCountry = normalizeCountryKey(appCountry);
   const country = COUNTRY_TIMEZONES[normalizedCountry] || COUNTRY_TIMEZONES.Korea;
 
-  const nextSettings: GeneralSettings = {
+  const nextSettings = {
     id: "general",
     appCountry: normalizedCountry,
     appCountryLabel: country.label,
     appTimezone: country.timezone,
-    updatedAt: serverTimestamp(),
-    updatedBy: staff.displayName || staff.email || "",
-    updatedByUid: staff.uid,
   };
 
-  const ref = doc(db, "appSettings", "general");
-  await setDoc(ref, nextSettings, { merge: true });
+  await callSettingsApi("save_general_settings", {
+    settings: nextSettings,
+    updatedBy: staff.displayName || staff.email || "",
+  });
 
-  createLog({
-    action: "settings_update",
-    targetType: "settings",
-    targetId: "general",
-    staff,
-    message: `상담회 국가를 ${country.label} / ${country.timezone}으로 변경했습니다.`,
-    after: {
-      appCountry: normalizedCountry,
-      appCountryLabel: country.label,
-      appTimezone: country.timezone,
-    },
-  }).catch((e) => console.warn("[saveGeneralSettings] log write failed:", e));
-
-  return { ...nextSettings, updatedAt: undefined };
+  return nextSettings as GeneralSettings;
 }
 
 /* ============================================================
@@ -446,31 +428,14 @@ export async function addConferenceMemo(
 
   if (!text) throw new Error("메모 내용을 입력하세요.");
 
-  const docRef = await addDoc(collection(db, "conferenceMemos"), {
+  const result = await callSettingsApi("add_memo", {
     memoDate: targetDate,
     memoText: text,
-    createdBy: staff.uid,
     createdByName: staff.displayName || staff.email || "",
-    createdAt: serverTimestamp(),
-    deleted: false,
-    deletedAt: null,
-    deletedBy: "",
   });
 
-  createLog({
-    action: "memo_create",
-    targetType: "memo",
-    targetId: docRef.id,
-    staff,
-    message: `${targetDate} 전체 메모를 추가했습니다.`,
-    after: {
-      memoDate: targetDate,
-      memoText: text,
-    },
-  }).catch((e) => console.warn("[addConferenceMemo] log write failed:", e));
-
   invalidateMemoCache(targetDate);
-  return docRef.id;
+  return result.id as string;
 }
 
 export async function deleteConferenceMemo(memoId: string, staff: StaffUser, memoDate?: string) {
@@ -479,22 +444,7 @@ export async function deleteConferenceMemo(memoId: string, staff: StaffUser, mem
   const id = cleanText(memoId);
   if (!id) throw new Error("메모 ID가 없습니다.");
 
-  const ref = doc(db, "conferenceMemos", id);
-
-  await updateDoc(ref, {
-    deleted: true,
-    deletedAt: serverTimestamp(),
-    deletedBy: staff.uid,
-  });
-
-  createLog({
-    action: "memo_delete",
-    targetType: "memo",
-    targetId: id,
-    staff,
-    message: "전체 메모를 삭제했습니다.",
-    after: { deleted: true },
-  }).catch((e) => console.warn("[deleteConferenceMemo] log write failed:", e));
+  await callSettingsApi("delete_memo", { memoId: id });
 
   if (memoDate) invalidateMemoCache(normalizeDateOnly(memoDate));
   return true;
@@ -505,49 +455,38 @@ export async function deleteConferenceMemo(memoId: string, staff: StaffUser, mem
 ============================================================ */
 
 export async function getStaffListForSettings(): Promise<SettingsStaffRecord[]> {
-  const snap = await getDocs(collection(db, "staff"));
+  const result = await callSettingsApi("get_staff_list");
+  const rawList = (result.staff as Record<string, unknown>[] | undefined) || [];
 
-  return snap.docs
-    .map((docSnap) => {
-      const data = docSnap.data();
-
-      return {
-        id: docSnap.id,
-        uid: cleanText(data.uid || docSnap.id),
-        email: cleanText(data.email),
-        displayName: cleanText(
-          data.displayName ||
-            data["display_name"] ||
-            data.email ||
-            docSnap.id
-        ),
-        role: cleanRole(data.role),
-        active: data.active !== false,
-        staffCode: cleanText(data.staffCode || data["staff_code"]),
-        orderNo:
-          typeof data.orderNo === "number"
-            ? data.orderNo
-            : typeof data["order_no"] === "number"
-              ? data["order_no"] as number
-              : 999999,
-        createdAt: data.createdAt,
-        updatedAt: data.updatedAt,
-        updatedBy: cleanText(data.updatedBy),
-        updatedByUid: cleanText(data.updatedByUid),
-      };
-    })
+  return rawList
+    .map((data) => ({
+      id: cleanText(data.id),
+      uid: cleanText(data.uid || data.id),
+      email: cleanText(data.email),
+      displayName: cleanText(data.displayName || data["display_name"] || data.email || data.id),
+      role: cleanRole(data.role),
+      active: data.active !== false,
+      staffCode: cleanText(data.staffCode || data["staff_code"]),
+      orderNo:
+        typeof data.orderNo === "number"
+          ? data.orderNo
+          : typeof data["order_no"] === "number"
+            ? data["order_no"] as number
+            : 999999,
+      createdAt: data.createdAt,
+      updatedAt: data.updatedAt,
+      updatedBy: cleanText(data.updatedBy),
+      updatedByUid: cleanText(data.updatedByUid),
+    }))
     .sort((a, b) => {
       const roleOrder: Record<string, number> = {
         admin: 1,
-        doctor: 2,
-        coordinator: 3,
-        staff: 4,
-        interpreter: 5,
+        coordinator: 2,
+        staff: 3,
+        interpreter: 4,
       };
-
       const ar = roleOrder[String(a.role)] || 99;
       const br = roleOrder[String(b.role)] || 99;
-
       return (
         ar - br ||
         Number(a.orderNo || 999999) - Number(b.orderNo || 999999) ||
@@ -769,12 +708,9 @@ export async function getAppointmentTypeColors(): Promise<AppointmentTypeColorMa
     if (Date.now() - ts < APPT_COLOR_TTL_MS) return cached;
   }
 
-  const ref = doc(db, "appSettings", "appointmentTypeColors");
-  const snap = await getDoc(ref);
-
-  if (!snap.exists()) return DEFAULT_APPOINTMENT_TYPE_COLORS;
-
-  const data = snap.data() as { colors?: Partial<AppointmentTypeColorMap> };
+  const result = await callSettingsApi("get_appointment_colors");
+  const data = result.data as { colors?: Partial<AppointmentTypeColorMap> } | null;
+  if (!data) return DEFAULT_APPOINTMENT_TYPE_COLORS;
   const colors = normalizeAppointmentTypeColors(data.colors);
   setCachedAppointmentTypeColors(colors);
   return colors;
@@ -787,19 +723,10 @@ export async function saveAppointmentTypeColors(
   assertCanManageSettings(staff);
 
   const normalizedColors = normalizeAppointmentTypeColors(colors);
-  const ref = doc(db, "appSettings", "appointmentTypeColors");
-
-  await setDoc(
-    ref,
-    {
-      id: "appointmentTypeColors",
-      colors: normalizedColors,
-      updatedAt: serverTimestamp(),
-      updatedBy: staff.displayName || staff.email || "",
-      updatedByUid: staff.uid,
-    },
-    { merge: true }
-  );
+  await callSettingsApi("save_appointment_colors", {
+    colors: normalizedColors,
+    updatedBy: staff.displayName || staff.email || "",
+  });
 
   createLog({
     action: "settings_update",

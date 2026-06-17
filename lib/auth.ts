@@ -12,7 +12,6 @@ import { auth, db } from "./firebase";
 
 export type StaffRole =
   | "admin"
-  | "doctor"
   | "coordinator"
   | "staff"
   | "interpreter";
@@ -29,8 +28,7 @@ export type StaffUser = {
 };
 
 const ROLE_LEVEL: Record<StaffRole, number> = {
-  admin: 5,
-  doctor: 4,
+  admin: 4,
   coordinator: 3,
   staff: 2,
   interpreter: 1,

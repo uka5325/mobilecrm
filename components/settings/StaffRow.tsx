@@ -7,7 +7,6 @@ import { Td } from "./ui";
 
 const STAFF_ROLES: SettingsStaffRole[] = [
   "admin",
-  "doctor",
   "coordinator",
   "staff",
   "interpreter",

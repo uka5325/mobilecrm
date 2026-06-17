@@ -1,14 +1,12 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { collection, onSnapshot, query, where, orderBy } from "firebase/firestore";
-import { db } from "@/lib/firebase";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import {
   type ReservationRecord,
   type AppointmentType,
   APPOINTMENT_TYPE_COLORS,
-  mapReservationDoc,
+  subscribeAllReservations,
 } from "@/lib/reservations";
 import { todayString } from "@/lib/dateUtils";
 import { DetailDrawer } from "@/components/timeline/DetailDrawer";
@@ -89,29 +87,26 @@ function getAppointmentColor(type: AppointmentType | string) {
 }
 
 function useScheduleData(startDate: string, endDate: string, authReady: boolean) {
-  const [reservations, setReservations] = useState<ReservationRecord[]>([]);
+  const [allReservations, setAllReservations] = useState<ReservationRecord[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (!authReady) return;
     setLoading(true);
-    const q = query(
-      collection(db, "reservations"),
-      where("reservationDate", ">=", startDate),
-      where("reservationDate", "<=", endDate),
-      orderBy("reservationDate"),
+    const unsub = subscribeAllReservations(
+      ({ reservations }) => {
+        setAllReservations(reservations);
+        setLoading(false);
+      },
+      () => setLoading(false)
     );
-
-    const unsub = onSnapshot(q, (snap) => {
-      const rows = snap.docs
-        .map((d) => mapReservationDoc(d.id, d.data() as Record<string, unknown>))
-        .filter((r) => !r.isDeleted);
-      setReservations(rows);
-      setLoading(false);
-    }, () => setLoading(false));
-
     return () => unsub();
-  }, [startDate, endDate, authReady]);
+  }, [authReady]);
+
+  const reservations = useMemo(
+    () => allReservations.filter((r) => r.reservationDate >= startDate && r.reservationDate <= endDate),
+    [allReservations, startDate, endDate]
+  );
 
   return { reservations, loading };
 }

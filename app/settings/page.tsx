@@ -83,12 +83,12 @@ export default function SettingsPage() {
 
   const canManageSettings = useMemo(() => {
     const role = String(currentUser?.role || "").toLowerCase();
-    return role === "admin" || role === "doctor";
+    return role === "admin";
   }, [currentUser]);
 
   const canEditMemo = useMemo(() => {
     const role = String(currentUser?.role || "").toLowerCase();
-    return ["admin", "doctor", "coordinator", "staff"].includes(role);
+    return ["admin", "coordinator", "staff"].includes(role);
   }, [currentUser]);
 
   const hasColorChanges = useMemo(() => {
@@ -161,10 +161,11 @@ export default function SettingsPage() {
   }
 
   useEffect(() => {
+    if (authLoading) return;
     loadBaseSettings();
     loadMemos(todayString());
-    loadStaffList();
-  }, []);
+    if (currentUser) loadStaffList();
+  }, [authLoading]);
 
   function clearAlerts() {
     setError("");
