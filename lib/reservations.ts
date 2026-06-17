@@ -1,5 +1,4 @@
 import {
-  addDoc,
   collection,
   doc,
   getDoc,
@@ -7,8 +6,6 @@ import {
   onSnapshot,
   orderBy,
   query,
-  serverTimestamp,
-  updateDoc,
   where,
 } from "firebase/firestore";
 import { auth, db } from "./firebase";
@@ -16,6 +13,20 @@ import type { StaffUser } from "./auth";
 import { cleanText } from "./stringUtils";
 import { createLog } from "./logs";
 import { parseBirthInfo } from "./reservationUtils";
+
+async function callReservationsApi(action: string, payload: Record<string, unknown>) {
+  const firebaseUser = auth.currentUser;
+  if (!firebaseUser) {
+    return { success: false as const, message: "로그인 상태를 확인할 수 없습니다. 페이지를 새로고침 후 다시 시도해주세요." };
+  }
+  const idToken = await firebaseUser.getIdToken();
+  const res = await fetch("/api/reservations", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ idToken, action, payload }),
+  });
+  return res.json() as Promise<Record<string, unknown> & { success: boolean; message?: string }>;
+}
 
 export type DoctorOption = {
   uid: string;
@@ -603,7 +614,7 @@ export async function createReservation(
     params.gender || ""
   );
 
-  const patientPayload = {
+  const patientData = {
     patientId,
     name,
     birth: parsedBirth.birth,
@@ -611,8 +622,6 @@ export async function createReservation(
     gender: parsedBirth.gender,
     phone: cleanText(params.phone),
     nationality: cleanText(params.nationality),
-    createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp(),
   };
 
   const doctorStatusMap: Record<string, ReservationStatus> = {};
@@ -628,7 +637,7 @@ export async function createReservation(
     };
   });
 
-  const reservationPayload = {
+  const reservationData = {
     reservationId,
     patientId,
 
@@ -666,44 +675,20 @@ export async function createReservation(
     invoiceId: "",
     invoiceSheetName: "",
 
-    createdAt: serverTimestamp(),
     createdBy: staff.displayName,
     createdByUid: staff.uid,
-    updatedAt: serverTimestamp(),
     updatedBy: staff.displayName,
     updatedByUid: staff.uid,
 
     isDeleted: false,
   };
 
-  const firebaseUser = auth.currentUser;
-  if (!firebaseUser) {
-    console.error("[createReservation] auth.currentUser is null — not logged in to Firebase");
-    return { success: false, message: "로그인 상태를 확인할 수 없습니다. 페이지를 새로고침 후 다시 시도해주세요." };
+  const apiResult = await callReservationsApi("create", { patient: patientData, reservation: reservationData });
+  if (!apiResult.success) {
+    return { success: false, message: apiResult.message || "예약 등록에 실패했습니다." };
   }
-  console.log("[createReservation] auth uid:", firebaseUser.uid);
 
-  let savedPatientId = "";
-  let savedReservationId = "";
-
-  const WRITE_TIMEOUT = 12000;
-  await Promise.race([
-    (async () => {
-      console.log("[createReservation] attempting Firestore write…");
-      const patientRef = await addDoc(collection(db, "patients"), patientPayload);
-      savedPatientId = patientRef.id;
-      console.log("[createReservation] patient written:", patientRef.id);
-      const reservationRef = await addDoc(collection(db, "reservations"), reservationPayload);
-      savedReservationId = reservationRef.id;
-      console.log("[createReservation] reservation written:", reservationRef.id);
-    })(),
-    new Promise<never>((_, reject) =>
-      setTimeout(
-        () => reject(new Error("Firestore 응답 없음 (12초 초과). Firebase Console에서 Firestore 데이터베이스가 생성됐는지, 보안 규칙이 게시됐는지 확인하세요.")),
-        WRITE_TIMEOUT
-      )
-    ),
-  ]);
+  const savedReservationId = String(apiResult.reservationDocId || "");
 
   createLog({
     action: "reservation_create",
@@ -725,7 +710,7 @@ export async function createReservation(
 
   return {
     success: true,
-    reservation: mapReservationDoc(savedReservationId, reservationPayload),
+    reservation: mapReservationDoc(savedReservationId, { ...reservationData, createdAt: null, updatedAt: null }),
   };
 }
 
@@ -769,34 +754,35 @@ export async function updateDoctorStatus(
   staff: StaffUser,
   options?: { previousOperationStatus?: string }
 ) {
-  const ref = doc(db, "reservations", reservationDocId);
-
-  const updateData: Record<string, unknown> = {
+  const reservationPatch: Record<string, unknown> = {
     [`doctorStatusMap.${doctorName}`]: newStatus,
     [`doctorStatusMetaMap.${doctorName}.status`]: newStatus,
     [`doctorStatusMetaMap.${doctorName}.updatedAt`]: new Date().toISOString(),
     [`doctorStatusMetaMap.${doctorName}.updatedBy`]: staff.displayName,
     [`doctorStatusMetaMap.${doctorName}.updatedRole`]: staff.role,
-    updatedAt: serverTimestamp(),
     updatedBy: staff.displayName,
     updatedByUid: staff.uid,
   };
 
   if (newStatus === "원상중") {
-    // 대시보드/KPI 카운팅을 위해 전역 operationStatus도 업데이트
-    updateData.operationStatus = "원상중";
-    // 다른 doctor 카드가 이전 상태를 유지하도록 preConsStatus 저장
+    reservationPatch.operationStatus = "원상중";
     if (options?.previousOperationStatus !== undefined) {
-      updateData.preConsStatus = options.previousOperationStatus;
+      reservationPatch.preConsStatus = options.previousOperationStatus;
     }
   } else {
-    // 원상중 해제 시 preConsStatus 초기화
-    updateData.preConsStatus = "";
+    reservationPatch.preConsStatus = "";
   }
 
-  await updateDoc(ref, updateData);
+  const apiResult = await callReservationsApi("update", {
+    reservationDocId,
+    reservationPatch,
+  });
 
-  await createLog({
+  if (!apiResult.success) {
+    return { success: false, message: apiResult.message || "상태 변경에 실패했습니다." };
+  }
+
+  createLog({
     action: "reservation_update",
     targetType: "reservation",
     targetId: reservationId,
@@ -805,7 +791,7 @@ export async function updateDoctorStatus(
     message: `${staff.displayName}님이 ${doctorName} 원상중 상태를 변경했습니다.`,
     before: null,
     after: { doctorStatusMap: { [doctorName]: newStatus } },
-  });
+  }).catch((e) => console.warn("[updateDoctorStatus] log write failed:", e));
 
   return { success: true };
 }
@@ -816,17 +802,23 @@ export async function updateReservationStatus(
   newStatus: ReservationStatus,
   staff: StaffUser
 ) {
-  const ref = doc(db, "reservations", reservationDocId);
-
-  await updateDoc(ref, {
+  const reservationPatch = {
     operationStatus: newStatus,
     preConsStatus: "",
-    updatedAt: serverTimestamp(),
     updatedBy: staff.displayName,
     updatedByUid: staff.uid,
+  };
+
+  const apiResult = await callReservationsApi("update", {
+    reservationDocId,
+    reservationPatch,
   });
 
-  await createLog({
+  if (!apiResult.success) {
+    return { success: false, message: apiResult.message || "상태 변경에 실패했습니다." };
+  }
+
+  createLog({
     action: "reservation_update",
     targetType: "reservation",
     targetId: reservationId,
@@ -837,7 +829,7 @@ export async function updateReservationStatus(
     after: {
       operationStatus: newStatus,
     },
-  });
+  }).catch((e) => console.warn("[updateReservationStatus] log write failed:", e));
 
   return { success: true };
 }
@@ -848,15 +840,16 @@ export async function toggleSurgeryReserved(
   nextValue: boolean,
   staff: StaffUser
 ) {
-  const ref = doc(db, "reservations", reservationDocId);
-
-  await updateDoc(ref, {
+  const apiResult = await callReservationsApi("toggleSurgery", {
+    reservationDocId,
     surgeryReserved: nextValue,
-    surgeryReservedAt: nextValue ? new Date().toISOString() : "",
-    updatedAt: serverTimestamp(),
-    updatedBy: staff.displayName,
-    updatedByUid: staff.uid,
+    staffDisplay: staff.displayName,
+    staffUid: staff.uid,
   });
+
+  if (!apiResult.success) {
+    return { success: false, message: apiResult.message || "수술예약 상태 변경에 실패했습니다." };
+  }
 
   createLog({
     action: "reservation_update",
@@ -983,25 +976,32 @@ export async function updateReservationFull(
     doctorStatusMap,
     doctorStatusMetaMap,
 
-    updatedAt: serverTimestamp(),
     updatedBy: staff.displayName,
     updatedByUid: staff.uid,
   };
 
-  await updateDoc(doc(db, "reservations", reservationDocId), reservationPatch);
-
   const patientDocId = await findPatientDocId(patientId);
 
-  if (patientDocId) {
-    await updateDoc(doc(db, "patients", patientDocId), {
-      name,
-      birth: parsedBirth.birth,
-      birthInput: parsedBirth.birthInput,
-      gender: parsedBirth.gender,
-      phone: cleanText(params.phone),
-      nationality: cleanText(params.nationality),
-      updatedAt: serverTimestamp(),
-    });
+  const patientPatch = patientDocId
+    ? {
+        name,
+        birth: parsedBirth.birth,
+        birthInput: parsedBirth.birthInput,
+        gender: parsedBirth.gender,
+        phone: cleanText(params.phone),
+        nationality: cleanText(params.nationality),
+      }
+    : undefined;
+
+  const apiResult = await callReservationsApi("update", {
+    reservationDocId,
+    patientDocId: patientDocId ?? undefined,
+    reservationPatch,
+    patientPatch,
+  });
+
+  if (!apiResult.success) {
+    return { success: false, message: apiResult.message || "예약 수정에 실패했습니다." };
   }
 
   createLog({
@@ -1040,14 +1040,15 @@ export async function deleteReservation(
     return { success: false, message: "예약 삭제 권한이 없습니다." };
   }
 
-  const ref = doc(db, "reservations", reservationDocId);
-
-  await updateDoc(ref, {
-    isDeleted: true,
-    updatedAt: serverTimestamp(),
-    updatedBy: staff.displayName,
-    updatedByUid: staff.uid,
+  const apiResult = await callReservationsApi("delete", {
+    reservationDocId,
+    staffDisplay: staff.displayName,
+    staffUid: staff.uid,
   });
+
+  if (!apiResult.success) {
+    return { success: false, message: apiResult.message || "예약 삭제에 실패했습니다." };
+  }
 
   createLog({
     action: "reservation_delete",
