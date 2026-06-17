@@ -10,9 +10,8 @@ import {
   serverTimestamp,
   updateDoc,
   where,
-  writeBatch,
 } from "firebase/firestore";
-import { db } from "./firebase";
+import { auth, db } from "./firebase";
 import type { StaffUser } from "./auth";
 import { cleanText } from "./stringUtils";
 import { createLog } from "./logs";
@@ -677,12 +676,34 @@ export async function createReservation(
     isDeleted: false,
   };
 
-  const batch = writeBatch(db);
-  const patientRef = doc(collection(db, "patients"));
-  const reservationRef = doc(collection(db, "reservations"));
-  batch.set(patientRef, patientPayload);
-  batch.set(reservationRef, reservationPayload);
-  await batch.commit();
+  const firebaseUser = auth.currentUser;
+  if (!firebaseUser) {
+    console.error("[createReservation] auth.currentUser is null — not logged in to Firebase");
+    return { success: false, message: "로그인 상태를 확인할 수 없습니다. 페이지를 새로고침 후 다시 시도해주세요." };
+  }
+  console.log("[createReservation] auth uid:", firebaseUser.uid);
+
+  let savedPatientId = "";
+  let savedReservationId = "";
+
+  const WRITE_TIMEOUT = 12000;
+  await Promise.race([
+    (async () => {
+      console.log("[createReservation] attempting Firestore write…");
+      const patientRef = await addDoc(collection(db, "patients"), patientPayload);
+      savedPatientId = patientRef.id;
+      console.log("[createReservation] patient written:", patientRef.id);
+      const reservationRef = await addDoc(collection(db, "reservations"), reservationPayload);
+      savedReservationId = reservationRef.id;
+      console.log("[createReservation] reservation written:", reservationRef.id);
+    })(),
+    new Promise<never>((_, reject) =>
+      setTimeout(
+        () => reject(new Error("Firestore 응답 없음 (12초 초과). Firebase Console에서 Firestore 데이터베이스가 생성됐는지, 보안 규칙이 게시됐는지 확인하세요.")),
+        WRITE_TIMEOUT
+      )
+    ),
+  ]);
 
   createLog({
     action: "reservation_create",
@@ -704,7 +725,7 @@ export async function createReservation(
 
   return {
     success: true,
-    reservation: mapReservationDoc(reservationRef.id, reservationPayload),
+    reservation: mapReservationDoc(savedReservationId, reservationPayload),
   };
 }
 
