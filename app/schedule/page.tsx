@@ -100,6 +100,7 @@ const END_HOUR = 22;
 const TOTAL_HOURS = END_HOUR - START_HOUR;
 const TIME_COL_W = 52; // px width of time label column
 const CARD_HEIGHT = HOUR_HEIGHT - 6;
+const WEEK_CARD_H = 20; // compact height for week view
 
 function timeToMinutes(time: string) {
   if (!time) return START_HOUR * 60;
@@ -184,18 +185,24 @@ function DayCard({ item, top, onClick }: { item: ReservationRecord; top: number;
 }
 
 // ─── buildStackedPositions ────────────────────────────────────────────────────
-function buildStackedPositions(items: ReservationRecord[]) {
+// cardH: the actual rendered card height. Used to detect and resolve overlap.
+function buildStackedPositions(items: ReservationRecord[], cardH = CARD_HEIGHT) {
   const sorted = [...items].sort((a, b) =>
     timeToMinutes(a.reservationTime || "00:00") - timeToMinutes(b.reservationTime || "00:00")
   );
   const result: { item: ReservationRecord; top: number }[] = [];
-  const counts = new Map<string, number>();
   for (const item of sorted) {
     const t = item.reservationTime || "";
-    const n = counts.get(t) || 0;
     const base = minutesToPx(timeToMinutes(t || `${START_HOUR}:00`));
-    result.push({ item, top: base + n * HOUR_HEIGHT });
-    counts.set(t, n + 1);
+    // Find minimum top that doesn't overlap any previously placed card
+    let top = base;
+    for (const placed of result) {
+      const placedBottom = placed.top + cardH + 2;
+      if (top < placedBottom && placed.top < top + cardH + 2) {
+        top = Math.max(top, placedBottom);
+      }
+    }
+    result.push({ item, top });
   }
   return result;
 }
@@ -319,6 +326,25 @@ function DayView({
   );
 }
 
+// ─── WeekDayCard (compact for week view) ─────────────────────────────────────
+function WeekDayCard({ item, top, onClick }: { item: ReservationRecord; top: number; onClick: () => void }) {
+  const color = getAppointmentColor(item.appointmentType);
+  const time = item.reservationTime ? item.reservationTime.slice(0, 5) : "";
+  return (
+    <button
+      onClick={onClick}
+      className="absolute left-0.5 right-0.5 overflow-hidden rounded px-1 text-left text-white shadow-sm transition hover:brightness-110 active:scale-[0.99]"
+      style={{ top, height: WEEK_CARD_H, backgroundColor: color }}
+      title={[item.name, time, item.hospital, item.consultArea].filter(Boolean).join(" · ")}
+    >
+      <div className="truncate text-[10px] font-semibold leading-tight">
+        {time && <span className="mr-0.5 opacity-80">{time}</span>}
+        {item.name}
+      </div>
+    </button>
+  );
+}
+
 // ─── WeekView ─────────────────────────────────────────────────────────────────
 function WeekView({
   weekStart,
@@ -334,9 +360,9 @@ function WeekView({
   const dayData = useMemo(() => {
     return days.map((day) => {
       const dayItems = reservations.filter((r) => r.reservationDate === day);
-      const positioned = buildStackedPositions(dayItems);
+      const positioned = buildStackedPositions(dayItems, WEEK_CARD_H);
       const contentH = positioned.length > 0
-        ? Math.max(...positioned.map((p) => p.top + CARD_HEIGHT + 4))
+        ? Math.max(...positioned.map((p) => p.top + WEEK_CARD_H + 4))
         : 0;
       return { day, dayItems, positioned, contentH };
     });
@@ -392,7 +418,7 @@ function WeekView({
               <div className="relative" style={{ height: maxH }}>
                 <HourGrid rows={gridRows} />
                 {positioned.map(({ item, top }) => (
-                  <DayCard key={item.id} item={item} top={top} onClick={() => onCardClick(item)} />
+                  <WeekDayCard key={item.id} item={item} top={top} onClick={() => onCardClick(item)} />
                 ))}
               </div>
             </div>
