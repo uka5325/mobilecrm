@@ -16,6 +16,7 @@ import {
   accumulate,
   finalizeCounter,
   pctText,
+  formatDepositMap,
   setQuickRange,
 } from "@/lib/dashboardUtils";
 import { QuickButton } from "@/components/dashboard/QuickButton";
