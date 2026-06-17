@@ -193,8 +193,10 @@ export function DetailDrawer({ open, reservation, currentUser, onClose, onRefres
       setDetailMessage("수정 저장 완료");
       await loadLogs(updated);
       await onRefreshLatestLog(updated);
-    } catch {
-      setDetailError("예약 수정 중 오류가 발생했습니다.");
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setDetailError(`저장 오류: ${msg}`);
+      console.error("[DetailDrawer] save error:", err);
     } finally {
       setDetailSaving(false);
     }

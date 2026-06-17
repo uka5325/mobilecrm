@@ -684,7 +684,7 @@ export async function createReservation(
   batch.set(reservationRef, reservationPayload);
   await batch.commit();
 
-  await createLog({
+  createLog({
     action: "reservation_create",
     targetType: "reservation",
     targetId: reservationId,
@@ -700,7 +700,7 @@ export async function createReservation(
       hospital,
       appointmentType: params.appointmentType || "상담",
     },
-  });
+  }).catch((e) => console.warn("[createReservation] log write failed:", e));
 
   return {
     success: true,
@@ -983,7 +983,7 @@ export async function updateReservationFull(
     });
   }
 
-  await createLog({
+  createLog({
     action: "reservation_update",
     targetType: "reservation",
     targetId: reservationId,
@@ -1005,7 +1005,7 @@ export async function updateReservationFull(
       coordinators: params.coordinators || [],
       depositAmount: cleanText(params.depositAmount),
     },
-  });
+  }).catch((e) => console.warn("[updateReservationFull] log write failed:", e));
 
   return { success: true };
 }

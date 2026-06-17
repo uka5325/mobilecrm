@@ -76,8 +76,10 @@ export function NewReservationDrawer({ open, onClose, currentUser, initialDate }
       }
 
       onClose();
-    } catch {
-      setErrorMessage("예약 등록 중 오류가 발생했습니다.");
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setErrorMessage(`저장 오류: ${msg}`);
+      console.error("[NewReservationDrawer] save error:", err);
     } finally {
       setSaving(false);
     }

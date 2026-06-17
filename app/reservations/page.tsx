@@ -162,8 +162,10 @@ const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
       );
       setInlineEditId(null);
       setInlineForm(null);
-    } catch {
-      setPageError("수정 중 오류가 발생했습니다.");
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setPageError(`수정 오류: ${msg}`);
+      console.error("[ReservationsPage] inline save error:", err);
     } finally {
       setInlineSaving(false);
     }
