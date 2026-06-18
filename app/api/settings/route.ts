@@ -141,6 +141,17 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: true, id: docRef.id });
     }
 
+    // ── WRITE: update memo ───────────────────────────────────────────────
+    if (action === "update_memo") {
+      const p = payload as { memoId: string; memoText: string };
+      await adminDb.doc(`conferenceMemos/${p.memoId}`).update({
+        memoText: p.memoText,
+        updatedAt: FieldValue.serverTimestamp(),
+        updatedBy: uid,
+      });
+      return NextResponse.json({ success: true });
+    }
+
     // ── WRITE: delete memo (soft) ─────────────────────────────────────────
     if (action === "delete_memo") {
       const p = payload as { memoId: string };

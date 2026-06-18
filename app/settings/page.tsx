@@ -9,6 +9,7 @@ import {
   DEFAULT_GENERAL_SETTINGS,
   deactivateStaffFromSettings,
   deleteConferenceMemo,
+  updateConferenceMemo,
   getAppointmentTypeColors,
   getConferenceMemos,
   getGeneralSettings,
@@ -261,6 +262,19 @@ export default function SettingsPage() {
     }
   }
 
+  async function handleUpdateMemo(memoId: string, newText: string) {
+    if (!currentUser) { setError("로그인 정보를 확인할 수 없습니다."); return; }
+    clearAlerts();
+    try {
+      await updateConferenceMemo(memoId, newText, currentUser, memoDate);
+      await loadMemos(memoDate);
+      setMessage("메모가 수정되었습니다.");
+    } catch (err) {
+      console.error(err);
+      setError(getErrorMessage(err));
+    }
+  }
+
   async function handleChangePassword() {
     if (!currentUser) { setError("로그인 정보를 확인할 수 없습니다."); return; }
     setSaving(true);
@@ -344,6 +358,7 @@ export default function SettingsPage() {
             onTextChange={setMemoText}
             onAdd={handleAddMemo}
             onDelete={handleDeleteMemo}
+            onUpdate={handleUpdateMemo}
           />
         )}
 

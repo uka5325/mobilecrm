@@ -426,6 +426,21 @@ export async function deleteConferenceMemo(memoId: string, staff: StaffUser, mem
   return true;
 }
 
+export async function updateConferenceMemo(memoId: string, memoText: string, staff: StaffUser, memoDate?: string) {
+  assertCanEditMemo(staff);
+
+  const id = cleanText(memoId);
+  if (!id) throw new Error("메모 ID가 없습니다.");
+
+  const text = cleanText(memoText);
+  if (!text) throw new Error("메모 내용을 입력하세요.");
+
+  await callSettingsApi("update_memo", { memoId: id, memoText: text });
+
+  if (memoDate) invalidateMemoCache(normalizeDateOnly(memoDate));
+  return true;
+}
+
 /* ============================================================
    직원 관리
 ============================================================ */
