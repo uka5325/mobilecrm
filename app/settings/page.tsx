@@ -289,7 +289,7 @@ export default function SettingsPage() {
             return (
               <button
                 key={item.key}
-                onClick={() => { setActiveTab(item.key); clearAlerts(); }}
+                onClick={() => { setActiveTab(item.key); clearAlerts(); if (item.key === "memo") loadMemos(memoDate); }}
                 className={`flex shrink-0 items-center gap-2 rounded-xl px-3 py-3 text-left text-sm transition hover:-translate-y-0.5 active:scale-95 lg:w-full ${
                   active ? "bg-emerald-50 font-bold text-emerald-700" : "bg-white text-gray-500 hover:bg-gray-50 hover:text-gray-900"
                 }`}
