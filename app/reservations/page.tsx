@@ -33,7 +33,7 @@ export default function ReservationsPage() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [importDrawerOpen, setImportDrawerOpen] = useState(false);
 
-  const [addPatient, setAddPatient] = useState<{ name: string; birthInput: string; phone: string; nationality: string; patientId: string } | undefined>();
+  const [addPatient, setAddPatient] = useState<{ name: string; birthInput: string; phone: string; nationality: string; patientId: string; hospital?: string; consultArea?: string; appointmentType?: import("@/lib/reservations").AppointmentType; coordinators?: string; depositAmount?: string; surgeryCost?: string } | undefined>();
 
   const [inlineEditId, setInlineEditId] = useState<string | null>(null);
   const [inlineForm, setInlineForm] = useState<{
@@ -317,6 +317,12 @@ export default function ReservationsPage() {
       phone: item.phone || "",
       nationality: item.nationality || "",
       patientId: item.patientId,
+      hospital: item.hospital || "",
+      consultArea: item.consultArea || "",
+      appointmentType: item.appointmentType,
+      coordinators: (item.coordinators || []).join(", "),
+      depositAmount: item.depositAmount || "",
+      surgeryCost: item.surgeryCost || "",
     });
     setDrawerOpen(true);
   }
