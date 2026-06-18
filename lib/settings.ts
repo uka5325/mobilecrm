@@ -382,38 +382,14 @@ export async function getConferenceMemos(
     } catch {}
   }
 
-  const q = query(
-    collection(db, "conferenceMemos"),
-    where("memoDate", "==", targetDate)
-  );
-
-  const snap = await getDocs(q);
-
-  const result = snap.docs
-    .map((docSnap) => {
-      const data = docSnap.data() as Omit<ConferenceMemo, "id">;
-
-      return {
-        id: docSnap.id,
-        memoDate: normalizeDateOnly(data.memoDate),
-        memoText: cleanText(data.memoText),
-        createdBy: cleanText(data.createdBy),
-        createdByName: cleanText(data.createdByName),
-        createdAt: data.createdAt,
-        deleted: Boolean(data.deleted),
-        deletedAt: data.deletedAt,
-        deletedBy: cleanText(data.deletedBy),
-      };
-    })
-    .filter((memo) => memo.deleted !== true)
-    .sort((a, b) => toMillis(b.createdAt) - toMillis(a.createdAt))
-    .slice(0, limit);
+  const result = await callSettingsApi("get_memos", { memoDate: targetDate, limit });
+  const memos = (result.memos as ConferenceMemo[]) ?? [];
 
   setTimeout(() => {
-    try { sessionStorage.setItem(cacheKey, JSON.stringify(result)); } catch {}
+    try { sessionStorage.setItem(cacheKey, JSON.stringify(memos)); } catch {}
   }, 0);
 
-  return result;
+  return memos;
 }
 
 export async function addConferenceMemo(

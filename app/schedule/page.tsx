@@ -525,8 +525,9 @@ export default function SchedulePage() {
   const [memoSectionOpen, setMemoSectionOpen] = useState(true);
 
   useEffect(() => {
+    if (!authReady) return;
     getConferenceMemos(baseDate).then(setTodayMemos).catch(() => setTodayMemos([]));
-  }, [baseDate]);
+  }, [baseDate, authReady]);
 
   const { startDate, endDate } = useMemo(() => {
     if (viewMode === "day") return { startDate: baseDate, endDate: baseDate };

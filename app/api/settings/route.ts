@@ -106,6 +106,25 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: true });
     }
 
+    // ── READ: get memos by date ───────────────────────────────────────────
+    if (action === "get_memos") {
+      const p = payload as { memoDate: string; limit?: number };
+      const snap = await adminDb
+        .collection("conferenceMemos")
+        .where("memoDate", "==", p.memoDate)
+        .get();
+      const memos = snap.docs
+        .map(docToObj)
+        .filter((m: Record<string, unknown>) => m.deleted !== true)
+        .sort((a: Record<string, unknown>, b: Record<string, unknown>) => {
+          const at = typeof a.createdAt === "number" ? a.createdAt : 0;
+          const bt = typeof b.createdAt === "number" ? b.createdAt : 0;
+          return bt - at;
+        })
+        .slice(0, p.limit ?? 50);
+      return NextResponse.json({ success: true, memos });
+    }
+
     // ── WRITE: add memo ───────────────────────────────────────────────────
     if (action === "add_memo") {
       const p = payload as { memoDate: string; memoText: string; createdByName: string };
