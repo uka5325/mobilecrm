@@ -1,16 +1,14 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { createReservation, type DoctorOption } from "@/lib/reservations";
+import { createReservation, APPOINTMENT_TYPES, type AppointmentType } from "@/lib/reservations";
 import { parseBirthInfo } from "@/lib/reservationUtils";
-import { splitComma } from "@/lib/timelineUtils";
 import type { StaffUser } from "@/lib/auth";
 import { todayString } from "@/lib/dateUtils";
 
 type Props = {
   open: boolean;
   onClose: () => void;
-  doctors: DoctorOption[];
   currentUser: StaffUser;
   initialDate?: string;
 };
@@ -23,67 +21,65 @@ const EMPTY_FORM = (date: string) => ({
   consultArea: "",
   reservationDate: date,
   reservationTime: "",
+  hospital: "",
+  appointmentType: "상담" as AppointmentType,
+  completed: false,
   coordinators: "",
   depositAmount: "",
 });
 
-export function NewReservationDrawer({ open, onClose, doctors, currentUser, initialDate }: Props) {
+export function NewReservationDrawer({ open, onClose, currentUser, initialDate }: Props) {
   const [saving, setSaving] = useState(false);
-  const [newError, setNewError] = useState("");
-  const [newDoctors, setNewDoctors] = useState<string[]>([]);
-  const [newForm, setNewForm] = useState(EMPTY_FORM(initialDate || todayString()));
+  const [errorMessage, setErrorMessage] = useState("");
+  const [form, setForm] = useState(EMPTY_FORM(initialDate || todayString()));
 
   useEffect(() => {
     if (open) {
-      setNewForm(EMPTY_FORM(initialDate || todayString()));
-      setNewDoctors([]);
-      setNewError("");
+      setForm(EMPTY_FORM(initialDate || todayString()));
+      setErrorMessage("");
       setSaving(false);
     }
   }, [open, initialDate]);
 
-  const birthPreview = useMemo(() => parseBirthInfo(newForm.birthInput), [newForm.birthInput]);
-
-  function toggleDoctor(name: string) {
-    setNewDoctors((prev) =>
-      prev.includes(name) ? prev.filter((d) => d !== name) : [...prev, name]
-    );
-  }
+  const birthPreview = useMemo(() => parseBirthInfo(form.birthInput), [form.birthInput]);
 
   async function handleCreate() {
-    if (!newForm.name.trim()) { setNewError("이름을 입력하세요."); return; }
-    if (!newForm.reservationDate) { setNewError("예약날짜를 선택하세요."); return; }
-    if (!newDoctors.length) { setNewError("지정원장을 선택하세요."); return; }
+    if (!form.name.trim()) { setErrorMessage("이름을 입력하세요."); return; }
+    if (!form.reservationDate) { setErrorMessage("예약날짜를 선택하세요."); return; }
 
     setSaving(true);
-    setNewError("");
+    setErrorMessage("");
 
     try {
       const result = await createReservation(
         {
-          name: newForm.name,
-          birthInput: newForm.birthInput,
-          birth: newForm.birthInput,
-          phone: newForm.phone,
-          nationality: newForm.nationality,
-          consultArea: newForm.consultArea,
-          reservationDate: newForm.reservationDate,
-          reservationTime: newForm.reservationTime,
-          doctors: newDoctors,
-          coordinators: splitComma(newForm.coordinators),
-          depositAmount: newForm.depositAmount,
+          name: form.name,
+          birthInput: form.birthInput,
+          birth: form.birthInput,
+          phone: form.phone,
+          nationality: form.nationality,
+          consultArea: form.consultArea,
+          reservationDate: form.reservationDate,
+          reservationTime: form.reservationTime,
+          hospital: form.hospital,
+          appointmentType: form.appointmentType,
+          completed: form.completed,
+          coordinators: form.coordinators.split(",").map((s) => s.trim()).filter(Boolean),
+          depositAmount: form.depositAmount,
         },
         currentUser
       );
 
       if (!result.success) {
-        setNewError(result.message || "예약 등록에 실패했습니다.");
+        setErrorMessage(result.message || "예약 등록에 실패했습니다.");
         return;
       }
 
       onClose();
-    } catch {
-      setNewError("예약 등록 중 오류가 발생했습니다.");
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setErrorMessage(`저장 오류: ${msg}`);
+      console.error("[NewReservationDrawer] save error:", err);
     } finally {
       setSaving(false);
     }
@@ -101,12 +97,7 @@ export function NewReservationDrawer({ open, onClose, doctors, currentUser, init
             <div className="text-xl font-bold">신규 예약 등록</div>
             <div className="mt-1 text-sm text-gray-500">단일 예약 추가</div>
           </div>
-          <button
-            onClick={onClose}
-            className="text-2xl text-gray-400 transition hover:scale-110 hover:text-gray-700 active:scale-95"
-          >
-            ×
-          </button>
+          <button onClick={onClose} className="text-2xl text-gray-400 transition hover:scale-110 hover:text-gray-700 active:scale-95">×</button>
         </div>
 
         <div className="flex-1 space-y-4 overflow-auto p-6">
@@ -114,8 +105,8 @@ export function NewReservationDrawer({ open, onClose, doctors, currentUser, init
             <div>
               <label className="text-xs text-gray-500">이름 *</label>
               <input
-                value={newForm.name}
-                onChange={(e) => setNewForm((p) => ({ ...p, name: e.target.value }))}
+                value={form.name}
+                onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))}
                 className="mt-1 w-full rounded-xl border border-[#dfe3e8] px-3 py-2 text-sm transition focus:border-[#1d9e75] focus:outline-none"
               />
             </div>
@@ -123,16 +114,16 @@ export function NewReservationDrawer({ open, onClose, doctors, currentUser, init
             <div>
               <label className="text-xs text-gray-500">생년월일</label>
               <input
-                value={newForm.birthInput}
-                onChange={(e) => setNewForm((p) => ({ ...p, birthInput: e.target.value }))}
-                placeholder="900101-1"
+                value={form.birthInput}
+                onChange={(e) => setForm((p) => ({ ...p, birthInput: e.target.value }))}
+                placeholder="891210-1 / 19891210-1"
                 className="mt-1 w-full rounded-xl border border-[#dfe3e8] px-3 py-2 text-sm transition focus:border-[#1d9e75] focus:outline-none"
               />
-              {newForm.birthInput && (
+              {form.birthInput && (
                 <div className="mt-1 text-xs text-gray-500">
-                  {birthPreview.birthDisplay}
-                  {birthPreview.ageText ? ` · ${birthPreview.ageText}` : ""}
-                  {birthPreview.gender ? ` · ${birthPreview.gender}` : ""}
+                  {birthPreview.birthDisplay && <span>{birthPreview.birthDisplay}</span>}
+                  {birthPreview.ageText && <span> · {birthPreview.ageText}</span>}
+                  {birthPreview.gender && <span> · {birthPreview.gender}</span>}
                 </div>
               )}
             </div>
@@ -140,8 +131,8 @@ export function NewReservationDrawer({ open, onClose, doctors, currentUser, init
             <div>
               <label className="text-xs text-gray-500">연락처</label>
               <input
-                value={newForm.phone}
-                onChange={(e) => setNewForm((p) => ({ ...p, phone: e.target.value }))}
+                value={form.phone}
+                onChange={(e) => setForm((p) => ({ ...p, phone: e.target.value }))}
                 className="mt-1 w-full rounded-xl border border-[#dfe3e8] px-3 py-2 text-sm transition focus:border-[#1d9e75] focus:outline-none"
               />
             </div>
@@ -149,8 +140,8 @@ export function NewReservationDrawer({ open, onClose, doctors, currentUser, init
             <div>
               <label className="text-xs text-gray-500">국적</label>
               <input
-                value={newForm.nationality}
-                onChange={(e) => setNewForm((p) => ({ ...p, nationality: e.target.value }))}
+                value={form.nationality}
+                onChange={(e) => setForm((p) => ({ ...p, nationality: e.target.value }))}
                 placeholder="몽골"
                 className="mt-1 w-full rounded-xl border border-[#dfe3e8] px-3 py-2 text-sm transition focus:border-[#1d9e75] focus:outline-none"
               />
@@ -158,10 +149,46 @@ export function NewReservationDrawer({ open, onClose, doctors, currentUser, init
           </div>
 
           <div>
+            <label className="text-xs text-gray-500">병원명</label>
+            <input
+              value={form.hospital}
+              onChange={(e) => setForm((p) => ({ ...p, hospital: e.target.value }))}
+              placeholder="예: 강남성형외과"
+              className="mt-1 w-full rounded-xl border border-[#dfe3e8] px-3 py-2 text-sm transition focus:border-[#1d9e75] focus:outline-none"
+            />
+          </div>
+
+          <div>
+            <label className="text-xs text-gray-500">예약 유형 *</label>
+            <div className="mt-2 flex gap-2 flex-wrap">
+              {APPOINTMENT_TYPES.map((type) => {
+                const colors: Record<string, string> = {
+                  상담: "#2563eb", 수술: "#ef4444", 치료: "#16a34a", 경과: "#f59e0b",
+                };
+                const active = form.appointmentType === type;
+                return (
+                  <button
+                    key={type}
+                    onClick={() => setForm((p) => ({ ...p, appointmentType: type }))}
+                    className="rounded-xl border px-4 py-2 text-sm font-semibold transition hover:-translate-y-0.5 active:scale-95"
+                    style={{
+                      backgroundColor: active ? colors[type] : "#f9fafb",
+                      color: active ? "#fff" : "#374151",
+                      borderColor: active ? colors[type] : "#dfe3e8",
+                    }}
+                  >
+                    {type}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div>
             <label className="text-xs text-gray-500">상담부위</label>
             <input
-              value={newForm.consultArea}
-              onChange={(e) => setNewForm((p) => ({ ...p, consultArea: e.target.value }))}
+              value={form.consultArea}
+              onChange={(e) => setForm((p) => ({ ...p, consultArea: e.target.value }))}
               className="mt-1 w-full rounded-xl border border-[#dfe3e8] px-3 py-2 text-sm transition focus:border-[#1d9e75] focus:outline-none"
             />
           </div>
@@ -171,8 +198,8 @@ export function NewReservationDrawer({ open, onClose, doctors, currentUser, init
               <label className="text-xs text-gray-500">예약날짜 *</label>
               <input
                 type="date"
-                value={newForm.reservationDate}
-                onChange={(e) => setNewForm((p) => ({ ...p, reservationDate: e.target.value }))}
+                value={form.reservationDate}
+                onChange={(e) => setForm((p) => ({ ...p, reservationDate: e.target.value }))}
                 className="mt-1 min-w-0 w-full appearance-none rounded-xl border border-[#dfe3e8] px-3 py-2 text-sm transition focus:border-[#1d9e75] focus:outline-none"
               />
             </div>
@@ -180,41 +207,19 @@ export function NewReservationDrawer({ open, onClose, doctors, currentUser, init
               <label className="text-xs text-gray-500">예약시간</label>
               <input
                 type="time"
-                step={1800}
-                value={newForm.reservationTime}
-                onChange={(e) => setNewForm((p) => ({ ...p, reservationTime: e.target.value }))}
+                value={form.reservationTime}
+                onChange={(e) => setForm((p) => ({ ...p, reservationTime: e.target.value }))}
                 className="mt-1 min-w-0 w-full appearance-none rounded-xl border border-[#dfe3e8] px-3 py-2 text-sm transition focus:border-[#1d9e75] focus:outline-none"
               />
             </div>
           </div>
 
           <div>
-            <label className="text-xs text-gray-500">지정원장 *</label>
-            <div className="mt-2 flex flex-wrap gap-2">
-              {doctors.map((doctor) => {
-                const on = newDoctors.includes(doctor.displayName);
-                return (
-                  <button
-                    key={doctor.uid}
-                    onClick={() => toggleDoctor(doctor.displayName)}
-                    className={`rounded-xl border px-3 py-2 text-sm transition hover:-translate-y-0.5 hover:shadow-md active:scale-95 ${
-                      on
-                        ? "border-black bg-black text-white"
-                        : "border-[#dfe3e8] bg-white text-gray-700"
-                    }`}
-                  >
-                    {doctor.displayName}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          <div>
-            <label className="text-xs text-gray-500">담당 실장</label>
+            <label className="text-xs text-gray-500">담당자</label>
             <input
-              value={newForm.coordinators}
-              onChange={(e) => setNewForm((p) => ({ ...p, coordinators: e.target.value }))}
+              value={form.coordinators}
+              onChange={(e) => setForm((p) => ({ ...p, coordinators: e.target.value }))}
+              placeholder="쉼표로 구분"
               className="mt-1 w-full rounded-xl border border-[#dfe3e8] px-3 py-2 text-sm transition focus:border-[#1d9e75] focus:outline-none"
             />
           </div>
@@ -222,14 +227,28 @@ export function NewReservationDrawer({ open, onClose, doctors, currentUser, init
           <div>
             <label className="text-xs text-gray-500">예약금</label>
             <input
-              value={newForm.depositAmount}
-              onChange={(e) => setNewForm((p) => ({ ...p, depositAmount: e.target.value }))}
+              value={form.depositAmount}
+              onChange={(e) => setForm((p) => ({ ...p, depositAmount: e.target.value }))}
               placeholder="100,000원 / 10,000엔"
               className="mt-1 w-full rounded-xl border border-[#dfe3e8] px-3 py-2 text-sm transition focus:border-[#1d9e75] focus:outline-none"
             />
           </div>
 
-          {newError && <div className="text-sm text-red-500">{newError}</div>}
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setForm((p) => ({ ...p, completed: !p.completed }))}
+              className={`flex h-6 w-11 items-center rounded-full transition-colors ${form.completed ? "bg-emerald-500" : "bg-gray-200"}`}
+            >
+              <div className={`h-5 w-5 rounded-full bg-white shadow transition-transform ${form.completed ? "translate-x-5" : "translate-x-0.5"}`} />
+            </button>
+            <label className="cursor-pointer text-sm text-gray-700" onClick={() => setForm((p) => ({ ...p, completed: !p.completed }))}>
+              완료 처리
+            </label>
+          </div>
+
+          {errorMessage && (
+            <div className="text-sm text-red-500">{errorMessage}</div>
+          )}
         </div>
 
         <div className="flex shrink-0 gap-2 border-t border-[#edf0f3] p-4">

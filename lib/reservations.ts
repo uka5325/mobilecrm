@@ -1,28 +1,39 @@
-import {
-  addDoc,
-  collection,
-  doc,
-  getDoc,
-  getDocs,
-  onSnapshot,
-  orderBy,
-  query,
-  serverTimestamp,
-  updateDoc,
-  where,
-  writeBatch,
-} from "firebase/firestore";
-import { db } from "./firebase";
+import { auth } from "./firebase";
 import type { StaffUser } from "./auth";
 import { cleanText } from "./stringUtils";
 import { createLog } from "./logs";
 import { parseBirthInfo } from "./reservationUtils";
+
+async function callReservationsApi(action: string, payload: Record<string, unknown>) {
+  const firebaseUser = auth.currentUser;
+  if (!firebaseUser) {
+    return { success: false as const, message: "로그인 상태를 확인할 수 없습니다. 페이지를 새로고침 후 다시 시도해주세요." };
+  }
+  const idToken = await firebaseUser.getIdToken();
+  const res = await fetch("/api/reservations", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ idToken, action, payload }),
+  });
+  return res.json() as Promise<Record<string, unknown> & { success: boolean; message?: string }>;
+}
 
 export type DoctorOption = {
   uid: string;
   displayName: string;
   email: string;
   orderNo: number;
+};
+
+export type AppointmentType = "상담" | "수술" | "치료" | "경과";
+
+export const APPOINTMENT_TYPES: AppointmentType[] = ["상담", "수술", "치료", "경과"];
+
+export const APPOINTMENT_TYPE_COLORS: Record<AppointmentType, string> = {
+  상담: "#2563eb",
+  수술: "#ef4444",
+  치료: "#16a34a",
+  경과: "#f59e0b",
 };
 
 export type ReservationStatus =
@@ -48,6 +59,10 @@ export type ReservationRecord = {
 
   reservationDate: string;
   reservationTime: string;
+
+  hospital: string;
+  appointmentType: AppointmentType;
+  completed: boolean;
 
   operationStatus: ReservationStatus;
   preConsStatus: string;
@@ -97,7 +112,10 @@ export type CreateReservationParams = {
   consultArea?: string;
   reservationDate: string;
   reservationTime?: string;
-  doctors: string[];
+  hospital?: string;
+  appointmentType?: AppointmentType;
+  completed?: boolean;
+  doctors?: string[];
   coordinators?: string[];
   depositAmount?: string;
   reservationId?: string;
@@ -148,8 +166,15 @@ function normalizeDuplicateKey(params: CreateReservationParams) {
     cleanText(params.reservationDate),
     cleanText(params.reservationTime),
     cleanText(params.phone).replace(/[^0-9+]/g, ""),
+    cleanText(params.hospital),
     doctors,
   ].join("__");
+}
+
+function normalizeAppointmentType(value: unknown): AppointmentType {
+  const v = cleanText(value);
+  if (v === "상담" || v === "수술" || v === "치료" || v === "경과") return v;
+  return "상담";
 }
 
 export function mapReservationDoc(id: string, data: Record<string, unknown>): ReservationRecord {
@@ -170,6 +195,10 @@ export function mapReservationDoc(id: string, data: Record<string, unknown>): Re
 
     reservationDate: cleanText(data.reservationDate),
     reservationTime: cleanText(data.reservationTime),
+
+    hospital: cleanText(data.hospital),
+    appointmentType: normalizeAppointmentType(data.appointmentType),
+    completed: data.completed === true,
 
     operationStatus: normalizeReservationStatus(data.operationStatus),
     preConsStatus: cleanText(data.preConsStatus),
@@ -210,56 +239,6 @@ export function mapReservationDoc(id: string, data: Record<string, unknown>): Re
   };
 }
 
-async function hasDuplicateReservation(params: CreateReservationParams) {
-  const reservationId = cleanText(params.reservationId);
-
-  if (reservationId) {
-    const idSnap = await getDocs(
-      query(
-        collection(db, "reservations"),
-        where("reservationId", "==", reservationId),
-        where("isDeleted", "==", false)
-      )
-    );
-
-    if (!idSnap.empty) return true;
-  }
-
-  const reservationDate = cleanText(params.reservationDate);
-  const name = cleanText(params.name);
-
-  if (!reservationDate || !name) return false;
-
-  const snap = await getDocs(
-    query(
-      collection(db, "reservations"),
-      where("reservationDate", "==", reservationDate),
-      where("isDeleted", "==", false)
-    )
-  );
-
-  const key = normalizeDuplicateKey(params);
-
-  return snap.docs
-    .map((docSnap) => mapReservationDoc(docSnap.id, docSnap.data()))
-    .some(
-      (item) =>
-        normalizeDuplicateKey({
-          name: item.name,
-          birthInput: item.birthInput,
-          birth: item.birth,
-          gender: item.gender,
-          phone: item.phone,
-          nationality: item.nationality,
-          consultArea: item.consultArea,
-          reservationDate: item.reservationDate,
-          reservationTime: item.reservationTime,
-          doctors: item.doctors,
-          coordinators: item.coordinators,
-          depositAmount: item.depositAmount,
-        }) === key
-    );
-}
 
 const DOCTORS_CACHE_KEY = "crm_doctors_v1";
 
@@ -317,22 +296,18 @@ export async function getDoctors(): Promise<DoctorOption[]> {
 
   _doctorsCachedAt = Date.now();
   _doctorsPromise = (async () => {
-    const snap = await getDocs(
-      query(collection(db, "staff"), where("role", "==", "doctor"), where("active", "==", true))
-    );
+    const result = await callReservationsApi("read_doctors", {});
+    const rawDoctors = (result.doctors as Record<string, unknown>[] | undefined) || [];
 
-    const doctors = snap.docs
-      .map((docSnap) => {
-        const data = docSnap.data();
-        return {
-          uid: docSnap.id,
-          displayName: cleanText(data.displayName || data["display_name"] || data.name),
-          email: cleanText(data.email),
-          orderNo: cleanNumber(data.orderNo ?? data["order_no"]),
-          role: String(data.role || ""),
-          active: data.active,
-        };
-      })
+    const doctors = rawDoctors
+      .map((d) => ({
+        uid: String(d.id || ""),
+        displayName: cleanText(d.displayName || d["display_name"] || d.name),
+        email: cleanText(d.email),
+        orderNo: cleanNumber(d.orderNo ?? d["order_no"]),
+        role: String(d.role || ""),
+        active: d.active,
+      }))
       .filter((d) => d.displayName && d.role === "doctor" && d.active !== false);
 
     setCachedDoctors(sortDoctors(doctors));
@@ -357,16 +332,12 @@ export async function getAllReservations(): Promise<{
     return d.toISOString().slice(0, 10);
   })();
 
-  const reservationSnap = await getDocs(
-    query(
-      collection(db, "reservations"),
-      where("reservationDate", ">=", fromDate),
-      orderBy("reservationDate", "desc")
-    )
-  );
+  const result = await callReservationsApi("read_all", { from: fromDate });
+  const rawReservations = (result.reservations as Record<string, unknown>[] | undefined) || [];
+  const rawDoctors = (result.doctors as Record<string, unknown>[] | undefined) || [];
 
-  const reservations = reservationSnap.docs
-    .map((docSnap) => mapReservationDoc(docSnap.id, docSnap.data()))
+  const reservations = rawReservations
+    .map((r) => mapReservationDoc(String(r.id || ""), r))
     .filter((item) => !item.isDeleted)
     .sort((a, b) => {
       const aa = `${a.reservationDate} ${a.reservationTime} ${a.name}`;
@@ -374,20 +345,23 @@ export async function getAllReservations(): Promise<{
       return aa.localeCompare(bb);
     });
 
-  let doctors: DoctorOption[] = [];
-
-  try {
-    doctors = await getDoctors();
-  } catch (error) {
-    console.error("[getAllReservations getDoctors error]", error);
-    doctors = makeDoctorOptionsFromReservations(reservations);
-  }
+  const doctors: DoctorOption[] = rawDoctors
+    .map((d) => ({
+      uid: String(d.id || ""),
+      displayName: cleanText(d.displayName || d["display_name"] || d.name),
+      email: cleanText(d.email),
+      orderNo: cleanNumber(d.orderNo ?? d["order_no"]),
+    }))
+    .filter((d) => d.displayName)
+    .sort((a, b) => a.orderNo - b.orderNo || a.displayName.localeCompare(b.displayName));
 
   return {
     reservations,
     doctors: doctors.length ? doctors : makeDoctorOptionsFromReservations(reservations),
   };
 }
+
+const ALL_RESERVATIONS_POLL_MS = 8000;
 
 export function subscribeAllReservations(
   callback: (data: {
@@ -396,56 +370,66 @@ export function subscribeAllReservations(
   }) => void,
   onError?: (error: Error) => void
 ) {
-  let currentDoctors: DoctorOption[] = getCachedDoctors() ?? [];
-  let currentReservations: ReservationRecord[] = [];
-  let reservationsReady = false;
+  let cancelled = false;
 
-  function emit() {
-    if (!reservationsReady) return;
-    const fallbackDoctors = makeDoctorOptionsFromReservations(currentReservations);
-    callback({
-      reservations: currentReservations,
-      doctors: currentDoctors.length ? currentDoctors : fallbackDoctors,
-    });
-  }
+  async function fetchAndEmit() {
+    if (cancelled) return;
 
-  getDoctors()
-    .then((loadedDoctors) => {
-      currentDoctors = loadedDoctors;
-      emit();
-    })
-    .catch(() => {});
+    const sixMonthsAgo = (() => {
+      const d = new Date();
+      d.setMonth(d.getMonth() - 6);
+      return d.toISOString().slice(0, 10);
+    })();
 
-  const sixMonthsAgo = (() => {
-    const d = new Date();
-    d.setMonth(d.getMonth() - 6);
-    return d.toISOString().slice(0, 10);
-  })();
+    try {
+      const result = await callReservationsApi("read_all", { from: sixMonthsAgo });
+      if (cancelled || !result.success) return;
 
-  return onSnapshot(
-    query(
-      collection(db, "reservations"),
-      where("reservationDate", ">=", sixMonthsAgo),
-      orderBy("reservationDate", "desc")
-    ),
-    (snap) => {
-      currentReservations = snap.docs
-        .map((docSnap) => mapReservationDoc(docSnap.id, docSnap.data()))
+      const rawReservations = (result.reservations as Record<string, unknown>[] | undefined) || [];
+      const rawDoctors = (result.doctors as Record<string, unknown>[] | undefined) || [];
+
+      const reservations = rawReservations
+        .map((r) => mapReservationDoc(String(r.id || ""), r))
         .filter((item) => !item.isDeleted)
         .sort((a, b) => {
           const aa = `${a.reservationDate} ${a.reservationTime} ${a.name}`;
           const bb = `${b.reservationDate} ${b.reservationTime} ${b.name}`;
           return aa.localeCompare(bb);
         });
-      reservationsReady = true;
-      emit();
-    },
-    (error) => {
-      console.error("[reservations snapshot error in subscribeAllReservations]", error);
-      onError?.(error);
+
+      const doctors: DoctorOption[] = rawDoctors
+        .map((d) => ({
+          uid: String(d.id || ""),
+          displayName: cleanText(d.displayName || d["display_name"] || d.name),
+          email: cleanText(d.email),
+          orderNo: cleanNumber(d.orderNo ?? d["order_no"]),
+        }))
+        .filter((d) => d.displayName)
+        .sort((a, b) => a.orderNo - b.orderNo || a.displayName.localeCompare(b.displayName));
+
+      const fallbackDoctors = makeDoctorOptionsFromReservations(reservations);
+      callback({
+        reservations,
+        doctors: doctors.length ? doctors : fallbackDoctors,
+      });
+    } catch (error) {
+      if (!cancelled) {
+        console.error("[subscribeAllReservations error]", error);
+        onError?.(error as Error);
+      }
     }
-  );
+  }
+
+  fetchAndEmit();
+  const intervalId = setInterval(fetchAndEmit, ALL_RESERVATIONS_POLL_MS);
+
+  return () => {
+    cancelled = true;
+    clearInterval(intervalId);
+  };
 }
+
+const TIMELINE_POLL_MS = 6000;
 
 export function subscribeTimelineReservations(
   date: string,
@@ -455,82 +439,85 @@ export function subscribeTimelineReservations(
   }) => void,
   onError?: (error: Error) => void
 ) {
-  let currentDoctors: DoctorOption[] = getCachedDoctors() ?? [];
-  let currentReservations: ReservationRecord[] = [];
-  let reservationsReady = false;
+  let cancelled = false;
 
-  function emit() {
-    if (!reservationsReady) return;
-    const fallbackDoctors = makeDoctorOptionsFromReservations(currentReservations);
-    callback({
-      reservations: currentReservations,
-      doctors: currentDoctors.length ? currentDoctors : fallbackDoctors,
-    });
-  }
+  async function fetchAndEmit() {
+    if (cancelled) return;
 
-  getDoctors()
-    .then((doctors) => {
-      currentDoctors = doctors;
-      emit();
-    })
-    .catch(() => {});
+    try {
+      const result = await callReservationsApi("read_by_date", { date });
+      if (cancelled || !result.success) return;
 
-  const unsubReservations = onSnapshot(
-    query(
-      collection(db, "reservations"),
-      where("reservationDate", "==", date)
-    ),
-    (snap) => {
-      currentReservations = snap.docs
-        .map((docSnap) => mapReservationDoc(docSnap.id, docSnap.data()))
+      const rawReservations = (result.reservations as Record<string, unknown>[] | undefined) || [];
+      const rawDoctors = (result.doctors as Record<string, unknown>[] | undefined) || [];
+
+      const reservations = rawReservations
+        .map((r) => mapReservationDoc(String(r.id || ""), r))
         .filter((item) => !item.isDeleted)
         .sort((a, b) => {
           const aa = `${a.reservationTime} ${a.name}`;
           const bb = `${b.reservationTime} ${b.name}`;
           return aa.localeCompare(bb);
         });
-      reservationsReady = true;
-      emit();
-    },
-    (error) => {
-      console.error("[reservations snapshot error in subscribeTimelineReservations]", error);
-      reservationsReady = true;
-      emit();
-      onError?.(error);
-    }
-  );
 
-  return unsubReservations;
+      const doctors: DoctorOption[] = rawDoctors
+        .map((d) => ({
+          uid: String(d.id || ""),
+          displayName: cleanText(d.displayName || d["display_name"] || d.name),
+          email: cleanText(d.email),
+          orderNo: cleanNumber(d.orderNo ?? d["order_no"]),
+        }))
+        .filter((d) => d.displayName)
+        .sort((a, b) => a.orderNo - b.orderNo || a.displayName.localeCompare(b.displayName));
+
+      const fallbackDoctors = makeDoctorOptionsFromReservations(reservations);
+      callback({
+        reservations,
+        doctors: doctors.length ? doctors : fallbackDoctors,
+      });
+    } catch (error) {
+      if (!cancelled) {
+        console.error("[subscribeTimelineReservations error]", error);
+        onError?.(error as Error);
+      }
+    }
+  }
+
+  fetchAndEmit();
+  const intervalId = setInterval(fetchAndEmit, TIMELINE_POLL_MS);
+
+  return () => {
+    cancelled = true;
+    clearInterval(intervalId);
+  };
 }
 
 export async function getTimelineReservations(date: string): Promise<{
   reservations: ReservationRecord[];
   doctors: DoctorOption[];
 }> {
-  const reservationSnap = await getDocs(
-    query(
-      collection(db, "reservations"),
-      where("reservationDate", "==", date),
-      where("isDeleted", "==", false)
-    )
-  );
+  const result = await callReservationsApi("read_by_date", { date });
+  const rawReservations = (result.reservations as Record<string, unknown>[] | undefined) || [];
+  const rawDoctors = (result.doctors as Record<string, unknown>[] | undefined) || [];
 
-  const reservations = reservationSnap.docs
-    .map((docSnap) => mapReservationDoc(docSnap.id, docSnap.data()))
+  const reservations = rawReservations
+    .map((r) => mapReservationDoc(String(r.id || ""), r))
+    .filter((item) => !item.isDeleted)
     .sort((a, b) => {
       const aa = `${a.reservationTime} ${a.name}`;
       const bb = `${b.reservationTime} ${b.name}`;
       return aa.localeCompare(bb);
     });
 
-  let doctors: DoctorOption[] = [];
-
-  try {
-    doctors = await getDoctors();
-  } catch (error) {
-    console.error("[getTimelineReservations getDoctors error]", error);
-    doctors = makeDoctorOptionsFromReservations(reservations);
-  }
+  const doctors: DoctorOption[] = rawDoctors
+    .map((d) => ({
+      uid: String(d.id || ""),
+      displayName: cleanText(d.displayName || d["display_name"] || d.name),
+      email: cleanText(d.email),
+      orderNo: cleanNumber(d.orderNo ?? d["order_no"]),
+    }))
+    .filter((d) => d.displayName)
+    .sort((a, b) => a.orderNo - b.orderNo || a.displayName.localeCompare(b.displayName));
 
   return {
     reservations,
@@ -544,6 +531,7 @@ export async function createReservation(
 ) {
   const name = cleanText(params.name);
   const reservationDate = cleanText(params.reservationDate);
+  const hospital = cleanText(params.hospital);
   const doctors = Array.isArray(params.doctors)
     ? params.doctors.map(cleanText).filter(Boolean)
     : [];
@@ -556,20 +544,6 @@ export async function createReservation(
     return { success: false, message: "예약날짜를 선택하세요." };
   }
 
-  if (!doctors.length) {
-    return { success: false, message: "지정원장을 선택하세요." };
-  }
-
-  const isDuplicate = await hasDuplicateReservation(params);
-
-  if (isDuplicate) {
-    return {
-      success: false,
-      message: "이미 등록된 예약으로 보여 저장하지 않았습니다.",
-      duplicate: true,
-    };
-  }
-
   const patientId = cleanText(params.patientId) || makeDateBasedId("P");
   const reservationId = cleanText(params.reservationId) || makeDateBasedId("R");
 
@@ -578,7 +552,7 @@ export async function createReservation(
     params.gender || ""
   );
 
-  const patientPayload = {
+  const patientData = {
     patientId,
     name,
     birth: parsedBirth.birth,
@@ -586,8 +560,6 @@ export async function createReservation(
     gender: parsedBirth.gender,
     phone: cleanText(params.phone),
     nationality: cleanText(params.nationality),
-    createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp(),
   };
 
   const doctorStatusMap: Record<string, ReservationStatus> = {};
@@ -603,7 +575,7 @@ export async function createReservation(
     };
   });
 
-  const reservationPayload = {
+  const reservationData = {
     reservationId,
     patientId,
 
@@ -617,6 +589,10 @@ export async function createReservation(
 
     reservationDate,
     reservationTime: cleanText(params.reservationTime),
+
+    hospital,
+    appointmentType: (params.appointmentType || "상담") as AppointmentType,
+    completed: params.completed === true,
 
     operationStatus: "내원전" as ReservationStatus,
     surgeryReserved: false,
@@ -637,24 +613,22 @@ export async function createReservation(
     invoiceId: "",
     invoiceSheetName: "",
 
-    createdAt: serverTimestamp(),
     createdBy: staff.displayName,
     createdByUid: staff.uid,
-    updatedAt: serverTimestamp(),
     updatedBy: staff.displayName,
     updatedByUid: staff.uid,
 
     isDeleted: false,
   };
 
-  const batch = writeBatch(db);
-  const patientRef = doc(collection(db, "patients"));
-  const reservationRef = doc(collection(db, "reservations"));
-  batch.set(patientRef, patientPayload);
-  batch.set(reservationRef, reservationPayload);
-  await batch.commit();
+  const apiResult = await callReservationsApi("create", { patient: patientData, reservation: reservationData });
+  if (!apiResult.success) {
+    return { success: false, message: apiResult.message || "예약 등록에 실패했습니다." };
+  }
 
-  await createLog({
+  const savedReservationId = String(apiResult.reservationDocId || "");
+
+  createLog({
     action: "reservation_create",
     targetType: "reservation",
     targetId: reservationId,
@@ -667,13 +641,14 @@ export async function createReservation(
       name,
       reservationDate,
       reservationTime: cleanText(params.reservationTime),
-      doctors,
+      hospital,
+      appointmentType: params.appointmentType || "상담",
     },
-  });
+  }).catch((e) => console.warn("[createReservation] log write failed:", e));
 
   return {
     success: true,
-    reservation: mapReservationDoc(reservationRef.id, reservationPayload),
+    reservation: mapReservationDoc(savedReservationId, { ...reservationData, createdAt: null, updatedAt: null }),
   };
 }
 
@@ -717,34 +692,35 @@ export async function updateDoctorStatus(
   staff: StaffUser,
   options?: { previousOperationStatus?: string }
 ) {
-  const ref = doc(db, "reservations", reservationDocId);
-
-  const updateData: Record<string, unknown> = {
+  const reservationPatch: Record<string, unknown> = {
     [`doctorStatusMap.${doctorName}`]: newStatus,
     [`doctorStatusMetaMap.${doctorName}.status`]: newStatus,
     [`doctorStatusMetaMap.${doctorName}.updatedAt`]: new Date().toISOString(),
     [`doctorStatusMetaMap.${doctorName}.updatedBy`]: staff.displayName,
     [`doctorStatusMetaMap.${doctorName}.updatedRole`]: staff.role,
-    updatedAt: serverTimestamp(),
     updatedBy: staff.displayName,
     updatedByUid: staff.uid,
   };
 
   if (newStatus === "원상중") {
-    // 대시보드/KPI 카운팅을 위해 전역 operationStatus도 업데이트
-    updateData.operationStatus = "원상중";
-    // 다른 doctor 카드가 이전 상태를 유지하도록 preConsStatus 저장
+    reservationPatch.operationStatus = "원상중";
     if (options?.previousOperationStatus !== undefined) {
-      updateData.preConsStatus = options.previousOperationStatus;
+      reservationPatch.preConsStatus = options.previousOperationStatus;
     }
   } else {
-    // 원상중 해제 시 preConsStatus 초기화
-    updateData.preConsStatus = "";
+    reservationPatch.preConsStatus = "";
   }
 
-  await updateDoc(ref, updateData);
+  const apiResult = await callReservationsApi("update", {
+    reservationDocId,
+    reservationPatch,
+  });
 
-  await createLog({
+  if (!apiResult.success) {
+    return { success: false, message: apiResult.message || "상태 변경에 실패했습니다." };
+  }
+
+  createLog({
     action: "reservation_update",
     targetType: "reservation",
     targetId: reservationId,
@@ -753,7 +729,7 @@ export async function updateDoctorStatus(
     message: `${staff.displayName}님이 ${doctorName} 원상중 상태를 변경했습니다.`,
     before: null,
     after: { doctorStatusMap: { [doctorName]: newStatus } },
-  });
+  }).catch((e) => console.warn("[updateDoctorStatus] log write failed:", e));
 
   return { success: true };
 }
@@ -764,17 +740,23 @@ export async function updateReservationStatus(
   newStatus: ReservationStatus,
   staff: StaffUser
 ) {
-  const ref = doc(db, "reservations", reservationDocId);
-
-  await updateDoc(ref, {
+  const reservationPatch = {
     operationStatus: newStatus,
     preConsStatus: "",
-    updatedAt: serverTimestamp(),
     updatedBy: staff.displayName,
     updatedByUid: staff.uid,
+  };
+
+  const apiResult = await callReservationsApi("update", {
+    reservationDocId,
+    reservationPatch,
   });
 
-  await createLog({
+  if (!apiResult.success) {
+    return { success: false, message: apiResult.message || "상태 변경에 실패했습니다." };
+  }
+
+  createLog({
     action: "reservation_update",
     targetType: "reservation",
     targetId: reservationId,
@@ -785,7 +767,7 @@ export async function updateReservationStatus(
     after: {
       operationStatus: newStatus,
     },
-  });
+  }).catch((e) => console.warn("[updateReservationStatus] log write failed:", e));
 
   return { success: true };
 }
@@ -796,17 +778,18 @@ export async function toggleSurgeryReserved(
   nextValue: boolean,
   staff: StaffUser
 ) {
-  const ref = doc(db, "reservations", reservationDocId);
-
-  await updateDoc(ref, {
+  const apiResult = await callReservationsApi("toggleSurgery", {
+    reservationDocId,
     surgeryReserved: nextValue,
-    surgeryReservedAt: nextValue ? new Date().toISOString() : "",
-    updatedAt: serverTimestamp(),
-    updatedBy: staff.displayName,
-    updatedByUid: staff.uid,
+    staffDisplay: staff.displayName,
+    staffUid: staff.uid,
   });
 
-  await createLog({
+  if (!apiResult.success) {
+    return { success: false, message: apiResult.message || "수술예약 상태 변경에 실패했습니다." };
+  }
+
+  createLog({
     action: "reservation_update",
     targetType: "reservation",
     targetId: reservationId,
@@ -819,7 +802,7 @@ export async function toggleSurgeryReserved(
     after: {
       surgeryReserved: nextValue,
     },
-  });
+  }).catch((e) => console.warn("[toggleSurgeryReserved] log write failed:", e));
 
   return { success: true };
 }
@@ -834,20 +817,13 @@ export type UpdateReservationParams = {
   consultArea?: string;
   reservationDate: string;
   reservationTime?: string;
-  doctors: string[];
+  hospital?: string;
+  appointmentType?: AppointmentType;
+  completed?: boolean;
+  doctors?: string[];
   coordinators?: string[];
   depositAmount?: string;
 };
-
-async function findPatientDocId(patientId: string) {
-  const snap = await getDocs(
-    query(collection(db, "patients"), where("patientId", "==", patientId))
-  );
-
-  if (snap.empty) return null;
-
-  return snap.docs[0].id;
-}
 
 export async function updateReservationFull(
   reservationDocId: string,
@@ -870,22 +846,20 @@ export async function updateReservationFull(
     return { success: false, message: "예약날짜를 선택하세요." };
   }
 
-  if (!doctors.length) {
-    return { success: false, message: "지정원장을 선택하세요." };
-  }
-
   const parsedBirth = parseBirthInfo(
     params.birthInput || params.birth || "",
     params.gender || ""
   );
 
-  const currentReservationSnap = await getDoc(
-    doc(db, "reservations", reservationDocId)
-  );
-
-  const currentReservation = currentReservationSnap.exists()
-    ? mapReservationDoc(currentReservationSnap.id, currentReservationSnap.data())
-    : null;
+  // Read current reservation server-side to preserve doctor statuses
+  const readResult = await callReservationsApi("read_one", { reservationDocId });
+  const currentReservation =
+    readResult.success && readResult.reservation
+      ? mapReservationDoc(
+          String((readResult.reservation as Record<string, unknown>).id || ""),
+          readResult.reservation as Record<string, unknown>
+        )
+      : null;
 
   const previousDoctorStatusMap = currentReservation?.doctorStatusMap || {};
   const previousDoctorStatusMetaMap =
@@ -904,7 +878,7 @@ export async function updateReservationFull(
     };
   });
 
-  const reservationPatch = {
+  const reservationPatch: Record<string, unknown> = {
     name,
     patientName: name,
 
@@ -917,6 +891,10 @@ export async function updateReservationFull(
     reservationDate,
     reservationTime: cleanText(params.reservationTime),
 
+    hospital: cleanText(params.hospital),
+    appointmentType: params.appointmentType || currentReservation?.appointmentType || "상담",
+    completed: params.completed === true,
+
     consultArea: cleanText(params.consultArea),
     depositAmount: cleanText(params.depositAmount),
 
@@ -928,28 +906,32 @@ export async function updateReservationFull(
     doctorStatusMap,
     doctorStatusMetaMap,
 
-    updatedAt: serverTimestamp(),
     updatedBy: staff.displayName,
     updatedByUid: staff.uid,
   };
 
-  await updateDoc(doc(db, "reservations", reservationDocId), reservationPatch);
+  const patientPatch = {
+    name,
+    birth: parsedBirth.birth,
+    birthInput: parsedBirth.birthInput,
+    gender: parsedBirth.gender,
+    phone: cleanText(params.phone),
+    nationality: cleanText(params.nationality),
+  };
 
-  const patientDocId = await findPatientDocId(patientId);
+  // Pass patientId so server can find the patientDocId
+  const apiResult = await callReservationsApi("update", {
+    reservationDocId,
+    patientId,
+    reservationPatch,
+    patientPatch,
+  });
 
-  if (patientDocId) {
-    await updateDoc(doc(db, "patients", patientDocId), {
-      name,
-      birth: parsedBirth.birth,
-      birthInput: parsedBirth.birthInput,
-      gender: parsedBirth.gender,
-      phone: cleanText(params.phone),
-      nationality: cleanText(params.nationality),
-      updatedAt: serverTimestamp(),
-    });
+  if (!apiResult.success) {
+    return { success: false, message: apiResult.message || "예약 수정에 실패했습니다." };
   }
 
-  await createLog({
+  createLog({
     action: "reservation_update",
     targetType: "reservation",
     targetId: reservationId,
@@ -961,10 +943,9 @@ export async function updateReservationFull(
     after: {
       name,
       birth: parsedBirth.birth,
-      birthInput: parsedBirth.birthInput,
-      gender: parsedBirth.gender,
-      phone: cleanText(params.phone),
-      nationality: cleanText(params.nationality),
+      hospital: cleanText(params.hospital),
+      appointmentType: params.appointmentType,
+      completed: params.completed,
       consultArea: cleanText(params.consultArea),
       reservationDate,
       reservationTime: cleanText(params.reservationTime),
@@ -972,7 +953,7 @@ export async function updateReservationFull(
       coordinators: params.coordinators || [],
       depositAmount: cleanText(params.depositAmount),
     },
-  });
+  }).catch((e) => console.warn("[updateReservationFull] log write failed:", e));
 
   return { success: true };
 }
@@ -986,16 +967,17 @@ export async function deleteReservation(
     return { success: false, message: "예약 삭제 권한이 없습니다." };
   }
 
-  const ref = doc(db, "reservations", reservationDocId);
-
-  await updateDoc(ref, {
-    isDeleted: true,
-    updatedAt: serverTimestamp(),
-    updatedBy: staff.displayName,
-    updatedByUid: staff.uid,
+  const apiResult = await callReservationsApi("delete", {
+    reservationDocId,
+    staffDisplay: staff.displayName,
+    staffUid: staff.uid,
   });
 
-  await createLog({
+  if (!apiResult.success) {
+    return { success: false, message: apiResult.message || "예약 삭제에 실패했습니다." };
+  }
+
+  createLog({
     action: "reservation_delete",
     targetType: "reservation",
     targetId: reservationId,
@@ -1006,7 +988,7 @@ export async function deleteReservation(
     after: {
       isDeleted: true,
     },
-  });
+  }).catch((e) => console.warn("[deleteReservation] log write failed:", e));
 
   return { success: true };
 }

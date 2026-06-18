@@ -1,32 +1,31 @@
 "use client";
 
 import {
-  DEFAULT_VISIT_STATUS_COLORS,
-  VISIT_STATUS_LIST,
-  type VisitStatus,
-  type VisitStatusColorMap,
+  DEFAULT_APPOINTMENT_TYPE_COLORS,
+  type AppointmentTypeColorMap,
 } from "@/lib/settings";
 import { getReadableTextColor } from "@/lib/colorUtils";
 import { isValidHex } from "@/lib/settingsUtils";
 import { SectionHeader, EmptyBox } from "@/components/settings/ui";
 
-const STATUS_HELP: Record<VisitStatus, string> = {
-  내원전: "아직 방문 전인 예약",
-  대기: "내원 후 대기 중인 고객",
-  원상중: "원장 상담 진행 중",
-  후상중: "실장/후상담 진행 중",
-  귀가: "상담 또는 진료 종료",
-  부도: "예약 후 미방문",
+const TYPE_KEYS = ["상담", "수술", "치료", "경과"] as const;
+type ApptType = typeof TYPE_KEYS[number];
+
+const TYPE_HELP: Record<ApptType, string> = {
+  상담: "상담 예약 카드 색상",
+  수술: "수술 예약 카드 색상",
+  치료: "치료 예약 카드 색상",
+  경과: "경과 관찰 예약 카드 색상",
 };
 
 type Props = {
-  colors: VisitStatusColorMap;
+  colors: AppointmentTypeColorMap;
   loading: boolean;
   authLoading: boolean;
   canManage: boolean;
   saving: boolean;
   hasChanges: boolean;
-  onUpdateColor: (status: VisitStatus, value: string) => void;
+  onUpdateColor: (type: string, value: string) => void;
   onSave: () => void;
   onReset: () => void;
 };
@@ -45,8 +44,8 @@ export function StatusColorsPanel({
   return (
     <section className="rounded-[18px] border border-[#edf0f3] bg-white p-6 shadow-[0_2px_14px_rgba(0,0,0,0.04)]">
       <SectionHeader
-        title="내원상태 색상 설정"
-        description="타임라인 고객 카드, 예약관리 상태 배지, 대시보드 상태 표시 색상에 공통으로 사용할 기준 색상입니다."
+        title="유형별 색상 설정"
+        description="스케줄 및 예약관리 카드에 표시되는 예약 유형별 색상을 설정합니다."
         badge={authLoading ? "권한 확인 중" : canManage ? "수정 가능" : "보기 전용"}
         badgeActive={canManage}
       />
@@ -55,25 +54,25 @@ export function StatusColorsPanel({
         <EmptyBox text="설정을 불러오는 중..." />
       ) : (
         <>
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-            {VISIT_STATUS_LIST.map((status) => {
-              const color = colors[status];
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            {TYPE_KEYS.map((type) => {
+              const color = colors[type];
               const valid = isValidHex(color);
-              const previewColor = valid ? color : DEFAULT_VISIT_STATUS_COLORS[status];
+              const previewColor = valid ? color : DEFAULT_APPOINTMENT_TYPE_COLORS[type];
 
               return (
-                <div key={status} className="rounded-2xl border border-[#edf0f3] bg-white p-4">
+                <div key={type} className="rounded-2xl border border-[#edf0f3] bg-white p-4">
                   <div className="mb-3 flex items-center justify-between gap-3">
                     <div>
-                      <div className="text-sm font-bold text-gray-900">{status}</div>
-                      <div className="mt-0.5 text-xs text-gray-400">{STATUS_HELP[status]}</div>
+                      <div className="text-sm font-bold text-gray-900">{type}</div>
+                      <div className="mt-0.5 text-xs text-gray-400">{TYPE_HELP[type]}</div>
                     </div>
 
                     <div
                       className="flex h-10 min-w-[76px] items-center justify-center rounded-xl px-3 text-xs font-bold shadow-sm"
                       style={{ backgroundColor: previewColor, color: getReadableTextColor(previewColor) }}
                     >
-                      {status}
+                      {type}
                     </div>
                   </div>
 
@@ -82,14 +81,14 @@ export function StatusColorsPanel({
                       type="color"
                       value={previewColor}
                       disabled={!canManage || saving}
-                      onChange={(e) => onUpdateColor(status, e.target.value)}
+                      onChange={(e) => onUpdateColor(type, e.target.value)}
                       className="h-10 w-12 shrink-0 cursor-pointer rounded-lg border border-[#dfe3e8] bg-white p-1 disabled:cursor-not-allowed disabled:opacity-50"
                     />
 
                     <input
                       value={color}
                       disabled={!canManage || saving}
-                      onChange={(e) => onUpdateColor(status, e.target.value)}
+                      onChange={(e) => onUpdateColor(type, e.target.value)}
                       className={`h-10 min-w-0 flex-1 rounded-xl border bg-white px-3 text-sm outline-none transition focus:border-[#1d9e75] focus:ring-4 focus:ring-emerald-100 disabled:bg-gray-50 disabled:text-gray-400 ${valid ? "border-[#dfe3e8]" : "border-red-300"}`}
                       placeholder="#1d9e75"
                     />
@@ -106,15 +105,15 @@ export function StatusColorsPanel({
           <div className="mt-5 rounded-2xl border border-[#edf0f3] bg-gray-50 p-4">
             <div className="mb-3 text-sm font-bold text-gray-900">미리보기</div>
             <div className="flex flex-wrap gap-2">
-              {VISIT_STATUS_LIST.map((status) => {
-                const color = isValidHex(colors[status]) ? colors[status] : DEFAULT_VISIT_STATUS_COLORS[status];
+              {TYPE_KEYS.map((type) => {
+                const color = isValidHex(colors[type]) ? colors[type] : DEFAULT_APPOINTMENT_TYPE_COLORS[type];
                 return (
                   <span
-                    key={status}
+                    key={type}
                     className="rounded-full px-3 py-1.5 text-xs font-bold"
                     style={{ backgroundColor: color, color: getReadableTextColor(color) }}
                   >
-                    {status}
+                    {type}
                   </span>
                 );
               })}

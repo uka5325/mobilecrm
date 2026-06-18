@@ -14,33 +14,32 @@ type AppShellProps = {
 
 const menuItems = [
   { href: "/", label: "홈", icon: "🏠" },
-  { href: "/timeline", label: "타임라인", icon: "📋" },
+  { href: "/schedule", label: "스케줄", icon: "📅" },
   { href: "/reservations", label: "예약관리", icon: "👥" },
   { href: "/dashboard", label: "KPI 대시보드", icon: "📊" },
-  { href: "/invoice", label: "인보이스", icon: "🧾" },
   { href: "/settings", label: "설정", icon: "⚙️" },
 ];
 
 const pageInfo: Record<string, { title: string; description: string }> = {
   "/": {
     title: "홈",
-    description: "상담회 운영 현황을 확인하고 필요한 메뉴로 이동하세요",
+    description: "오늘의 운영 현황을 확인하고 필요한 메뉴로 이동하세요",
+  },
+  "/schedule": {
+    title: "스케줄",
+    description: "상담·수술·치료·경과 일정을 일·주·월 단위로 확인합니다.",
   },
   "/timeline": {
-    title: "타임라인",
-    description: "상담회 진행 상황을 시간순으로 확인합니다.",
+    title: "스케줄",
+    description: "상담·수술·치료·경과 일정을 확인합니다.",
   },
   "/reservations": {
     title: "예약관리",
-    description: "상담회 예약 고객 목록을 관리합니다.",
+    description: "환자 예약 목록을 관리합니다.",
   },
   "/dashboard": {
     title: "KPI 대시보드",
-    description: "상담회 주요 지표를 확인합니다.",
-  },
-  "/invoice": {
-    title: "인보이스",
-    description: "생성된 고객 인보이스를 조회하고 템플릿을 관리합니다.",
+    description: "병원별·유형별 주요 지표를 확인합니다.",
   },
   "/settings": {
     title: "설정",
@@ -110,7 +109,7 @@ export default function AppShell({ children }: AppShellProps) {
   const pathname = usePathname();
 
   const isLoginPage = pathname === "/login";
-  const isTimelinePage = pathname.startsWith("/timeline");
+  const isTimelinePage = pathname.startsWith("/timeline") || pathname.startsWith("/schedule");
 
   const [mounted, setMounted] = useState(false);
   const [firebaseUser, setFirebaseUser] = useState<User | null>(null);
@@ -127,7 +126,7 @@ export default function AppShell({ children }: AppShellProps) {
     return matched
       ? pageInfo[matched]
       : {
-          title: "상담회 CRM",
+          title: "모바일 CRM",
           description: "상담회 운영 시스템",
         };
   }, [pathname]);
@@ -311,12 +310,10 @@ export default function AppShell({ children }: AppShellProps) {
             🏥
           </div>
 
-          <div className="text-base font-semibold text-white">상담회 CRM</div>
+          <div className="text-base font-semibold text-white">모바일 CRM</div>
 
           <div className="mt-1 text-xs leading-relaxed text-[#9aa7b5]">
-            해외 상담회
-            <br />
-            실시간 운영 시스템
+            예약관리 시스템
           </div>
 
           <div className="mt-4 flex items-center gap-2 rounded-lg bg-[#182430] px-3 py-2.5">
@@ -396,8 +393,8 @@ export default function AppShell({ children }: AppShellProps) {
             </div>
 
             <div>
-              <div className="text-xl font-semibold text-white">상담회 CRM</div>
-              <div className="text-xs text-[#9aa7b5]">실시간 운영 시스템</div>
+              <div className="text-xl font-semibold text-white">모바일 CRM</div>
+              <div className="text-xs text-[#9aa7b5]">예약관리 시스템</div>
             </div>
           </div>
 

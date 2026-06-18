@@ -151,7 +151,7 @@ export async function addReservationNote(params: {
     isDeleted: false,
   });
 
-  await createLog({
+  createLog({
     action: "memo_create",
     targetType: "reservation",
     targetId: params.reservationId,
@@ -164,7 +164,7 @@ export async function addReservationNote(params: {
       memoText,
       noteId: ref.id,
     },
-  });
+  }).catch((e) => console.warn("[addReservationNote] log write failed:", e));
 
   return { success: true, id: ref.id };
 }
@@ -189,7 +189,7 @@ export async function updateReservationNote(params: {
     updatedByUid: params.staff.uid,
   });
 
-  await createLog({
+  createLog({
     action: "memo_update",
     targetType: "reservation",
     targetId: params.reservationId,
@@ -202,7 +202,7 @@ export async function updateReservationNote(params: {
       memoText,
       noteId: params.noteId,
     },
-  });
+  }).catch((e) => console.warn("[updateReservationNote] log write failed:", e));
 
   return { success: true };
 }
@@ -220,7 +220,7 @@ export async function deleteReservationNote(params: {
     updatedByUid: params.staff.uid,
   });
 
-  await createLog({
+  createLog({
     action: "memo_delete",
     targetType: "reservation",
     targetId: params.reservationId,
@@ -233,7 +233,7 @@ export async function deleteReservationNote(params: {
       noteId: params.noteId,
       isDeleted: true,
     },
-  });
+  }).catch((e) => console.warn("[deleteReservationNote] log write failed:", e));
 
   return { success: true };
 }

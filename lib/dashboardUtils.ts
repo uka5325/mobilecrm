@@ -29,6 +29,9 @@ export type ReservationDoc = {
   reservationTime?: string;
   reservation_time?: string;
   time?: string;
+  hospital?: string;
+  appointmentType?: string;
+  completed?: boolean;
   consultArea?: string;
   consult_area?: string;
   area?: string;
@@ -66,6 +69,11 @@ export type Counter = {
   cons: number;
   post: number;
   left: number;
+  consultCount: number;
+  surgeryTypeCount: number;
+  treatmentCount: number;
+  followUpCount: number;
+  completedCount: number;
   depositByCurrency: Record<string, number>;
 };
 
@@ -170,6 +178,20 @@ export function getConsultArea(item: ReservationDoc) {
   return cleanName(item.consultArea || item.consult_area || item.area || "미지정");
 }
 
+export function getHospital(item: ReservationDoc) {
+  return cleanName(item.hospital || "");
+}
+
+export function getAppointmentType(item: ReservationDoc) {
+  const v = cleanText(item.appointmentType || "");
+  if (v === "상담" || v === "수술" || v === "치료" || v === "경과") return v;
+  return "상담";
+}
+
+export function isCompleted(item: ReservationDoc) {
+  return item.completed === true;
+}
+
 export function getDoctors(item: ReservationDoc) {
   const fromArray = splitNames(item.doctors);
   const fromSingle = splitNames(item.doctor || item.doctorName || item.doctor_name);
@@ -233,7 +255,7 @@ function parseDepositParts(value: unknown) {
 }
 
 export function emptyCounter(name?: string): Counter {
-  return { name, total: 0, visited: 0, noShow: 0, surgery: 0, before: 0, wait: 0, cons: 0, post: 0, left: 0, depositByCurrency: {} };
+  return { name, total: 0, visited: 0, noShow: 0, surgery: 0, before: 0, wait: 0, cons: 0, post: 0, left: 0, consultCount: 0, surgeryTypeCount: 0, treatmentCount: 0, followUpCount: 0, completedCount: 0, depositByCurrency: {} };
 }
 
 function addDeposit(counter: Counter, item: ReservationDoc) {
@@ -245,6 +267,7 @@ function addDeposit(counter: Counter, item: ReservationDoc) {
 
 export function accumulate(counter: Counter, item: ReservationDoc) {
   const status = getStatus(item);
+  const apptType = getAppointmentType(item);
   counter.total += 1;
   if (status === "내원전") counter.before += 1;
   if (status === "대기") counter.wait += 1;
@@ -254,6 +277,11 @@ export function accumulate(counter: Counter, item: ReservationDoc) {
   if (status === "부도") counter.noShow += 1;
   if (status !== "부도" && status !== "내원전") counter.visited += 1;
   if (isSurgeryReserved(item)) counter.surgery += 1;
+  if (apptType === "상담") counter.consultCount += 1;
+  if (apptType === "수술") counter.surgeryTypeCount += 1;
+  if (apptType === "치료") counter.treatmentCount += 1;
+  if (apptType === "경과") counter.followUpCount += 1;
+  if (isCompleted(item)) counter.completedCount += 1;
   addDeposit(counter, item);
 }
 

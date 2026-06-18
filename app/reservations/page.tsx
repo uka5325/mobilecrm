@@ -1,46 +1,28 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import type { MouseEvent } from "react";
-import { useRouter } from "next/navigation";
-import { doc, serverTimestamp, updateDoc } from "firebase/firestore";
 import {
   deleteReservation,
   updateReservationFull,
   type ReservationRecord,
-  type ReservationStatus,
+  type AppointmentType,
   toggleSurgeryReserved,
-  updateReservationStatus,
 } from "@/lib/reservations";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useReservationData } from "@/hooks/useReservationData";
 import { getReservationBirthInfo } from "@/lib/reservationUtils";
-import { db } from "@/lib/firebase";
 import { todayString } from "@/lib/dateUtils";
 import { CreateDrawer } from "@/components/reservations/CreateDrawer";
-import { EditDrawer } from "@/components/reservations/EditDrawer";
 import { ImportDrawer } from "@/components/reservations/ImportDrawer";
 import { MemoPopover, type MemoPopoverState } from "@/components/reservations/MemoPopover";
-import { InvoiceContextMenu, type InvoiceMenuState } from "@/components/reservations/InvoiceContextMenu";
 import { ReservationsTable } from "@/components/reservations/ReservationsTable";
 import { getReservationNotes, updateReservationNote, deleteReservationNote, type ReservationNote } from "@/lib/reservationNotes";
 import { toDate } from "@/lib/settingsUtils";
 
-const STATUS_LIST: ReservationStatus[] = [
-  "내원전",
-  "대기",
-  "원상중",
-  "후상중",
-  "귀가",
-  "부도",
-];
-
 
 export default function ReservationsPage() {
-  const router = useRouter();
-
   const { currentUser, authReady } = useCurrentUser();
-  const { reservations, doctors, statusColors, loading } = useReservationData(
+  const { reservations, loading } = useReservationData(
     currentUser,
     authReady
   );
@@ -49,21 +31,17 @@ export default function ReservationsPage() {
   const [filterDate, setFilterDate] = useState("");
 
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const [editDrawerOpen, setEditDrawerOpen] = useState(false);
   const [importDrawerOpen, setImportDrawerOpen] = useState(false);
 
-  const [editingReservation, setEditingReservation] =
-    useState<ReservationRecord | null>(null);
 
   const [inlineEditId, setInlineEditId] = useState<string | null>(null);
   const [inlineForm, setInlineForm] = useState<{
     name: string; birthInput: string; phone: string; nationality: string;
     consultArea: string; reservationDate: string; reservationTime: string;
-    coordinators: string; depositAmount: string; doctors: string[];
+    coordinators: string; depositAmount: string; hospital: string;
+    appointmentType: AppointmentType; completed: boolean;
   } | null>(null);
   const [inlineSaving, setInlineSaving] = useState(false);
-
-  const [invoiceMenu, setInvoiceMenu] = useState<InvoiceMenuState>(null);
 
   const [memoPopover, setMemoPopover] = useState<MemoPopoverState>(null);
 const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
@@ -93,11 +71,12 @@ const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
         item.phone,
         item.nationality,
         item.consultArea,
+        item.hospital,
+        item.appointmentType,
         item.reservationDate,
         item.reservationTime,
         item.operationStatus,
         item.depositAmount,
-        item.doctors.join(", "),
         item.coordinators.join(", "),
       ]
         .join(" ")
@@ -125,90 +104,6 @@ const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
     });
   }, [filteredReservations]);
 
-  function closeInvoiceMenu() {
-    setInvoiceMenu(null);
-  }
-
-  function openInvoicePage(item: ReservationRecord) {
-    closeInvoiceMenu();
-    router.push(`/invoices/${item.id}`);
-  }
-
-  function handleInvoiceButtonClick(
-    e: MouseEvent<HTMLButtonElement>,
-    item: ReservationRecord
-  ) {
-    e.preventDefault();
-    e.stopPropagation();
-
-    if (!item.invoiceId) {
-      openInvoicePage(item);
-      return;
-    }
-
-    const rect = e.currentTarget.getBoundingClientRect();
-
-    setInvoiceMenu((prev) =>
-      prev?.id === item.id
-        ? null
-        : {
-            id: item.id,
-            x: Math.min(rect.left, window.innerWidth - 190),
-            y: rect.bottom + 6,
-          }
-    );
-  }
-
-  async function handleDeleteInvoiceOnly(item: ReservationRecord) {
-    if (!currentUser) return;
-
-    if (!confirm("연결된 인보이스를 삭제할까요?\n삭제 후 다시 생성할 수 있습니다.")) return;
-
-    closeInvoiceMenu();
-
-    try {
-      const invoiceDocId = item.invoiceDocId || item.invoiceId;
-
-      if (invoiceDocId) {
-        await updateDoc(doc(db, "invoices", invoiceDocId), {
-          status: "void",
-          isDeleted: true,
-          updatedAt: serverTimestamp(),
-          updatedBy: currentUser.displayName,
-          updatedByUid: currentUser.uid,
-        });
-      }
-
-      await updateDoc(doc(db, "reservations", item.id), {
-        invoiceId: "",
-        invoiceDocId: "",
-        invoiceStatus: "",
-        invoiceUpdatedAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-        updatedBy: currentUser.displayName,
-        updatedByUid: currentUser.uid,
-      });
-    } catch (error) {
-      console.error(error);
-      setPageError("인보이스 삭제 중 오류가 발생했습니다.");
-    }
-  }
-
-  async function handleStatusChange(
-    item: ReservationRecord,
-    status: ReservationStatus
-  ) {
-    if (!currentUser) return;
-
-    await updateReservationStatus(
-      item.id,
-      item.reservationId,
-      status,
-      currentUser
-    );
-
-  }
-
   async function handleSurgeryToggle(item: ReservationRecord) {
     if (!currentUser) return;
 
@@ -234,7 +129,9 @@ const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
       reservationTime: item.reservationTime || "",
       coordinators: item.coordinators.join(", "),
       depositAmount: item.depositAmount || "",
-      doctors: item.doctors || [],
+      hospital: item.hospital || "",
+      appointmentType: item.appointmentType || "상담",
+      completed: item.completed || false,
     });
   }
 
@@ -255,7 +152,9 @@ const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
           consultArea: inlineForm.consultArea,
           reservationDate: inlineForm.reservationDate,
           reservationTime: inlineForm.reservationTime,
-          doctors: inlineForm.doctors,
+          hospital: inlineForm.hospital,
+          appointmentType: inlineForm.appointmentType,
+          completed: inlineForm.completed,
           coordinators: inlineForm.coordinators.split(",").map((s) => s.trim()).filter(Boolean),
           depositAmount: inlineForm.depositAmount,
         },
@@ -263,8 +162,10 @@ const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
       );
       setInlineEditId(null);
       setInlineForm(null);
-    } catch {
-      setPageError("수정 중 오류가 발생했습니다.");
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setPageError(`수정 오류: ${msg}`);
+      console.error("[ReservationsPage] inline save error:", err);
     } finally {
       setInlineSaving(false);
     }
@@ -344,7 +245,7 @@ const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
 
       const header = [
         "예약일", "예약시간", "환자명", "생년월일", "성별", "연락처",
-        "상담부위", "담당원장", "상담실장", "수술결정여부",
+        "병원명", "예약유형", "완료여부", "상담부위", "담당자", "수술결정여부",
         "예약금", "예약금통화", "현재상태", "전체메모", "등록일", "최종수정일",
       ];
 
@@ -364,8 +265,10 @@ const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
           birthInfo.birthDisplay || "",
           birthInfo.gender || "",
           r.phone || "",
+          r.hospital || "",
+          r.appointmentType || "상담",
+          r.completed ? "완료" : "미완료",
           r.consultArea || "",
-          r.doctors.join(", "),
           r.coordinators.join(", "),
           r.surgeryReserved ? "예" : "아니오",
           depositAmount,
@@ -419,19 +322,6 @@ const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
         onEditTextChange={setEditingNoteText}
         onUpdate={handleMemoUpdate}
         onDelete={handleMemoDelete}
-      />
-
-      <InvoiceContextMenu
-        invoiceMenu={invoiceMenu}
-        onClose={closeInvoiceMenu}
-        onView={() => {
-          const item = reservations.find((r) => r.id === invoiceMenu?.id);
-          if (item) openInvoicePage(item);
-        }}
-        onDelete={() => {
-          const item = reservations.find((r) => r.id === invoiceMenu?.id);
-          if (item) handleDeleteInvoiceOnly(item);
-        }}
       />
 
       {pageError && (
@@ -541,15 +431,12 @@ const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
         items={groupedReservations}
         loading={loading}
         filterDate={filterDate}
-        statusColors={statusColors}
         inlineEditId={inlineEditId}
         inlineForm={inlineForm}
         inlineSaving={inlineSaving}
         onFormChange={setInlineForm}
-        onStatusChange={handleStatusChange}
         onSurgeryToggle={handleSurgeryToggle}
         onOpenMemo={openMemoPopover}
-        onInvoiceButtonClick={handleInvoiceButtonClick}
         onStartEdit={startInlineEdit}
         onSaveEdit={saveInlineEdit}
         onCancelEdit={() => { setInlineEditId(null); setInlineForm(null); }}
@@ -560,19 +447,8 @@ const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
         <CreateDrawer
           open={drawerOpen}
           onClose={() => setDrawerOpen(false)}
-          doctors={doctors}
           currentUser={currentUser}
           initialDate={filterDate || undefined}
-        />
-      )}
-
-      {currentUser && (
-        <EditDrawer
-          open={editDrawerOpen}
-          onClose={() => { setEditDrawerOpen(false); setEditingReservation(null); }}
-          reservation={editingReservation}
-          doctors={doctors}
-          currentUser={currentUser}
         />
       )}
 

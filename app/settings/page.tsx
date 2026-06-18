@@ -5,47 +5,28 @@ import type { User } from "firebase/auth";
 import {
   addConferenceMemo,
   changeMyPassword,
+  DEFAULT_APPOINTMENT_TYPE_COLORS,
   DEFAULT_GENERAL_SETTINGS,
-  DEFAULT_VISIT_STATUS_COLORS,
   deactivateStaffFromSettings,
   deleteConferenceMemo,
+  getAppointmentTypeColors,
   getConferenceMemos,
   getGeneralSettings,
   getStaffListForSettings,
-  getVisitStatusColors,
-  resetVisitStatusColors,
+  resetAppointmentTypeColors,
+  saveAppointmentTypeColors,
   saveGeneralSettings,
-  saveVisitStatusColors,
   updateStaffFromSettings,
   createStaffFromSettings,
+  type AppointmentTypeColorMap,
   type ConferenceMemo,
   type CountryKey,
   type GeneralSettings,
   type SettingsStaffRecord,
   type SettingsStaffRole,
-  type VisitStatus,
-  type VisitStatusColorMap,
 } from "@/lib/settings";
 import { getStaffByUid, listenCurrentUser } from "@/lib/auth";
 import type { StaffUser } from "@/lib/auth";
-import {
-  deactivateInvoiceCategory,
-  deactivateInvoiceItem,
-  deactivateInvoiceTemplate,
-  deactivateInvoiceTemplateSection,
-  getInvoiceCategories,
-  getInvoiceItems,
-  getInvoiceTemplateSections,
-  getInvoiceTemplates,
-  saveInvoiceCategory,
-  saveInvoiceItem,
-  saveInvoiceTemplate,
-  saveInvoiceTemplateSection,
-  type InvoiceCategory,
-  type InvoiceItem,
-  type InvoiceTemplate,
-  type InvoiceTemplateSection,
-} from "@/lib/invoiceSettings";
 import { todayString } from "@/lib/dateUtils";
 import {
   getErrorMessage,
@@ -53,10 +34,6 @@ import {
   notifyStaffSettingsUpdated,
 } from "@/lib/settingsUtils";
 import { GlobalAlert, EmptyBox, SectionHeader, Th } from "@/components/settings/ui";
-import { InvoiceCategoriesPanel } from "@/components/settings/InvoiceCategoriesPanel";
-import { InvoiceItemsPanel } from "@/components/settings/InvoiceItemsPanel";
-import { InvoiceSectionsPanel } from "@/components/settings/InvoiceSectionsPanel";
-import { InvoiceTemplatesPanel } from "@/components/settings/InvoiceTemplatesPanel";
 import { StaffRow } from "@/components/settings/StaffRow";
 import { AddStaffModal } from "@/components/settings/AddStaffModal";
 import { StatusColorsPanel } from "@/components/settings/StatusColorsPanel";
@@ -64,34 +41,24 @@ import { SystemSettingsPanel } from "@/components/settings/SystemSettingsPanel";
 import { MemoPanel } from "@/components/settings/MemoPanel";
 import { SecurityPanel } from "@/components/settings/SecurityPanel";
 
-type SettingsTab = "statusColors" | "system" | "memo" | "staff" | "invoice" | "security";
-type InvoiceTab = "categories" | "items" | "sections" | "templates";
+type SettingsTab = "statusColors" | "system" | "memo" | "staff" | "security";
 
 const TAB_ITEMS: { key: SettingsTab; label: string; icon: string }[] = [
-  { key: "statusColors", label: "내원상태 색상", icon: "🎨" },
+  { key: "statusColors", label: "유형별 색상", icon: "🎨" },
   { key: "system", label: "기본 설정", icon: "🌐" },
   { key: "memo", label: "오늘의 메모", icon: "📝" },
   { key: "staff", label: "직원 관리", icon: "👥" },
-  { key: "invoice", label: "인보이스 설정", icon: "🧾" },
   { key: "security", label: "보안", icon: "🔐" },
-];
-
-const INVOICE_TAB_ITEMS: { key: InvoiceTab; label: string }[] = [
-  { key: "categories", label: "대분류" },
-  { key: "items", label: "수술항목/가격" },
-  { key: "sections", label: "안내사항" },
-  { key: "templates", label: "제목/템플릿" },
 ];
 
 export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState<SettingsTab>("statusColors");
-  const [activeInvoiceTab, setActiveInvoiceTab] = useState<InvoiceTab>("categories");
 
   const [currentUser, setCurrentUser] = useState<StaffUser | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
 
-  const [colors, setColors] = useState<VisitStatusColorMap>(DEFAULT_VISIT_STATUS_COLORS);
-  const [initialColors, setInitialColors] = useState<VisitStatusColorMap>(DEFAULT_VISIT_STATUS_COLORS);
+  const [colors, setColors] = useState<AppointmentTypeColorMap>(DEFAULT_APPOINTMENT_TYPE_COLORS);
+  const [initialColors, setInitialColors] = useState<AppointmentTypeColorMap>(DEFAULT_APPOINTMENT_TYPE_COLORS);
 
   const [generalSettings, setGeneralSettings] = useState<GeneralSettings>(DEFAULT_GENERAL_SETTINGS);
   const [selectedCountry, setSelectedCountry] = useState<CountryKey>("Korea");
@@ -102,11 +69,6 @@ export default function SettingsPage() {
 
   const [staffList, setStaffList] = useState<SettingsStaffRecord[]>([]);
 
-  const [invoiceCategories, setInvoiceCategories] = useState<InvoiceCategory[]>([]);
-  const [invoiceItems, setInvoiceItems] = useState<InvoiceItem[]>([]);
-  const [invoiceSections, setInvoiceSections] = useState<InvoiceTemplateSection[]>([]);
-  const [invoiceTemplates, setInvoiceTemplates] = useState<InvoiceTemplate[]>([]);
-
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
 
@@ -114,7 +76,6 @@ export default function SettingsPage() {
   const [memoLoading, setMemoLoading] = useState(false);
   const [staffLoading, setStaffLoading] = useState(false);
   const [showAddStaff, setShowAddStaff] = useState(false);
-  const [invoiceLoading, setInvoiceLoading] = useState(false);
   const [saving, setSaving] = useState(false);
 
   const [message, setMessage] = useState("");
@@ -156,7 +117,7 @@ export default function SettingsPage() {
     setMessage("");
     try {
       const [loadedColors, loadedGeneral] = await Promise.all([
-        getVisitStatusColors(),
+        getAppointmentTypeColors(),
         getGeneralSettings(),
       ]);
       setColors(loadedColors);
@@ -199,33 +160,10 @@ export default function SettingsPage() {
     }
   }
 
-  async function loadInvoiceSettings() {
-    setInvoiceLoading(true);
-    setError("");
-    try {
-      const [categories, items, sections, templates] = await Promise.all([
-        getInvoiceCategories(true),
-        getInvoiceItems({ includeInactive: true }),
-        getInvoiceTemplateSections(true),
-        getInvoiceTemplates(true),
-      ]);
-      setInvoiceCategories(categories);
-      setInvoiceItems(items);
-      setInvoiceSections(sections);
-      setInvoiceTemplates(templates);
-    } catch (err) {
-      console.error(err);
-      setError("인보이스 설정을 불러오지 못했습니다.");
-    } finally {
-      setInvoiceLoading(false);
-    }
-  }
-
   useEffect(() => {
     loadBaseSettings();
     loadMemos(todayString());
     loadStaffList();
-    loadInvoiceSettings();
   }, []);
 
   function clearAlerts() {
@@ -238,10 +176,10 @@ export default function SettingsPage() {
     setSaving(true);
     clearAlerts();
     try {
-      const savedColors = await saveVisitStatusColors(colors, currentUser);
+      const savedColors = await saveAppointmentTypeColors(colors, currentUser);
       setColors(savedColors);
       setInitialColors(savedColors);
-      setMessage("내원상태 색상이 저장되었습니다.");
+      setMessage("유형별 색상이 저장되었습니다.");
     } catch (err) {
       console.error(err);
       setError(getErrorMessage(err));
@@ -252,12 +190,12 @@ export default function SettingsPage() {
 
   async function handleResetColors() {
     if (!currentUser) { setError("로그인 정보를 확인할 수 없습니다."); return; }
-    const ok = confirm("내원상태 색상을 기본값으로 되돌릴까요?");
+    const ok = confirm("유형별 색상을 기본값으로 되돌릴까요?");
     if (!ok) return;
     setSaving(true);
     clearAlerts();
     try {
-      const resetColors = await resetVisitStatusColors(currentUser);
+      const resetColors = await resetAppointmentTypeColors(currentUser);
       setColors(resetColors);
       setInitialColors(resetColors);
       setMessage("기본 색상으로 복원되었습니다.");
@@ -339,22 +277,6 @@ export default function SettingsPage() {
     }
   }
 
-  async function runInvoiceAction(action: () => Promise<unknown>, doneMessage: string) {
-    if (!currentUser) { setError("로그인 정보를 확인할 수 없습니다."); return; }
-    setSaving(true);
-    clearAlerts();
-    try {
-      await action();
-      await loadInvoiceSettings();
-      setMessage(doneMessage);
-    } catch (err) {
-      console.error(err);
-      setError(getErrorMessage(err));
-    } finally {
-      setSaving(false);
-    }
-  }
-
   return (
     <div className="grid max-w-[1180px] grid-cols-1 gap-5 lg:grid-cols-[230px_minmax(0,1fr)]">
       <nav className="h-fit rounded-[18px] border border-[#edf0f3] bg-white p-3 shadow-[0_2px_14px_rgba(0,0,0,0.04)] lg:sticky lg:top-8">
@@ -390,8 +312,8 @@ export default function SettingsPage() {
             canManage={canManageSettings}
             saving={saving}
             hasChanges={hasColorChanges}
-            onUpdateColor={(status: VisitStatus, value: string) => {
-              setColors((prev) => ({ ...prev, [status]: normalizeHexInput(value) }));
+            onUpdateColor={(type: string, value: string) => {
+              setColors((prev) => ({ ...prev, [type]: normalizeHexInput(value) }));
             }}
             onSave={handleSaveColors}
             onReset={handleResetColors}
@@ -429,7 +351,7 @@ export default function SettingsPage() {
             <div className="flex items-start justify-between gap-4">
               <SectionHeader
                 title="직원 관리"
-                description="직원 권한, 활성상태, 원장 표시 순서를 관리합니다."
+                description="직원 권한, 활성상태, 표시 순서를 관리합니다."
                 badge={canManageSettings ? "수정 가능" : "보기 전용"}
                 badgeActive={canManageSettings}
               />
@@ -523,85 +445,6 @@ export default function SettingsPage() {
               setMessage("직원 계정이 추가되었습니다.");
             }}
           />
-        )}
-
-        {activeTab === "invoice" && (
-          <section className="rounded-[18px] border border-[#edf0f3] bg-white p-6 shadow-[0_2px_14px_rgba(0,0,0,0.04)]">
-            <SectionHeader
-              title="인보이스 설정"
-              description="인보이스 대분류, 수술항목/가격, 안내사항, 제목 템플릿을 관리합니다. 삭제는 기존 인보이스 보존을 위해 비활성화로 처리됩니다."
-              badge={canManageSettings ? "수정 가능" : "보기 전용"}
-              badgeActive={canManageSettings}
-            />
-
-            <div className="mb-5 flex flex-wrap gap-2">
-              {INVOICE_TAB_ITEMS.map((tab) => {
-                const active = activeInvoiceTab === tab.key;
-                return (
-                  <button
-                    key={tab.key}
-                    onClick={() => setActiveInvoiceTab(tab.key)}
-                    className={`rounded-xl px-4 py-2 text-sm transition active:scale-95 ${
-                      active ? "bg-black font-semibold text-white" : "bg-gray-100 text-gray-500 hover:bg-gray-200"
-                    }`}
-                  >
-                    {tab.label}
-                  </button>
-                );
-              })}
-
-              <button
-                onClick={loadInvoiceSettings}
-                className="ml-auto rounded-xl border border-[#dfe3e8] bg-white px-4 py-2 text-sm text-gray-600 transition hover:bg-gray-50 active:scale-95"
-              >
-                새로고침
-              </button>
-            </div>
-
-            {invoiceLoading ? (
-              <EmptyBox text="인보이스 설정을 불러오는 중..." />
-            ) : (
-              <>
-                {activeInvoiceTab === "categories" && (
-                  <InvoiceCategoriesPanel
-                    categories={invoiceCategories}
-                    canManage={canManageSettings}
-                    saving={saving}
-                    onSave={(payload) => runInvoiceAction(() => saveInvoiceCategory(payload, currentUser!), "인보이스 대분류가 저장되었습니다.")}
-                    onDeactivate={(categoryId) => runInvoiceAction(() => deactivateInvoiceCategory(categoryId, currentUser!), "인보이스 대분류가 비활성화되었습니다.")}
-                  />
-                )}
-                {activeInvoiceTab === "items" && (
-                  <InvoiceItemsPanel
-                    categories={invoiceCategories}
-                    items={invoiceItems}
-                    canManage={canManageSettings}
-                    saving={saving}
-                    onSave={(payload) => runInvoiceAction(() => saveInvoiceItem(payload, currentUser!), "인보이스 수술항목이 저장되었습니다.")}
-                    onDeactivate={(itemId) => runInvoiceAction(() => deactivateInvoiceItem(itemId, currentUser!), "인보이스 수술항목이 비활성화되었습니다.")}
-                  />
-                )}
-                {activeInvoiceTab === "sections" && (
-                  <InvoiceSectionsPanel
-                    sections={invoiceSections}
-                    canManage={canManageSettings}
-                    saving={saving}
-                    onSave={(payload) => runInvoiceAction(() => saveInvoiceTemplateSection(payload, currentUser!), "인보이스 안내사항이 저장되었습니다.")}
-                    onDeactivate={(sectionId) => runInvoiceAction(() => deactivateInvoiceTemplateSection(sectionId, currentUser!), "인보이스 안내사항이 비활성화되었습니다.")}
-                  />
-                )}
-                {activeInvoiceTab === "templates" && (
-                  <InvoiceTemplatesPanel
-                    templates={invoiceTemplates}
-                    canManage={canManageSettings}
-                    saving={saving}
-                    onSave={(payload) => runInvoiceAction(() => saveInvoiceTemplate(payload, currentUser!), "인보이스 템플릿이 저장되었습니다.")}
-                    onDeactivate={(templateId) => runInvoiceAction(() => deactivateInvoiceTemplate(templateId, currentUser!), "인보이스 템플릿이 비활성화되었습니다.")}
-                  />
-                )}
-              </>
-            )}
-          </section>
         )}
 
         {activeTab === "security" && (
