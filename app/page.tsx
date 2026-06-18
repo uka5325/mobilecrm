@@ -85,6 +85,7 @@ export default function HomePage() {
 
       const staff = await getStaffByUid(user.uid);
       if (staff) setCurrentUser(staff);
+      await refreshHome();
     });
 
     return () => unsubscribe();
@@ -121,10 +122,6 @@ export default function HomePage() {
   async function refreshHome() {
     await Promise.all([loadData(), loadTodayMemos()]);
   }
-
-  useEffect(() => {
-    refreshHome();
-  }, []);
 
   const todayReservations = useMemo(() => {
     return reservations.filter(isTodayReservation);

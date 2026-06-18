@@ -525,8 +525,9 @@ export default function SchedulePage() {
   const [memoSectionOpen, setMemoSectionOpen] = useState(true);
 
   useEffect(() => {
-    getConferenceMemos(todayString()).then(setTodayMemos).catch(() => {});
-  }, []);
+    if (!authReady) return;
+    getConferenceMemos(baseDate).then(setTodayMemos).catch(() => setTodayMemos([]));
+  }, [baseDate, authReady]);
 
   const { startDate, endDate } = useMemo(() => {
     if (viewMode === "day") return { startDate: baseDate, endDate: baseDate };
@@ -619,7 +620,7 @@ export default function SchedulePage() {
           onClick={() => setMemoSectionOpen((v) => !v)}
           className="flex w-full items-center gap-2 px-5 py-1.5 text-xs text-gray-500 hover:bg-gray-50"
         >
-          <span className="font-semibold">📝 오늘의 메모</span>
+          <span className="font-semibold">📝 {baseDate === todayString() ? "오늘의 메모" : `${baseDate} 메모`}</span>
           {todayMemos.length > 0 && (
             <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700">{todayMemos.length}</span>
           )}
