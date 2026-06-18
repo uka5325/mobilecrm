@@ -455,7 +455,7 @@ export default function ReservationsPage() {
             onClick={() => { setAddPatient(undefined); setDrawerOpen(true); }}
             className="h-10 rounded-xl bg-black px-4 text-sm font-medium text-white transition hover:-translate-y-0.5 hover:shadow-md active:scale-95"
           >
-            + 단일 예약 추가
+            + 고객 등록
           </button>
           <button
             onClick={() => setImportDrawerOpen(true)}
