@@ -15,6 +15,14 @@ export type PatientGroup = {
   reservations: ReservationRecord[];
 };
 
+export type PatientEditForm = {
+  name: string;
+  birthInput: string;
+  phone: string;
+  nationality: string;
+  gender: string;
+};
+
 const APPT_TYPE_COLORS: Record<AppointmentType, string> = {
   상담: "#2563eb",
   수술: "#ef4444",
@@ -36,14 +44,43 @@ type Props = {
   inlineForm: InlineForm;
   inlineSaving: boolean;
   onFormChange: (updater: (prev: InlineForm) => InlineForm) => void;
-  onSurgeryToggle: (item: ReservationRecord) => void;
-  onOpenMemo: (item: ReservationRecord) => void;
   onStartEdit: (item: ReservationRecord) => void;
   onSaveEdit: (item: ReservationRecord) => void;
   onCancelEdit: () => void;
   onDelete: (item: ReservationRecord) => void;
   onAddReservation: (item: ReservationRecord) => void;
+  // 환자 헤더 편집
+  patientEditId: string | null;
+  patientEditForm: PatientEditForm | null;
+  patientEditSaving: boolean;
+  onPatientFormChange: (updater: (prev: PatientEditForm | null) => PatientEditForm | null) => void;
+  onStartPatientEdit: (group: PatientGroup) => void;
+  onSavePatientEdit: (group: PatientGroup) => void;
+  onCancelPatientEdit: () => void;
+  onDeletePatient: (group: PatientGroup) => void;
+  onOpenPatientMemo: (group: PatientGroup) => void;
 };
+
+function getConsultAreas(reservations: ReservationRecord[], type: AppointmentType): string {
+  const areas = reservations
+    .filter((r) => r.appointmentType === type && r.consultArea)
+    .map((r) => r.consultArea);
+  return [...new Set(areas)].join(", ") || "—";
+}
+
+function sumAmounts(amounts: string[]): string {
+  let total = 0;
+  const nonNumeric: string[] = [];
+  for (const a of amounts) {
+    const n = parseFloat(a.replace(/[^0-9.]/g, ""));
+    if (a.trim() && !isNaN(n) && n > 0) total += n;
+    else if (a.trim()) nonNumeric.push(a.trim());
+  }
+  const parts: string[] = [];
+  if (total > 0) parts.push(total.toLocaleString());
+  parts.push(...nonNumeric);
+  return parts.join(" + ") || "—";
+}
 
 export function ReservationsTable({
   patientGroups,
@@ -52,13 +89,20 @@ export function ReservationsTable({
   inlineForm,
   inlineSaving,
   onFormChange,
-  onSurgeryToggle,
-  onOpenMemo,
   onStartEdit,
   onSaveEdit,
   onCancelEdit,
   onDelete,
   onAddReservation,
+  patientEditId,
+  patientEditForm,
+  patientEditSaving,
+  onPatientFormChange,
+  onStartPatientEdit,
+  onSavePatientEdit,
+  onCancelPatientEdit,
+  onDeletePatient,
+  onOpenPatientMemo,
 }: Props) {
   const cellCls = "border-b border-gray-100 px-2 py-2";
   const inputCls = "w-full rounded-lg border border-[#dfe3e8] px-2 py-1 text-xs focus:border-[#1d9e75] focus:outline-none";
@@ -117,11 +161,13 @@ export function ReservationsTable({
           )}
         </td>
 
-        {/* 상담부위/수술항목 */}
+        {/* 상담부위/수술항목 (편집 모드에서만 표시) */}
         <td className={cellCls}>
           {isEditing ? (
             <input className={inputCls} value={f!.consultArea} onChange={(e) => onFormChange((p) => p && ({ ...p, consultArea: e.target.value }))} />
-          ) : item.consultArea}
+          ) : (
+            <span className="text-gray-500 text-xs">{item.consultArea || "—"}</span>
+          )}
         </td>
 
         {/* 담당자 */}
@@ -131,39 +177,6 @@ export function ReservationsTable({
           ) : (
             <span className="text-gray-500">{item.coordinators.join(", ")}</span>
           )}
-        </td>
-
-        {/* 수술예약 */}
-        <td className={`${cellCls} text-center`}>
-          <button
-            onClick={() => onSurgeryToggle(item)}
-            className={`rounded-full px-2 py-1 text-xs ${item.surgeryReserved ? "bg-purple-50 text-purple-700" : "bg-gray-100 text-gray-500"}`}
-          >
-            {item.surgeryReserved ? "예약" : "미예약"}
-          </button>
-        </td>
-
-        {/* 예약금 */}
-        <td className={cellCls}>
-          {isEditing ? (
-            <input className={inputCls} value={f!.depositAmount} onChange={(e) => onFormChange((p) => p && ({ ...p, depositAmount: e.target.value }))} />
-          ) : (
-            <span className="text-gray-600">{item.depositAmount || "—"}</span>
-          )}
-        </td>
-
-        {/* 수술비용 */}
-        <td className={cellCls}>
-          {isEditing ? (
-            <input className={inputCls} value={f!.surgeryCost} onChange={(e) => onFormChange((p) => p && ({ ...p, surgeryCost: e.target.value }))} />
-          ) : (
-            <span className="text-gray-600">{item.surgeryCost || "—"}</span>
-          )}
-        </td>
-
-        {/* 메모 */}
-        <td className={`${cellCls} text-xs text-gray-500`}>
-          <button onClick={() => onOpenMemo(item)} className="text-emerald-700 hover:underline">전체보기</button>
         </td>
 
         {/* 관리 */}
@@ -189,18 +202,155 @@ export function ReservationsTable({
     );
   }
 
+  function renderPatientHeader(group: PatientGroup) {
+    const isEditing = patientEditId === group.patientKey;
+    const pf = patientEditForm;
+
+    const birthInfo = getReservationBirthInfo({
+      birth: group.birth,
+      birthInput: group.birthInput,
+      gender: group.gender,
+    } as Parameters<typeof getReservationBirthInfo>[0]);
+
+    const surgeryReserved = group.reservations.some((r) => r.surgeryReserved);
+    const depositTotal = sumAmounts(group.reservations.map((r) => r.depositAmount || ""));
+    const surgeryTotal = sumAmounts(group.reservations.map((r) => r.surgeryCost || ""));
+    const consultAreas = getConsultAreas(group.reservations, "상담");
+    const surgeryAreas = getConsultAreas(group.reservations, "수술");
+
+    if (isEditing && pf) {
+      return (
+        <tr key={`patient-edit-${group.patientKey}`} className="bg-blue-50">
+          <td colSpan={7} className="border-y border-blue-200 px-4 py-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <input
+                className="h-7 w-[100px] rounded-lg border border-[#dfe3e8] bg-white px-2 text-xs font-bold focus:border-[#1d9e75] focus:outline-none"
+                value={pf.name}
+                placeholder="이름"
+                onChange={(e) => onPatientFormChange((p) => p && ({ ...p, name: e.target.value }))}
+              />
+              <input
+                className="h-7 w-[120px] rounded-lg border border-[#dfe3e8] bg-white px-2 text-xs focus:border-[#1d9e75] focus:outline-none"
+                value={pf.birthInput}
+                placeholder="생년월일 (891210-1)"
+                onChange={(e) => onPatientFormChange((p) => p && ({ ...p, birthInput: e.target.value }))}
+              />
+              <select
+                className="h-7 w-[70px] rounded-lg border border-[#dfe3e8] bg-white px-2 text-xs focus:border-[#1d9e75] focus:outline-none"
+                value={pf.gender}
+                onChange={(e) => onPatientFormChange((p) => p && ({ ...p, gender: e.target.value }))}
+              >
+                <option value="">성별</option>
+                <option value="남">남</option>
+                <option value="여">여</option>
+              </select>
+              <input
+                className="h-7 w-[130px] rounded-lg border border-[#dfe3e8] bg-white px-2 text-xs focus:border-[#1d9e75] focus:outline-none"
+                value={pf.phone}
+                placeholder="연락처"
+                onChange={(e) => onPatientFormChange((p) => p && ({ ...p, phone: e.target.value }))}
+              />
+              <input
+                className="h-7 w-[90px] rounded-lg border border-[#dfe3e8] bg-white px-2 text-xs focus:border-[#1d9e75] focus:outline-none"
+                value={pf.nationality}
+                placeholder="국적"
+                onChange={(e) => onPatientFormChange((p) => p && ({ ...p, nationality: e.target.value }))}
+              />
+              <div className="ml-auto flex gap-1">
+                <button
+                  onClick={() => onSavePatientEdit(group)}
+                  disabled={patientEditSaving}
+                  className="rounded-lg bg-emerald-600 px-3 py-1 text-xs text-white disabled:opacity-50"
+                >
+                  {patientEditSaving ? "…" : "저장"}
+                </button>
+                <button onClick={onCancelPatientEdit} className="rounded-lg border border-gray-200 bg-white px-3 py-1 text-xs text-gray-500">
+                  취소
+                </button>
+              </div>
+            </div>
+          </td>
+        </tr>
+      );
+    }
+
+    return (
+      <tr key={`patient-${group.patientKey}`} className="bg-blue-50">
+        <td colSpan={7} className="border-y border-blue-100 px-4 py-2">
+          {/* 1행: 환자 기본 정보 */}
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mb-1.5">
+            <span className="text-sm font-bold text-gray-900">{group.name}</span>
+            {birthInfo.birthDisplay && (
+              <span className="text-xs text-gray-500">{birthInfo.birthDisplay} ({birthInfo.ageText})</span>
+            )}
+            {group.gender && <span className="text-xs text-gray-500">{group.gender}</span>}
+            {group.phone && <span className="text-xs text-gray-500">{group.phone}</span>}
+            {group.nationality && <span className="text-xs text-gray-400">{group.nationality}</span>}
+          </div>
+
+          {/* 2행: 집계 정보 + 버튼 */}
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+            {consultAreas !== "—" && (
+              <span className="text-xs text-gray-600">
+                <span className="font-medium text-blue-700">상담</span> {consultAreas}
+              </span>
+            )}
+            {surgeryAreas !== "—" && (
+              <span className="text-xs text-gray-600">
+                <span className="font-medium text-red-600">수술</span> {surgeryAreas}
+              </span>
+            )}
+            <span className={`text-xs font-medium ${surgeryReserved ? "text-purple-700" : "text-gray-400"}`}>
+              수술예약 {surgeryReserved ? "✓" : "✗"}
+            </span>
+            {depositTotal !== "—" && (
+              <span className="text-xs text-gray-600">예약금 <span className="font-medium">{depositTotal}</span></span>
+            )}
+            {surgeryTotal !== "—" && (
+              <span className="text-xs text-gray-600">수술비 <span className="font-medium">{surgeryTotal}</span></span>
+            )}
+
+            <div className="ml-auto flex items-center gap-1.5">
+              <button
+                onClick={() => onOpenPatientMemo(group)}
+                className="rounded-md border border-emerald-200 bg-white px-2 py-0.5 text-xs text-emerald-700 hover:bg-emerald-50"
+              >
+                메모
+              </button>
+              <button
+                onClick={() => onStartPatientEdit(group)}
+                className="rounded-md border border-gray-200 bg-white px-2 py-0.5 text-xs text-blue-600 hover:bg-blue-50"
+              >
+                수정
+              </button>
+              <button
+                onClick={() => onDeletePatient(group)}
+                className="rounded-md border border-gray-200 bg-white px-2 py-0.5 text-xs text-red-500 hover:bg-red-50"
+              >
+                삭제
+              </button>
+              <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-semibold text-blue-700">
+                총 {group.reservations.length}건
+              </span>
+            </div>
+          </div>
+        </td>
+      </tr>
+    );
+  }
+
   function renderBody() {
     if (loading) {
       return (
         <tr>
-          <td colSpan={11} className="py-12 text-center text-gray-400">데이터 로딩 중...</td>
+          <td colSpan={7} className="py-12 text-center text-gray-400">데이터 로딩 중...</td>
         </tr>
       );
     }
     if (patientGroups.length === 0) {
       return (
         <tr>
-          <td colSpan={11} className="py-12 text-center text-gray-400">고객이 없습니다.</td>
+          <td colSpan={7} className="py-12 text-center text-gray-400">고객이 없습니다.</td>
         </tr>
       );
     }
@@ -208,37 +358,7 @@ export function ReservationsTable({
     const rows: React.ReactNode[] = [];
 
     patientGroups.forEach((group) => {
-      const birthInfo = getReservationBirthInfo({
-        birth: group.birth,
-        birthInput: group.birthInput,
-        gender: group.gender,
-      } as Parameters<typeof getReservationBirthInfo>[0]);
-
-      rows.push(
-        <tr key={`patient-${group.patientKey}`} className="bg-blue-50">
-          <td colSpan={11} className="border-y border-blue-100 px-4 py-2.5">
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
-              <span className="text-sm font-bold text-gray-900">{group.name}</span>
-              {birthInfo.birthDisplay && (
-                <span className="text-xs text-gray-500">{birthInfo.birthDisplay} ({birthInfo.ageText})</span>
-              )}
-              {group.gender && (
-                <span className="text-xs text-gray-500">{group.gender}</span>
-              )}
-              {group.phone && (
-                <span className="text-xs text-gray-500">{group.phone}</span>
-              )}
-              {group.nationality && (
-                <span className="text-xs text-gray-400">{group.nationality}</span>
-              )}
-              <span className="ml-auto rounded-full bg-blue-100 px-2 py-0.5 text-xs font-semibold text-blue-700">
-                총 {group.reservations.length}건
-              </span>
-            </div>
-          </td>
-        </tr>
-      );
-
+      rows.push(renderPatientHeader(group));
       group.reservations.forEach((item) => {
         rows.push(renderReservationRow(item));
       });
@@ -250,24 +370,20 @@ export function ReservationsTable({
   return (
     <div className="-mx-4 sm:-mx-6 lg:-mx-8">
       <div className="overflow-x-auto border-y border-gray-100 bg-white">
-        <table className="min-w-[1300px] w-full table-fixed border-collapse text-sm">
+        <table className="min-w-[900px] w-full table-fixed border-collapse text-sm">
           <colgroup>
             <col className="w-[110px]" />
-            <col className="w-[80px]" />
-            <col className="w-[120px]" />
-            <col className="w-[70px]" />
+            <col className="w-[75px]" />
             <col className="w-[130px]" />
-            <col className="w-[100px]" />
-            <col className="w-[80px]" />
-            <col className="w-[100px]" />
-            <col className="w-[100px]" />
-            <col className="w-[65px]" />
+            <col className="w-[70px]" />
+            <col className="w-[140px]" />
+            <col className="w-[110px]" />
             <col className="w-[110px]" />
           </colgroup>
 
           <thead className="bg-gray-50">
             <tr>
-              {["예약일", "시간", "병원명", "유형", "상담부위/수술항목", "담당자", "수술예약", "예약금", "수술비용", "메모", "관리"].map((head) => (
+              {["예약일", "시간", "병원명", "유형", "상담/수술항목", "담당자", "관리"].map((head) => (
                 <th key={head} className="border-b border-gray-200 px-4 py-3 text-left text-xs font-semibold text-gray-500">
                   {head}
                 </th>
