@@ -15,7 +15,7 @@ import { todayString } from "@/lib/dateUtils";
 import { CreateDrawer } from "@/components/reservations/CreateDrawer";
 import { ImportDrawer } from "@/components/reservations/ImportDrawer";
 import { MemoPopover, type MemoPopoverState } from "@/components/reservations/MemoPopover";
-import { ReservationsTable } from "@/components/reservations/ReservationsTable";
+import { ReservationsTable, type PatientGroup } from "@/components/reservations/ReservationsTable";
 import { getReservationNotes, updateReservationNote, deleteReservationNote, type ReservationNote } from "@/lib/reservationNotes";
 import { toDate } from "@/lib/settingsUtils";
 
@@ -88,21 +88,36 @@ export default function ReservationsPage() {
     });
   }, [reservations, search, filterDate]);
 
-  const groupedReservations = useMemo(() => {
-    return [...filteredReservations].sort((a, b) => {
-      const aa = [
-        a.reservationDate || "",
-        a.reservationTime || "",
-        a.name || "",
-      ].join("");
 
-      const bb = [
-        b.reservationDate || "",
-        b.reservationTime || "",
-        b.name || "",
-      ].join("");
-
-      return aa.localeCompare(bb);
+  const patientGroups = useMemo<PatientGroup[]>(() => {
+    const map = new Map<string, PatientGroup>();
+    for (const r of filteredReservations) {
+      const key = r.patientId || `${r.name}_${r.birth}`;
+      if (!map.has(key)) {
+        map.set(key, {
+          patientKey: key,
+          name: r.name,
+          birth: r.birth,
+          birthInput: r.birthInput || r.birth || "",
+          gender: r.gender,
+          phone: r.phone,
+          nationality: r.nationality,
+          reservations: [],
+        });
+      }
+      map.get(key)!.reservations.push(r);
+    }
+    for (const g of map.values()) {
+      g.reservations.sort((a, b) =>
+        (a.reservationDate + a.reservationTime).localeCompare(
+          b.reservationDate + b.reservationTime
+        )
+      );
+    }
+    return [...map.values()].sort((a, b) => {
+      const latestA = a.reservations[a.reservations.length - 1]?.reservationDate || "";
+      const latestB = b.reservations[b.reservations.length - 1]?.reservationDate || "";
+      return latestB.localeCompare(latestA);
     });
   }, [filteredReservations]);
 
@@ -445,9 +460,8 @@ export default function ReservationsPage() {
       </div>
 
       <ReservationsTable
-        items={groupedReservations}
+        patientGroups={patientGroups}
         loading={loading}
-        filterDate={filterDate}
         inlineEditId={inlineEditId}
         inlineForm={inlineForm}
         inlineSaving={inlineSaving}
