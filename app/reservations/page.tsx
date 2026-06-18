@@ -22,7 +22,7 @@ import { toDate } from "@/lib/settingsUtils";
 
 export default function ReservationsPage() {
   const { currentUser, authReady } = useCurrentUser();
-  const { reservations, loading } = useReservationData(
+  const { reservations, loading, refresh } = useReservationData(
     currentUser,
     authReady
   );
@@ -33,18 +33,19 @@ export default function ReservationsPage() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [importDrawerOpen, setImportDrawerOpen] = useState(false);
 
+  const [addPatient, setAddPatient] = useState<{ name: string; birthInput: string; phone: string; nationality: string; patientId: string; hospital?: string; consultArea?: string; appointmentType?: import("@/lib/reservations").AppointmentType; coordinators?: string; depositAmount?: string; surgeryCost?: string } | undefined>();
 
   const [inlineEditId, setInlineEditId] = useState<string | null>(null);
   const [inlineForm, setInlineForm] = useState<{
     name: string; birthInput: string; phone: string; nationality: string;
     consultArea: string; reservationDate: string; reservationTime: string;
-    coordinators: string; depositAmount: string; hospital: string;
-    appointmentType: AppointmentType; completed: boolean;
+    coordinators: string; depositAmount: string; surgeryCost: string; hospital: string;
+    appointmentType: AppointmentType;
   } | null>(null);
   const [inlineSaving, setInlineSaving] = useState(false);
 
   const [memoPopover, setMemoPopover] = useState<MemoPopoverState>(null);
-const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
+  const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
   const [editingNoteText, setEditingNoteText] = useState("");
 
   const [downloadOpen, setDownloadOpen] = useState(false);
@@ -77,6 +78,7 @@ const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
         item.reservationTime,
         item.operationStatus,
         item.depositAmount,
+        item.surgeryCost,
         item.coordinators.join(", "),
       ]
         .join(" ")
@@ -129,9 +131,9 @@ const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
       reservationTime: item.reservationTime || "",
       coordinators: item.coordinators.join(", "),
       depositAmount: item.depositAmount || "",
+      surgeryCost: item.surgeryCost || "",
       hospital: item.hospital || "",
       appointmentType: item.appointmentType || "상담",
-      completed: item.completed || false,
     });
   }
 
@@ -154,14 +156,17 @@ const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
           reservationTime: inlineForm.reservationTime,
           hospital: inlineForm.hospital,
           appointmentType: inlineForm.appointmentType,
-          completed: inlineForm.completed,
           coordinators: inlineForm.coordinators.split(",").map((s) => s.trim()).filter(Boolean),
           depositAmount: inlineForm.depositAmount,
+          surgeryCost: inlineForm.surgeryCost,
+          currentDoctorStatusMap: item.doctorStatusMap,
+          currentDoctorStatusMetaMap: item.doctorStatusMetaMap,
         },
         currentUser
       );
       setInlineEditId(null);
       setInlineForm(null);
+      await refresh();
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       setPageError(`수정 오류: ${msg}`);
@@ -245,18 +250,14 @@ const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
 
       const header = [
         "예약일", "예약시간", "환자명", "생년월일", "성별", "연락처",
-        "병원명", "예약유형", "완료여부", "상담부위", "담당자", "수술결정여부",
-        "예약금", "예약금통화", "현재상태", "전체메모", "등록일", "최종수정일",
+        "병원명", "예약유형", "상담부위", "담당자", "수술결정여부",
+        "예약금", "수술비용", "현재상태", "전체메모", "등록일", "최종수정일",
       ];
 
       const rows = inRange.map((r, i) => {
         const birthInfo = getReservationBirthInfo(r);
         const notes = notesPerReservation[i];
         const allMemo = notes.map((n) => `[${n.createdBy || ""}] ${n.memoText}`).join(" | ");
-        const depositRaw = String(r.depositAmount || "").trim();
-        const depositMatch = depositRaw.match(/^([\d,]+)\s*([A-Z₩$¥€]+)?$/);
-        const depositAmount = depositMatch ? depositMatch[1].replace(/,/g, "") : depositRaw;
-        const depositCurrency = depositMatch?.[2] || "KRW";
 
         return [
           r.reservationDate || "",
@@ -267,12 +268,11 @@ const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
           r.phone || "",
           r.hospital || "",
           r.appointmentType || "상담",
-          r.completed ? "완료" : "미완료",
           r.consultArea || "",
           r.coordinators.join(", "),
           r.surgeryReserved ? "예" : "아니오",
-          depositAmount,
-          depositCurrency,
+          r.depositAmount || "",
+          r.surgeryCost || "",
           r.operationStatus || "",
           allMemo,
           toDateStr(r.createdAt),
@@ -307,7 +307,24 @@ const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
       setPageError(result.message || "예약 삭제 권한이 없습니다.");
       return;
     }
+    await refresh();
+  }
 
+  function handleAddReservation(item: ReservationRecord) {
+    setAddPatient({
+      name: item.name,
+      birthInput: item.birthInput || item.birth || "",
+      phone: item.phone || "",
+      nationality: item.nationality || "",
+      patientId: item.patientId,
+      hospital: item.hospital || "",
+      consultArea: item.consultArea || "",
+      appointmentType: item.appointmentType,
+      coordinators: (item.coordinators || []).join(", "),
+      depositAmount: item.depositAmount || "",
+      surgeryCost: item.surgeryCost || "",
+    });
+    setDrawerOpen(true);
   }
 
   return (
@@ -357,7 +374,7 @@ const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
 
         <div className="mt-2 flex items-center gap-2">
           <button
-            onClick={() => setDrawerOpen(true)}
+            onClick={() => { setAddPatient(undefined); setDrawerOpen(true); }}
             className="h-10 rounded-xl bg-black px-4 text-sm font-medium text-white transition hover:-translate-y-0.5 hover:shadow-md active:scale-95"
           >
             + 단일 예약 추가
@@ -382,7 +399,7 @@ const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
               <div className="fixed inset-0 z-[9990]" onClick={() => setDownloadOpen(false)} />
               <div className="absolute right-0 top-full z-[9991] mt-2 w-[280px] rounded-2xl border border-[#edf0f3] bg-white p-4 shadow-xl">
                 <div className="mb-3 text-sm font-bold text-gray-700">예약 데이터 다운로드</div>
-                <div className="mb-2 text-xs text-gray-400">선택한 기간의 예약을 CSV로 내보냅니다. (Google 스프레드시트에서 열기 가능)</div>
+                <div className="mb-2 text-xs text-gray-400">선택한 기간의 예약을 CSV로 내보냅니다.</div>
                 <div className="mb-2 grid grid-cols-2 gap-2">
                   <div>
                     <label className="mb-1 block text-xs font-semibold text-gray-500">시작일</label>
@@ -441,14 +458,17 @@ const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
         onSaveEdit={saveInlineEdit}
         onCancelEdit={() => { setInlineEditId(null); setInlineForm(null); }}
         onDelete={handleDelete}
+        onAddReservation={handleAddReservation}
       />
 
       {currentUser && (
         <CreateDrawer
           open={drawerOpen}
-          onClose={() => setDrawerOpen(false)}
+          onClose={() => { setDrawerOpen(false); setAddPatient(undefined); }}
           currentUser={currentUser}
           initialDate={filterDate || undefined}
+          initialPatient={addPatient}
+          onCreated={refresh}
         />
       )}
 

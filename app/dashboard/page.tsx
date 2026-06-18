@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { collection, getDocs, query, where } from "firebase/firestore";
-import { db } from "@/lib/firebase";
+import { useCurrentUser } from "@/hooks/useCurrentUser";
+import { subscribeAllReservations } from "@/lib/reservations";
 import { todayString } from "@/lib/dateUtils";
 import {
   type ReservationDoc,
@@ -21,8 +21,8 @@ import {
   emptyCounter,
   accumulate,
   finalizeCounter,
-  formatDepositMap,
   pctText,
+  formatDepositMap,
   setQuickRange,
 } from "@/lib/dashboardUtils";
 import { QuickButton } from "@/components/dashboard/QuickButton";
@@ -32,7 +32,8 @@ import { Panel } from "@/components/dashboard/Panel";
 import { KpiTable } from "@/components/dashboard/KpiTable";
 
 export default function DashboardPage() {
-  const [reservations, setReservations] = useState<ReservationDoc[]>([]);
+  const { authReady } = useCurrentUser();
+  const [allReservations, setAllReservations] = useState<ReservationDoc[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -42,43 +43,31 @@ export default function DashboardPage() {
   const [apptTypeFilter, setApptTypeFilter] = useState("");
   const [areaFilter, setAreaFilter] = useState("");
 
-  async function loadData() {
-    setLoading(true);
-    setError("");
-
-    try {
-      const normalizedStart = startDate <= endDate ? startDate : endDate;
-      const normalizedEnd = startDate <= endDate ? endDate : startDate;
-
-      if (normalizedStart !== startDate) setStartDate(normalizedStart);
-      if (normalizedEnd !== endDate) setEndDate(normalizedEnd);
-
-      const reservationQuery = query(
-        collection(db, "reservations"),
-        where("reservationDate", ">=", normalizedStart),
-        where("reservationDate", "<=", normalizedEnd)
-      );
-
-      const reservationSnap = await getDocs(reservationQuery);
-
-      const reservationRows = reservationSnap.docs.map((docSnap) => ({
-        id: docSnap.id,
-        ...(docSnap.data() as Omit<ReservationDoc, "id">),
-      }));
-
-      setReservations(reservationRows);
-    } catch (err) {
-      console.error(err);
-      setError("대시보드 데이터를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.");
-    } finally {
-      setLoading(false);
-    }
-  }
-
   useEffect(() => {
-    loadData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    if (!authReady) return;
+    setLoading(true);
+    const unsub = subscribeAllReservations(
+      ({ reservations }) => {
+        setAllReservations(reservations as unknown as ReservationDoc[]);
+        setLoading(false);
+      },
+      (err) => {
+        console.error(err);
+        setError("대시보드 데이터를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.");
+        setLoading(false);
+      }
+    );
+    return () => unsub();
+  }, [authReady]);
+
+  const reservations = useMemo(() => {
+    const normalizedStart = startDate <= endDate ? startDate : endDate;
+    const normalizedEnd = startDate <= endDate ? endDate : startDate;
+    return allReservations.filter((item) => {
+      const date = getReservationDate(item);
+      return date >= normalizedStart && date <= normalizedEnd;
+    });
+  }, [allReservations, startDate, endDate]);
 
   const hospitals = useMemo(() => {
     return Array.from(
@@ -92,14 +81,12 @@ export default function DashboardPage() {
 
   const filteredRows = useMemo(() => {
     return reservations.filter((item) => {
-      const date = getReservationDate(item);
-      if (date < startDate || date > endDate) return false;
       if (hospitalFilter && getHospital(item) !== hospitalFilter) return false;
       if (apptTypeFilter && getAppointmentType(item) !== apptTypeFilter) return false;
       if (areaFilter && getConsultArea(item) !== areaFilter) return false;
       return true;
     });
-  }, [reservations, startDate, endDate, hospitalFilter, apptTypeFilter, areaFilter]);
+  }, [reservations, hospitalFilter, apptTypeFilter, areaFilter]);
 
   const areaOptions = useMemo(() => {
     return Array.from(new Set(reservations.map(getConsultArea).filter(Boolean))).sort();
@@ -151,7 +138,6 @@ export default function DashboardPage() {
     const range = setQuickRange(type);
     setStartDate(range.start);
     setEndDate(range.end);
-    loadData();
   }
 
   function resetFilters() {
@@ -238,16 +224,8 @@ export default function DashboardPage() {
 
           <div className="flex gap-2">
             <button
-              onClick={loadData}
-              disabled={loading}
-              className="h-10 flex-1 rounded-xl bg-[#1d9e75] px-4 text-sm font-medium text-white transition hover:-translate-y-0.5 hover:shadow-md active:scale-95 disabled:opacity-50"
-            >
-              {loading ? "집계 중..." : "조회"}
-            </button>
-
-            <button
               onClick={resetFilters}
-              className="h-10 rounded-xl bg-[#111827] px-4 text-sm font-medium text-white transition hover:-translate-y-0.5 hover:shadow-md active:scale-95"
+              className="h-10 flex-1 rounded-xl bg-[#111827] px-4 text-sm font-medium text-white transition hover:-translate-y-0.5 hover:shadow-md active:scale-95"
             >
               초기화
             </button>
@@ -268,13 +246,8 @@ export default function DashboardPage() {
       </section>
 
       {/* KPI 카드 */}
-      <section className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-6">
-        <KpiCard label="전체예약" value={dashboard.summary.total.toLocaleString("ko-KR")} sub={rangeText} />
-        <KpiCard label="실제내원" value={dashboard.summary.visited.toLocaleString("ko-KR")} sub={`내원율 ${pctText(dashboard.summary.visitRate)}`} />
-        <KpiCard label="완료" value={dashboard.summary.completedCount.toLocaleString("ko-KR")} sub="완료 처리된 건" />
+      <section className="grid grid-cols-2 gap-4 md:grid-cols-2 xl:grid-cols-2">
         <KpiCard label="부도" value={dashboard.summary.noShow.toLocaleString("ko-KR")} sub={`부도율 ${pctText(dashboard.summary.noShowRate)}`} />
-        <KpiCard label="수술예약" value={dashboard.summary.surgery.toLocaleString("ko-KR")} sub={`전환율 ${pctText(dashboard.summary.surgeryRate)}`} />
-        <KpiCard label="예약금 합계" depositLines={formatDepositMap(dashboard.summary.depositByCurrency)} sub="통화별 분리 집계" compact />
       </section>
 
       {/* 유형별 현황 */}

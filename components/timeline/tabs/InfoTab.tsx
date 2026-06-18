@@ -15,9 +15,9 @@ type DetailForm = {
   reservationTime: string;
   hospital: string;
   appointmentType: AppointmentType;
-  completed: boolean;
   coordinators: string;
   depositAmount: string;
+  surgeryCost: string;
 };
 
 type BirthPreview = {
@@ -139,7 +139,7 @@ export function InfoTab({
 
       <div className="mt-3">
         <EditField
-          label="상담부위"
+          label={detailForm.appointmentType === "상담" ? "상담부위" : "수술항목"}
           value={detailForm.consultArea}
           onChange={(value) => onFormChange({ consultArea: value })}
         />
@@ -176,24 +176,17 @@ export function InfoTab({
         />
       </div>
 
-      <div className="mt-3">
+      <div className="mt-3 grid grid-cols-2 gap-3">
         <EditField
           label="예약금"
           value={detailForm.depositAmount}
           onChange={(value) => onFormChange({ depositAmount: value })}
         />
-      </div>
-
-      <div className="mt-3 flex items-center gap-3">
-        <button
-          onClick={() => onFormChange({ completed: !detailForm.completed })}
-          className={`flex h-6 w-11 items-center rounded-full transition-colors ${detailForm.completed ? "bg-emerald-500" : "bg-gray-200"}`}
-        >
-          <div className={`h-5 w-5 rounded-full bg-white shadow transition-transform ${detailForm.completed ? "translate-x-5" : "translate-x-0.5"}`} />
-        </button>
-        <label className="cursor-pointer text-sm text-gray-700" onClick={() => onFormChange({ completed: !detailForm.completed })}>
-          완료 처리
-        </label>
+        <EditField
+          label="수술비용"
+          value={detailForm.surgeryCost}
+          onChange={(value) => onFormChange({ surgeryCost: value })}
+        />
       </div>
 
       {detailError && (

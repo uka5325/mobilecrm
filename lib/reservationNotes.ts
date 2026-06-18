@@ -1,20 +1,7 @@
-import {
-  addDoc,
-  collection,
-  doc,
-  getDocs,
-  type QuerySnapshot,
-  type DocumentData,
-  query,
-  serverTimestamp,
-  updateDoc,
-  where,
-} from "firebase/firestore";
-import { db } from "./firebase";
+import { auth } from "./firebase";
 import type { StaffUser } from "./auth";
 import { cleanText } from "./stringUtils";
 import { toMillis } from "./settingsUtils";
-import { createLog } from "./logs";
 
 export type ReservationNote = {
   id: string;
@@ -31,97 +18,55 @@ export type ReservationNote = {
   isDeleted: boolean;
 };
 
+async function callNotesApi(action: string, payload: Record<string, unknown>) {
+  const firebaseUser = auth.currentUser;
+  if (!firebaseUser) return { success: false as const };
+  const idToken = await firebaseUser.getIdToken();
+  const res = await fetch("/api/reservation-notes", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ idToken, action, payload }),
+  });
+  return res.json() as Promise<Record<string, unknown> & { success: boolean; message?: string }>;
+}
+
+function mapNote(
+  data: Record<string, unknown>,
+  fallbacks: { reservationId?: string; reservationDocId?: string; patientId?: string } = {}
+): ReservationNote {
+  return {
+    id: cleanText(data.id),
+    reservationId: cleanText(data.reservationId || fallbacks.reservationId),
+    reservationDocId: cleanText(data.reservationDocId || fallbacks.reservationDocId),
+    patientId: cleanText(data.patientId || fallbacks.patientId),
+    memoText: cleanText(data.memoText || data.memo || data.note || data.content || data.text),
+    createdAt: data.createdAt,
+    createdBy: cleanText(data.createdBy || data.createdByName || data.staffName),
+    createdByUid: cleanText(data.createdByUid),
+    updatedAt: data.updatedAt,
+    updatedBy: cleanText(data.updatedBy),
+    updatedByUid: cleanText(data.updatedByUid),
+    isDeleted: data.isDeleted === true,
+  };
+}
 
 export async function getReservationNotes(
   reservationId: string,
   reservationDocId: string,
   patientId?: string
 ): Promise<ReservationNote[]> {
-  const cleanReservationId = cleanText(reservationId);
-  const cleanReservationDocId = cleanText(reservationDocId);
-  const cleanPatientId = cleanText(patientId);
-
-  const requests: Promise<QuerySnapshot<DocumentData>>[] = [];
-
-  const targets = [
-    { field: "reservationId", value: cleanReservationId },
-    { field: "reservationDocId", value: cleanReservationDocId },
-    { field: "patientId", value: cleanPatientId },
-  ].filter((item) => item.value);
-
-  targets.forEach((target) => {
-    requests.push(
-      getDocs(
-        query(
-          collection(db, "reservationNotes"),
-          where(target.field, "==", target.value)
-        )
-      )
-    );
+  const result = await callNotesApi("read", {
+    reservationId: cleanText(reservationId),
+    reservationDocId: cleanText(reservationDocId),
+    patientId: cleanText(patientId),
   });
 
-  if (!requests.length) return [];
+  if (!result.success || !Array.isArray(result.notes)) return [];
 
-  const snaps = await Promise.allSettled(requests);
-  const noteMap = new Map<string, ReservationNote>();
-
-  snaps.forEach((result) => {
-    if (result.status !== "fulfilled") {
-      console.error("[reservationNotes query failed]", result.reason);
-      return;
-    }
-
-    result.value.docs.forEach((d) => {
-      const data = d.data();
-
-      const isDeleted =
-        data.isDeleted === true ||
-        data.deleted === true ||
-        data.status === "deleted";
-
-      if (isDeleted) return;
-
-      const memoText = cleanText(
-        data.memoText ||
-          data.memo ||
-          data.note ||
-          data.content ||
-          data.text
-      );
-
-      if (!memoText) return;
-
-      const note: ReservationNote = {
-        id: d.id,
-        reservationId: cleanText(data.reservationId || cleanReservationId),
-        reservationDocId: cleanText(
-          data.reservationDocId || cleanReservationDocId
-        ),
-        patientId: cleanText(data.patientId || cleanPatientId),
-        memoText,
-        createdAt: data.createdAt,
-        createdBy: cleanText(
-          data.createdBy ||
-            data.createdByName ||
-            data.staffName ||
-            data.writer
-        ),
-        createdByUid: cleanText(data.createdByUid || data.createdBy),
-        updatedAt: data.updatedAt,
-        updatedBy: cleanText(data.updatedBy),
-        updatedByUid: cleanText(data.updatedByUid),
-        isDeleted,
-      };
-
-      noteMap.set(note.id, note);
-    });
-  });
-
-  const notes = Array.from(noteMap.values()).sort(
-    (a, b) => toMillis(b.createdAt) - toMillis(a.createdAt)
-  );
-
-  return notes;
+  return (result.notes as Record<string, unknown>[])
+    .map((d) => mapNote(d, { reservationId, reservationDocId, patientId }))
+    .filter((n) => !n.isDeleted && n.memoText)
+    .sort((a, b) => toMillis(b.createdAt) - toMillis(a.createdAt));
 }
 
 export async function addReservationNote(params: {
@@ -132,41 +77,20 @@ export async function addReservationNote(params: {
   staff: StaffUser;
 }) {
   const memoText = params.memoText.trim();
+  if (!memoText) return { success: false, message: "메모 내용을 입력하세요." };
 
-  if (!memoText) {
-    return { success: false, message: "메모 내용을 입력하세요." };
-  }
-
-  const ref = await addDoc(collection(db, "reservationNotes"), {
+  const result = await callNotesApi("create", {
     reservationId: params.reservationId,
     reservationDocId: params.reservationDocId,
     patientId: params.patientId,
     memoText,
-    createdAt: serverTimestamp(),
-    createdBy: params.staff.displayName,
-    createdByUid: params.staff.uid,
-    updatedAt: serverTimestamp(),
-    updatedBy: params.staff.displayName,
-    updatedByUid: params.staff.uid,
-    isDeleted: false,
+    staffName: params.staff.displayName,
+    staffUid: params.staff.uid,
   });
 
-  createLog({
-    action: "memo_create",
-    targetType: "reservation",
-    targetId: params.reservationId,
-    staff: params.staff,
-    message: memoText,
-    patientId: params.patientId,
-    reservationId: params.reservationId,
-    before: null,
-    after: {
-      memoText,
-      noteId: ref.id,
-    },
-  }).catch((e) => console.warn("[addReservationNote] log write failed:", e));
-
-  return { success: true, id: ref.id };
+  return result.success
+    ? { success: true, id: String(result.id || "") }
+    : { success: false, message: result.message || "저장 실패" };
 }
 
 export async function updateReservationNote(params: {
@@ -177,34 +101,16 @@ export async function updateReservationNote(params: {
   staff: StaffUser;
 }) {
   const memoText = params.memoText.trim();
+  if (!memoText) return { success: false, message: "메모 내용을 입력하세요." };
 
-  if (!memoText) {
-    return { success: false, message: "메모 내용을 입력하세요." };
-  }
-
-  await updateDoc(doc(db, "reservationNotes", params.noteId), {
+  const result = await callNotesApi("update", {
+    noteId: params.noteId,
     memoText,
-    updatedAt: serverTimestamp(),
-    updatedBy: params.staff.displayName,
-    updatedByUid: params.staff.uid,
+    staffName: params.staff.displayName,
+    staffUid: params.staff.uid,
   });
 
-  createLog({
-    action: "memo_update",
-    targetType: "reservation",
-    targetId: params.reservationId,
-    staff: params.staff,
-    message: "메모를 수정했습니다.",
-    patientId: params.patientId,
-    reservationId: params.reservationId,
-    before: null,
-    after: {
-      memoText,
-      noteId: params.noteId,
-    },
-  }).catch((e) => console.warn("[updateReservationNote] log write failed:", e));
-
-  return { success: true };
+  return result.success ? { success: true } : { success: false, message: result.message || "수정 실패" };
 }
 
 export async function deleteReservationNote(params: {
@@ -213,27 +119,11 @@ export async function deleteReservationNote(params: {
   patientId: string;
   staff: StaffUser;
 }) {
-  await updateDoc(doc(db, "reservationNotes", params.noteId), {
-    isDeleted: true,
-    updatedAt: serverTimestamp(),
-    updatedBy: params.staff.displayName,
-    updatedByUid: params.staff.uid,
+  const result = await callNotesApi("delete", {
+    noteId: params.noteId,
+    staffName: params.staff.displayName,
+    staffUid: params.staff.uid,
   });
 
-  createLog({
-    action: "memo_delete",
-    targetType: "reservation",
-    targetId: params.reservationId,
-    staff: params.staff,
-    message: "메모를 삭제했습니다.",
-    patientId: params.patientId,
-    reservationId: params.reservationId,
-    before: null,
-    after: {
-      noteId: params.noteId,
-      isDeleted: true,
-    },
-  }).catch((e) => console.warn("[deleteReservationNote] log write failed:", e));
-
-  return { success: true };
+  return result.success ? { success: true } : { success: false, message: result.message || "삭제 실패" };
 }

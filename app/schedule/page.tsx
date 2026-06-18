@@ -1,14 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { collection, onSnapshot, query, where, orderBy } from "firebase/firestore";
-import { db } from "@/lib/firebase";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import {
   type ReservationRecord,
   type AppointmentType,
   APPOINTMENT_TYPE_COLORS,
-  mapReservationDoc,
+  subscribeAllReservations,
+  fetchAllReservationsOnce,
 } from "@/lib/reservations";
 import { todayString } from "@/lib/dateUtils";
 import { DetailDrawer } from "@/components/timeline/DetailDrawer";
@@ -68,10 +67,40 @@ function isToday(dateStr: string) {
   return dateStr === todayString();
 }
 
-const HOUR_HEIGHT = 64;
+function formatLog(updatedBy: unknown, updatedAt: unknown): string {
+  const name = typeof updatedBy === "string" ? updatedBy.trim() : "";
+  let dateStr = "";
+  if (updatedAt) {
+    try {
+      // toSerializable converts Firestore Timestamp to milliseconds (number)
+      const ms =
+        typeof updatedAt === "number"
+          ? updatedAt
+          : typeof (updatedAt as { toMillis?: () => number }).toMillis === "function"
+          ? (updatedAt as { toMillis: () => number }).toMillis()
+          : Number(updatedAt);
+      if (ms && ms > 0) {
+        const d = new Date(ms);
+        const mm = String(d.getMonth() + 1).padStart(2, "0");
+        const dd = String(d.getDate()).padStart(2, "0");
+        const hh = String(d.getHours()).padStart(2, "0");
+        const min = String(d.getMinutes()).padStart(2, "0");
+        dateStr = `${mm}/${dd} ${hh}:${min}`;
+      }
+    } catch {
+      // ignore
+    }
+  }
+  return [name, dateStr].filter(Boolean).join(" · ");
+}
+
+const HOUR_HEIGHT = 72; // px per hour
 const START_HOUR = 8;
 const END_HOUR = 22;
 const TOTAL_HOURS = END_HOUR - START_HOUR;
+const TIME_COL_W = 52; // px width of time label column
+const CARD_HEIGHT = HOUR_HEIGHT - 6;
+const WEEK_CARD_H = 20; // compact height for week view
 
 function timeToMinutes(time: string) {
   if (!time) return START_HOUR * 60;
@@ -80,98 +109,118 @@ function timeToMinutes(time: string) {
 }
 
 function minutesToPx(minutes: number) {
-  const offsetMinutes = minutes - START_HOUR * 60;
-  return (offsetMinutes / 60) * HOUR_HEIGHT;
+  return ((minutes - START_HOUR * 60) / 60) * HOUR_HEIGHT;
 }
 
 function getAppointmentColor(type: AppointmentType | string) {
   return APPOINTMENT_TYPE_COLORS[type as AppointmentType] || "#6b7280";
 }
 
-function useScheduleData(startDate: string, endDate: string) {
-  const [reservations, setReservations] = useState<ReservationRecord[]>([]);
+// ─── useScheduleData ─────────────────────────────────────────────────────────
+function useScheduleData(startDate: string, endDate: string, authReady: boolean) {
+  const [allReservations, setAllReservations] = useState<ReservationRecord[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (!authReady) return;
     setLoading(true);
-    const q = query(
-      collection(db, "reservations"),
-      where("reservationDate", ">=", startDate),
-      where("reservationDate", "<=", endDate),
-      orderBy("reservationDate"),
+    const unsub = subscribeAllReservations(
+      ({ reservations }) => {
+        setAllReservations(reservations);
+        setLoading(false);
+      },
+      () => setLoading(false)
     );
-
-    const unsub = onSnapshot(q, (snap) => {
-      const rows = snap.docs
-        .map((d) => mapReservationDoc(d.id, d.data() as Record<string, unknown>))
-        .filter((r) => !r.isDeleted);
-      setReservations(rows);
-      setLoading(false);
-    }, () => setLoading(false));
-
     return () => unsub();
-  }, [startDate, endDate]);
+  }, [authReady]);
 
-  return { reservations, loading };
+  const refresh = useCallback(async () => {
+    try {
+      const data = await fetchAllReservationsOnce();
+      setAllReservations(data.reservations);
+    } catch (e) {
+      console.error("[useScheduleData] refresh error:", e);
+    }
+  }, []);
+
+  const reservations = useMemo(
+    () => allReservations.filter((r) => r.reservationDate >= startDate && r.reservationDate <= endDate),
+    [allReservations, startDate, endDate]
+  );
+
+  return { reservations, loading, refresh };
 }
 
-function DayCard({
-  item,
-  top,
-  onClick,
-}: {
-  item: ReservationRecord;
-  top?: number;
-  onClick: () => void;
-}) {
-  const color = getAppointmentColor(item.appointmentType);
+// ─── DayCard ─────────────────────────────────────────────────────────────────
+function DayCard({ item, top, onClick }: { item: ReservationRecord; top: number; onClick: () => void }) {
+  const cancelled = item.cancelled === true;
+  const color = cancelled ? "#fef08a" : item.completed ? "#9ca3af" : getAppointmentColor(item.appointmentType);
+  const textColor = cancelled ? "#78350f" : "white";
   const time = item.reservationTime || "";
-  const minutes = timeToMinutes(time);
-  const cardTop = top ?? minutesToPx(minutes);
-  const info = getBirthGenderText(item);
+  const areaLabel = item.appointmentType === "상담" ? "상담부위" : "수술항목";
+  const logText = formatLog(item.updatedBy, item.updatedAt);
 
   return (
     <button
       onClick={onClick}
-      className="absolute left-1 right-1 overflow-hidden rounded-lg px-2 py-1.5 text-left text-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md active:scale-[0.99]"
-      style={{ top: cardTop, height: HOUR_HEIGHT - 2, backgroundColor: color, opacity: item.completed ? 0.6 : 1 }}
+      className="absolute left-1 right-1 flex flex-col overflow-hidden rounded-md px-2 py-1 text-left shadow-sm transition hover:brightness-110 active:scale-[0.99]"
+      style={{ top, height: CARD_HEIGHT, backgroundColor: color, opacity: item.completed ? 0.75 : 1, color: textColor }}
     >
-      <div className="truncate text-[11px] font-bold leading-tight">
-        {item.name}{info ? ` · ${info}` : ""}
+      <div className={`truncate text-[11px] font-bold leading-tight ${cancelled ? "line-through" : ""}`}>{item.name}</div>
+      <div className={`truncate text-[10px] opacity-85 leading-tight ${cancelled ? "line-through" : ""}`}>
+        {[time, item.hospital].filter(Boolean).join(" · ")}
       </div>
-      {(item.hospital || time) && (
-        <div className="mt-0.5 truncate text-[10px] opacity-90">
-          {[item.hospital, time].filter(Boolean).join(" · ")}
+      {item.consultArea && (
+        <div className={`truncate text-[9px] opacity-80 leading-tight ${cancelled ? "line-through" : ""}`}>
+          {areaLabel}: {item.consultArea}
         </div>
       )}
-      {item.consultArea && (
-        <div className="mt-0.5 truncate text-[10px] opacity-80">{item.consultArea}</div>
+      {logText && (
+        <div className="mt-auto truncate text-[8px] opacity-55 leading-tight">{logText}</div>
       )}
     </button>
   );
 }
 
-function buildStackedPositions(items: ReservationRecord[]): { item: ReservationRecord; top: number }[] {
-  const sorted = [...items].sort((a, b) => {
-    const ta = timeToMinutes(a.reservationTime || "00:00");
-    const tb = timeToMinutes(b.reservationTime || "00:00");
-    return ta - tb;
-  });
-
+// ─── buildStackedPositions ────────────────────────────────────────────────────
+// cardH: the actual rendered card height. Used to detect and resolve overlap.
+function buildStackedPositions(items: ReservationRecord[], cardH = CARD_HEIGHT) {
+  const sorted = [...items].sort((a, b) =>
+    timeToMinutes(a.reservationTime || "00:00") - timeToMinutes(b.reservationTime || "00:00")
+  );
   const result: { item: ReservationRecord; top: number }[] = [];
-  const timeCount = new Map<string, number>();
-
-  sorted.forEach((item) => {
+  for (const item of sorted) {
     const t = item.reservationTime || "";
-    const count = timeCount.get(t) || 0;
-    const basePx = minutesToPx(timeToMinutes(t || `${START_HOUR}:00`));
-    result.push({ item, top: basePx + count * HOUR_HEIGHT });
-    timeCount.set(t, count + 1);
-  });
-
+    const base = minutesToPx(timeToMinutes(t || `${START_HOUR}:00`));
+    // Find minimum top that doesn't overlap any previously placed card
+    let top = base;
+    for (const placed of result) {
+      const placedBottom = placed.top + cardH + 2;
+      if (top < placedBottom && placed.top < top + cardH + 2) {
+        top = Math.max(top, placedBottom);
+      }
+    }
+    result.push({ item, top });
+  }
   return result;
 }
 
+// ─── Hour grid lines (absolute, reusable) ─────────────────────────────────────
+function HourGrid({ rows }: { rows: number }) {
+  return (
+    <>
+      {Array.from({ length: rows }, (_, i) => (
+        <div
+          key={i}
+          className="absolute left-0 right-0 border-b border-[#f1f3f5]"
+          style={{ top: i * HOUR_HEIGHT, height: HOUR_HEIGHT }}
+        />
+      ))}
+    </>
+  );
+}
+
+// ─── DayView ──────────────────────────────────────────────────────────────────
 function DayView({
   dateStr,
   reservations,
@@ -182,20 +231,37 @@ function DayView({
   onCardClick: (item: ReservationRecord) => void;
 }) {
   const hospitals = useMemo(() => {
-    const set = new Set(reservations.map((r) => r.hospital || "미지정"));
-    return Array.from(set).sort();
+    const s = new Set(reservations.map((r) => r.hospital || "미지정"));
+    return Array.from(s).sort();
   }, [reservations]);
 
-  const hours = Array.from({ length: TOTAL_HOURS }, (_, i) => START_HOUR + i);
+  const columnData = useMemo(() => {
+    return hospitals.map((hospital) => {
+      const items = reservations.filter((r) => (r.hospital || "미지정") === hospital);
+      const positioned = buildStackedPositions(items);
+      const contentH = positioned.length > 0
+        ? Math.max(...positioned.map((p) => p.top + CARD_HEIGHT + 4))
+        : 0;
+      return { hospital, items, positioned, contentH };
+    });
+  }, [hospitals, reservations]);
+
+  const baseH = TOTAL_HOURS * HOUR_HEIGHT;
+  const maxH = Math.max(baseH, ...columnData.map((c) => c.contentH));
+  const gridRows = Math.ceil(maxH / HOUR_HEIGHT);
+  const hours = Array.from({ length: gridRows }, (_, i) => START_HOUR + i);
+
+  const HEADER_H = 48;
 
   if (hospitals.length === 0) {
     return (
-      <div className="flex min-h-0 flex-1 overflow-hidden rounded-b-2xl">
-        <div className="flex w-16 shrink-0 flex-col border-r border-[#edf0f3]">
-          <div className="h-[48px] shrink-0 border-b border-[#edf0f3]" />
-          {hours.map((h) => (
-            <div key={h} className="flex items-start justify-center border-b border-[#f1f3f5] pt-1 text-xs text-gray-400" style={{ height: HOUR_HEIGHT }}>
-              {String(h).padStart(2, "0")}:00
+      <div className="flex min-h-0 flex-1 overflow-auto">
+        {/* Time column */}
+        <div className="sticky left-0 z-10 flex shrink-0 flex-col border-r border-[#edf0f3] bg-white" style={{ width: TIME_COL_W }}>
+          <div className="shrink-0 border-b border-[#edf0f3]" style={{ height: HEADER_H }} />
+          {Array.from({ length: TOTAL_HOURS }, (_, i) => (
+            <div key={i} className="flex items-start justify-center border-b border-[#f1f3f5] pt-1 text-[10px] text-gray-400" style={{ height: HOUR_HEIGHT }}>
+              {String(START_HOUR + i).padStart(2, "0")}:00
             </div>
           ))}
         </div>
@@ -207,46 +273,79 @@ function DayView({
   }
 
   return (
-    <div className="flex min-h-0 flex-1 overflow-auto rounded-b-2xl">
-      <div className="flex w-16 shrink-0 flex-col border-r border-[#edf0f3] bg-white">
-        <div className="h-[48px] shrink-0 border-b border-[#edf0f3]" />
-        {hours.map((h) => (
-          <div key={h} className="flex items-start justify-center border-b border-[#f1f3f5] pt-1 text-xs text-gray-400" style={{ height: HOUR_HEIGHT }}>
-            {String(h).padStart(2, "0")}:00
+    /* Single overflow-auto container — everything scrolls together */
+    <div className="min-h-0 flex-1 overflow-auto">
+      <div className="flex" style={{ minWidth: TIME_COL_W + hospitals.length * 200 }}>
+
+        {/* ── Sticky time column ── */}
+        <div
+          className="sticky left-0 z-10 flex shrink-0 flex-col border-r border-[#edf0f3] bg-white"
+          style={{ width: TIME_COL_W }}
+        >
+          {/* corner spacer matches hospital header height */}
+          <div className="shrink-0 border-b border-[#edf0f3]" style={{ height: HEADER_H }} />
+          {hours.map((h) => (
+            <div
+              key={h}
+              className="flex items-start justify-center border-b border-[#f1f3f5] pt-1 text-[10px] text-gray-400"
+              style={{ height: HOUR_HEIGHT }}
+            >
+              {h < 24 ? `${String(h).padStart(2, "0")}:00` : ""}
+            </div>
+          ))}
+        </div>
+
+        {/* ── Hospital columns ── */}
+        {columnData.map(({ hospital, items, positioned }) => (
+          <div
+            key={hospital}
+            className="flex flex-col border-r border-[#edf0f3]"
+            style={{ minWidth: 200, maxWidth: 320, flex: 1 }}
+          >
+            {/* column header */}
+            <div
+              className="sticky top-0 z-10 flex shrink-0 items-center justify-center gap-2 border-b border-[#edf0f3] bg-white px-3"
+              style={{ height: HEADER_H }}
+            >
+              <span className="truncate text-sm font-semibold">{hospital}</span>
+              <span className="shrink-0 text-xs text-gray-400">{items.length}건</span>
+            </div>
+            {/* card + grid area */}
+            <div className="relative" style={{ height: maxH }}>
+              <HourGrid rows={gridRows} />
+              {positioned.map(({ item, top }) => (
+                <DayCard key={item.id} item={item} top={top} onClick={() => onCardClick(item)} />
+              ))}
+            </div>
           </div>
         ))}
-      </div>
-
-      <div className="flex flex-1 overflow-x-auto">
-        {hospitals.map((hospital) => {
-          const items = reservations.filter((r) => (r.hospital || "미지정") === hospital);
-          const positioned = buildStackedPositions(items);
-          const totalHeight = Math.max(
-            TOTAL_HOURS * HOUR_HEIGHT,
-            positioned.length > 0 ? Math.max(...positioned.map((p) => p.top + HOUR_HEIGHT)) : 0
-          );
-          return (
-            <div key={hospital} className="flex flex-col border-r border-[#edf0f3]" style={{ minWidth: 200, width: `${Math.max(200, Math.floor(100 / hospitals.length))}%`, maxWidth: 320 }}>
-              <div className="flex h-[48px] shrink-0 items-center justify-center gap-2 border-b border-[#edf0f3] bg-white px-3">
-                <span className="truncate text-sm font-semibold">{hospital}</span>
-                <span className="shrink-0 text-xs text-gray-400">{items.length}건</span>
-              </div>
-              <div className="relative" style={{ height: totalHeight }}>
-                {hours.map((h) => (
-                  <div key={h} className="border-b border-[#f1f3f5]" style={{ height: HOUR_HEIGHT }} />
-                ))}
-                {positioned.map(({ item, top }) => (
-                  <DayCard key={item.id} item={item} top={top} onClick={() => onCardClick(item)} />
-                ))}
-              </div>
-            </div>
-          );
-        })}
       </div>
     </div>
   );
 }
 
+// ─── WeekDayCard (compact for week view) ─────────────────────────────────────
+function WeekDayCard({ item, top, onClick }: { item: ReservationRecord; top: number; onClick: () => void }) {
+  const cancelled = item.cancelled === true;
+  const color = cancelled ? "#fef08a" : item.completed ? "#9ca3af" : getAppointmentColor(item.appointmentType);
+  const textColor = cancelled ? "#78350f" : "white";
+  const time = item.reservationTime ? item.reservationTime.slice(0, 5) : "";
+  return (
+    <button
+      onClick={onClick}
+      className="absolute left-0.5 right-0.5 overflow-hidden rounded px-1 text-left shadow-sm transition hover:brightness-110 active:scale-[0.99]"
+      style={{ top, height: WEEK_CARD_H, backgroundColor: color, opacity: item.completed ? 0.75 : 1, color: textColor }}
+      title={[item.name, time, item.hospital, item.consultArea].filter(Boolean).join(" · ")}
+    >
+      <div className={`truncate text-[10px] font-semibold leading-tight ${cancelled ? "line-through" : ""}`}>
+        {time && <span className="mr-0.5 opacity-80">{time}</span>}
+        {item.name}
+      </div>
+    </button>
+  );
+}
+
+// ─── WeekView ─────────────────────────────────────────────────────────────────
 function WeekView({
   weekStart,
   reservations,
@@ -257,42 +356,69 @@ function WeekView({
   onCardClick: (item: ReservationRecord) => void;
 }) {
   const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
-  const hours = Array.from({ length: TOTAL_HOURS }, (_, i) => START_HOUR + i);
+
+  const dayData = useMemo(() => {
+    return days.map((day) => {
+      const dayItems = reservations.filter((r) => r.reservationDate === day);
+      const positioned = buildStackedPositions(dayItems, WEEK_CARD_H);
+      const contentH = positioned.length > 0
+        ? Math.max(...positioned.map((p) => p.top + WEEK_CARD_H + 4))
+        : 0;
+      return { day, dayItems, positioned, contentH };
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [weekStart, reservations]);
+
+  const baseH = TOTAL_HOURS * HOUR_HEIGHT;
+  const maxH = Math.max(baseH, ...dayData.map((d) => d.contentH));
+  const gridRows = Math.ceil(maxH / HOUR_HEIGHT);
+  const hours = Array.from({ length: gridRows }, (_, i) => START_HOUR + i);
+
+  const HEADER_H = 52;
 
   return (
-    <div className="flex min-h-0 flex-1 overflow-auto rounded-b-2xl">
-      <div className="flex w-14 shrink-0 flex-col border-r border-[#edf0f3] bg-white">
-        <div className="h-[52px] shrink-0 border-b border-[#edf0f3]" />
-        {hours.map((h) => (
-          <div key={h} className="flex items-start justify-center border-b border-[#f1f3f5] pt-1 text-xs text-gray-400" style={{ height: HOUR_HEIGHT }}>
-            {String(h).padStart(2, "0")}
-          </div>
-        ))}
-      </div>
+    <div className="min-h-0 flex-1 overflow-auto">
+      <div className="flex" style={{ minWidth: TIME_COL_W + 7 * 100 }}>
 
-      <div className="flex flex-1 overflow-x-auto">
-        {days.map((day) => {
-          const dayItems = reservations.filter((r) => r.reservationDate === day);
+        {/* Sticky time column */}
+        <div
+          className="sticky left-0 z-10 flex shrink-0 flex-col border-r border-[#edf0f3] bg-white"
+          style={{ width: TIME_COL_W }}
+        >
+          <div className="shrink-0 border-b border-[#edf0f3]" style={{ height: HEADER_H }} />
+          {hours.map((h) => (
+            <div
+              key={h}
+              className="flex items-start justify-center border-b border-[#f1f3f5] pt-1 text-[10px] text-gray-400"
+              style={{ height: HOUR_HEIGHT }}
+            >
+              {h < 24 ? `${String(h).padStart(2, "0")}` : ""}
+            </div>
+          ))}
+        </div>
+
+        {/* Day columns */}
+        {dayData.map(({ day, dayItems, positioned }) => {
           const today = isToday(day);
-          const positioned = buildStackedPositions(dayItems);
-          const totalHeight = Math.max(
-            TOTAL_HOURS * HOUR_HEIGHT,
-            positioned.length > 0 ? Math.max(...positioned.map((p) => p.top + HOUR_HEIGHT)) : 0
-          );
           return (
-            <div key={day} className="flex flex-col border-r border-[#edf0f3]" style={{ minWidth: 100, flex: 1 }}>
-              <div className={`flex h-[52px] shrink-0 flex-col items-center justify-center border-b border-[#edf0f3] ${today ? "bg-emerald-50" : "bg-white"}`}>
+            <div
+              key={day}
+              className="flex flex-col border-r border-[#edf0f3]"
+              style={{ minWidth: 100, flex: 1 }}
+            >
+              <div
+                className={`sticky top-0 z-10 flex shrink-0 flex-col items-center justify-center border-b border-[#edf0f3] ${today ? "bg-emerald-50" : "bg-white"}`}
+                style={{ height: HEADER_H }}
+              >
                 <span className={`text-xs font-bold ${today ? "text-emerald-700" : "text-gray-700"}`}>
                   {formatDayLabel(day)}
                 </span>
                 <span className={`text-[10px] ${today ? "text-emerald-500" : "text-gray-400"}`}>{dayItems.length}건</span>
               </div>
-              <div className="relative" style={{ height: totalHeight }}>
-                {hours.map((h) => (
-                  <div key={h} className="border-b border-[#f1f3f5]" style={{ height: HOUR_HEIGHT }} />
-                ))}
+              <div className="relative" style={{ height: maxH }}>
+                <HourGrid rows={gridRows} />
                 {positioned.map(({ item, top }) => (
-                  <DayCard key={item.id} item={item} top={top} onClick={() => onCardClick(item)} />
+                  <WeekDayCard key={item.id} item={item} top={top} onClick={() => onCardClick(item)} />
                 ))}
               </div>
             </div>
@@ -303,6 +429,7 @@ function WeekView({
   );
 }
 
+// ─── MonthView ────────────────────────────────────────────────────────────────
 function MonthView({
   monthStart,
   reservations,
@@ -317,16 +444,13 @@ function MonthView({
   const [y, m] = monthStart.split("-").map(Number);
   const firstDay = new Date(y, m - 1, 1);
   const lastDay = new Date(y, m, 0);
-
   const startWeekday = firstDay.getDay();
   const adjustedStart = startWeekday === 0 ? 6 : startWeekday - 1;
-
   const calStart = new Date(firstDay);
   calStart.setDate(calStart.getDate() - adjustedStart);
 
-  const totalCells = 42;
   const cells: string[] = [];
-  for (let i = 0; i < totalCells; i++) {
+  for (let i = 0; i < 42; i++) {
     const d = new Date(calStart);
     d.setDate(d.getDate() + i);
     cells.push(formatDate(d));
@@ -334,7 +458,6 @@ function MonthView({
 
   const today = todayString();
   const DAY_LABELS = ["월", "화", "수", "목", "금", "토", "일"];
-  const [, cm] = monthStart.split("-").map(Number);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-auto rounded-b-2xl bg-white">
@@ -343,39 +466,42 @@ function MonthView({
           <div key={d} className="py-2 text-center text-xs font-semibold text-gray-500">{d}</div>
         ))}
       </div>
-
       <div className="grid flex-1 grid-cols-7" style={{ gridAutoRows: "minmax(80px, 1fr)" }}>
         {cells.map((dateStr) => {
           const [, cellMonth] = dateStr.split("-").map(Number);
-          const isCurrentMonth = cellMonth === cm;
-          const isLastDay = dateStr === formatDate(lastDay);
+          const isCurrentMonth = cellMonth === m;
           const dayItems = reservations.filter((r) => r.reservationDate === dateStr);
           const shown = dayItems.slice(0, 3);
           const more = dayItems.length - shown.length;
-
+          const isLastDay = dateStr === formatDate(lastDay);
           return (
             <div
               key={dateStr}
-              className={`relative border-b border-r border-[#edf0f3] p-1.5 ${!isCurrentMonth ? "bg-gray-50" : "bg-white"} ${dateStr === today ? "ring-2 ring-inset ring-emerald-400" : ""}`}
+              className={`relative border-b border-r border-[#edf0f3] p-1.5 cursor-pointer ${!isCurrentMonth ? "bg-gray-50" : "bg-white"} ${dateStr === today ? "ring-2 ring-inset ring-emerald-400" : ""}`}
               onClick={() => onDayClick(dateStr)}
             >
               <div className={`mb-1 text-right text-xs font-semibold ${dateStr === today ? "text-emerald-600" : isCurrentMonth ? "text-gray-700" : "text-gray-300"}`}>
                 {parseDate(dateStr).getDate()}
               </div>
               <div className="space-y-0.5">
-                {shown.map((item) => (
-                  <button
-                    key={item.id}
-                    onClick={(e) => { e.stopPropagation(); onCardClick(item); }}
-                    className="w-full truncate rounded px-1 py-0.5 text-left text-[10px] font-semibold text-white"
-                    style={{ backgroundColor: getAppointmentColor(item.appointmentType), opacity: item.completed ? 0.7 : 1 }}
-                  >
-                    {item.reservationTime && <span className="mr-0.5 opacity-90">{item.reservationTime.slice(0, 5)}</span>}
-                    {item.name}
-                  </button>
-                ))}
+                {shown.map((item) => {
+                  const isCancelled = item.cancelled === true;
+                  const bg = isCancelled ? "#fef08a" : item.completed ? "#9ca3af" : getAppointmentColor(item.appointmentType);
+                  const tc = isCancelled ? "#78350f" : "white";
+                  return (
+                    <button
+                      key={item.id}
+                      onClick={(e) => { e.stopPropagation(); onCardClick(item); }}
+                      className={`w-full truncate rounded px-1 py-0.5 text-left text-[10px] font-semibold ${isCancelled ? "line-through" : ""}`}
+                      style={{ backgroundColor: bg, color: tc, opacity: item.completed ? 0.75 : 1 }}
+                    >
+                      {item.reservationTime && <span className="mr-0.5 opacity-90">{item.reservationTime.slice(0, 5)}</span>}
+                      {item.name}
+                    </button>
+                  );
+                })}
                 {more > 0 && (
-                  <div className="cursor-pointer text-right text-[10px] text-gray-400 hover:text-gray-600">+{more}건</div>
+                  <div className="text-right text-[10px] text-gray-400">+{more}건</div>
                 )}
               </div>
               {isLastDay && <div className="hidden" />}
@@ -387,8 +513,9 @@ function MonthView({
   );
 }
 
+// ─── SchedulePage ─────────────────────────────────────────────────────────────
 export default function SchedulePage() {
-  const { currentUser } = useCurrentUser();
+  const { currentUser, authReady } = useCurrentUser();
   const [viewMode, setViewMode] = useState<ViewMode>("week");
   const [baseDate, setBaseDate] = useState(todayString());
   const [detailOpen, setDetailOpen] = useState(false);
@@ -410,14 +537,11 @@ export default function SchedulePage() {
     return { startDate: getMonthStart(baseDate), endDate: getMonthEnd(baseDate) };
   }, [viewMode, baseDate]);
 
-  const { reservations, loading } = useScheduleData(startDate, endDate);
+  const { reservations, loading, refresh } = useScheduleData(startDate, endDate, authReady);
 
   const kpi = useMemo(() => {
     const counts: Record<string, number> = { 상담: 0, 수술: 0, 치료: 0, 경과: 0 };
-    reservations.forEach((r) => {
-      const t = r.appointmentType || "상담";
-      counts[t] = (counts[t] || 0) + 1;
-    });
+    reservations.forEach((r) => { counts[r.appointmentType || "상담"] = (counts[r.appointmentType || "상담"] || 0) + 1; });
     return counts;
   }, [reservations]);
 
@@ -426,19 +550,8 @@ export default function SchedulePage() {
     else if (viewMode === "week") setBaseDate((d) => addDays(getWeekStart(d), dir * 7));
     else {
       const [y, m] = baseDate.split("-").map(Number);
-      const next = new Date(y, m - 1 + dir, 1);
-      setBaseDate(formatDate(next));
+      setBaseDate(formatDate(new Date(y, m - 1 + dir, 1)));
     }
-  }
-
-  function openDetail(item: ReservationRecord) {
-    setSelectedReservation(item);
-    setDetailOpen(true);
-  }
-
-  function handleMonthDayClick(dateStr: string) {
-    setBaseDate(dateStr);
-    setViewMode("day");
   }
 
   const titleText = useMemo(() => {
@@ -456,12 +569,11 @@ export default function SchedulePage() {
       {/* 상단 컨트롤 */}
       <div className="flex shrink-0 items-center justify-between border-b border-[#edf0f3] bg-white px-5 py-3 gap-3">
         <div className="flex items-center gap-2">
-          <button onClick={() => navigate(-1)} className="flex h-8 w-8 items-center justify-center rounded-lg border border-[#edf0f3] text-gray-500 hover:bg-gray-50 active:scale-95">‹</button>
-          <button onClick={() => setBaseDate(todayString())} className="h-8 rounded-lg border border-[#edf0f3] px-3 text-xs text-gray-600 hover:bg-gray-50 active:scale-95">오늘</button>
-          <button onClick={() => navigate(1)} className="flex h-8 w-8 items-center justify-center rounded-lg border border-[#edf0f3] text-gray-500 hover:bg-gray-50 active:scale-95">›</button>
+          <button onClick={() => navigate(-1)} className="flex h-8 w-8 items-center justify-center rounded-lg border border-[#edf0f3] text-gray-500 hover:bg-gray-50">‹</button>
+          <button onClick={() => setBaseDate(todayString())} className="h-8 rounded-lg border border-[#edf0f3] px-3 text-xs text-gray-600 hover:bg-gray-50">오늘</button>
+          <button onClick={() => navigate(1)} className="flex h-8 w-8 items-center justify-center rounded-lg border border-[#edf0f3] text-gray-500 hover:bg-gray-50">›</button>
           <span className="ml-2 text-sm font-semibold text-gray-800">{titleText}</span>
         </div>
-
         <div className="flex items-center gap-2">
           <div className="flex rounded-lg border border-[#edf0f3] overflow-hidden">
             {(["day", "week", "month"] as ViewMode[]).map((mode) => (
@@ -474,14 +586,12 @@ export default function SchedulePage() {
               </button>
             ))}
           </div>
-
           <input
             type="date"
             value={baseDate}
             onChange={(e) => setBaseDate(e.target.value)}
             className="h-8 rounded-lg border border-[#edf0f3] px-2 text-xs text-gray-700 focus:border-[#1d9e75] focus:outline-none"
           />
-
           <button
             onClick={() => setNewOpen(true)}
             className="h-8 rounded-lg bg-black px-3 text-xs font-medium text-white transition hover:-translate-y-0.5 hover:shadow-md active:scale-95"
@@ -503,7 +613,7 @@ export default function SchedulePage() {
         {loading && <span className="ml-auto text-xs text-gray-400 animate-pulse">로딩 중...</span>}
       </div>
 
-      {/* 오늘의 전체 메모 */}
+      {/* 오늘의 메모 */}
       <div className="shrink-0 border-b border-[#edf0f3]">
         <button
           onClick={() => setMemoSectionOpen((v) => !v)}
@@ -531,29 +641,19 @@ export default function SchedulePage() {
         )}
       </div>
 
-      {/* 뷰 영역 */}
+      {/* 뷰 */}
       {viewMode === "day" && (
-        <DayView
-          dateStr={baseDate}
-          reservations={reservations}
-          onCardClick={openDetail}
-        />
+        <DayView dateStr={baseDate} reservations={reservations} onCardClick={(item) => { setSelectedReservation(item); setDetailOpen(true); }} />
       )}
-
       {viewMode === "week" && (
-        <WeekView
-          weekStart={getWeekStart(baseDate)}
-          reservations={reservations}
-          onCardClick={openDetail}
-        />
+        <WeekView weekStart={getWeekStart(baseDate)} reservations={reservations} onCardClick={(item) => { setSelectedReservation(item); setDetailOpen(true); }} />
       )}
-
       {viewMode === "month" && (
         <MonthView
           monthStart={getMonthStart(baseDate)}
           reservations={reservations}
-          onDayClick={handleMonthDayClick}
-          onCardClick={openDetail}
+          onDayClick={(d) => { setBaseDate(d); setViewMode("day"); }}
+          onCardClick={(item) => { setSelectedReservation(item); setDetailOpen(true); }}
         />
       )}
 
@@ -564,15 +664,16 @@ export default function SchedulePage() {
           currentUser={currentUser}
           onClose={() => { setDetailOpen(false); setSelectedReservation(null); }}
           onRefreshLatestLog={async () => {}}
+          onRefresh={refresh}
         />
       )}
-
       {currentUser && (
         <NewReservationDrawer
           open={newOpen}
           onClose={() => setNewOpen(false)}
           currentUser={currentUser}
           initialDate={baseDate}
+          onCreated={refresh}
         />
       )}
     </div>
