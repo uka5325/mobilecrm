@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useRef, useEffect } from "react";
 import type { ReservationRecord, AppointmentType } from "@/lib/reservations";
 import { APPOINTMENT_TYPES } from "@/lib/reservations";
 import { getReservationBirthInfo } from "@/lib/reservationUtils";
@@ -82,6 +83,46 @@ function sumAmounts(amounts: string[]): string {
   return parts.join(" + ") || "—";
 }
 
+type AmountPopoverProps = {
+  label: string;
+  rows: { date: string; hospital: string; amount: string }[];
+  onClose: () => void;
+};
+
+function AmountPopover({ label, rows, onClose }: AmountPopoverProps) {
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) onClose();
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [onClose]);
+
+  return (
+    <div
+      ref={ref}
+      className="absolute z-50 mt-1 min-w-[260px] rounded-xl border border-gray-200 bg-white shadow-xl"
+    >
+      <div className="border-b border-gray-100 px-4 py-2.5 text-xs font-bold text-gray-700">{label} 내역</div>
+      <div className="max-h-60 overflow-y-auto">
+        {rows.length === 0 ? (
+          <div className="px-4 py-3 text-xs text-gray-400">내역 없음</div>
+        ) : (
+          rows.map((row, i) => (
+            <div key={i} className="flex items-center justify-between gap-3 border-b border-gray-50 px-4 py-2 last:border-0">
+              <span className="text-xs text-gray-500">{row.date || "—"}</span>
+              <span className="text-xs text-gray-500 truncate max-w-[90px]">{row.hospital || "—"}</span>
+              <span className="text-xs font-medium text-gray-800">{row.amount || "—"}</span>
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+  );
+}
+
 export function ReservationsTable({
   patientGroups,
   loading,
@@ -106,6 +147,15 @@ export function ReservationsTable({
 }: Props) {
   const cellCls = "border-b border-gray-100 px-2 py-2";
   const inputCls = "w-full rounded-lg border border-[#dfe3e8] px-2 py-1 text-xs focus:border-[#1d9e75] focus:outline-none";
+
+  type PopoverState = { groupKey: string; type: "deposit" | "surgery" } | null;
+  const [amountPopover, setAmountPopover] = useState<PopoverState>(null);
+
+  function toggleAmountPopover(groupKey: string, type: "deposit" | "surgery") {
+    setAmountPopover((prev) =>
+      prev?.groupKey === groupKey && prev.type === type ? null : { groupKey, type }
+    );
+  }
 
   function renderReservationRow(item: ReservationRecord) {
     const apptType = item.appointmentType || "상담";
@@ -213,10 +263,18 @@ export function ReservationsTable({
     } as Parameters<typeof getReservationBirthInfo>[0]);
 
     const surgeryReserved = group.reservations.some((r) => r.surgeryReserved);
-    const depositTotal = sumAmounts(group.reservations.map((r) => r.depositAmount || ""));
-    const surgeryTotal = sumAmounts(group.reservations.map((r) => r.surgeryCost || ""));
     const consultAreas = getConsultAreas(group.reservations, "상담");
     const surgeryAreas = getConsultAreas(group.reservations, "수술");
+
+    const depositRows = group.reservations
+      .filter((r) => r.depositAmount && r.depositAmount.trim())
+      .map((r) => ({ date: r.reservationDate || "", hospital: r.hospital || "", amount: r.depositAmount || "" }));
+    const surgeryRows = group.reservations
+      .filter((r) => r.surgeryCost && r.surgeryCost.trim())
+      .map((r) => ({ date: r.reservationDate || "", hospital: r.hospital || "", amount: r.surgeryCost || "" }));
+
+    const depositPopoverOpen = amountPopover?.groupKey === group.patientKey && amountPopover.type === "deposit";
+    const surgeryPopoverOpen = amountPopover?.groupKey === group.patientKey && amountPopover.type === "surgery";
 
     if (isEditing && pf) {
       return (
@@ -303,12 +361,40 @@ export function ReservationsTable({
             <span className={`text-xs font-medium ${surgeryReserved ? "text-purple-700" : "text-gray-400"}`}>
               수술예약 {surgeryReserved ? "✓" : "✗"}
             </span>
-            {depositTotal !== "—" && (
-              <span className="text-xs text-gray-600">예약금 <span className="font-medium">{depositTotal}</span></span>
-            )}
-            {surgeryTotal !== "—" && (
-              <span className="text-xs text-gray-600">수술비 <span className="font-medium">{surgeryTotal}</span></span>
-            )}
+
+            {/* 예약금 버튼 + 팝오버 */}
+            <div className="relative">
+              <button
+                onClick={() => toggleAmountPopover(group.patientKey, "deposit")}
+                className={`rounded-md border px-2 py-0.5 text-xs transition ${depositRows.length > 0 ? "border-blue-200 bg-white text-blue-600 hover:bg-blue-50" : "border-gray-200 bg-white text-gray-400"}`}
+              >
+                예약금{depositRows.length > 0 ? ` (${depositRows.length})` : ""}
+              </button>
+              {depositPopoverOpen && (
+                <AmountPopover
+                  label="예약금"
+                  rows={depositRows}
+                  onClose={() => setAmountPopover(null)}
+                />
+              )}
+            </div>
+
+            {/* 수술비용 버튼 + 팝오버 */}
+            <div className="relative">
+              <button
+                onClick={() => toggleAmountPopover(group.patientKey, "surgery")}
+                className={`rounded-md border px-2 py-0.5 text-xs transition ${surgeryRows.length > 0 ? "border-orange-200 bg-white text-orange-600 hover:bg-orange-50" : "border-gray-200 bg-white text-gray-400"}`}
+              >
+                수술비용{surgeryRows.length > 0 ? ` (${surgeryRows.length})` : ""}
+              </button>
+              {surgeryPopoverOpen && (
+                <AmountPopover
+                  label="수술비용"
+                  rows={surgeryRows}
+                  onClose={() => setAmountPopover(null)}
+                />
+              )}
+            </div>
 
             <div className="ml-auto flex items-center gap-1.5">
               <button
