@@ -199,13 +199,13 @@ export function InvoiceListTab() {
                 {filtered.map((inv) => (
                   <tr
                     key={inv.id}
-                    className="cursor-pointer transition hover:bg-[#f8fafc]"
+                    className="cursor-pointer whitespace-nowrap transition hover:bg-[#f8fafc]"
                     onClick={() => router.push(`/invoices/${inv.reservationDocId}`)}
                   >
                     <td className="px-4 py-3 text-gray-500">{formatDate(inv.createdAt)}</td>
                     <td className="px-4 py-3 font-semibold text-gray-800">{inv.patientName}</td>
                     <td className="px-4 py-3 text-gray-600">{inv.hospitalName || "-"}</td>
-                    <td className="max-w-[140px] truncate px-4 py-3 text-gray-600">{inv.surgeryItems || "-"}</td>
+                    <td className="max-w-[140px] overflow-hidden text-ellipsis px-4 py-3 text-gray-600">{inv.surgeryItems || "-"}</td>
                     <td className="px-4 py-3 text-gray-600">{inv.doctors.join(", ") || "-"}</td>
                     <td className="px-4 py-3">
                       <span className={`rounded-lg px-2 py-0.5 text-xs font-semibold ${STATUS_CLASS[inv.status] || "bg-gray-100 text-gray-500"}`}>
