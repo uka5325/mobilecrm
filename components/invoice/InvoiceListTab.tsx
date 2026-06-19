@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 import { getInvoices, type InvoiceRecord, type InvoiceListFilter } from "@/lib/invoices";
 import { todayString } from "@/lib/dateUtils";
 import { toDate } from "@/lib/settingsUtils";
@@ -113,71 +112,65 @@ export function InvoiceListTab() {
 
   return (
     <div className="flex flex-col gap-4">
-      {/* 안내 배너 */}
-      <div className="flex items-center justify-between rounded-xl border border-emerald-100 bg-emerald-50 px-4 py-2.5 text-sm">
-        <span className="text-emerald-800">인보이스는 <b>예약 관리</b> 페이지의 각 예약 행에서 생성하거나 열 수 있습니다.</span>
-        <Link href="/reservations" className="ml-3 shrink-0 rounded-lg bg-[#1d9e75] px-3 py-1 text-xs font-semibold text-white hover:bg-[#178a65]">
-          예약 관리 →
-        </Link>
-      </div>
-
-      {/* Filters */}
-      <div className="flex flex-wrap items-center gap-2">
-        <input
-          type="date"
-          value={startDate}
-          onChange={(e) => setStartDate(e.target.value)}
-          className="h-9 rounded-xl border border-[#dfe3e8] bg-white px-3 text-sm focus:border-[#1d9e75] focus:outline-none"
-        />
-        <span className="text-sm text-gray-400">~</span>
-        <input
-          type="date"
-          value={endDate}
-          onChange={(e) => setEndDate(e.target.value)}
-          className="h-9 rounded-xl border border-[#dfe3e8] bg-white px-3 text-sm focus:border-[#1d9e75] focus:outline-none"
-        />
-        <select
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)}
-          className="h-9 rounded-xl border border-[#dfe3e8] bg-white px-3 text-sm focus:border-[#1d9e75] focus:outline-none"
-        >
-          <option value="">전체 상태</option>
-          <option value="draft">임시저장</option>
-          <option value="confirmed">확정</option>
-          <option value="void">취소</option>
-        </select>
-        <input
-          type="text"
-          placeholder="환자명 검색"
-          value={nameQuery}
-          onChange={(e) => setNameQuery(e.target.value)}
-          className="h-9 rounded-xl border border-[#dfe3e8] bg-white px-3 text-sm focus:border-[#1d9e75] focus:outline-none"
-        />
-        <button
-          onClick={load}
-          className="h-9 rounded-xl bg-gray-100 px-3 text-sm font-medium text-gray-600 hover:bg-gray-200"
-        >
-          새로고침
-        </button>
+      {/* 컨트롤바 */}
+      <div className="-mx-6 rounded-t-2xl border border-[#edf0f3] bg-[#ecfdf5] px-4 py-4 lg:-mx-8 lg:px-8">
+        <div className="flex items-center gap-2 overflow-x-auto [&::-webkit-scrollbar]:hidden">
+          <input
+            type="date"
+            value={startDate}
+            onChange={(e) => setStartDate(e.target.value)}
+            className="h-10 shrink-0 appearance-none rounded-xl border border-[#dfe3e8] bg-white px-3 text-sm outline-none transition focus:border-[#1d9e75] focus:ring-4 focus:ring-emerald-100"
+          />
+          <span className="shrink-0 text-sm text-gray-400">~</span>
+          <input
+            type="date"
+            value={endDate}
+            onChange={(e) => setEndDate(e.target.value)}
+            className="h-10 shrink-0 appearance-none rounded-xl border border-[#dfe3e8] bg-white px-3 text-sm outline-none transition focus:border-[#1d9e75] focus:ring-4 focus:ring-emerald-100"
+          />
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)}
+            className="h-10 shrink-0 rounded-xl border border-[#dfe3e8] bg-white px-3 text-sm outline-none transition focus:border-[#1d9e75] focus:ring-4 focus:ring-emerald-100"
+          >
+            <option value="">전체 상태</option>
+            <option value="draft">임시저장</option>
+            <option value="confirmed">확정</option>
+            <option value="void">취소</option>
+          </select>
+          <input
+            type="text"
+            placeholder="환자명 검색"
+            value={nameQuery}
+            onChange={(e) => setNameQuery(e.target.value)}
+            className="h-10 min-w-[120px] shrink-0 rounded-xl border border-[#dfe3e8] bg-white px-3 text-sm outline-none transition focus:border-[#1d9e75] focus:ring-4 focus:ring-emerald-100"
+          />
+          <button
+            onClick={load}
+            className="h-10 shrink-0 rounded-xl border border-[#dfe3e8] bg-white px-4 text-sm font-medium text-gray-600 transition hover:-translate-y-0.5 hover:shadow-sm active:scale-95"
+          >
+            새로고침
+          </button>
+        </div>
       </div>
 
       {/* KPI */}
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         {[
-          { label: "전체", value: kpi.total + "건", className: "bg-gray-50 border-gray-200" },
+          { label: "전체", value: kpi.total + "건", className: "bg-gray-50 border-gray-200 text-gray-700" },
           { label: "확정", value: kpi.confirmed + "건", className: "bg-emerald-50 border-emerald-200 text-emerald-700" },
-          { label: "확정 수술비 합계", value: `₩${formatMoney(kpi.totalAmount)}`, className: "bg-blue-50 border-blue-200 text-blue-700" },
-          { label: "확정 커미션 합계", value: `₩${formatMoney(kpi.totalCommission)}`, className: "bg-orange-50 border-orange-200 text-orange-700" },
+          { label: "확정 수술비", value: `₩${formatMoney(kpi.totalAmount)}`, className: "bg-blue-50 border-blue-200 text-blue-700" },
+          { label: "확정 커미션", value: `₩${formatMoney(kpi.totalCommission)}`, className: "bg-orange-50 border-orange-200 text-orange-700" },
         ].map((box) => (
-          <div key={box.label} className={`rounded-xl border px-4 py-2.5 ${box.className}`}>
-            <div className="text-xs font-semibold opacity-70">{box.label}</div>
-            <div className="text-lg font-extrabold">{box.value}</div>
+          <div key={box.label} className={`rounded-xl border px-4 py-3 ${box.className}`}>
+            <div className="text-xs font-semibold opacity-60">{box.label}</div>
+            <div className="mt-0.5 text-lg font-extrabold">{box.value}</div>
           </div>
         ))}
       </div>
 
-      {/* Table */}
-      <div className="overflow-hidden rounded-2xl border border-[#edf0f3] bg-white">
+      {/* 테이블 */}
+      <div className="-mx-6 overflow-hidden border-t border-[#edf0f3] bg-white lg:-mx-8">
         {loading ? (
           <div className="flex items-center justify-center py-16 text-sm text-gray-400">
             데이터 로딩 중...
@@ -196,10 +189,7 @@ export function InvoiceListTab() {
               <thead className="border-b border-[#edf0f3] bg-[#f8fafc]">
                 <tr>
                   {["날짜", "환자명", "병원명", "수술명", "담당원장", "상태", "수술비", "커미션", ""].map((h) => (
-                    <th
-                      key={h}
-                      className="px-4 py-3 text-left text-xs font-semibold text-gray-500"
-                    >
+                    <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-500">
                       {h}
                     </th>
                   ))}
@@ -213,37 +203,32 @@ export function InvoiceListTab() {
                     onClick={() => router.push(`/invoices/${inv.reservationDocId}`)}
                   >
                     <td className="px-4 py-3 text-gray-500">{formatDate(inv.createdAt)}</td>
-                    <td className="px-4 py-3 font-medium text-gray-800">{inv.patientName}</td>
+                    <td className="px-4 py-3 font-semibold text-gray-800">{inv.patientName}</td>
                     <td className="px-4 py-3 text-gray-600">{inv.hospitalName || "-"}</td>
-                    <td className="px-4 py-3 text-gray-600 max-w-[140px] truncate">{inv.surgeryItems || "-"}</td>
+                    <td className="max-w-[140px] truncate px-4 py-3 text-gray-600">{inv.surgeryItems || "-"}</td>
                     <td className="px-4 py-3 text-gray-600">{inv.doctors.join(", ") || "-"}</td>
                     <td className="px-4 py-3">
-                      <span
-                        className={`rounded-lg px-2 py-0.5 text-xs font-semibold ${STATUS_CLASS[inv.status] || "bg-gray-100 text-gray-500"}`}
-                      >
+                      <span className={`rounded-lg px-2 py-0.5 text-xs font-semibold ${STATUS_CLASS[inv.status] || "bg-gray-100 text-gray-500"}`}>
                         {STATUS_LABEL[inv.status] || inv.status}
                       </span>
                     </td>
                     <td className="px-4 py-3 font-medium text-gray-700">
                       ₩{formatMoney(inv.totalAmount || 0)}
                     </td>
-                    <td className="px-4 py-3 text-sm text-[#1d9e75]">
+                    <td className="px-4 py-3 text-[#1d9e75]">
                       {inv.commissionAmount ? `₩${formatMoney(inv.commissionAmount)}` : "-"}
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex gap-1">
                         <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            router.push(`/invoices/${inv.reservationDocId}`);
-                          }}
-                          className="rounded-lg bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-600 hover:bg-gray-200"
+                          onClick={(e) => { e.stopPropagation(); router.push(`/invoices/${inv.reservationDocId}`); }}
+                          className="rounded-lg border border-gray-200 bg-white px-2.5 py-1 text-xs font-medium text-gray-600 hover:bg-gray-50"
                         >
                           수정
                         </button>
                         <button
                           onClick={(e) => handleDelete(inv, e)}
-                          className="rounded-lg bg-red-50 px-2.5 py-1 text-xs font-medium text-red-600 hover:bg-red-100"
+                          className="rounded-lg border border-red-100 bg-red-50 px-2.5 py-1 text-xs font-medium text-red-600 hover:bg-red-100"
                         >
                           삭제
                         </button>

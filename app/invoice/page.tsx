@@ -22,9 +22,5 @@ export default function InvoicePage() {
     );
   }
 
-  return (
-    <div className="-mx-6 -mb-6 mt-5 flex flex-col gap-4 pb-8">
-      <InvoiceListTab />
-    </div>
-  );
+  return <InvoiceListTab />;
 }

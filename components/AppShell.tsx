@@ -119,7 +119,7 @@ export default function AppShell({ children }: AppShellProps) {
   const pathname = usePathname();
 
   const isLoginPage = pathname === "/login";
-  const isTimelinePage = pathname.startsWith("/timeline") || pathname.startsWith("/schedule") || pathname.startsWith("/reservations") || pathname.startsWith("/dashboard");
+  const isTimelinePage = pathname.startsWith("/timeline") || pathname.startsWith("/schedule") || pathname.startsWith("/reservations") || pathname.startsWith("/dashboard") || pathname.startsWith("/invoice");
 
   const [mounted, setMounted] = useState(false);
   const [firebaseUser, setFirebaseUser] = useState<User | null>(null);
