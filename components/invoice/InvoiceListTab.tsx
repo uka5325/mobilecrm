@@ -45,7 +45,6 @@ export function InvoiceListTab() {
   const router = useRouter();
   const today = todayString();
 
-  const [allPeriod, setAllPeriod] = useState(false);
   const [startDate, setStartDate] = useState(threeMonthsAgo());
   const [endDate, setEndDate] = useState(today);
   const [statusFilter, setStatusFilter] = useState<"" | "draft" | "confirmed" | "void">("");
@@ -55,14 +54,14 @@ export function InvoiceListTab() {
 
   useEffect(() => {
     load();
-  }, [startDate, endDate, statusFilter, allPeriod]);
+  }, [startDate, endDate, statusFilter]);
 
   async function load() {
     setLoading(true);
     try {
       const filters: InvoiceListFilter = {
-        startDate: allPeriod ? undefined : startDate,
-        endDate: allPeriod ? undefined : endDate,
+        startDate,
+        endDate,
         status: statusFilter || undefined,
       };
       const data = await getInvoices(filters);
@@ -83,8 +82,7 @@ export function InvoiceListTab() {
     return {
       total: filtered.length,
       confirmed: confirmed.length,
-      eventTotal: confirmed.reduce((s, i) => s + i.eventTotal, 0),
-      balance: confirmed.reduce((s, i) => s + i.balanceAmount, 0),
+      totalAmount: confirmed.reduce((s, i) => s + (i.totalAmount || 0), 0),
     };
   }, [filtered]);
 
@@ -100,29 +98,18 @@ export function InvoiceListTab() {
 
       {/* Filters */}
       <div className="flex flex-wrap items-center gap-2">
-        <label className="flex items-center gap-1.5 text-sm text-gray-600 cursor-pointer">
-          <input
-            type="checkbox"
-            checked={allPeriod}
-            onChange={(e) => setAllPeriod(e.target.checked)}
-            className="h-4 w-4 rounded"
-          />
-          전체 기간
-        </label>
         <input
           type="date"
           value={startDate}
           onChange={(e) => setStartDate(e.target.value)}
-          disabled={allPeriod}
-          className="h-9 rounded-xl border border-[#dfe3e8] bg-white px-3 text-sm focus:border-[#1d9e75] focus:outline-none disabled:opacity-40"
+          className="h-9 rounded-xl border border-[#dfe3e8] bg-white px-3 text-sm focus:border-[#1d9e75] focus:outline-none"
         />
         <span className="text-sm text-gray-400">~</span>
         <input
           type="date"
           value={endDate}
           onChange={(e) => setEndDate(e.target.value)}
-          disabled={allPeriod}
-          className="h-9 rounded-xl border border-[#dfe3e8] bg-white px-3 text-sm focus:border-[#1d9e75] focus:outline-none disabled:opacity-40"
+          className="h-9 rounded-xl border border-[#dfe3e8] bg-white px-3 text-sm focus:border-[#1d9e75] focus:outline-none"
         />
         <select
           value={statusFilter}
@@ -150,12 +137,11 @@ export function InvoiceListTab() {
       </div>
 
       {/* KPI */}
-      <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
+      <div className="grid grid-cols-3 gap-2">
         {[
-          { label: "전체", value: kpi.total, className: "bg-gray-50 border-gray-200" },
-          { label: "확정", value: kpi.confirmed, className: "bg-emerald-50 border-emerald-200 text-emerald-700" },
-          { label: "이벤트가 합계", value: `₩${formatMoney(kpi.eventTotal)}`, className: "bg-blue-50 border-blue-200 text-blue-700" },
-          { label: "잔금 합계", value: `₩${formatMoney(kpi.balance)}`, className: "bg-orange-50 border-orange-200 text-orange-700" },
+          { label: "전체", value: kpi.total + "건", className: "bg-gray-50 border-gray-200" },
+          { label: "확정", value: kpi.confirmed + "건", className: "bg-emerald-50 border-emerald-200 text-emerald-700" },
+          { label: "확정 수술비 합계", value: `₩${formatMoney(kpi.totalAmount)}`, className: "bg-blue-50 border-blue-200 text-blue-700" },
         ].map((box) => (
           <div key={box.label} className={`rounded-xl border px-4 py-2.5 ${box.className}`}>
             <div className="text-xs font-semibold opacity-70">{box.label}</div>
@@ -179,7 +165,7 @@ export function InvoiceListTab() {
             <table className="w-full text-sm">
               <thead className="border-b border-[#edf0f3] bg-[#f8fafc]">
                 <tr>
-                  {["날짜", "환자명", "담당원장", "상태", "이벤트가", "잔금", ""].map((h) => (
+                  {["날짜", "환자명", "병원명", "수술명", "담당원장", "상태", "수술비", ""].map((h) => (
                     <th
                       key={h}
                       className="px-4 py-3 text-left text-xs font-semibold text-gray-500"
@@ -198,6 +184,8 @@ export function InvoiceListTab() {
                   >
                     <td className="px-4 py-3 text-gray-500">{formatDate(inv.createdAt)}</td>
                     <td className="px-4 py-3 font-medium text-gray-800">{inv.patientName}</td>
+                    <td className="px-4 py-3 text-gray-600">{inv.hospitalName || "-"}</td>
+                    <td className="px-4 py-3 text-gray-600 max-w-[140px] truncate">{inv.surgeryItems || "-"}</td>
                     <td className="px-4 py-3 text-gray-600">{inv.doctors.join(", ") || "-"}</td>
                     <td className="px-4 py-3">
                       <span
@@ -207,10 +195,7 @@ export function InvoiceListTab() {
                       </span>
                     </td>
                     <td className="px-4 py-3 font-medium text-gray-700">
-                      ₩{formatMoney(inv.eventTotal)}
-                    </td>
-                    <td className="px-4 py-3 text-gray-600">
-                      ₩{formatMoney(inv.balanceAmount)}
+                      ₩{formatMoney(inv.totalAmount || 0)}
                     </td>
                     <td className="px-4 py-3">
                       <button

@@ -15,91 +15,8 @@ import { db } from "./firebase";
 import type { StaffUser } from "./auth";
 import { mapReservationDoc, type ReservationRecord } from "./reservations";
 import { cleanText } from "./stringUtils";
-import { toDate } from "./settingsUtils";
 import { createLog } from "./logs";
 import { getReservationBirthInfo } from "./reservationUtils";
-
-export type InvoiceTemplate = {
-  templateId: string;
-  language: string;
-  label: string;
-  active: boolean;
-
-  clinicTitleKo: string;
-  mainTitle: string;
-  invoiceTitle: string;
-
-  patientInfoLabels: {
-    name: string;
-    birth: string;
-    doctor: string;
-    surgerySchedule: string;
-    totalAmount: string;
-    deposit: string;
-  };
-
-  regularPriceLabel: string;
-  eventPriceLabel: string;
-  totalLabel: string;
-  balanceLabel: string;
-
-  categoryOrder: string[];
-  sectionOrder: string[];
-};
-
-export type InvoiceTemplateSection = {
-  sectionId: string;
-  templateId: string;
-  type: string;
-  titleKo: string;
-  titleLocal: string;
-  backgroundColor?: string;
-  borderColor?: string;
-  sortOrder: number;
-  active: boolean;
-  lines: {
-    ko: string;
-    local: string;
-  }[];
-};
-
-export type InvoiceItemMaster = {
-  itemId: string;
-  categoryId: string;
-  categoryKo: string;
-  categoryLocal: string;
-
-  nameKo: string;
-  nameLocal: string;
-  nameEn?: string;
-
-  regularPrice: number;
-  eventPrice: number;
-  costPrice?: number;
-
-  currency: string;
-  active: boolean;
-  sortOrder: number;
-};
-
-export type InvoiceItemSnapshot = InvoiceItemMaster & {
-  selected: boolean;
-  quantity: number;
-  customRegularPrice: number | null;
-  customEventPrice: number | null;
-  finalRegularPrice: number;
-  finalEventPrice: number;
-};
-
-export type InvoiceDiscount = {
-  discountId: string;
-  labelKo: string;
-  labelLocal: string;
-  type: "rate" | "amount";
-  value: number;
-  selected: boolean;
-  amount: number;
-};
 
 export type InvoiceRecord = {
   id: string;
@@ -115,28 +32,13 @@ export type InvoiceRecord = {
   gender: string;
   nationality: string;
   phone: string;
-
   doctors: string[];
   coordinators: string[];
 
-  language: string;
-  templateId: string;
-  templateSnapshot: InvoiceTemplate | null;
-  sectionsSnapshot: InvoiceTemplateSection[];
-
-  items: InvoiceItemSnapshot[];
-  discounts: InvoiceDiscount[];
-
-  depositAmount: number;
-
-  regularTotal: number;
-  eventTotal: number;
-  discountTotal: number;
-  finalTotal: number;
-  balanceAmount: number;
-
-  memo: string;
-  internalMemo: string;
+  // 인보이스 핵심 필드
+  hospitalName: string;
+  surgeryItems: string;
+  totalAmount: number;
 
   // 결제 방법 및 커미션
   paymentMethod?: "card" | "cash" | "mixed";
@@ -148,12 +50,12 @@ export type InvoiceRecord = {
   commissionBase?: number;
   commissionAmount?: number;
 
+  memo?: string;
   status: "draft" | "confirmed" | "void";
 
   createdAt?: unknown;
   createdBy: string;
   createdByUid: string;
-
   updatedAt?: unknown;
   updatedBy: string;
   updatedByUid: string;
@@ -162,12 +64,9 @@ export type InvoiceRecord = {
 };
 
 export type InvoiceUpdatePayload = {
-  items: InvoiceItemSnapshot[];
-  discounts: InvoiceDiscount[];
-  depositAmount: number;
-  memo?: string;
-  internalMemo?: string;
-  status?: "draft" | "confirmed" | "void";
+  hospitalName: string;
+  surgeryItems: string;
+  totalAmount: number;
   paymentMethod?: "card" | "cash" | "mixed";
   cardAmount?: number;
   cashAmount?: number;
@@ -176,6 +75,8 @@ export type InvoiceUpdatePayload = {
   commissionStaffName?: string;
   commissionBase?: number;
   commissionAmount?: number;
+  memo?: string;
+  status?: "draft" | "confirmed" | "void";
 };
 
 function toNumber(value: unknown) {
@@ -190,91 +91,11 @@ function makeInvoiceId(reservation: ReservationRecord) {
   const yy = String(now.getFullYear()).slice(2);
   const mm = String(now.getMonth() + 1).padStart(2, "0");
   const dd = String(now.getDate()).padStart(2, "0");
-
-  const birthInfo = getReservationBirthInfo(reservation);
-  const birthPart =
-    birthInfo.birthDisplay?.replace(/[^0-9]/g, "").slice(2) || "000000";
-
   const namePart = cleanText(reservation.name || reservation.patientName || "고객")
     .replace(/[\\/#?[\]*.]/g, " ")
     .replace(/\s+/g, "")
     .slice(0, 20);
-
-  return `INV-${yy}${mm}${dd}-${namePart}-${birthPart}`;
-}
-
-function mapTemplate(id: string, data: Record<string, unknown>): InvoiceTemplate {
-  return {
-    templateId: cleanText(data.templateId || id),
-    language: cleanText(data.language),
-    label: cleanText(data.label),
-    active: data.active === true,
-
-    clinicTitleKo: cleanText(data.clinicTitleKo),
-    mainTitle: cleanText(data.mainTitle),
-    invoiceTitle: cleanText(data.invoiceTitle),
-
-    patientInfoLabels: (() => {
-      const labels = data.patientInfoLabels as Record<string, unknown> | undefined;
-      return {
-        name: cleanText(labels?.name),
-        birth: cleanText(labels?.birth),
-        doctor: cleanText(labels?.doctor),
-        surgerySchedule: cleanText(labels?.surgerySchedule),
-        totalAmount: cleanText(labels?.totalAmount),
-        deposit: cleanText(labels?.deposit),
-      };
-    })(),
-
-    regularPriceLabel: cleanText(data.regularPriceLabel),
-    eventPriceLabel: cleanText(data.eventPriceLabel),
-    totalLabel: cleanText(data.totalLabel),
-    balanceLabel: cleanText(data.balanceLabel),
-
-    categoryOrder: Array.isArray(data.categoryOrder) ? data.categoryOrder : [],
-    sectionOrder: Array.isArray(data.sectionOrder) ? data.sectionOrder : [],
-  };
-}
-
-function mapSection(id: string, data: Record<string, unknown>): InvoiceTemplateSection {
-  return {
-    sectionId: cleanText(data.sectionId || id),
-    templateId: cleanText(data.templateId),
-    type: cleanText(data.type),
-    titleKo: cleanText(data.titleKo),
-    titleLocal: cleanText(data.titleLocal),
-    backgroundColor: cleanText(data.backgroundColor),
-    borderColor: cleanText(data.borderColor),
-    sortOrder: toNumber(data.sortOrder),
-    active: data.active === true,
-    lines: Array.isArray(data.lines)
-      ? data.lines.map((line: unknown) => ({
-          ko: cleanText((line as Record<string, unknown>)?.ko),
-          local: cleanText((line as Record<string, unknown>)?.local),
-        }))
-      : [],
-  };
-}
-
-function mapItem(id: string, data: Record<string, unknown>): InvoiceItemMaster {
-  return {
-    itemId: cleanText(data.itemId || id),
-    categoryId: cleanText(data.categoryId),
-    categoryKo: cleanText(data.categoryKo),
-    categoryLocal: cleanText(data.categoryLocal),
-
-    nameKo: cleanText(data.nameKo),
-    nameLocal: cleanText(data.nameLocal),
-    nameEn: cleanText(data.nameEn),
-
-    regularPrice: toNumber(data.regularPrice),
-    eventPrice: toNumber(data.eventPrice),
-    costPrice: toNumber(data.costPrice),
-
-    currency: cleanText(data.currency || "KRW"),
-    active: data.active === true,
-    sortOrder: toNumber(data.sortOrder),
-  };
+  return `INV-${yy}${mm}${dd}-${namePart}`;
 }
 
 function mapInvoiceDoc(id: string, data: Record<string, unknown>): InvoiceRecord {
@@ -296,28 +117,13 @@ function mapInvoiceDoc(id: string, data: Record<string, unknown>): InvoiceRecord
     doctors: Array.isArray(data.doctors) ? data.doctors : [],
     coordinators: Array.isArray(data.coordinators) ? data.coordinators : [],
 
-    language: cleanText(data.language || "mn"),
-    templateId: cleanText(data.templateId || "template_mn"),
-    templateSnapshot: (data.templateSnapshot as InvoiceTemplate) || null,
-    sectionsSnapshot: Array.isArray(data.sectionsSnapshot)
-      ? (data.sectionsSnapshot as InvoiceTemplateSection[])
-      : [],
+    hospitalName: cleanText(data.hospitalName),
+    surgeryItems: cleanText(data.surgeryItems),
+    totalAmount: toNumber(data.totalAmount),
 
-    items: Array.isArray(data.items) ? (data.items as InvoiceItemSnapshot[]) : [],
-    discounts: Array.isArray(data.discounts) ? (data.discounts as InvoiceDiscount[]) : [],
-
-    depositAmount: toNumber(data.depositAmount),
-
-    regularTotal: toNumber(data.regularTotal),
-    eventTotal: toNumber(data.eventTotal),
-    discountTotal: toNumber(data.discountTotal),
-    finalTotal: toNumber(data.finalTotal),
-    balanceAmount: toNumber(data.balanceAmount),
-
-    memo: cleanText(data.memo),
-    internalMemo: cleanText(data.internalMemo),
-
-    paymentMethod: (["card", "cash", "mixed"].includes(String(data.paymentMethod)) ? data.paymentMethod : undefined) as "card" | "cash" | "mixed" | undefined,
+    paymentMethod: (["card", "cash", "mixed"].includes(String(data.paymentMethod))
+      ? data.paymentMethod
+      : undefined) as "card" | "cash" | "mixed" | undefined,
     cardAmount: data.cardAmount !== undefined ? toNumber(data.cardAmount) : undefined,
     cashAmount: data.cashAmount !== undefined ? toNumber(data.cashAmount) : undefined,
     commissionRate: data.commissionRate !== undefined ? toNumber(data.commissionRate) : undefined,
@@ -326,145 +132,20 @@ function mapInvoiceDoc(id: string, data: Record<string, unknown>): InvoiceRecord
     commissionBase: data.commissionBase !== undefined ? toNumber(data.commissionBase) : undefined,
     commissionAmount: data.commissionAmount !== undefined ? toNumber(data.commissionAmount) : undefined,
 
-    status: (["draft", "confirmed", "void"].includes(String(data.status)) ? data.status : "draft") as "draft" | "confirmed" | "void",
+    memo: cleanText(data.memo),
+    status: (["draft", "confirmed", "void"].includes(String(data.status))
+      ? data.status
+      : "draft") as "draft" | "confirmed" | "void",
 
     createdAt: data.createdAt,
     createdBy: cleanText(data.createdBy),
     createdByUid: cleanText(data.createdByUid),
-
     updatedAt: data.updatedAt,
     updatedBy: cleanText(data.updatedBy),
     updatedByUid: cleanText(data.updatedByUid),
 
     isDeleted: data.isDeleted === true,
   };
-}
-
-export function calculateInvoiceTotals(
-  items: InvoiceItemSnapshot[],
-  discounts: InvoiceDiscount[],
-  depositAmount: number
-) {
-  const selectedItems = items.filter((item) => item.selected);
-
-  const regularTotal = selectedItems.reduce((sum, item) => {
-    const price =
-      item.customRegularPrice !== null
-        ? item.customRegularPrice
-        : item.finalRegularPrice;
-    return sum + price * (item.quantity || 1);
-  }, 0);
-
-  const eventTotal = selectedItems.reduce((sum, item) => {
-    const price =
-      item.customEventPrice !== null
-        ? item.customEventPrice
-        : item.finalEventPrice;
-    return sum + price * (item.quantity || 1);
-  }, 0);
-
-  const calculatedDiscounts = discounts.map((discount) => {
-    if (!discount.selected) {
-      return {
-        ...discount,
-        amount: 0,
-      };
-    }
-
-    if (discount.type === "rate") {
-      return {
-        ...discount,
-        amount: Math.floor((eventTotal * discount.value) / 100),
-      };
-    }
-
-    return {
-      ...discount,
-      amount: discount.value,
-    };
-  });
-
-  const discountTotal = calculatedDiscounts.reduce(
-    (sum, discount) => sum + discount.amount,
-    0
-  );
-
-  const finalTotal = Math.max(eventTotal - discountTotal, 0);
-  const balanceAmount = Math.max(finalTotal - depositAmount, 0);
-
-  return {
-    regularTotal,
-    eventTotal,
-    discounts: calculatedDiscounts,
-    discountTotal,
-    finalTotal,
-    balanceAmount,
-  };
-}
-
-export async function getInvoiceTemplate(templateId = "template_mn") {
-  const snap = await getDoc(doc(db, "invoiceTemplates", templateId));
-  if (!snap.exists()) return null;
-  return mapTemplate(snap.id, snap.data());
-}
-
-const INV_CACHE_TTL = 10 * 60 * 1000;
-
-function getInvLocalCache<T>(key: string): T | null {
-  if (typeof window === "undefined") return null;
-  try {
-    const raw = localStorage.getItem(key);
-    const ts = Number(localStorage.getItem(key + "_ts") || 0);
-    if (raw && Date.now() - ts < INV_CACHE_TTL) return JSON.parse(raw) as T;
-  } catch {}
-  return null;
-}
-
-function setInvLocalCache(key: string, data: unknown) {
-  if (typeof window === "undefined") return;
-  setTimeout(() => {
-    try {
-      localStorage.setItem(key, JSON.stringify(data));
-      localStorage.setItem(key + "_ts", String(Date.now()));
-    } catch {}
-  }, 0);
-}
-
-export async function getInvoiceSections(templateId = "template_mn") {
-  const cacheKey = "crm_inv_sections_" + templateId;
-  const cached = getInvLocalCache<ReturnType<typeof mapSection>[]>(cacheKey);
-  if (cached) return cached;
-
-  const snap = await getDocs(
-    query(
-      collection(db, "invoiceTemplateSections"),
-      where("templateId", "==", templateId)
-    )
-  );
-
-  const result = snap.docs
-    .map((docSnap) => mapSection(docSnap.id, docSnap.data()))
-    .filter((section) => section.active)
-    .sort((a, b) => a.sortOrder - b.sortOrder);
-
-  setInvLocalCache(cacheKey, result);
-  return result;
-}
-
-export async function getInvoiceItemMasters() {
-  const cacheKey = "crm_inv_items";
-  const cached = getInvLocalCache<ReturnType<typeof mapItem>[]>(cacheKey);
-  if (cached) return cached;
-
-  const snap = await getDocs(collection(db, "invoiceItems"));
-
-  const result = snap.docs
-    .map((docSnap) => mapItem(docSnap.id, docSnap.data()))
-    .filter((item) => item.active)
-    .sort((a, b) => a.sortOrder - b.sortOrder);
-
-  setInvLocalCache(cacheKey, result);
-  return result;
 }
 
 export async function getReservationByDocId(reservationDocId: string) {
@@ -480,99 +161,28 @@ export async function getInvoiceByReservationDocId(reservationDocId: string) {
       where("reservationDocId", "==", reservationDocId)
     )
   );
-
   for (const docSnap of snap.docs) {
     const inv = mapInvoiceDoc(docSnap.id, docSnap.data());
     if (!inv.isDeleted) return inv;
   }
-
   return null;
 }
 
-export function buildInitialDiscounts(): InvoiceDiscount[] {
-  return [
-    {
-      discountId: "x3_review_discount",
-      labelKo: "X3C 후기조건 추가 할인",
-      labelLocal: "X3C...",
-      type: "rate",
-      value: 10,
-      selected: false,
-      amount: 0,
-    },
-    {
-      discountId: "return_visit_discount",
-      labelKo: "재방문 추가 할인",
-      labelLocal: "Зөвлөхийн нэмэлт хөнгөлөлт",
-      type: "amount",
-      value: 100000,
-      selected: false,
-      amount: 0,
-    },
-  ];
-}
-
-export function buildInvoiceItemsFromMasters(
-  masters: InvoiceItemMaster[]
-): InvoiceItemSnapshot[] {
-  return masters.map((item) => ({
-    ...item,
-    selected: false,
-    quantity: 1,
-    customRegularPrice: null,
-    customEventPrice: null,
-    finalRegularPrice: item.regularPrice,
-    finalEventPrice: item.eventPrice,
-  }));
-}
-
-export async function createInvoiceDraftFromReservation(
+export async function getOrCreateInvoiceDraft(
   reservationDocId: string,
-  staff: StaffUser,
-  templateId = "template_mn"
+  staff: StaffUser
 ) {
   const existing = await getInvoiceByReservationDocId(reservationDocId);
-  if (existing) {
-    return {
-      success: true,
-      invoice: existing,
-      alreadyExists: true,
-    };
-  }
+  if (existing) return { success: true, invoice: existing, alreadyExists: true };
 
-  const [reservation, template, sections, itemMasters] = await Promise.all([
-    getReservationByDocId(reservationDocId),
-    getInvoiceTemplate(templateId),
-    getInvoiceSections(templateId),
-    getInvoiceItemMasters(),
-  ]);
-
-  if (!reservation) {
-    return {
-      success: false,
-      message: "예약 정보를 찾을 수 없습니다.",
-    };
-  }
-
-  if (!template) {
-    return {
-      success: false,
-      message: "인보이스 템플릿을 찾을 수 없습니다.",
-    };
-  }
+  const reservation = await getReservationByDocId(reservationDocId);
+  if (!reservation) return { success: false, message: "예약 정보를 찾을 수 없습니다." };
 
   const birthInfo = getReservationBirthInfo(reservation);
   const invoiceId = makeInvoiceId(reservation);
 
-  const items = buildInvoiceItemsFromMasters(itemMasters);
-  const discounts = buildInitialDiscounts();
-  const depositAmount = toNumber(reservation.depositAmount);
-
-  const totals = calculateInvoiceTotals(items, discounts, depositAmount);
-
   const payload = {
     invoiceId,
-
     reservationDocId: reservation.id,
     reservationId: reservation.reservationId,
     patientId: reservation.patientId,
@@ -587,31 +197,16 @@ export async function createInvoiceDraftFromReservation(
     doctors: reservation.doctors || [],
     coordinators: reservation.coordinators || [],
 
-    language: template.language || "mn",
-    templateId: template.templateId,
-    templateSnapshot: template,
-    sectionsSnapshot: sections,
-
-    items,
-    discounts: totals.discounts,
-
-    depositAmount,
-
-    regularTotal: totals.regularTotal,
-    eventTotal: totals.eventTotal,
-    discountTotal: totals.discountTotal,
-    finalTotal: totals.finalTotal,
-    balanceAmount: totals.balanceAmount,
+    hospitalName: reservation.hospital || "",
+    surgeryItems: "",
+    totalAmount: 0,
 
     memo: "",
-    internalMemo: "",
-
     status: "draft",
 
     createdAt: serverTimestamp(),
     createdBy: staff.displayName,
     createdByUid: staff.uid,
-
     updatedAt: serverTimestamp(),
     updatedBy: staff.displayName,
     updatedByUid: staff.uid,
@@ -639,13 +234,9 @@ export async function createInvoiceDraftFromReservation(
     patientId: reservation.patientId,
     reservationId: reservation.reservationId,
     staff,
-    message: `${staff.displayName}님이 CRM 인보이스를 생성했습니다.`,
+    message: `${staff.displayName}님이 인보이스를 생성했습니다.`,
     before: null,
-    after: {
-      invoiceId,
-      invoiceDocId,
-      templateId,
-    },
+    after: { invoiceId, invoiceDocId },
   });
 
   return {
@@ -655,29 +246,113 @@ export async function createInvoiceDraftFromReservation(
   };
 }
 
-export async function getOrCreateInvoiceDraft(
-  reservationDocId: string,
-  staff: StaffUser,
-  templateId = "template_mn"
+export async function updateInvoice(
+  invoiceDocId: string,
+  payload: InvoiceUpdatePayload,
+  staff: StaffUser
 ) {
-  const existing = await getInvoiceByReservationDocId(reservationDocId);
+  const invoiceRef = doc(db, "invoices", invoiceDocId);
+  const invoiceSnap = await getDoc(invoiceRef);
 
-  if (existing) {
-    return {
-      success: true,
-      invoice: existing,
-      alreadyExists: true,
-    };
+  if (!invoiceSnap.exists()) {
+    return { success: false, message: "인보이스를 찾을 수 없습니다." };
   }
 
-  return createInvoiceDraftFromReservation(reservationDocId, staff, templateId);
+  const current = mapInvoiceDoc(invoiceSnap.id, invoiceSnap.data());
+
+  const patch: Record<string, unknown> = {
+    hospitalName: cleanText(payload.hospitalName),
+    surgeryItems: cleanText(payload.surgeryItems),
+    totalAmount: toNumber(payload.totalAmount),
+    paymentMethod: payload.paymentMethod ?? null,
+    cardAmount: payload.cardAmount ?? null,
+    cashAmount: payload.cashAmount ?? null,
+    commissionRate: payload.commissionRate ?? null,
+    commissionStaffUid: payload.commissionStaffUid ?? null,
+    commissionStaffName: payload.commissionStaffName ?? null,
+    commissionBase: payload.commissionBase ?? null,
+    commissionAmount: payload.commissionAmount ?? null,
+    memo: cleanText(payload.memo),
+    status: payload.status || current.status || "draft",
+    updatedAt: serverTimestamp(),
+    updatedBy: staff.displayName,
+    updatedByUid: staff.uid,
+    isDeleted: false,
+  };
+
+  await updateDoc(invoiceRef, patch);
+
+  await updateDoc(doc(db, "reservations", current.reservationDocId), {
+    invoiceId: current.invoiceId,
+    invoiceDocId,
+    invoiceStatus: patch.status,
+    invoiceUpdatedAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+    updatedBy: staff.displayName,
+    updatedByUid: staff.uid,
+  });
+
+  await createLog({
+    action: "invoice_update",
+    targetType: "invoice",
+    targetId: current.invoiceId,
+    patientId: current.patientId,
+    reservationId: current.reservationId,
+    staff,
+    message: `${staff.displayName}님이 인보이스를 수정했습니다.`,
+    before: null,
+    after: { invoiceId: current.invoiceId, totalAmount: patch.totalAmount, status: patch.status },
+  });
+
+  return {
+    success: true,
+    invoice: mapInvoiceDoc(invoiceDocId, { ...current, ...patch }),
+  };
+}
+
+export async function deleteInvoice(invoiceDocId: string, staff: StaffUser) {
+  const invoiceRef = doc(db, "invoices", invoiceDocId);
+  const invoiceSnap = await getDoc(invoiceRef);
+  if (!invoiceSnap.exists()) return { success: false, message: "인보이스를 찾을 수 없습니다." };
+
+  const current = mapInvoiceDoc(invoiceSnap.id, invoiceSnap.data());
+
+  await updateDoc(invoiceRef, {
+    isDeleted: true,
+    updatedAt: serverTimestamp(),
+    updatedBy: staff.displayName,
+    updatedByUid: staff.uid,
+  });
+
+  await updateDoc(doc(db, "reservations", current.reservationDocId), {
+    invoiceId: "",
+    invoiceDocId: "",
+    invoiceStatus: "",
+    invoiceUpdatedAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+    updatedBy: staff.displayName,
+    updatedByUid: staff.uid,
+  });
+
+  await createLog({
+    action: "invoice_delete",
+    targetType: "invoice",
+    targetId: current.invoiceId,
+    patientId: current.patientId,
+    reservationId: current.reservationId,
+    staff,
+    message: `${staff.displayName}님이 인보이스를 삭제했습니다.`,
+    before: { invoiceId: current.invoiceId },
+    after: null,
+  });
+
+  return { success: true };
 }
 
 export type InvoiceListFilter = {
   startDate?: string;
   endDate?: string;
   status?: "draft" | "confirmed" | "void" | "";
-  doctorName?: string;
   patientName?: string;
   commissionStaffUid?: string;
 };
@@ -687,7 +362,6 @@ export async function getInvoices(filters?: InvoiceListFilter): Promise<InvoiceR
 
   let q;
   if (!filters?.startDate && !filters?.endDate) {
-    // 전체 기간 조회 (날짜 필터 없음)
     q = query(
       collection(db, "invoices"),
       where("isDeleted", "==", false),
@@ -696,7 +370,7 @@ export async function getInvoices(filters?: InvoiceListFilter): Promise<InvoiceR
   } else {
     const start = filters?.startDate
       ? new Date(filters.startDate + "T00:00:00")
-      : new Date(now.getFullYear(), now.getMonth(), 1);
+      : new Date(now.getFullYear(), now.getMonth() - 3, 1);
     const end = filters?.endDate
       ? new Date(filters.endDate + "T23:59:59")
       : now;
@@ -716,12 +390,6 @@ export async function getInvoices(filters?: InvoiceListFilter): Promise<InvoiceR
     records = records.filter((r) => r.status === filters.status);
   }
 
-  if (filters?.doctorName) {
-    records = records.filter((r) =>
-      r.doctors.some((d) => d.includes(filters.doctorName!))
-    );
-  }
-
   if (filters?.patientName) {
     const search = filters.patientName.toLowerCase();
     records = records.filter((r) => r.patientName.toLowerCase().includes(search));
@@ -732,109 +400,4 @@ export async function getInvoices(filters?: InvoiceListFilter): Promise<InvoiceR
   }
 
   return records;
-}
-
-export async function saveInvoiceTemplateOrder(
-  templateId: string,
-  categoryOrder: string[],
-  sectionOrder: string[]
-) {
-  await updateDoc(doc(db, "invoiceTemplates", templateId), {
-    categoryOrder,
-    sectionOrder,
-    updatedAt: serverTimestamp(),
-  });
-}
-
-export async function updateInvoice(
-  invoiceDocId: string,
-  payload: InvoiceUpdatePayload,
-  staff: StaffUser
-) {
-  const invoiceRef = doc(db, "invoices", invoiceDocId);
-  const invoiceSnap = await getDoc(invoiceRef);
-
-  if (!invoiceSnap.exists()) {
-    return {
-      success: false,
-      message: "인보이스를 찾을 수 없습니다.",
-    };
-  }
-
-  const current = mapInvoiceDoc(invoiceSnap.id, invoiceSnap.data());
-
-  const totals = calculateInvoiceTotals(
-    payload.items,
-    payload.discounts,
-    toNumber(payload.depositAmount)
-  );
-
-  const patch = {
-    items: payload.items,
-    discounts: totals.discounts,
-
-    depositAmount: toNumber(payload.depositAmount),
-
-    regularTotal: totals.regularTotal,
-    eventTotal: totals.eventTotal,
-    discountTotal: totals.discountTotal,
-    finalTotal: totals.finalTotal,
-    balanceAmount: totals.balanceAmount,
-
-    memo: cleanText(payload.memo),
-    internalMemo: cleanText(payload.internalMemo),
-    status: payload.status || current.status || "draft",
-
-    paymentMethod: payload.paymentMethod ?? current.paymentMethod ?? null,
-    cardAmount: payload.cardAmount ?? current.cardAmount ?? null,
-    cashAmount: payload.cashAmount ?? current.cashAmount ?? null,
-    commissionRate: payload.commissionRate ?? current.commissionRate ?? null,
-    commissionStaffUid: payload.commissionStaffUid ?? current.commissionStaffUid ?? null,
-    commissionStaffName: payload.commissionStaffName ?? current.commissionStaffName ?? null,
-    commissionBase: payload.commissionBase ?? current.commissionBase ?? null,
-    commissionAmount: payload.commissionAmount ?? current.commissionAmount ?? null,
-
-    updatedAt: serverTimestamp(),
-    updatedBy: staff.displayName,
-    updatedByUid: staff.uid,
-
-    isDeleted: false,
-  };
-
-  await updateDoc(invoiceRef, patch);
-
-  await updateDoc(doc(db, "reservations", current.reservationDocId), {
-    invoiceId: current.invoiceId,
-    invoiceDocId: invoiceDocId,
-    invoiceStatus: patch.status,
-    invoiceUpdatedAt: serverTimestamp(),
-    updatedAt: serverTimestamp(),
-    updatedBy: staff.displayName,
-    updatedByUid: staff.uid,
-  });
-
-  await createLog({
-    action: "invoice_update",
-    targetType: "invoice",
-    targetId: current.invoiceId,
-    patientId: current.patientId,
-    reservationId: current.reservationId,
-    staff,
-    message: `${staff.displayName}님이 CRM 인보이스를 수정 저장했습니다.`,
-    before: null,
-    after: {
-      invoiceId: current.invoiceId,
-      finalTotal: totals.finalTotal,
-      balanceAmount: totals.balanceAmount,
-      status: patch.status,
-    },
-  });
-
-  return {
-    success: true,
-    invoice: mapInvoiceDoc(invoiceDocId, {
-      ...current,
-      ...patch,
-    }),
-  };
 }

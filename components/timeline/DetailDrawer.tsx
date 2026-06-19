@@ -23,10 +23,11 @@ import { InfoTab } from "@/components/timeline/tabs/InfoTab";
 import { FilesTab } from "@/components/timeline/tabs/FilesTab";
 import { NotesTab } from "@/components/timeline/tabs/NotesTab";
 import { LogsTab } from "@/components/timeline/tabs/LogsTab";
+import { InvoiceTab } from "@/components/timeline/tabs/InvoiceTab";
 import { NewReservationDrawer } from "@/components/timeline/NewReservationDrawer";
 import { CreateDrawer } from "@/components/reservations/CreateDrawer";
 
-type DetailTab = "info" | "files" | "notes" | "logs";
+type DetailTab = "info" | "files" | "notes" | "logs" | "invoice";
 
 type DetailForm = {
   name: string;
@@ -446,8 +447,8 @@ export function DetailDrawer({ open, reservation, currentUser, onClose, onRefres
         </div>
 
         <div className="flex shrink-0 border-b border-[#edf0f3]">
-          {(["info", "files", "notes", "logs"] as const).map((key) => {
-            const label = { info: "기본정보", files: "파일", notes: "메모", logs: "로그" }[key];
+          {(["info", "files", "notes", "logs", "invoice"] as const).map((key) => {
+            const label = { info: "기본정보", files: "파일", notes: "메모", logs: "로그", invoice: "인보이스" }[key];
             return (
               <button
                 key={key}
@@ -510,6 +511,13 @@ export function DetailDrawer({ open, reservation, currentUser, onClose, onRefres
 
           {activeTab === "logs" && (
             <LogsTab logs={logs} loading={logsLoading} error={logsError} />
+          )}
+
+          {activeTab === "invoice" && selectedReservation && (
+            <InvoiceTab
+              reservationDocId={selectedReservation.id}
+              currentUser={currentUser}
+            />
           )}
         </div>
       </div>
