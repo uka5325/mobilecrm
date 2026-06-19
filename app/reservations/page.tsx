@@ -500,24 +500,24 @@ export default function ReservationsPage() {
           </button>
         </div>
 
-        <div className="mt-2 flex items-center gap-2 overflow-x-auto [&::-webkit-scrollbar]:hidden">
+        <div className="mt-2 flex items-center gap-2">
           <button
             onClick={() => { setAddPatient(undefined); setDrawerOpen(true); }}
-            className="h-10 shrink-0 whitespace-nowrap rounded-xl bg-black px-4 text-sm font-medium text-white transition hover:-translate-y-0.5 hover:shadow-md active:scale-95"
+            className="h-10 flex-1 whitespace-nowrap rounded-xl bg-black px-4 text-sm font-medium text-white transition hover:-translate-y-0.5 hover:shadow-md active:scale-95"
           >
             + 고객 등록
           </button>
           <button
             onClick={() => setImportDrawerOpen(true)}
-            className="h-10 shrink-0 whitespace-nowrap rounded-xl border border-[#dfe3e8] bg-white px-4 text-sm text-gray-700 transition hover:-translate-y-0.5 hover:bg-gray-50 active:scale-95"
+            className="h-10 flex-1 whitespace-nowrap rounded-xl border border-[#dfe3e8] bg-white px-4 text-sm text-gray-700 transition hover:-translate-y-0.5 hover:bg-gray-50 active:scale-95"
           >
             🔗 외부 링크 가져오기
           </button>
 
-          <div className="relative shrink-0">
+          <div className="relative flex-1">
             <button
               onClick={() => setDownloadOpen((v) => !v)}
-              className="h-10 whitespace-nowrap rounded-xl border border-[#dfe3e8] bg-white px-4 text-sm text-gray-700 transition hover:-translate-y-0.5 hover:bg-gray-50 active:scale-95"
+              className="h-10 w-full whitespace-nowrap rounded-xl border border-[#dfe3e8] bg-white px-4 text-sm text-gray-700 transition hover:-translate-y-0.5 hover:bg-gray-50 active:scale-95"
             >
               📥 다운로드
             </button>
