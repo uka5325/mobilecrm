@@ -1059,7 +1059,7 @@ export function ReservationsTable({
         onCountLoaded={handleCountLoaded}
       />
     )}
-    <div className="-mx-4 sm:-mx-6 lg:-mx-8">
+    <div className="-mx-6 lg:-mx-8">
       <div className="overflow-x-auto border-y border-gray-100 bg-white">
         <table className="min-w-[900px] w-full table-fixed border-collapse text-sm">
           <colgroup>

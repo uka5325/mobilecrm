@@ -475,8 +475,8 @@ export default function ReservationsPage() {
         </div>
       )}
 
-      <div className="-mx-6 mb-4 rounded-t-2xl border border-[#edf0f3] bg-[#ecfdf5] px-6 py-4 lg:-mx-8 lg:px-8">
-        <div className="flex flex-wrap items-center gap-2">
+      <div className="-mx-6 mb-4 rounded-t-2xl border border-[#edf0f3] bg-[#ecfdf5] px-4 py-4 lg:-mx-8 lg:px-8">
+        <div className="flex items-center gap-2">
           <input
             type="text"
             value={search}
@@ -489,35 +489,35 @@ export default function ReservationsPage() {
             type="date"
             value={filterDate}
             onChange={(e) => setFilterDate(e.target.value)}
-            className="h-10 w-[160px] appearance-none rounded-xl border border-[#dfe3e8] bg-white px-3 text-sm outline-none focus:border-[#1d9e75]"
+            className="h-10 w-[120px] shrink-0 appearance-none rounded-xl border border-[#dfe3e8] bg-white px-3 text-sm outline-none focus:border-[#1d9e75]"
           />
 
           <button
             onClick={() => setFilterDate("")}
-            className="h-10 w-[110px] rounded-xl border border-[#dfe3e8] bg-white px-4 text-sm text-gray-700 transition hover:-translate-y-0.5 hover:bg-gray-50 active:scale-95"
+            className="h-10 shrink-0 whitespace-nowrap rounded-xl border border-[#dfe3e8] bg-white px-3 text-sm text-gray-700 transition hover:-translate-y-0.5 hover:bg-gray-50 active:scale-95"
           >
             날짜 초기화
           </button>
         </div>
 
-        <div className="mt-2 flex items-center gap-2">
+        <div className="mt-2 flex items-center gap-2 overflow-x-auto [&::-webkit-scrollbar]:hidden">
           <button
             onClick={() => { setAddPatient(undefined); setDrawerOpen(true); }}
-            className="h-10 rounded-xl bg-black px-4 text-sm font-medium text-white transition hover:-translate-y-0.5 hover:shadow-md active:scale-95"
+            className="h-10 shrink-0 whitespace-nowrap rounded-xl bg-black px-4 text-sm font-medium text-white transition hover:-translate-y-0.5 hover:shadow-md active:scale-95"
           >
             + 고객 등록
           </button>
           <button
             onClick={() => setImportDrawerOpen(true)}
-            className="h-10 rounded-xl border border-[#dfe3e8] bg-white px-4 text-sm text-gray-700 transition hover:-translate-y-0.5 hover:bg-gray-50 active:scale-95"
+            className="h-10 shrink-0 whitespace-nowrap rounded-xl border border-[#dfe3e8] bg-white px-4 text-sm text-gray-700 transition hover:-translate-y-0.5 hover:bg-gray-50 active:scale-95"
           >
             🔗 외부 링크 가져오기
           </button>
 
-          <div className="relative ml-auto">
+          <div className="relative ml-auto shrink-0">
             <button
               onClick={() => setDownloadOpen((v) => !v)}
-              className="h-10 w-[110px] rounded-xl border border-[#dfe3e8] bg-white px-4 text-sm text-gray-700 transition hover:-translate-y-0.5 hover:bg-gray-50 active:scale-95"
+              className="h-10 whitespace-nowrap rounded-xl border border-[#dfe3e8] bg-white px-4 text-sm text-gray-700 transition hover:-translate-y-0.5 hover:bg-gray-50 active:scale-95"
             >
               📥 다운로드
             </button>
