@@ -820,10 +820,32 @@ export function ReservationsTable({
     const consultAreas = getConsultAreas(group.reservations, "상담");
     const surgeryAreas = getConsultAreas(group.reservations, "수술");
 
-    const depositRows = group.reservations
-      .map((r) => ({ id: r.id, date: r.reservationDate || "", hospital: r.hospital || "", amount: r.depositAmount || "" }));
-    const surgeryRows = group.reservations
-      .map((r) => ({ id: r.id, date: r.reservationDate || "", hospital: r.hospital || "", amount: r.surgeryCost || "" }));
+    const depositRows = (() => {
+      const seen = new Set<string>();
+      return group.reservations.filter((r) => {
+        const key = [
+          (r.hospital || "").trim().toLowerCase(),
+          (r.doctors || []).map((d) => d.trim().toLowerCase()).sort().join(","),
+          (r.consultArea || "").trim().toLowerCase(),
+        ].join("|");
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      }).map((r) => ({ id: r.id, date: r.reservationDate || "", hospital: r.hospital || "", amount: r.depositAmount || "" }));
+    })();
+    const surgeryRows = (() => {
+      const seen = new Set<string>();
+      return group.reservations.filter((r) => {
+        const key = [
+          (r.hospital || "").trim().toLowerCase(),
+          (r.doctors || []).map((d) => d.trim().toLowerCase()).sort().join(","),
+          (r.consultArea || "").trim().toLowerCase(),
+        ].join("|");
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      }).map((r) => ({ id: r.id, date: r.reservationDate || "", hospital: r.hospital || "", amount: r.surgeryCost || "" }));
+    })();
 
     const depositPopoverOpen = amountPopover?.groupKey === group.patientKey && amountPopover.type === "deposit";
     const surgeryPopoverOpen = amountPopover?.groupKey === group.patientKey && amountPopover.type === "surgery";
