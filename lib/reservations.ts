@@ -883,9 +883,10 @@ export async function updateReservationFull(
 ) {
   const name = cleanText(params.name);
   const reservationDate = cleanText(params.reservationDate);
-  const doctors = Array.isArray(params.doctors)
-    ? params.doctors.map(cleanText).filter(Boolean)
-    : [];
+  const doctorsProvided = params.doctors !== undefined;
+  const doctors = doctorsProvided
+    ? (params.doctors as string[]).map(cleanText).filter(Boolean)
+    : null;
 
   if (!name) {
     return { success: false, message: "이름을 입력하세요." };
@@ -906,15 +907,17 @@ export async function updateReservationFull(
   const doctorStatusMap: Record<string, ReservationStatus | string> = {};
   const doctorStatusMetaMap: ReservationRecord["doctorStatusMetaMap"] = {};
 
-  doctors.forEach((doctor) => {
-    doctorStatusMap[doctor] = previousDoctorStatusMap[doctor] || "내원전";
-    doctorStatusMetaMap[doctor] = previousDoctorStatusMetaMap[doctor] || {
-      status: String(doctorStatusMap[doctor] || "내원전"),
-      updatedAt: "",
-      updatedBy: "",
-      updatedRole: "",
-    };
-  });
+  if (doctors !== null) {
+    doctors.forEach((doctor) => {
+      doctorStatusMap[doctor] = previousDoctorStatusMap[doctor] || "내원전";
+      doctorStatusMetaMap[doctor] = previousDoctorStatusMetaMap[doctor] || {
+        status: String(doctorStatusMap[doctor] || "내원전"),
+        updatedAt: "",
+        updatedBy: "",
+        updatedRole: "",
+      };
+    });
+  }
 
   const reservationPatch: Record<string, unknown> = {
     name,
@@ -938,13 +941,11 @@ export async function updateReservationFull(
     depositAmount: cleanText(params.depositAmount),
     surgeryCost: cleanText(params.surgeryCost),
 
-    doctors,
     coordinators: Array.isArray(params.coordinators)
       ? params.coordinators.map(cleanText).filter(Boolean)
       : [],
 
-    doctorStatusMap,
-    doctorStatusMetaMap,
+    ...(doctors !== null && { doctors, doctorStatusMap, doctorStatusMetaMap }),
 
     updatedBy: staff.displayName,
     updatedByUid: staff.uid,
