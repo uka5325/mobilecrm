@@ -117,13 +117,15 @@ export async function createLog(params: CreateLogParams) {
 
 export async function getLogsByReservationId(
   reservationId: string,
-  targetId?: string
+  targetId?: string,
+  patientId?: string
 ): Promise<LogRecord[]> {
   const id = cleanText(reservationId);
   const tid = cleanText(targetId);
-  if (!id && !tid) return [];
+  const pid = cleanText(patientId);
+  if (!id && !tid && !pid) return [];
 
-  const result = await callLogsApi("read", { reservationId: id, targetId: tid });
+  const result = await callLogsApi("read", { reservationId: id, targetId: tid, patientId: pid });
   if (!result.success || !Array.isArray(result.logs)) return [];
 
   return (result.logs as Record<string, unknown>[]).map(mapLogDoc);

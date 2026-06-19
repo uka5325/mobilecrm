@@ -128,7 +128,7 @@ export function DetailDrawer({ open, reservation, currentUser, onClose, onRefres
     setLogsError("");
     setLogs([]);
     try {
-      const list = await getLogsByReservationId(item.reservationId, item.id);
+      const list = await getLogsByReservationId(item.reservationId, item.id, item.patientId);
       if (mounted && !mounted.current) return;
       setLogs(list);
     } catch {
