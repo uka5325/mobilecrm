@@ -177,73 +177,54 @@ export default function CommissionPage() {
         <DetailModal invoice={selectedInvoice} onClose={() => setSelectedInvoice(null)} />
       )}
 
-      {/* 필터 */}
-      <div className="rounded-2xl border border-black/10 bg-white p-5 shadow-[0_2px_16px_rgba(0,0,0,0.06)]">
-        <div className="mb-4 text-base font-bold">커미션 조회</div>
-        <div className="flex flex-wrap items-end gap-3">
-          <div>
-            <label className="mb-1 block text-xs text-gray-500">시작일</label>
-            <input
-              type="date"
-              value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
-              className="rounded-xl border px-3 py-2 text-sm"
-            />
-          </div>
-          <div>
-            <label className="mb-1 block text-xs text-gray-500">종료일</label>
-            <input
-              type="date"
-              value={endDate}
-              onChange={(e) => setEndDate(e.target.value)}
-              className="rounded-xl border px-3 py-2 text-sm"
-            />
-          </div>
-
+      {/* 컨트롤바 */}
+      <div className="-mx-6 rounded-t-2xl border border-[#edf0f3] bg-[#ecfdf5] px-4 py-4 lg:-mx-8 lg:px-8">
+        <div className="flex items-center gap-2 overflow-x-auto [&::-webkit-scrollbar]:hidden">
+          <input
+            type="date"
+            value={startDate}
+            onChange={(e) => setStartDate(e.target.value)}
+            className="h-10 shrink-0 appearance-none rounded-xl border border-[#dfe3e8] bg-white px-3 text-sm outline-none transition focus:border-[#1d9e75] focus:ring-4 focus:ring-emerald-100"
+          />
+          <span className="shrink-0 text-sm text-gray-400">~</span>
+          <input
+            type="date"
+            value={endDate}
+            onChange={(e) => setEndDate(e.target.value)}
+            className="h-10 shrink-0 appearance-none rounded-xl border border-[#dfe3e8] bg-white px-3 text-sm outline-none transition focus:border-[#1d9e75] focus:ring-4 focus:ring-emerald-100"
+          />
           {isAdmin && (
-            <div>
-              <label className="mb-1 block text-xs text-gray-500">담당자</label>
-              <select
-                value={selectedStaffUid}
-                onChange={(e) => setSelectedStaffUid(e.target.value)}
-                className="rounded-xl border px-3 py-2 text-sm"
-              >
-                <option value="__all__">전체 직원</option>
-                {staffList.map((s) => (
-                  <option key={s.uid} value={s.uid}>{s.displayName}</option>
-                ))}
-              </select>
-            </div>
-          )}
-
-          <div>
-            <label className="mb-1 block text-xs text-gray-500">인보이스 상태</label>
             <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)}
-              className="rounded-xl border px-3 py-2 text-sm"
+              value={selectedStaffUid}
+              onChange={(e) => setSelectedStaffUid(e.target.value)}
+              className="h-10 shrink-0 rounded-xl border border-[#dfe3e8] bg-white px-3 text-sm outline-none transition focus:border-[#1d9e75] focus:ring-4 focus:ring-emerald-100"
             >
-              <option value="">전체</option>
-              <option value="confirmed">확정</option>
-              <option value="draft">임시저장</option>
+              <option value="__all__">전체 직원</option>
+              {staffList.map((s) => (
+                <option key={s.uid} value={s.uid}>{s.displayName}</option>
+              ))}
             </select>
-          </div>
-
-          <div>
-            <label className="mb-1 block text-xs text-gray-500">환자명 검색</label>
-            <input
-              value={patientSearch}
-              onChange={(e) => setPatientSearch(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && handleSearch()}
-              placeholder="환자명"
-              className="rounded-xl border px-3 py-2 text-sm"
-            />
-          </div>
-
+          )}
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)}
+            className="h-10 shrink-0 rounded-xl border border-[#dfe3e8] bg-white px-3 text-sm outline-none transition focus:border-[#1d9e75] focus:ring-4 focus:ring-emerald-100"
+          >
+            <option value="">전체 상태</option>
+            <option value="confirmed">확정</option>
+            <option value="draft">임시저장</option>
+          </select>
+          <input
+            value={patientSearch}
+            onChange={(e) => setPatientSearch(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && handleSearch()}
+            placeholder="환자명 검색"
+            className="h-10 min-w-[100px] shrink-0 rounded-xl border border-[#dfe3e8] bg-white px-3 text-sm outline-none transition focus:border-[#1d9e75] focus:ring-4 focus:ring-emerald-100"
+          />
           <button
             onClick={handleSearch}
             disabled={loading}
-            className="rounded-xl bg-[#1d9e75] px-5 py-2 text-sm font-semibold text-white disabled:opacity-50"
+            className="h-10 shrink-0 rounded-xl bg-black px-5 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:shadow-md active:scale-95 disabled:opacity-50"
           >
             {loading ? "조회 중..." : "조회"}
           </button>
@@ -254,42 +235,44 @@ export default function CommissionPage() {
       {searched && (
         <>
           {/* 합계 카드 */}
-          <div className="grid gap-4 sm:grid-cols-3">
-            <div className="rounded-2xl border border-black/10 bg-white p-5 shadow-[0_2px_16px_rgba(0,0,0,0.06)]">
-              <div className="text-xs text-gray-500">총 건수</div>
-              <div className="mt-1 text-2xl font-bold">{grandTotal.count}건</div>
+          <div className="grid gap-3 sm:grid-cols-3">
+            <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-gray-700">
+              <div className="text-xs font-semibold opacity-60">총 건수</div>
+              <div className="mt-0.5 text-lg font-extrabold">{grandTotal.count}건</div>
             </div>
-            <div className="rounded-2xl border border-black/10 bg-white p-5 shadow-[0_2px_16px_rgba(0,0,0,0.06)]">
-              <div className="text-xs text-gray-500">총 수술금액</div>
-              <div className="mt-1 text-2xl font-bold">{formatMoney(grandTotal.amount)} KRW</div>
+            <div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-blue-700">
+              <div className="text-xs font-semibold opacity-60">총 수술금액</div>
+              <div className="mt-0.5 text-lg font-extrabold">{formatMoney(grandTotal.amount)} KRW</div>
             </div>
-            <div className="rounded-2xl border border-[#1d9e75]/30 bg-emerald-50 p-5 shadow-[0_2px_16px_rgba(0,0,0,0.06)]">
-              <div className="text-xs text-gray-500">총 커미션</div>
-              <div className="mt-1 text-2xl font-bold text-[#1d9e75]">{formatMoney(grandTotal.commission)} KRW</div>
+            <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-emerald-700">
+              <div className="text-xs font-semibold opacity-60">총 커미션</div>
+              <div className="mt-0.5 text-lg font-extrabold">{formatMoney(grandTotal.commission)} KRW</div>
             </div>
           </div>
 
           {/* 담당자별 소계 */}
           {isAdmin && selectedStaffUid === "__all__" && staffSubtotals.length > 0 && (
-            <div className="rounded-2xl border border-black/10 bg-white p-5 shadow-[0_2px_16px_rgba(0,0,0,0.06)]">
-              <div className="mb-3 font-bold">담당자별 소계</div>
+            <div className="-mx-6 border-t border-[#edf0f3] bg-white lg:-mx-8">
+              <div className="flex items-center justify-between px-6 py-4 lg:px-8">
+                <div className="text-sm font-bold text-gray-800">담당자별 소계</div>
+              </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b text-xs text-gray-500">
-                      <th className="py-2 text-left">담당자</th>
-                      <th className="py-2 text-right">건수</th>
-                      <th className="py-2 text-right">수술금액 합계</th>
-                      <th className="py-2 text-right">커미션 합계</th>
+                  <thead className="border-b border-[#edf0f3] bg-[#f8fafc]">
+                    <tr className="text-xs text-gray-500">
+                      <th className="px-6 py-3 text-left lg:px-8">담당자</th>
+                      <th className="px-4 py-3 text-right">건수</th>
+                      <th className="px-4 py-3 text-right">수술금액 합계</th>
+                      <th className="px-4 py-3 text-right">커미션 합계</th>
                     </tr>
                   </thead>
-                  <tbody>
+                  <tbody className="divide-y divide-[#f1f3f5]">
                     {staffSubtotals.map((s) => (
-                      <tr key={s.name} className="border-b last:border-b-0">
-                        <td className="py-2 font-medium">{s.name}</td>
-                        <td className="py-2 text-right">{s.count}건</td>
-                        <td className="py-2 text-right">{formatMoney(s.totalAmount)}</td>
-                        <td className="py-2 text-right font-semibold text-[#1d9e75]">{formatMoney(s.totalCommission)}</td>
+                      <tr key={s.name}>
+                        <td className="px-6 py-3 font-medium text-gray-800 lg:px-8">{s.name}</td>
+                        <td className="px-4 py-3 text-right text-gray-600">{s.count}건</td>
+                        <td className="px-4 py-3 text-right text-gray-700">{formatMoney(s.totalAmount)}</td>
+                        <td className="px-4 py-3 text-right font-semibold text-[#1d9e75]">{formatMoney(s.totalCommission)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -299,28 +282,28 @@ export default function CommissionPage() {
           )}
 
           {/* 상세 테이블 */}
-          <div className="rounded-2xl border border-black/10 bg-white shadow-[0_2px_16px_rgba(0,0,0,0.06)]">
-            <div className="flex items-center justify-between border-b px-5 py-4">
-              <div className="font-bold">상세 내역</div>
+          <div className="-mx-6 border-t border-[#edf0f3] bg-white lg:-mx-8">
+            <div className="flex items-center justify-between px-6 py-4 lg:px-8">
+              <div className="text-sm font-bold text-gray-800">상세 내역</div>
               {records.length > 0 && (
                 <button
                   onClick={() => downloadCSV(records)}
-                  className="rounded-xl border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50"
+                  className="rounded-xl border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50"
                 >
                   CSV 다운로드
                 </button>
               )}
             </div>
             {records.length === 0 ? (
-              <div className="px-5 py-8 text-center text-sm text-gray-400">
+              <div className="px-6 py-10 text-center text-sm text-gray-400">
                 해당 기간에 커미션 정보가 있는 인보이스가 없습니다.
               </div>
             ) : (
               <div className="overflow-x-auto">
-                <table className="w-full min-w-[1000px] text-sm">
-                  <thead>
-                    <tr className="border-b bg-gray-50 text-xs text-gray-500">
-                      <th className="px-4 py-3 text-left">환자명</th>
+                <table className="w-full min-w-[900px] text-sm">
+                  <thead className="border-b border-[#edf0f3] bg-[#f8fafc]">
+                    <tr className="text-xs text-gray-500">
+                      <th className="px-6 py-3 text-left lg:px-8">환자명</th>
                       <th className="px-4 py-3 text-left">병원명</th>
                       <th className="px-4 py-3 text-left">담당자</th>
                       <th className="px-4 py-3 text-left">결제방법</th>
@@ -330,14 +313,14 @@ export default function CommissionPage() {
                       <th className="px-4 py-3 text-right">커미션액</th>
                     </tr>
                   </thead>
-                  <tbody>
+                  <tbody className="divide-y divide-[#f1f3f5]">
                     {records.map((r) => (
                       <tr
                         key={r.id}
-                        className="cursor-pointer border-b last:border-b-0 hover:bg-emerald-50"
+                        className="cursor-pointer whitespace-nowrap transition hover:bg-[#f8fafc]"
                         onClick={() => setSelectedInvoice(r)}
                       >
-                        <td className="px-4 py-3 font-medium text-blue-700 hover:underline">{r.patientName}</td>
+                        <td className="px-6 py-3 font-semibold text-gray-800 lg:px-8">{r.patientName}</td>
                         <td className="px-4 py-3 text-gray-600">{r.hospitalName || "-"}</td>
                         <td className="px-4 py-3 text-gray-600">{r.commissionStaffName || "-"}</td>
                         <td className="px-4 py-3">
@@ -350,9 +333,9 @@ export default function CommissionPage() {
                             {paymentMethodLabel(r.paymentMethod)}
                           </span>
                         </td>
-                        <td className="px-4 py-3 text-right">{formatMoney(r.totalAmount)}</td>
-                        <td className="px-4 py-3 text-right">{formatMoney(r.commissionBase)}</td>
-                        <td className="px-4 py-3 text-right">
+                        <td className="px-4 py-3 text-right text-gray-700">{formatMoney(r.totalAmount)}</td>
+                        <td className="px-4 py-3 text-right text-gray-700">{formatMoney(r.commissionBase)}</td>
+                        <td className="px-4 py-3 text-right text-gray-600">
                           {r.commissionRate !== undefined && r.commissionRate !== null ? `${r.commissionRate}%` : "-"}
                         </td>
                         <td className="px-4 py-3 text-right font-semibold text-[#1d9e75]">
