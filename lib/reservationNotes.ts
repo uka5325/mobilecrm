@@ -106,6 +106,8 @@ export async function updateReservationNote(params: {
   const result = await callNotesApi("update", {
     noteId: params.noteId,
     memoText,
+    reservationId: params.reservationId,
+    patientId: params.patientId,
     staffName: params.staff.displayName,
     staffUid: params.staff.uid,
   });
@@ -121,6 +123,8 @@ export async function deleteReservationNote(params: {
 }) {
   const result = await callNotesApi("delete", {
     noteId: params.noteId,
+    reservationId: params.reservationId,
+    patientId: params.patientId,
     staffName: params.staff.displayName,
     staffUid: params.staff.uid,
   });

@@ -76,7 +76,7 @@ export async function POST(req: NextRequest) {
       // Also write a log entry
       await adminDb.collection("logs").add({
         action: "memo_create",
-        targetType: "reservation",
+        targetType: "memo",
         targetId: reservationId,
         staffUid,
         staffName,
@@ -86,9 +86,9 @@ export async function POST(req: NextRequest) {
         patientId,
         reservationId,
         invoiceId: "",
-        message: memoText.trim(),
+        message: `${staffName}님이 메모를 추가했습니다.`,
         before: null,
-        after: { memoText: memoText.trim(), noteId: ref.id },
+        after: { noteId: ref.id },
         createdAt: FieldValue.serverTimestamp(),
       });
 
@@ -97,7 +97,7 @@ export async function POST(req: NextRequest) {
 
     // ── UPDATE ─────────────────────────────────────────────────────────────
     if (action === "update") {
-      const { noteId, memoText, staffName, staffUid } = payload as Record<string, string>;
+      const { noteId, memoText, staffName, staffUid, reservationId = "", patientId = "" } = payload as Record<string, string>;
       if (!memoText?.trim()) return NextResponse.json({ success: false, message: "메모 내용을 입력하세요." });
 
       await adminDb.collection("reservationNotes").doc(noteId).update({
@@ -107,18 +107,54 @@ export async function POST(req: NextRequest) {
         updatedByUid: staffUid,
       });
 
+      await adminDb.collection("logs").add({
+        action: "memo_update",
+        targetType: "memo",
+        targetId: noteId,
+        staffUid,
+        staffName,
+        staffEmail: "",
+        staffRole: "",
+        staffCode: "",
+        patientId,
+        reservationId,
+        invoiceId: "",
+        message: `${staffName}님이 메모를 수정했습니다.`,
+        before: null,
+        after: { noteId },
+        createdAt: FieldValue.serverTimestamp(),
+      });
+
       return NextResponse.json({ success: true });
     }
 
     // ── DELETE (soft) ──────────────────────────────────────────────────────
     if (action === "delete") {
-      const { noteId, staffName, staffUid } = payload as Record<string, string>;
+      const { noteId, staffName, staffUid, reservationId = "", patientId = "" } = payload as Record<string, string>;
 
       await adminDb.collection("reservationNotes").doc(noteId).update({
         isDeleted: true,
         updatedAt: FieldValue.serverTimestamp(),
         updatedBy: staffName,
         updatedByUid: staffUid,
+      });
+
+      await adminDb.collection("logs").add({
+        action: "memo_delete",
+        targetType: "memo",
+        targetId: noteId,
+        staffUid,
+        staffName,
+        staffEmail: "",
+        staffRole: "",
+        staffCode: "",
+        patientId,
+        reservationId,
+        invoiceId: "",
+        message: `${staffName}님이 메모를 삭제했습니다.`,
+        before: { noteId },
+        after: null,
+        createdAt: FieldValue.serverTimestamp(),
       });
 
       return NextResponse.json({ success: true });
