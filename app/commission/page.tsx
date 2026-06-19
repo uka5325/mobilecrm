@@ -86,7 +86,7 @@ export default function CommissionPage() {
       const name = r.commissionStaffName || "미지정";
       if (!map[uid]) map[uid] = { name, count: 0, totalAmount: 0, totalCommission: 0 };
       map[uid].count++;
-      map[uid].totalAmount += r.finalTotal || 0;
+      map[uid].totalAmount += r.totalAmount || 0;
       map[uid].totalCommission += r.commissionAmount || 0;
     }
     return Object.values(map).sort((a, b) => b.totalCommission - a.totalCommission);
@@ -94,7 +94,7 @@ export default function CommissionPage() {
 
   const grandTotal = useMemo(() => ({
     count: records.length,
-    amount: records.reduce((s, r) => s + (r.finalTotal || 0), 0),
+    amount: records.reduce((s, r) => s + (r.totalAmount || 0), 0),
     commission: records.reduce((s, r) => s + (r.commissionAmount || 0), 0),
   }), [records]);
 
@@ -265,7 +265,7 @@ export default function CommissionPage() {
                             {paymentMethodLabel(r.paymentMethod)}
                           </span>
                         </td>
-                        <td className="px-4 py-3 text-right">{formatMoney(r.finalTotal)}</td>
+                        <td className="px-4 py-3 text-right">{formatMoney(r.totalAmount)}</td>
                         <td className="px-4 py-3 text-right">{formatMoney(r.commissionBase)}</td>
                         <td className="px-4 py-3 text-right">
                           {r.commissionRate !== undefined && r.commissionRate !== null ? `${r.commissionRate}%` : "-"}
