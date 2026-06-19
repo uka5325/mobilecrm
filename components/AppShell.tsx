@@ -17,6 +17,7 @@ const allMenuItems = [
   { href: "/schedule", label: "스케줄", icon: "📅", roles: null },
   { href: "/reservations", label: "고객관리", icon: "👥", roles: null },
   { href: "/dashboard", label: "KPI 대시보드", icon: "📊", roles: null },
+  { href: "/invoice", label: "인보이스", icon: "🧾", roles: null },
   { href: "/commission", label: "커미션", icon: "💰", roles: ["admin", "coordinator"] },
   { href: "/settings", label: "설정", icon: "⚙️", roles: null },
 ];
@@ -41,6 +42,10 @@ const pageInfo: Record<string, { title: string; description: string }> = {
   "/dashboard": {
     title: "KPI 대시보드",
     description: "병원별·유형별 주요 지표를 확인합니다.",
+  },
+  "/invoice": {
+    title: "인보이스",
+    description: "인보이스 목록을 조회하고 관리합니다.",
   },
   "/commission": {
     title: "커미션",
