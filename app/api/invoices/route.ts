@@ -102,14 +102,9 @@ export async function POST(req: NextRequest) {
       const { patientId } = payload as { patientId: string };
       const snap = await adminDb.collection("invoices")
         .where("patientId", "==", patientId)
+        .orderBy("createdAt", "desc")
         .get();
-      const invoices = snap.docs.map(docToObj)
-        .filter((r) => !r.isDeleted)
-        .sort((a: any, b: any) => {
-          const ta = typeof a.createdAt === "number" ? a.createdAt : 0;
-          const tb = typeof b.createdAt === "number" ? b.createdAt : 0;
-          return tb - ta;
-        });
+      const invoices = snap.docs.map(docToObj).filter((r) => !r.isDeleted);
       return NextResponse.json({ success: true, invoices });
     }
 
