@@ -138,6 +138,16 @@ export type InvoiceRecord = {
   memo: string;
   internalMemo: string;
 
+  // 결제 방법 및 커미션
+  paymentMethod?: "card" | "cash" | "mixed";
+  cardAmount?: number;
+  cashAmount?: number;
+  commissionRate?: number;
+  commissionStaffUid?: string;
+  commissionStaffName?: string;
+  commissionBase?: number;
+  commissionAmount?: number;
+
   status: "draft" | "confirmed" | "void";
 
   createdAt?: unknown;
@@ -158,6 +168,14 @@ export type InvoiceUpdatePayload = {
   memo?: string;
   internalMemo?: string;
   status?: "draft" | "confirmed" | "void";
+  paymentMethod?: "card" | "cash" | "mixed";
+  cardAmount?: number;
+  cashAmount?: number;
+  commissionRate?: number;
+  commissionStaffUid?: string;
+  commissionStaffName?: string;
+  commissionBase?: number;
+  commissionAmount?: number;
 };
 
 function toNumber(value: unknown) {
@@ -298,6 +316,15 @@ function mapInvoiceDoc(id: string, data: Record<string, unknown>): InvoiceRecord
 
     memo: cleanText(data.memo),
     internalMemo: cleanText(data.internalMemo),
+
+    paymentMethod: (["card", "cash", "mixed"].includes(String(data.paymentMethod)) ? data.paymentMethod : undefined) as "card" | "cash" | "mixed" | undefined,
+    cardAmount: data.cardAmount !== undefined ? toNumber(data.cardAmount) : undefined,
+    cashAmount: data.cashAmount !== undefined ? toNumber(data.cashAmount) : undefined,
+    commissionRate: data.commissionRate !== undefined ? toNumber(data.commissionRate) : undefined,
+    commissionStaffUid: data.commissionStaffUid ? cleanText(data.commissionStaffUid) : undefined,
+    commissionStaffName: data.commissionStaffName ? cleanText(data.commissionStaffName) : undefined,
+    commissionBase: data.commissionBase !== undefined ? toNumber(data.commissionBase) : undefined,
+    commissionAmount: data.commissionAmount !== undefined ? toNumber(data.commissionAmount) : undefined,
 
     status: (["draft", "confirmed", "void"].includes(String(data.status)) ? data.status : "draft") as "draft" | "confirmed" | "void",
 
@@ -652,6 +679,7 @@ export type InvoiceListFilter = {
   status?: "draft" | "confirmed" | "void" | "";
   doctorName?: string;
   patientName?: string;
+  commissionStaffUid?: string;
 };
 
 export async function getInvoices(filters?: InvoiceListFilter): Promise<InvoiceRecord[]> {
@@ -687,6 +715,10 @@ export async function getInvoices(filters?: InvoiceListFilter): Promise<InvoiceR
   if (filters?.patientName) {
     const search = filters.patientName.toLowerCase();
     records = records.filter((r) => r.patientName.toLowerCase().includes(search));
+  }
+
+  if (filters?.commissionStaffUid) {
+    records = records.filter((r) => r.commissionStaffUid === filters.commissionStaffUid);
   }
 
   return records;
@@ -742,6 +774,15 @@ export async function updateInvoice(
     memo: cleanText(payload.memo),
     internalMemo: cleanText(payload.internalMemo),
     status: payload.status || current.status || "draft",
+
+    paymentMethod: payload.paymentMethod ?? current.paymentMethod ?? null,
+    cardAmount: payload.cardAmount ?? current.cardAmount ?? null,
+    cashAmount: payload.cashAmount ?? current.cashAmount ?? null,
+    commissionRate: payload.commissionRate ?? current.commissionRate ?? null,
+    commissionStaffUid: payload.commissionStaffUid ?? current.commissionStaffUid ?? null,
+    commissionStaffName: payload.commissionStaffName ?? current.commissionStaffName ?? null,
+    commissionBase: payload.commissionBase ?? current.commissionBase ?? null,
+    commissionAmount: payload.commissionAmount ?? current.commissionAmount ?? null,
 
     updatedAt: serverTimestamp(),
     updatedBy: staff.displayName,

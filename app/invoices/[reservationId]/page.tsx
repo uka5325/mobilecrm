@@ -13,6 +13,8 @@ import {
   type InvoiceRecord,
   updateInvoice,
 } from "@/lib/invoices";
+import { calcCommissionBase, calcCommission, type PaymentMethod } from "@/lib/commissionUtils";
+import { getStaffListForSettings, type SettingsStaffRecord } from "@/lib/settings";
 
 function formatMoney(value: number) {
   const n = Number(value || 0);
@@ -51,6 +53,14 @@ export default function InvoiceEditPage() {
   const [status, setStatus] = useState<"draft" | "confirmed" | "void">(
     "draft"
   );
+
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod | "">("");
+  const [cardAmount, setCardAmount] = useState(0);
+  const [cashAmount, setCashAmount] = useState(0);
+  const [commissionRate, setCommissionRate] = useState<number | "">("");
+  const [commissionStaffUid, setCommissionStaffUid] = useState("");
+  const [commissionStaffName, setCommissionStaffName] = useState("");
+  const [staffList, setStaffList] = useState<SettingsStaffRecord[]>([]);
 
   const [loadingUser, setLoadingUser] = useState(true);
   const [loadingInvoice, setLoadingInvoice] = useState(true);
@@ -100,6 +110,12 @@ export default function InvoiceEditPage() {
         setMemo(loaded.memo || "");
         setInternalMemo(loaded.internalMemo || "");
         setStatus(loaded.status || "draft");
+        setPaymentMethod(loaded.paymentMethod || "");
+        setCardAmount(loaded.cardAmount || 0);
+        setCashAmount(loaded.cashAmount || 0);
+        setCommissionRate(loaded.commissionRate ?? "");
+        setCommissionStaffUid(loaded.commissionStaffUid || "");
+        setCommissionStaffName(loaded.commissionStaffName || "");
       } catch (error) {
         console.error(error);
         setMessage("인보이스 로딩 중 오류가 발생했습니다.");
@@ -111,9 +127,22 @@ export default function InvoiceEditPage() {
     loadInvoice();
   }, [currentUser, reservationDocId]);
 
+  useEffect(() => {
+    getStaffListForSettings().then((list) => {
+      setStaffList(list.filter((s) => s.active && (s.role === "admin" || s.role === "coordinator")));
+    }).catch(() => {});
+  }, []);
+
   const totals = useMemo(() => {
     return calculateInvoiceTotals(items, discounts, depositAmount);
   }, [items, discounts, depositAmount]);
+
+  const commissionCalc = useMemo(() => {
+    if (!paymentMethod || commissionRate === "") return null;
+    const base = calcCommissionBase(totals.finalTotal, paymentMethod as PaymentMethod, cardAmount, cashAmount);
+    const amount = calcCommission(base, Number(commissionRate));
+    return { base, amount };
+  }, [paymentMethod, totals.finalTotal, cardAmount, cashAmount, commissionRate]);
 
   const categoryOrder = useMemo(() => {
     const templateOrder = invoice?.templateSnapshot?.categoryOrder || [];
@@ -194,6 +223,14 @@ export default function InvoiceEditPage() {
           memo,
           internalMemo,
           status,
+          paymentMethod: paymentMethod || undefined,
+          cardAmount: paymentMethod === "mixed" ? cardAmount : undefined,
+          cashAmount: paymentMethod === "mixed" ? cashAmount : undefined,
+          commissionRate: commissionRate !== "" ? Number(commissionRate) : undefined,
+          commissionStaffUid: commissionStaffUid || undefined,
+          commissionStaffName: commissionStaffName || undefined,
+          commissionBase: commissionCalc?.base,
+          commissionAmount: commissionCalc?.amount,
         },
         currentUser
       );
@@ -212,6 +249,12 @@ export default function InvoiceEditPage() {
       setMemo(saved.memo || "");
       setInternalMemo(saved.internalMemo || "");
       setStatus(saved.status || "draft");
+      setPaymentMethod(saved.paymentMethod || "");
+      setCardAmount(saved.cardAmount || 0);
+      setCashAmount(saved.cashAmount || 0);
+      setCommissionRate(saved.commissionRate ?? "");
+      setCommissionStaffUid(saved.commissionStaffUid || "");
+      setCommissionStaffName(saved.commissionStaffName || "");
 
       setMessage("저장 완료");
       router.back();
@@ -582,6 +625,103 @@ export default function InvoiceEditPage() {
               </div>
             );
           })}
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-black/10 bg-white p-5 shadow-[0_2px_16px_rgba(0,0,0,0.06)]">
+        <div className="mb-4 text-lg font-bold">커미션 정보</div>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <div>
+            <label className="mb-1 block text-xs text-gray-500">결제 방법</label>
+            <select
+              value={paymentMethod}
+              onChange={(e) => setPaymentMethod(e.target.value as PaymentMethod | "")}
+              className="w-full rounded-xl border px-3 py-2 text-sm"
+            >
+              <option value="">선택</option>
+              <option value="cash">현금</option>
+              <option value="card">카드</option>
+              <option value="mixed">혼합</option>
+            </select>
+          </div>
+
+          {paymentMethod === "mixed" && (
+            <>
+              <div>
+                <label className="mb-1 block text-xs text-gray-500">카드 금액</label>
+                <input
+                  value={cardAmount ? formatMoney(cardAmount) : ""}
+                  onChange={(e) => setCardAmount(parseMoney(e.target.value))}
+                  className="w-full rounded-xl border px-3 py-2 text-right text-sm"
+                  placeholder="0"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs text-gray-500">현금 금액</label>
+                <input
+                  value={cashAmount ? formatMoney(cashAmount) : ""}
+                  onChange={(e) => setCashAmount(parseMoney(e.target.value))}
+                  className="w-full rounded-xl border px-3 py-2 text-right text-sm"
+                  placeholder="0"
+                />
+              </div>
+            </>
+          )}
+
+          <div>
+            <label className="mb-1 block text-xs text-gray-500">담당 직원</label>
+            <select
+              value={commissionStaffUid}
+              onChange={(e) => {
+                const uid = e.target.value;
+                setCommissionStaffUid(uid);
+                const found = staffList.find((s) => s.uid === uid);
+                setCommissionStaffName(found?.displayName || "");
+              }}
+              className="w-full rounded-xl border px-3 py-2 text-sm"
+            >
+              <option value="">선택</option>
+              {staffList.map((s) => (
+                <option key={s.uid} value={s.uid}>{s.displayName}</option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="mb-1 block text-xs text-gray-500">커미션율 (%)</label>
+            <input
+              type="number"
+              min={0}
+              max={100}
+              step={0.1}
+              value={commissionRate}
+              onChange={(e) => setCommissionRate(e.target.value === "" ? "" : Number(e.target.value))}
+              className="w-full rounded-xl border px-3 py-2 text-right text-sm"
+              placeholder="예: 15"
+            />
+          </div>
+
+          {commissionCalc && (
+            <div className="sm:col-span-2 lg:col-span-1">
+              <label className="mb-1 block text-xs text-gray-500">커미션 계산 결과</label>
+              <div className="rounded-xl bg-emerald-50 px-4 py-3 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-gray-600">기준액</span>
+                  <b>{formatMoney(commissionCalc.base)} KRW</b>
+                </div>
+                <div className="mt-1 flex justify-between">
+                  <span className="text-gray-600">커미션 ({commissionRate}%)</span>
+                  <b className="text-[#1d9e75]">{formatMoney(commissionCalc.amount)} KRW</b>
+                </div>
+                {paymentMethod === "card" && (
+                  <div className="mt-1 text-xs text-gray-400">* 카드: VAT(10%) 제외 후 계산</div>
+                )}
+                {paymentMethod === "mixed" && (
+                  <div className="mt-1 text-xs text-gray-400">* 혼합: 카드분 VAT 제외, 현금분 그대로</div>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       </section>
 
