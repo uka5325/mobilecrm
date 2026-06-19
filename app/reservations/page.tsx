@@ -39,6 +39,7 @@ export default function ReservationsPage() {
     name: string; birthInput: string; phone: string; nationality: string;
     consultArea: string; reservationDate: string; reservationTime: string;
     coordinators: string; depositAmount: string; surgeryCost: string; hospital: string;
+    doctors: string;
     appointmentType: AppointmentType;
   } | null>(null);
   const [inlineSaving, setInlineSaving] = useState(false);
