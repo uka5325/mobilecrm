@@ -187,12 +187,12 @@ export async function getOrCreateInvoiceDraft(
     reservationId: reservation.reservationId,
     patientId: reservation.patientId,
 
-    patientName: reservation.name || reservation.patientName,
-    birth: birthInfo.birth,
+    patientName: reservation.name || reservation.patientName || "",
+    birth: birthInfo.birth || "",
     birthDisplay: (birthInfo.birthDisplay || "").replace(/[^0-9]/g, "").slice(2),
-    gender: birthInfo.gender,
-    nationality: reservation.nationality,
-    phone: reservation.phone,
+    gender: birthInfo.gender || "",
+    nationality: reservation.nationality || "",
+    phone: reservation.phone || "",
 
     doctors: reservation.doctors || [],
     coordinators: reservation.coordinators || [],
