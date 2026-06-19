@@ -514,7 +514,7 @@ export default function ReservationsPage() {
             🔗 외부 링크 가져오기
           </button>
 
-          <div className="relative ml-auto shrink-0">
+          <div className="relative shrink-0">
             <button
               onClick={() => setDownloadOpen((v) => !v)}
               className="h-10 whitespace-nowrap rounded-xl border border-[#dfe3e8] bg-white px-4 text-sm text-gray-700 transition hover:-translate-y-0.5 hover:bg-gray-50 active:scale-95"
