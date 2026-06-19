@@ -570,18 +570,18 @@ export default function SchedulePage() {
       {/* 상단 컨트롤 — 연한 녹색 배너 */}
       <div className="shrink-0 border-b border-[#edf0f3] bg-[#ecfdf5]">
         {/* 네비게이션 + 뷰 전환 (가로 스크롤) */}
-        <div className="flex items-center gap-2 overflow-x-auto px-4 pt-3 pb-2 [&::-webkit-scrollbar]:hidden">
-          <button onClick={() => navigate(-1)} className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-[#dfe3e8] bg-white text-gray-500 hover:bg-gray-50">‹</button>
-          <button onClick={() => setBaseDate(todayString())} className="h-8 shrink-0 rounded-lg border border-[#dfe3e8] bg-white px-3 text-xs text-gray-600 hover:bg-gray-50">오늘</button>
-          <button onClick={() => navigate(1)} className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-[#dfe3e8] bg-white text-gray-500 hover:bg-gray-50">›</button>
-          <span className="shrink-0 text-sm font-semibold text-gray-800">{titleText}</span>
-          <div className="ml-auto flex shrink-0 items-center gap-2">
-            <div className="flex h-8 shrink-0 overflow-hidden rounded-lg border border-[#dfe3e8]">
+        <div className="flex items-stretch gap-2 overflow-x-auto px-4 pt-3 pb-2 [&::-webkit-scrollbar]:hidden" style={{ height: 44 }}>
+          <button onClick={() => navigate(-1)} className="flex w-9 shrink-0 items-center justify-center rounded-lg border border-[#dfe3e8] bg-white text-gray-500 hover:bg-gray-50">‹</button>
+          <button onClick={() => setBaseDate(todayString())} className="flex shrink-0 items-center rounded-lg border border-[#dfe3e8] bg-white px-3 text-xs text-gray-600 hover:bg-gray-50">오늘</button>
+          <button onClick={() => navigate(1)} className="flex w-9 shrink-0 items-center justify-center rounded-lg border border-[#dfe3e8] bg-white text-gray-500 hover:bg-gray-50">›</button>
+          <span className="flex shrink-0 items-center text-sm font-semibold text-gray-800">{titleText}</span>
+          <div className="ml-auto flex shrink-0 items-stretch gap-2">
+            <div className="flex shrink-0 overflow-hidden rounded-lg border border-[#dfe3e8]">
               {(["day", "week", "month"] as ViewMode[]).map((mode) => (
                 <button
                   key={mode}
                   onClick={() => setViewMode(mode)}
-                  className={`flex h-8 items-center px-3 text-xs font-medium transition ${viewMode === mode ? "bg-[#1d9e75] text-white" : "bg-white text-gray-600 hover:bg-gray-50"}`}
+                  className={`flex items-center px-3 text-xs font-medium transition ${viewMode === mode ? "bg-[#1d9e75] text-white" : "bg-white text-gray-600 hover:bg-gray-50"}`}
                 >
                   {VIEW_LABELS[mode]}
                 </button>
@@ -591,11 +591,11 @@ export default function SchedulePage() {
               type="date"
               value={baseDate}
               onChange={(e) => setBaseDate(e.target.value)}
-              className="h-8 shrink-0 rounded-lg border border-[#dfe3e8] bg-white px-2 text-xs text-gray-700 focus:border-[#1d9e75] focus:outline-none"
+              className="shrink-0 rounded-lg border border-[#dfe3e8] bg-white px-2 text-xs text-gray-700 focus:border-[#1d9e75] focus:outline-none"
             />
             <button
               onClick={() => setNewOpen(true)}
-              className="h-8 shrink-0 rounded-lg bg-black px-3 text-xs font-medium text-white transition hover:-translate-y-0.5 hover:shadow-md active:scale-95"
+              className="flex shrink-0 items-center rounded-lg bg-black px-3 text-xs font-medium text-white transition hover:-translate-y-0.5 hover:shadow-md active:scale-95"
             >
               + 고객 등록
             </button>
