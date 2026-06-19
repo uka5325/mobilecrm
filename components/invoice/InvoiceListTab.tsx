@@ -222,19 +222,19 @@ export function InvoiceListTab() {
                       <div className="flex gap-1">
                         <button
                           onClick={(e) => { e.stopPropagation(); router.push(`/invoices/${inv.reservationDocId}`); }}
-                          className="rounded-md border border-gray-200 bg-white px-2 py-0.5 text-xs text-blue-600 hover:bg-blue-50"
+                          className="px-2 py-1 text-xs text-blue-600 hover:underline"
                         >
                           수정
                         </button>
                         <button
                           onClick={(e) => { e.stopPropagation(); router.push(`/invoices/${inv.reservationDocId}`); }}
-                          className="rounded-md border border-gray-200 bg-white px-2 py-0.5 text-xs text-gray-600 hover:bg-gray-50"
+                          className="px-2 py-1 text-xs text-gray-500 hover:underline"
                         >
                           보기
                         </button>
                         <button
                           onClick={(e) => handleDelete(inv, e)}
-                          className="rounded-md border border-gray-200 bg-white px-2 py-0.5 text-xs text-red-500 hover:bg-red-50"
+                          className="px-2 py-1 text-xs text-red-500 hover:underline"
                         >
                           삭제
                         </button>
