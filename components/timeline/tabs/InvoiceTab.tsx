@@ -61,6 +61,7 @@ function InvoiceEditPanel({
     commissionBase: invoice.commissionBase,
     commissionAmount: invoice.commissionAmount,
     memo: invoice.memo || "",
+    doctors: invoice.doctors || [],
     status: invoice.status || "draft",
   });
   const [saving, setSaving] = useState(false);
@@ -120,9 +121,12 @@ function InvoiceEditPanel({
 
         <div>
           <label className="mb-1 block text-xs font-medium text-gray-600">담당 원장</label>
-          <div className="rounded-xl border border-[#dfe3e8] bg-gray-50 px-3 py-2 text-sm text-gray-600">
-            {invoice.doctors?.length ? invoice.doctors.join(", ") : "-"}
-          </div>
+          <input
+            value={(form.doctors || []).join(", ")}
+            onChange={(e) => setForm((p) => ({ ...p, doctors: e.target.value.split(",").map((s) => s.trim()).filter(Boolean) }))}
+            placeholder="쉼표로 구분"
+            className="w-full rounded-xl border border-[#dfe3e8] px-3 py-2 text-sm focus:border-[#1d9e75] focus:outline-none"
+          />
         </div>
 
         <div>

@@ -159,8 +159,16 @@ function AmountPopover({ label, rows, onClose, onSave }: AmountPopoverProps) {
                     onClick={() => { setEditingId(row.id); setEditValue(row.amount); }}
                     className="text-xs text-blue-500 hover:underline shrink-0"
                   >
-                    수정
+                    {row.amount ? "수정" : "입력"}
                   </button>
+                  {row.amount && (
+                    <button
+                      onClick={async () => { setSaving(true); try { await onSave(row.id, ""); setEditingId(null); } finally { setSaving(false); } }}
+                      className="text-xs text-red-400 hover:underline shrink-0"
+                    >
+                      삭제
+                    </button>
+                  )}
                 </>
               )}
             </div>
@@ -424,12 +432,6 @@ export function ReservationsTable({
               <button onClick={() => onStartEdit(item)} className="px-2 py-1 text-xs text-blue-600 hover:underline">수정</button>
               <button onClick={() => onAddReservation(item)} className="px-2 py-1 text-xs text-emerald-600 hover:underline">추가</button>
               <button onClick={() => onDelete(item)} className="px-2 py-1 text-xs text-red-500 hover:underline">삭제</button>
-              <button
-                onClick={() => router.push(`/invoices/${item.id}`)}
-                className="px-2 py-1 text-xs font-medium text-[#1d9e75] hover:underline"
-              >
-                {item.invoiceDocId ? "인보이스" : "인보이스+"}
-              </button>
             </div>
           )}
         </td>
@@ -452,10 +454,8 @@ export function ReservationsTable({
     const surgeryAreas = getConsultAreas(group.reservations, "수술");
 
     const depositRows = group.reservations
-      .filter((r) => r.depositAmount && r.depositAmount.trim())
       .map((r) => ({ id: r.id, date: r.reservationDate || "", hospital: r.hospital || "", amount: r.depositAmount || "" }));
     const surgeryRows = group.reservations
-      .filter((r) => r.surgeryCost && r.surgeryCost.trim())
       .map((r) => ({ id: r.id, date: r.reservationDate || "", hospital: r.hospital || "", amount: r.surgeryCost || "" }));
 
     const depositPopoverOpen = amountPopover?.groupKey === group.patientKey && amountPopover.type === "deposit";
@@ -583,13 +583,14 @@ export function ReservationsTable({
               )}
             </div>
 
+            <button
+              onClick={() => setInvoiceModal({ patientId: group.patientId || group.patientKey, patientName: group.name, reservations: group.reservations })}
+              className="rounded-md border border-[#1d9e75] bg-white px-2 py-0.5 text-xs text-[#1d9e75] hover:bg-emerald-50"
+            >
+              인보이스
+            </button>
+
             <div className="ml-auto flex items-center gap-1.5">
-              <button
-                onClick={() => setInvoiceModal({ patientId: group.patientId || group.patientKey, patientName: group.name, reservations: group.reservations })}
-                className="rounded-md border border-[#1d9e75] bg-white px-2 py-0.5 text-xs text-[#1d9e75] hover:bg-emerald-50"
-              >
-                인보이스
-              </button>
               <button
                 onClick={() => onOpenPatientMemo(group)}
                 className="rounded-md border border-emerald-200 bg-white px-2 py-0.5 text-xs text-emerald-700 hover:bg-emerald-50"

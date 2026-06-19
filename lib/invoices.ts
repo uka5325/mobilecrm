@@ -58,6 +58,7 @@ export type InvoiceUpdatePayload = {
   commissionBase?: number;
   commissionAmount?: number;
   memo?: string;
+  doctors?: string[];
   status?: "draft" | "confirmed" | "void";
 };
 
@@ -190,6 +191,7 @@ export async function updateInvoice(
     commissionBase: payload.commissionBase,
     commissionAmount: payload.commissionAmount,
     memo: payload.memo,
+    doctors: payload.doctors,
     status: payload.status,
   });
   if (!result.success || !result.invoice) {

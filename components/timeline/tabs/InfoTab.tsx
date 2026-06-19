@@ -14,6 +14,7 @@ type DetailForm = {
   reservationDate: string;
   reservationTime: string;
   hospital: string;
+  doctors: string;
   appointmentType: AppointmentType;
   coordinators: string;
   depositAmount: string;
@@ -111,6 +112,16 @@ export function InfoTab({
           label="병원명"
           value={detailForm.hospital}
           onChange={(value) => onFormChange({ hospital: value })}
+        />
+      </div>
+
+      <div className="mt-3">
+        <label className="text-xs text-gray-500">담당 원장</label>
+        <input
+          value={detailForm.doctors}
+          onChange={(e) => onFormChange({ doctors: e.target.value })}
+          placeholder="쉼표로 구분"
+          className="mt-1 w-full rounded-xl border border-[#dfe3e8] bg-white px-3 py-2 text-sm transition focus:border-[#1d9e75] focus:outline-none"
         />
       </div>
 

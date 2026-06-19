@@ -42,6 +42,7 @@ type DetailForm = {
   coordinators: string;
   depositAmount: string;
   surgeryCost: string;
+  doctors: string;
   completed: boolean;
   cancelled: boolean;
 };
@@ -69,7 +70,7 @@ export function DetailDrawer({ open, reservation, currentUser, onClose, onRefres
     name: "", birthInput: "", phone: "", nationality: "",
     consultArea: "", reservationDate: todayString(),
     reservationTime: "", hospital: "", appointmentType: "상담",
-    coordinators: "", depositAmount: "", surgeryCost: "", completed: false, cancelled: false,
+    coordinators: "", depositAmount: "", surgeryCost: "", doctors: "", completed: false, cancelled: false,
   });
 
   const [logs, setLogs] = useState<LogRecord[]>([]);
@@ -107,6 +108,7 @@ export function DetailDrawer({ open, reservation, currentUser, onClose, onRefres
       coordinators: (reservation.coordinators || []).join(", "),
       depositAmount: reservation.depositAmount || "",
       surgeryCost: reservation.surgeryCost || "",
+      doctors: (reservation.doctors || []).join(", "),
       completed: reservation.completed === true,
       cancelled: (reservation as unknown as Record<string, unknown>).cancelled === true,
     });
@@ -175,6 +177,7 @@ export function DetailDrawer({ open, reservation, currentUser, onClose, onRefres
           coordinators: splitComma(detailForm.coordinators),
           depositAmount: detailForm.depositAmount,
           surgeryCost: detailForm.surgeryCost,
+          doctors: splitComma(detailForm.doctors),
           completed: detailForm.completed,
           currentDoctorStatusMap: selectedReservation.doctorStatusMap,
           currentDoctorStatusMetaMap: selectedReservation.doctorStatusMetaMap,
@@ -200,6 +203,7 @@ export function DetailDrawer({ open, reservation, currentUser, onClose, onRefres
         coordinators: splitComma(detailForm.coordinators),
         depositAmount: detailForm.depositAmount,
         surgeryCost: detailForm.surgeryCost,
+        doctors: splitComma(detailForm.doctors),
         completed: detailForm.completed,
       };
 

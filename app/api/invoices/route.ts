@@ -102,9 +102,14 @@ export async function POST(req: NextRequest) {
       const { patientId } = payload as { patientId: string };
       const snap = await adminDb.collection("invoices")
         .where("patientId", "==", patientId)
-        .orderBy("createdAt", "desc")
         .get();
-      const invoices = snap.docs.map(docToObj).filter((r) => !r.isDeleted);
+      const invoices = snap.docs.map(docToObj)
+        .filter((r) => !r.isDeleted)
+        .sort((a: any, b: any) => {
+          const ta = typeof a.createdAt === "number" ? a.createdAt : 0;
+          const tb = typeof b.createdAt === "number" ? b.createdAt : 0;
+          return tb - ta;
+        });
       return NextResponse.json({ success: true, invoices });
     }
 
@@ -229,6 +234,7 @@ export async function POST(req: NextRequest) {
         commissionBase: fields.commissionBase !== undefined ? toNumber(fields.commissionBase) : null,
         commissionAmount: fields.commissionAmount !== undefined ? toNumber(fields.commissionAmount) : null,
         memo: cleanText(fields.memo),
+        doctors: Array.isArray(fields.doctors) ? fields.doctors : (Array.isArray(current.doctors) ? current.doctors : []),
         status: fields.status || current.status || "draft",
         updatedAt: FieldValue.serverTimestamp(),
         updatedBy: staffName,

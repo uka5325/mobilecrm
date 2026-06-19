@@ -221,6 +221,12 @@ export default function InvoiceEditPage() {
               />
             </div>
             <div>
+              <label className="mb-1 block text-xs text-gray-500">담당 원장</label>
+              <div className="w-full rounded-xl border border-[#edf0f3] bg-gray-50 px-3 py-2 text-sm text-gray-600">
+                {invoice.doctors?.join(", ") || "-"}
+              </div>
+            </div>
+            <div>
               <label className="mb-1 block text-xs text-gray-500">수술/시술명</label>
               <textarea
                 value={surgeryItems}
