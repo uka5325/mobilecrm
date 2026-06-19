@@ -6,7 +6,6 @@ import {
   updateReservationFull,
   type ReservationRecord,
   type AppointmentType,
-  toggleSurgeryReserved,
 } from "@/lib/reservations";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useReservationData } from "@/hooks/useReservationData";
@@ -15,7 +14,7 @@ import { todayString } from "@/lib/dateUtils";
 import { CreateDrawer } from "@/components/reservations/CreateDrawer";
 import { ImportDrawer } from "@/components/reservations/ImportDrawer";
 import { MemoPopover, type MemoPopoverState } from "@/components/reservations/MemoPopover";
-import { ReservationsTable } from "@/components/reservations/ReservationsTable";
+import { ReservationsTable, type PatientGroup, type PatientEditForm } from "@/components/reservations/ReservationsTable";
 import { getReservationNotes, updateReservationNote, deleteReservationNote, type ReservationNote } from "@/lib/reservationNotes";
 import { toDate } from "@/lib/settingsUtils";
 
@@ -43,6 +42,10 @@ export default function ReservationsPage() {
     appointmentType: AppointmentType;
   } | null>(null);
   const [inlineSaving, setInlineSaving] = useState(false);
+
+  const [patientEditId, setPatientEditId] = useState<string | null>(null);
+  const [patientEditForm, setPatientEditForm] = useState<PatientEditForm | null>(null);
+  const [patientEditSaving, setPatientEditSaving] = useState(false);
 
   const [memoPopover, setMemoPopover] = useState<MemoPopoverState>(null);
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
@@ -88,36 +91,38 @@ export default function ReservationsPage() {
     });
   }, [reservations, search, filterDate]);
 
-  const groupedReservations = useMemo(() => {
-    return [...filteredReservations].sort((a, b) => {
-      const aa = [
-        a.reservationDate || "",
-        a.reservationTime || "",
-        a.name || "",
-      ].join("");
 
-      const bb = [
-        b.reservationDate || "",
-        b.reservationTime || "",
-        b.name || "",
-      ].join("");
-
-      return aa.localeCompare(bb);
+  const patientGroups = useMemo<PatientGroup[]>(() => {
+    const map = new Map<string, PatientGroup>();
+    for (const r of filteredReservations) {
+      const key = r.patientId || `${r.name}_${r.birth}`;
+      if (!map.has(key)) {
+        map.set(key, {
+          patientKey: key,
+          name: r.name,
+          birth: r.birth,
+          birthInput: r.birthInput || r.birth || "",
+          gender: r.gender,
+          phone: r.phone,
+          nationality: r.nationality,
+          reservations: [],
+        });
+      }
+      map.get(key)!.reservations.push(r);
+    }
+    for (const g of map.values()) {
+      g.reservations.sort((a, b) =>
+        (a.reservationDate + a.reservationTime).localeCompare(
+          b.reservationDate + b.reservationTime
+        )
+      );
+    }
+    return [...map.values()].sort((a, b) => {
+      const latestA = a.reservations[a.reservations.length - 1]?.reservationDate || "";
+      const latestB = b.reservations[b.reservations.length - 1]?.reservationDate || "";
+      return latestB.localeCompare(latestA);
     });
   }, [filteredReservations]);
-
-  async function handleSurgeryToggle(item: ReservationRecord) {
-    if (!currentUser) return;
-
-    const next = !item.surgeryReserved;
-
-    await toggleSurgeryReserved(
-      item.id,
-      item.reservationId,
-      next,
-      currentUser
-    );
-  }
 
   function startInlineEdit(item: ReservationRecord) {
     setInlineEditId(item.id);
@@ -295,6 +300,79 @@ export default function ReservationsPage() {
     }
   }
 
+  function startPatientEdit(group: PatientGroup) {
+    setPatientEditId(group.patientKey);
+    setPatientEditForm({
+      name: group.name || "",
+      birthInput: group.birthInput || group.birth || "",
+      phone: group.phone || "",
+      nationality: group.nationality || "",
+      gender: group.gender || "",
+    });
+  }
+
+  async function savePatientEdit(group: PatientGroup) {
+    if (!patientEditForm || !currentUser) return;
+    setPatientEditSaving(true);
+    try {
+      for (const r of group.reservations) {
+        await updateReservationFull(
+          r.id,
+          r.reservationId,
+          r.patientId,
+          {
+            name: patientEditForm.name,
+            birthInput: patientEditForm.birthInput,
+            birth: patientEditForm.birthInput,
+            phone: patientEditForm.phone,
+            nationality: patientEditForm.nationality,
+            gender: patientEditForm.gender,
+            reservationDate: r.reservationDate,
+            reservationTime: r.reservationTime,
+            consultArea: r.consultArea,
+            hospital: r.hospital,
+            appointmentType: r.appointmentType,
+            coordinators: r.coordinators,
+            depositAmount: r.depositAmount,
+            surgeryCost: r.surgeryCost,
+            currentDoctorStatusMap: r.doctorStatusMap,
+            currentDoctorStatusMetaMap: r.doctorStatusMetaMap,
+          },
+          currentUser
+        );
+      }
+      setPatientEditId(null);
+      setPatientEditForm(null);
+      await refresh();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setPageError(`환자정보 수정 오류: ${msg}`);
+    } finally {
+      setPatientEditSaving(false);
+    }
+  }
+
+  async function handleDeletePatient(group: PatientGroup) {
+    if (!currentUser) return;
+    const ok = confirm(`${group.name} 님의 예약 ${group.reservations.length}건을 모두 삭제할까요?`);
+    if (!ok) return;
+
+    for (const r of group.reservations) {
+      const result = await deleteReservation(r.id, r.reservationId, currentUser);
+      if (!result.success) {
+        setPageError(result.message || "삭제 권한이 없습니다.");
+        await refresh();
+        return;
+      }
+    }
+    await refresh();
+  }
+
+  async function openPatientMemoPopover(group: PatientGroup) {
+    const rep = group.reservations[group.reservations.length - 1];
+    await openMemoPopover(rep);
+  }
+
   async function handleDelete(item: ReservationRecord) {
     if (!currentUser) return;
 
@@ -377,7 +455,7 @@ export default function ReservationsPage() {
             onClick={() => { setAddPatient(undefined); setDrawerOpen(true); }}
             className="h-10 rounded-xl bg-black px-4 text-sm font-medium text-white transition hover:-translate-y-0.5 hover:shadow-md active:scale-95"
           >
-            + 단일 예약 추가
+            + 고객 등록
           </button>
           <button
             onClick={() => setImportDrawerOpen(true)}
@@ -445,20 +523,26 @@ export default function ReservationsPage() {
       </div>
 
       <ReservationsTable
-        items={groupedReservations}
+        patientGroups={patientGroups}
         loading={loading}
-        filterDate={filterDate}
         inlineEditId={inlineEditId}
         inlineForm={inlineForm}
         inlineSaving={inlineSaving}
         onFormChange={setInlineForm}
-        onSurgeryToggle={handleSurgeryToggle}
-        onOpenMemo={openMemoPopover}
         onStartEdit={startInlineEdit}
         onSaveEdit={saveInlineEdit}
         onCancelEdit={() => { setInlineEditId(null); setInlineForm(null); }}
         onDelete={handleDelete}
         onAddReservation={handleAddReservation}
+        patientEditId={patientEditId}
+        patientEditForm={patientEditForm}
+        patientEditSaving={patientEditSaving}
+        onPatientFormChange={setPatientEditForm}
+        onStartPatientEdit={startPatientEdit}
+        onSavePatientEdit={savePatientEdit}
+        onCancelPatientEdit={() => { setPatientEditId(null); setPatientEditForm(null); }}
+        onDeletePatient={handleDeletePatient}
+        onOpenPatientMemo={openPatientMemoPopover}
       />
 
       {currentUser && (

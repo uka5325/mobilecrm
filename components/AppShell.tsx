@@ -15,7 +15,7 @@ type AppShellProps = {
 const menuItems = [
   { href: "/", label: "홈", icon: "🏠" },
   { href: "/schedule", label: "스케줄", icon: "📅" },
-  { href: "/reservations", label: "예약관리", icon: "👥" },
+  { href: "/reservations", label: "고객관리", icon: "👥" },
   { href: "/dashboard", label: "KPI 대시보드", icon: "📊" },
   { href: "/settings", label: "설정", icon: "⚙️" },
 ];
@@ -34,8 +34,8 @@ const pageInfo: Record<string, { title: string; description: string }> = {
     description: "상담·수술·치료·경과 일정을 확인합니다.",
   },
   "/reservations": {
-    title: "예약관리",
-    description: "환자 예약 목록을 관리합니다.",
+    title: "고객관리",
+    description: "환자별 예약 목록을 관리합니다.",
   },
   "/dashboard": {
     title: "KPI 대시보드",

@@ -597,7 +597,7 @@ export default function SchedulePage() {
             onClick={() => setNewOpen(true)}
             className="h-8 rounded-lg bg-black px-3 text-xs font-medium text-white transition hover:-translate-y-0.5 hover:shadow-md active:scale-95"
           >
-            + 신규 예약
+            + 고객 등록
           </button>
         </div>
       </div>

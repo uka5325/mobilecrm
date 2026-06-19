@@ -60,13 +60,17 @@ function formatMemoTime(value: unknown) {
   if (!date) return "";
 
   return (
+    String(date.getMonth() + 1).padStart(2, "0") +
+    "." +
+    String(date.getDate()).padStart(2, "0") +
+    " " +
     String(date.getHours()).padStart(2, "0") +
     ":" +
     String(date.getMinutes()).padStart(2, "0")
   );
 }
 
-const ROLE_LIST = ["admin", "doctor", "coordinator", "staff", "interpreter"];
+const ROLE_LIST = ["admin", "coordinator", "staff", "interpreter"];
 
 export default function HomePage() {
   const router = useRouter();
@@ -164,13 +168,6 @@ export default function HomePage() {
               </div>
             </div>
 
-            {/* 오늘 내원자 */}
-            <div className="flex flex-col justify-center rounded-[12px] border border-black/10 bg-white p-[18px] shadow-[0_2px_16px_rgba(0,0,0,0.06)]">
-              <div className="mb-2.5 text-xs text-[#6b7280]">오늘 내원자</div>
-              <div className="text-[26px] font-bold text-[#1d9e75]">
-                {loading ? "-" : todayVisitors}
-              </div>
-            </div>
           </div>
 
           <div className="grid grid-cols-1 gap-[18px]">

@@ -56,6 +56,7 @@ export type ReservationDoc = {
   deposit?: string | number;
   nationality?: string;
   phone?: string;
+  cancelled?: boolean;
 };
 
 export type Counter = {

@@ -15,8 +15,6 @@ import {
   getPatientName,
   getConsultArea,
   getManagers,
-  getStatus,
-  isSurgeryReserved,
   isCompleted,
   emptyCounter,
   accumulate,
@@ -27,7 +25,6 @@ import {
 } from "@/lib/dashboardUtils";
 import { QuickButton } from "@/components/dashboard/QuickButton";
 import { KpiCard } from "@/components/dashboard/KpiCard";
-import { BarStatusRow } from "@/components/dashboard/BarStatusRow";
 import { Panel } from "@/components/dashboard/Panel";
 import { KpiTable } from "@/components/dashboard/KpiTable";
 
@@ -132,6 +129,27 @@ export default function DashboardPage() {
       .sort((a, b) => b.total - a.total || cleanText(a.name).localeCompare(cleanText(b.name)));
 
     return { summary: finalizedSummary, hospitalRows, apptTypeRows, areaRows };
+  }, [filteredRows]);
+
+  const cancelledCount = useMemo(() => filteredRows.filter((r) => r.cancelled === true).length, [filteredRows]);
+  const cancelledRate = filteredRows.length ? Math.round((cancelledCount / filteredRows.length) * 100) : 0;
+
+  const coordinatorRows = useMemo(() => {
+    const map = new Map<string, { total: number; completed: number; cancelled: number }>();
+    for (const r of filteredRows) {
+      const managers = getManagers(r);
+      const names = managers.length ? managers : ["미지정"];
+      for (const name of names) {
+        if (!map.has(name)) map.set(name, { total: 0, completed: 0, cancelled: 0 });
+        const s = map.get(name)!;
+        s.total++;
+        if (isCompleted(r)) s.completed++;
+        if (r.cancelled === true) s.cancelled++;
+      }
+    }
+    return [...map.entries()]
+      .map(([name, s]) => ({ name, ...s }))
+      .sort((a, b) => b.total - a.total);
   }, [filteredRows]);
 
   function handleQuickRange(type: "today" | "week" | "month" | "last7" | "last30") {
@@ -247,7 +265,7 @@ export default function DashboardPage() {
 
       {/* KPI 카드 */}
       <section className="grid grid-cols-2 gap-4 md:grid-cols-2 xl:grid-cols-2">
-        <KpiCard label="부도" value={dashboard.summary.noShow.toLocaleString("ko-KR")} sub={`부도율 ${pctText(dashboard.summary.noShowRate)}`} />
+        <KpiCard label="취소" value={cancelledCount.toLocaleString("ko-KR")} sub={`취소율 ${cancelledRate}%`} />
       </section>
 
       {/* 유형별 현황 */}
@@ -271,28 +289,6 @@ export default function DashboardPage() {
           );
         })}
       </section>
-
-      {/* 핵심 현황 */}
-      <Panel title="핵심 현황">
-        <div className="space-y-4">
-          <BarStatusRow label="전체예약" count={dashboard.summary.total} percentage={100} />
-          <BarStatusRow
-            label="실제내원"
-            count={dashboard.summary.visited}
-            percentage={dashboard.summary.total ? Math.round((dashboard.summary.visited / dashboard.summary.total) * 100) : 0}
-          />
-          <BarStatusRow
-            label="부도"
-            count={dashboard.summary.noShow}
-            percentage={dashboard.summary.total ? Math.round((dashboard.summary.noShow / dashboard.summary.total) * 100) : 0}
-          />
-          <BarStatusRow
-            label="수술예약"
-            count={dashboard.summary.surgery}
-            percentage={dashboard.summary.total ? Math.round((dashboard.summary.surgery / dashboard.summary.total) * 100) : 0}
-          />
-        </div>
-      </Panel>
 
       {/* 병원별 KPI */}
       <Panel title="병원별 KPI">
@@ -324,12 +320,25 @@ export default function DashboardPage() {
         />
       </Panel>
 
+      <Panel title="담당자별 KPI">
+        <KpiTable
+          headers={["담당자", "총 예약", "완료", "취소", "완료율"]}
+          rows={coordinatorRows.map((r) => [
+            r.name,
+            r.total.toLocaleString("ko-KR"),
+            r.completed.toLocaleString("ko-KR"),
+            r.cancelled.toLocaleString("ko-KR"),
+            pctText(r.total ? Math.round((r.completed / r.total) * 100) : 0),
+          ])}
+        />
+      </Panel>
+
       <Panel
         title="예약 상세 리스트"
         rightText={`${filteredRows.length.toLocaleString("ko-KR")}건 표시`}
       >
         <KpiTable
-          headers={["날짜", "시간", "이름", "병원", "유형", "완료", "상담부위", "담당자", "상태", "수술예약", "예약금"]}
+          headers={["날짜", "시간", "이름", "병원", "유형", "상담부위", "담당자", "상태", "예약금"]}
           rows={filteredRows
             .slice()
             .sort((a, b) => {
@@ -344,11 +353,9 @@ export default function DashboardPage() {
               getPatientName(row),
               getHospital(row) || "-",
               getAppointmentType(row),
-              isCompleted(row) ? "완료" : "미완료",
               getConsultArea(row),
               getManagers(row).join(", ") || "-",
-              getStatus(row),
-              isSurgeryReserved(row) ? "예약" : "-",
+              row.cancelled === true ? "취소" : isCompleted(row) ? "완료" : "미완료",
               cleanText(row.depositAmount || row.deposit_amount || row.deposit || "-") || "-",
             ])}
         />
