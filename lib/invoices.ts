@@ -132,6 +132,12 @@ function mapInvoiceDoc(data: Record<string, unknown>): InvoiceRecord {
   };
 }
 
+export async function getInvoicesByPatientId(patientId: string): Promise<InvoiceRecord[]> {
+  const result = await callInvoicesApi("get_by_patient", { patientId });
+  if (!result.success || !Array.isArray(result.invoices)) return [];
+  return (result.invoices as Record<string, unknown>[]).map(mapInvoiceDoc);
+}
+
 export async function getInvoiceByReservationDocId(reservationDocId: string) {
   const result = await callInvoicesApi("get_by_reservation", { reservationDocId });
   if (!result.success || !result.invoice) return null;

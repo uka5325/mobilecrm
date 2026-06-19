@@ -99,6 +99,7 @@ export default function ReservationsPage() {
       if (!map.has(key)) {
         map.set(key, {
           patientKey: key,
+          patientId: r.patientId || key,
           name: r.name,
           birth: r.birth,
           birthInput: r.birthInput || r.birth || "",
@@ -373,6 +374,36 @@ export default function ReservationsPage() {
     await openMemoPopover(rep);
   }
 
+  async function handleSaveAmount(reservationId: string, field: "depositAmount" | "surgeryCost", value: string) {
+    if (!currentUser) return;
+    const item = reservations.find((r) => r.id === reservationId);
+    if (!item) return;
+    await updateReservationFull(
+      item.id,
+      item.reservationId,
+      item.patientId,
+      {
+        name: item.name,
+        birthInput: item.birthInput || item.birth || "",
+        birth: item.birthInput || item.birth || "",
+        phone: item.phone,
+        nationality: item.nationality,
+        consultArea: item.consultArea,
+        reservationDate: item.reservationDate,
+        reservationTime: item.reservationTime,
+        hospital: item.hospital,
+        appointmentType: item.appointmentType,
+        coordinators: item.coordinators,
+        depositAmount: field === "depositAmount" ? value : item.depositAmount,
+        surgeryCost: field === "surgeryCost" ? value : item.surgeryCost,
+        currentDoctorStatusMap: item.doctorStatusMap,
+        currentDoctorStatusMetaMap: item.doctorStatusMetaMap,
+      },
+      currentUser
+    );
+    await refresh();
+  }
+
   async function handleDelete(item: ReservationRecord) {
     if (!currentUser) return;
 
@@ -543,6 +574,7 @@ export default function ReservationsPage() {
         onCancelPatientEdit={() => { setPatientEditId(null); setPatientEditForm(null); }}
         onDeletePatient={handleDeletePatient}
         onOpenPatientMemo={openPatientMemoPopover}
+        onSaveAmount={handleSaveAmount}
       />
 
       {currentUser && (

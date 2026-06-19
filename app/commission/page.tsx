@@ -23,6 +23,71 @@ function getFirstDayOfMonth() {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
 }
 
+function downloadCSV(records: InvoiceRecord[]) {
+  const header = ["환자명", "병원명", "담당자", "결제방법", "최종수술비", "커미션기준액", "커미션율(%)", "커미션액"];
+  const rows = records.map((r) => [
+    r.patientName,
+    r.hospitalName || "",
+    r.commissionStaffName || "",
+    paymentMethodLabel(r.paymentMethod),
+    r.totalAmount ?? "",
+    r.commissionBase ?? "",
+    r.commissionRate ?? "",
+    r.commissionAmount ?? "",
+  ]);
+  const csv = [header, ...rows].map((row) => row.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(",")).join("\n");
+  const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `커미션내역_${getTodayStr()}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function DetailModal({ invoice, onClose }: { invoice: InvoiceRecord; onClose: () => void }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
+      <div
+        className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="mb-4 flex items-center justify-between">
+          <div className="text-lg font-bold">{invoice.patientName} 정산 상세</div>
+          <button onClick={onClose} className="text-2xl leading-none text-gray-400 hover:text-gray-700">×</button>
+        </div>
+        <div className="space-y-2 text-sm">
+          {[
+            ["인보이스 ID", invoice.invoiceId],
+            ["병원명", invoice.hospitalName || "-"],
+            ["담당원장", invoice.doctors?.join(", ") || "-"],
+            ["수술/시술명", invoice.surgeryItems || "-"],
+            ["담당자", invoice.commissionStaffName || "-"],
+            ["결제방법", paymentMethodLabel(invoice.paymentMethod)],
+            ["최종 수술비", formatMoney(invoice.totalAmount) + " KRW"],
+            ["커미션 기준액", formatMoney(invoice.commissionBase) + " KRW"],
+            ["커미션율", invoice.commissionRate !== undefined ? `${invoice.commissionRate}%` : "-"],
+            ["커미션액", formatMoney(invoice.commissionAmount) + " KRW"],
+            ["상태", { draft: "임시저장", confirmed: "확정", void: "취소" }[invoice.status] || invoice.status],
+            ["메모", invoice.memo || "-"],
+          ].map(([label, value]) => (
+            <div key={label} className="flex gap-2">
+              <span className="w-28 shrink-0 text-gray-500">{label}</span>
+              <span className="font-medium">{value}</span>
+            </div>
+          ))}
+        </div>
+        <button
+          onClick={onClose}
+          className="mt-5 w-full rounded-xl bg-gray-100 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-200"
+        >
+          닫기
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function CommissionPage() {
   const [currentUser, setCurrentUser] = useState<StaffUser | null>(null);
   const [staffList, setStaffList] = useState<SettingsStaffRecord[]>([]);
@@ -36,6 +101,7 @@ export default function CommissionPage() {
   const [records, setRecords] = useState<InvoiceRecord[]>([]);
   const [loading, setLoading] = useState(false);
   const [searched, setSearched] = useState(false);
+  const [selectedInvoice, setSelectedInvoice] = useState<InvoiceRecord | null>(null);
 
   useEffect(() => {
     const unsub = listenCurrentUser(async (user: User | null) => {
@@ -78,7 +144,6 @@ export default function CommissionPage() {
 
   const isAdmin = currentUser?.role === "admin";
 
-  // 담당자별 소계
   const staffSubtotals = useMemo(() => {
     const map: Record<string, { name: string; count: number; totalAmount: number; totalCommission: number }> = {};
     for (const r of records) {
@@ -108,6 +173,10 @@ export default function CommissionPage() {
 
   return (
     <div className="space-y-5 pb-12">
+      {selectedInvoice && (
+        <DetailModal invoice={selectedInvoice} onClose={() => setSelectedInvoice(null)} />
+      )}
+
       {/* 필터 */}
       <div className="rounded-2xl border border-black/10 bg-white p-5 shadow-[0_2px_16px_rgba(0,0,0,0.06)]">
         <div className="mb-4 text-base font-bold">커미션 조회</div>
@@ -200,7 +269,7 @@ export default function CommissionPage() {
             </div>
           </div>
 
-          {/* 담당자별 소계 (전체 조회 시) */}
+          {/* 담당자별 소계 */}
           {isAdmin && selectedStaffUid === "__all__" && staffSubtotals.length > 0 && (
             <div className="rounded-2xl border border-black/10 bg-white p-5 shadow-[0_2px_16px_rgba(0,0,0,0.06)]">
               <div className="mb-3 font-bold">담당자별 소계</div>
@@ -231,17 +300,28 @@ export default function CommissionPage() {
 
           {/* 상세 테이블 */}
           <div className="rounded-2xl border border-black/10 bg-white shadow-[0_2px_16px_rgba(0,0,0,0.06)]">
-            <div className="border-b px-5 py-4 font-bold">상세 내역</div>
+            <div className="flex items-center justify-between border-b px-5 py-4">
+              <div className="font-bold">상세 내역</div>
+              {records.length > 0 && (
+                <button
+                  onClick={() => downloadCSV(records)}
+                  className="rounded-xl border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50"
+                >
+                  CSV 다운로드
+                </button>
+              )}
+            </div>
             {records.length === 0 ? (
               <div className="px-5 py-8 text-center text-sm text-gray-400">
-                해당 기간에 커미션 정보가 있는 확정 인보이스가 없습니다.
+                해당 기간에 커미션 정보가 있는 인보이스가 없습니다.
               </div>
             ) : (
               <div className="overflow-x-auto">
-                <table className="w-full min-w-[860px] text-sm">
+                <table className="w-full min-w-[1000px] text-sm">
                   <thead>
                     <tr className="border-b bg-gray-50 text-xs text-gray-500">
                       <th className="px-4 py-3 text-left">환자명</th>
+                      <th className="px-4 py-3 text-left">병원명</th>
                       <th className="px-4 py-3 text-left">담당자</th>
                       <th className="px-4 py-3 text-left">결제방법</th>
                       <th className="px-4 py-3 text-right">최종 수술비</th>
@@ -252,8 +332,13 @@ export default function CommissionPage() {
                   </thead>
                   <tbody>
                     {records.map((r) => (
-                      <tr key={r.id} className="border-b last:border-b-0 hover:bg-gray-50">
-                        <td className="px-4 py-3 font-medium">{r.patientName}</td>
+                      <tr
+                        key={r.id}
+                        className="cursor-pointer border-b last:border-b-0 hover:bg-emerald-50"
+                        onClick={() => setSelectedInvoice(r)}
+                      >
+                        <td className="px-4 py-3 font-medium text-blue-700 hover:underline">{r.patientName}</td>
+                        <td className="px-4 py-3 text-gray-600">{r.hospitalName || "-"}</td>
                         <td className="px-4 py-3 text-gray-600">{r.commissionStaffName || "-"}</td>
                         <td className="px-4 py-3">
                           <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${

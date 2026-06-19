@@ -1,13 +1,16 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import type { ReservationRecord, AppointmentType } from "@/lib/reservations";
 import { APPOINTMENT_TYPES } from "@/lib/reservations";
 import { getReservationBirthInfo } from "@/lib/reservationUtils";
+import type { InvoiceRecord } from "@/lib/invoices";
+import { getInvoicesByPatientId } from "@/lib/invoices";
 
 export type PatientGroup = {
   patientKey: string;
+  patientId: string;
   name: string;
   birth: string;
   birthInput: string;
@@ -61,6 +64,7 @@ type Props = {
   onCancelPatientEdit: () => void;
   onDeletePatient: (group: PatientGroup) => void;
   onOpenPatientMemo: (group: PatientGroup) => void;
+  onSaveAmount: (reservationId: string, field: "depositAmount" | "surgeryCost", value: string) => Promise<void>;
 };
 
 function getConsultAreas(reservations: ReservationRecord[], type: AppointmentType): string {
@@ -86,12 +90,16 @@ function sumAmounts(amounts: string[]): string {
 
 type AmountPopoverProps = {
   label: string;
-  rows: { date: string; hospital: string; amount: string }[];
+  rows: { id: string; date: string; hospital: string; amount: string }[];
   onClose: () => void;
+  onSave: (reservationId: string, newAmount: string) => Promise<void>;
 };
 
-function AmountPopover({ label, rows, onClose }: AmountPopoverProps) {
+function AmountPopover({ label, rows, onClose, onSave }: AmountPopoverProps) {
   const ref = useRef<HTMLDivElement>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editValue, setEditValue] = useState("");
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     function handleClick(e: MouseEvent) {
@@ -101,24 +109,191 @@ function AmountPopover({ label, rows, onClose }: AmountPopoverProps) {
     return () => document.removeEventListener("mousedown", handleClick);
   }, [onClose]);
 
+  async function handleSave(id: string) {
+    setSaving(true);
+    try {
+      await onSave(id, editValue);
+      setEditingId(null);
+    } finally {
+      setSaving(false);
+    }
+  }
+
   return (
     <div
       ref={ref}
-      className="absolute z-50 mt-1 min-w-[260px] rounded-xl border border-gray-200 bg-white shadow-xl"
+      className="absolute z-50 mt-1 min-w-[300px] rounded-xl border border-gray-200 bg-white shadow-xl"
     >
       <div className="border-b border-gray-100 px-4 py-2.5 text-xs font-bold text-gray-700">{label} 내역</div>
       <div className="max-h-60 overflow-y-auto">
         {rows.length === 0 ? (
           <div className="px-4 py-3 text-xs text-gray-400">내역 없음</div>
         ) : (
-          rows.map((row, i) => (
-            <div key={i} className="flex items-center justify-between gap-3 border-b border-gray-50 px-4 py-2 last:border-0">
-              <span className="text-xs text-gray-500">{row.date || "—"}</span>
-              <span className="text-xs text-gray-500 truncate max-w-[90px]">{row.hospital || "—"}</span>
-              <span className="text-xs font-medium text-gray-800">{row.amount || "—"}</span>
+          rows.map((row) => (
+            <div key={row.id} className="flex items-center gap-2 border-b border-gray-50 px-3 py-2 last:border-0">
+              <span className="text-xs text-gray-500 w-[70px] shrink-0">{row.date || "—"}</span>
+              <span className="text-xs text-gray-500 truncate flex-1">{row.hospital || "—"}</span>
+              {editingId === row.id ? (
+                <>
+                  <input
+                    autoFocus
+                    className="w-[90px] rounded-lg border border-[#dfe3e8] px-2 py-0.5 text-xs focus:border-[#1d9e75] focus:outline-none"
+                    value={editValue}
+                    onChange={(e) => setEditValue(e.target.value)}
+                  />
+                  <button
+                    disabled={saving}
+                    onClick={() => handleSave(row.id)}
+                    className="rounded-lg bg-emerald-600 px-2 py-0.5 text-xs text-white disabled:opacity-50"
+                  >
+                    {saving ? "…" : "저장"}
+                  </button>
+                  <button onClick={() => setEditingId(null)} className="text-xs text-gray-400 hover:text-gray-600">
+                    ✕
+                  </button>
+                </>
+              ) : (
+                <>
+                  <span className="text-xs font-medium text-gray-800 w-[80px] text-right">{row.amount || "—"}</span>
+                  <button
+                    onClick={() => { setEditingId(row.id); setEditValue(row.amount); }}
+                    className="text-xs text-blue-500 hover:underline shrink-0"
+                  >
+                    수정
+                  </button>
+                </>
+              )}
             </div>
           ))
         )}
+      </div>
+    </div>
+  );
+}
+
+const STATUS_LABEL: Record<string, string> = {
+  draft: "임시저장", confirmed: "확정", void: "취소",
+};
+const STATUS_CLASS: Record<string, string> = {
+  draft: "bg-gray-100 text-gray-500", confirmed: "bg-emerald-50 text-emerald-700", void: "bg-red-50 text-red-500",
+};
+
+function formatMoney(v: number) { return v.toLocaleString("ko-KR"); }
+
+type PatientInvoiceModalProps = {
+  patientId: string;
+  patientName: string;
+  reservations: ReservationRecord[];
+  onClose: () => void;
+};
+
+function PatientInvoiceModal({ patientId, patientName, reservations, onClose }: PatientInvoiceModalProps) {
+  const router = useRouter();
+  const [invoices, setInvoices] = useState<InvoiceRecord[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const data = await getInvoicesByPatientId(patientId);
+      setInvoices(data);
+    } finally {
+      setLoading(false);
+    }
+  }, [patientId]);
+
+  useEffect(() => { load(); }, [load]);
+
+  async function handleDelete(inv: InvoiceRecord) {
+    if (!confirm(`${patientName}의 인보이스를 삭제할까요?`)) return;
+    try {
+      const { auth } = await import("@/lib/firebase");
+      const { deleteInvoice } = await import("@/lib/invoices");
+      const { getStaffByUid } = await import("@/lib/auth");
+      const firebaseUser = auth.currentUser;
+      if (!firebaseUser) { alert("로그인 정보를 확인할 수 없습니다."); return; }
+      const staff = await getStaffByUid(firebaseUser.uid);
+      if (!staff) { alert("직원 정보를 찾을 수 없습니다."); return; }
+      const result = await deleteInvoice(inv.id, staff);
+      if (result.success) load();
+      else alert(result.message || "삭제 실패");
+    } catch {
+      alert("삭제 중 오류가 발생했습니다.");
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-[1100] flex items-center justify-center bg-black/40" onClick={onClose}>
+      <div
+        className="relative w-full max-w-2xl rounded-2xl bg-white shadow-2xl mx-4 max-h-[85vh] flex flex-col"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4">
+          <div>
+            <div className="text-base font-bold">{patientName} — 인보이스 목록</div>
+            <div className="text-xs text-gray-400 mt-0.5">전체 {invoices.length}건</div>
+          </div>
+          <button onClick={onClose} className="text-xl text-gray-400 hover:text-gray-700">✕</button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto">
+          {loading ? (
+            <div className="py-12 text-center text-sm text-gray-400">로딩 중...</div>
+          ) : invoices.length === 0 ? (
+            <div className="py-12 text-center text-sm text-gray-400">인보이스가 없습니다.</div>
+          ) : (
+            <table className="w-full text-sm">
+              <thead className="bg-gray-50 border-b border-gray-100">
+                <tr>
+                  {["병원명", "수술항목", "상태", "수술비", "커미션", ""].map((h) => (
+                    <th key={h} className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                {invoices.map((inv) => {
+                  const matchedRes = reservations.find((r) => r.id === inv.reservationDocId);
+                  return (
+                    <tr key={inv.id} className="hover:bg-gray-50">
+                      <td className="px-4 py-2.5 font-medium text-gray-800">{inv.hospitalName || "—"}</td>
+                      <td className="px-4 py-2.5 text-gray-600 max-w-[140px] truncate">{inv.surgeryItems || "—"}</td>
+                      <td className="px-4 py-2.5">
+                        <span className={`rounded-lg px-2 py-0.5 text-xs font-semibold ${STATUS_CLASS[inv.status] || ""}`}>
+                          {STATUS_LABEL[inv.status] || inv.status}
+                        </span>
+                        {matchedRes && <span className="ml-1 text-xs text-blue-500">이 환자</span>}
+                      </td>
+                      <td className="px-4 py-2.5 text-gray-700">₩{formatMoney(inv.totalAmount || 0)}</td>
+                      <td className="px-4 py-2.5 text-[#1d9e75]">
+                        {inv.commissionAmount ? `₩${formatMoney(inv.commissionAmount)}` : "—"}
+                      </td>
+                      <td className="px-4 py-2.5">
+                        <div className="flex gap-1">
+                          <button
+                            onClick={() => router.push(`/invoices/${inv.reservationDocId}`)}
+                            className="rounded-lg bg-gray-100 px-2 py-1 text-xs font-medium text-gray-600 hover:bg-gray-200"
+                          >
+                            수정
+                          </button>
+                          <button
+                            onClick={() => handleDelete(inv)}
+                            className="rounded-lg bg-red-50 px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-100"
+                          >
+                            삭제
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          )}
+        </div>
+
+        <div className="border-t border-gray-100 px-6 py-3">
+          <div className="text-xs text-gray-400">인보이스를 새로 추가하려면 각 예약 행의 인보이스+ 버튼을 사용하세요.</div>
+        </div>
       </div>
     </div>
   );
@@ -145,6 +320,7 @@ export function ReservationsTable({
   onCancelPatientEdit,
   onDeletePatient,
   onOpenPatientMemo,
+  onSaveAmount,
 }: Props) {
   const router = useRouter();
   const cellCls = "border-b border-gray-100 px-2 py-2";
@@ -152,6 +328,7 @@ export function ReservationsTable({
 
   type PopoverState = { groupKey: string; type: "deposit" | "surgery" } | null;
   const [amountPopover, setAmountPopover] = useState<PopoverState>(null);
+  const [invoiceModal, setInvoiceModal] = useState<{ patientId: string; patientName: string; reservations: ReservationRecord[] } | null>(null);
 
   function toggleAmountPopover(groupKey: string, type: "deposit" | "surgery") {
     setAmountPopover((prev) =>
@@ -276,10 +453,10 @@ export function ReservationsTable({
 
     const depositRows = group.reservations
       .filter((r) => r.depositAmount && r.depositAmount.trim())
-      .map((r) => ({ date: r.reservationDate || "", hospital: r.hospital || "", amount: r.depositAmount || "" }));
+      .map((r) => ({ id: r.id, date: r.reservationDate || "", hospital: r.hospital || "", amount: r.depositAmount || "" }));
     const surgeryRows = group.reservations
       .filter((r) => r.surgeryCost && r.surgeryCost.trim())
-      .map((r) => ({ date: r.reservationDate || "", hospital: r.hospital || "", amount: r.surgeryCost || "" }));
+      .map((r) => ({ id: r.id, date: r.reservationDate || "", hospital: r.hospital || "", amount: r.surgeryCost || "" }));
 
     const depositPopoverOpen = amountPopover?.groupKey === group.patientKey && amountPopover.type === "deposit";
     const surgeryPopoverOpen = amountPopover?.groupKey === group.patientKey && amountPopover.type === "surgery";
@@ -383,6 +560,7 @@ export function ReservationsTable({
                   label="예약금"
                   rows={depositRows}
                   onClose={() => setAmountPopover(null)}
+                  onSave={(id, v) => onSaveAmount(id, "depositAmount", v)}
                 />
               )}
             </div>
@@ -400,11 +578,18 @@ export function ReservationsTable({
                   label="수술비용"
                   rows={surgeryRows}
                   onClose={() => setAmountPopover(null)}
+                  onSave={(id, v) => onSaveAmount(id, "surgeryCost", v)}
                 />
               )}
             </div>
 
             <div className="ml-auto flex items-center gap-1.5">
+              <button
+                onClick={() => setInvoiceModal({ patientId: group.patientId || group.patientKey, patientName: group.name, reservations: group.reservations })}
+                className="rounded-md border border-[#1d9e75] bg-white px-2 py-0.5 text-xs text-[#1d9e75] hover:bg-emerald-50"
+              >
+                인보이스
+              </button>
               <button
                 onClick={() => onOpenPatientMemo(group)}
                 className="rounded-md border border-emerald-200 bg-white px-2 py-0.5 text-xs text-emerald-700 hover:bg-emerald-50"
@@ -462,6 +647,15 @@ export function ReservationsTable({
   }
 
   return (
+    <>
+    {invoiceModal && (
+      <PatientInvoiceModal
+        patientId={invoiceModal.patientId}
+        patientName={invoiceModal.patientName}
+        reservations={invoiceModal.reservations}
+        onClose={() => setInvoiceModal(null)}
+      />
+    )}
     <div className="-mx-4 sm:-mx-6 lg:-mx-8">
       <div className="overflow-x-auto border-y border-gray-100 bg-white">
         <table className="min-w-[900px] w-full table-fixed border-collapse text-sm">
@@ -489,5 +683,6 @@ export function ReservationsTable({
         </table>
       </div>
     </div>
+    </>
   );
 }

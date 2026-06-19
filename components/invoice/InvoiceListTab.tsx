@@ -88,8 +88,28 @@ export function InvoiceListTab() {
       total: filtered.length,
       confirmed: confirmed.length,
       totalAmount: confirmed.reduce((s, i) => s + (i.totalAmount || 0), 0),
+      totalCommission: confirmed.reduce((s, i) => s + (i.commissionAmount || 0), 0),
     };
   }, [filtered]);
+
+  async function handleDelete(inv: typeof filtered[0], e: React.MouseEvent) {
+    e.stopPropagation();
+    if (!confirm(`${inv.patientName}의 인보이스를 삭제할까요?`)) return;
+    try {
+      const { auth } = await import("@/lib/firebase");
+      const { deleteInvoice } = await import("@/lib/invoices");
+      const firebaseUser = auth.currentUser;
+      if (!firebaseUser) { alert("로그인 정보를 확인할 수 없습니다."); return; }
+      const { getStaffByUid } = await import("@/lib/auth");
+      const staff = await getStaffByUid(firebaseUser.uid);
+      if (!staff) { alert("직원 정보를 찾을 수 없습니다."); return; }
+      const result = await deleteInvoice(inv.id, staff);
+      if (result.success) load();
+      else alert(result.message || "삭제 실패");
+    } catch {
+      alert("삭제 중 오류가 발생했습니다.");
+    }
+  }
 
   return (
     <div className="flex flex-col gap-4">
@@ -142,11 +162,12 @@ export function InvoiceListTab() {
       </div>
 
       {/* KPI */}
-      <div className="grid grid-cols-3 gap-2">
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
         {[
           { label: "전체", value: kpi.total + "건", className: "bg-gray-50 border-gray-200" },
           { label: "확정", value: kpi.confirmed + "건", className: "bg-emerald-50 border-emerald-200 text-emerald-700" },
           { label: "확정 수술비 합계", value: `₩${formatMoney(kpi.totalAmount)}`, className: "bg-blue-50 border-blue-200 text-blue-700" },
+          { label: "확정 커미션 합계", value: `₩${formatMoney(kpi.totalCommission)}`, className: "bg-orange-50 border-orange-200 text-orange-700" },
         ].map((box) => (
           <div key={box.label} className={`rounded-xl border px-4 py-2.5 ${box.className}`}>
             <div className="text-xs font-semibold opacity-70">{box.label}</div>
@@ -174,7 +195,7 @@ export function InvoiceListTab() {
             <table className="w-full text-sm">
               <thead className="border-b border-[#edf0f3] bg-[#f8fafc]">
                 <tr>
-                  {["날짜", "환자명", "병원명", "수술명", "담당원장", "상태", "수술비", ""].map((h) => (
+                  {["날짜", "환자명", "병원명", "수술명", "담당원장", "상태", "수술비", "커미션", ""].map((h) => (
                     <th
                       key={h}
                       className="px-4 py-3 text-left text-xs font-semibold text-gray-500"
@@ -206,16 +227,27 @@ export function InvoiceListTab() {
                     <td className="px-4 py-3 font-medium text-gray-700">
                       ₩{formatMoney(inv.totalAmount || 0)}
                     </td>
+                    <td className="px-4 py-3 text-sm text-[#1d9e75]">
+                      {inv.commissionAmount ? `₩${formatMoney(inv.commissionAmount)}` : "-"}
+                    </td>
                     <td className="px-4 py-3">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          router.push(`/invoices/${inv.reservationDocId}`);
-                        }}
-                        className="rounded-lg bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-600 hover:bg-gray-200"
-                      >
-                        보기
-                      </button>
+                      <div className="flex gap-1">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            router.push(`/invoices/${inv.reservationDocId}`);
+                          }}
+                          className="rounded-lg bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-600 hover:bg-gray-200"
+                        >
+                          수정
+                        </button>
+                        <button
+                          onClick={(e) => handleDelete(inv, e)}
+                          className="rounded-lg bg-red-50 px-2.5 py-1 text-xs font-medium text-red-600 hover:bg-red-100"
+                        >
+                          삭제
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}

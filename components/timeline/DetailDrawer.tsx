@@ -385,9 +385,13 @@ export function DetailDrawer({ open, reservation, currentUser, onClose, onRefres
               {birthGenderText && (
                 <div className="mt-0.5 text-sm text-gray-500">{birthGenderText}</div>
               )}
-              {(selectedReservation.hospital || selectedReservation.reservationTime) && (
+              {(selectedReservation.hospital || selectedReservation.reservationTime || (selectedReservation.doctors && selectedReservation.doctors.length > 0)) && (
                 <div className="mt-0.5 text-sm text-gray-500">
-                  {[selectedReservation.hospital, selectedReservation.reservationTime].filter(Boolean).join(" · ")}
+                  {[
+                    selectedReservation.hospital,
+                    selectedReservation.doctors?.length ? selectedReservation.doctors.join(", ") : null,
+                    selectedReservation.reservationTime,
+                  ].filter(Boolean).join(" · ")}
                 </div>
               )}
               {selectedReservation.consultArea && (
@@ -516,6 +520,7 @@ export function DetailDrawer({ open, reservation, currentUser, onClose, onRefres
           {activeTab === "invoice" && selectedReservation && (
             <InvoiceTab
               reservationDocId={selectedReservation.id}
+              patientId={selectedReservation.patientId}
               currentUser={currentUser}
             />
           )}

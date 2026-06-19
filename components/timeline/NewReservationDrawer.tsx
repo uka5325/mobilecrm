@@ -32,6 +32,7 @@ const EMPTY_FORM = (date: string, patient?: InitialPatient) => ({
   reservationDate: date,
   reservationTime: "",
   hospital: "",
+  doctors: "",
   appointmentType: "상담" as AppointmentType,
   coordinators: "",
   depositAmount: "",
@@ -72,6 +73,7 @@ export function NewReservationDrawer({ open, onClose, currentUser, initialDate, 
           reservationDate: form.reservationDate,
           reservationTime: form.reservationTime,
           hospital: form.hospital,
+          doctors: form.doctors.split(",").map((s) => s.trim()).filter(Boolean),
           appointmentType: form.appointmentType,
           coordinators: form.coordinators.split(",").map((s) => s.trim()).filter(Boolean),
           depositAmount: form.depositAmount,
@@ -164,14 +166,25 @@ export function NewReservationDrawer({ open, onClose, currentUser, initialDate, 
             </div>
           </div>
 
-          <div>
-            <label className="text-xs text-gray-500">병원명</label>
-            <input
-              value={form.hospital}
-              onChange={(e) => setForm((p) => ({ ...p, hospital: e.target.value }))}
-              placeholder="예: 강남성형외과"
-              className="mt-1 w-full rounded-xl border border-[#dfe3e8] px-3 py-2 text-sm transition focus:border-[#1d9e75] focus:outline-none"
-            />
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs text-gray-500">병원명</label>
+              <input
+                value={form.hospital}
+                onChange={(e) => setForm((p) => ({ ...p, hospital: e.target.value }))}
+                placeholder="예: 강남성형외과"
+                className="mt-1 w-full rounded-xl border border-[#dfe3e8] px-3 py-2 text-sm transition focus:border-[#1d9e75] focus:outline-none"
+              />
+            </div>
+            <div>
+              <label className="text-xs text-gray-500">담당 원장</label>
+              <input
+                value={form.doctors}
+                onChange={(e) => setForm((p) => ({ ...p, doctors: e.target.value }))}
+                placeholder="쉼표로 구분"
+                className="mt-1 w-full rounded-xl border border-[#dfe3e8] px-3 py-2 text-sm transition focus:border-[#1d9e75] focus:outline-none"
+              />
+            </div>
           </div>
 
           <div>

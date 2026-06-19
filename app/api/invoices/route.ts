@@ -97,6 +97,17 @@ export async function POST(req: NextRequest) {
     const uid = decoded.uid;
     void uid;
 
+    // ── GET_BY_PATIENT ───────────────────────────────────────────────────────
+    if (action === "get_by_patient") {
+      const { patientId } = payload as { patientId: string };
+      const snap = await adminDb.collection("invoices")
+        .where("patientId", "==", patientId)
+        .orderBy("createdAt", "desc")
+        .get();
+      const invoices = snap.docs.map(docToObj).filter((r) => !r.isDeleted);
+      return NextResponse.json({ success: true, invoices });
+    }
+
     // ── GET_BY_RESERVATION ───────────────────────────────────────────────────
     if (action === "get_by_reservation") {
       const { reservationDocId } = payload as { reservationDocId: string };
@@ -150,8 +161,12 @@ export async function POST(req: NextRequest) {
         doctors: Array.isArray(reservation.doctors) ? reservation.doctors : [],
         coordinators: Array.isArray(reservation.coordinators) ? reservation.coordinators : [],
         hospitalName: cleanText(reservation.hospital),
-        surgeryItems: "",
-        totalAmount: 0,
+        surgeryItems: cleanText(reservation.consultArea) || "",
+        totalAmount: (() => {
+          const raw = cleanText(reservation.surgeryCost).replace(/[^0-9.]/g, "");
+          const n = parseFloat(raw);
+          return Number.isFinite(n) ? n : 0;
+        })(),
         memo: "",
         status: "draft",
         createdAt: FieldValue.serverTimestamp(),
