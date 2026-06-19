@@ -798,7 +798,6 @@ export function ReservationsTable({
           ) : (
             <div className="flex flex-wrap justify-center gap-0.5">
               <button onClick={() => onStartEdit(item)} className="px-2 py-1 text-xs text-blue-600 hover:underline">수정</button>
-              <button onClick={() => onAddReservation(item)} className="px-2 py-1 text-xs text-emerald-600 hover:underline">추가</button>
               <button onClick={() => onDelete(item)} className="px-2 py-1 text-xs text-red-500 hover:underline">삭제</button>
             </div>
           )}
@@ -957,7 +956,7 @@ export function ReservationsTable({
               return (
                 <button
                   onClick={() => setInvoiceModal({ patientId: pid, patientName: group.name, reservations: group.reservations })}
-                  className={`rounded-md border px-2 py-0.5 text-xs transition ${cnt !== undefined && cnt > 0 ? "border-[#1d9e75] bg-white text-[#1d9e75] hover:bg-emerald-50" : "border-gray-200 bg-white text-gray-400 hover:bg-gray-50"}`}
+                  className={`rounded-md border px-2 py-0.5 text-xs transition ${cnt !== undefined && cnt > 0 ? "border-emerald-200 bg-white text-[#1d9e75] hover:bg-emerald-50" : "border-gray-200 bg-white text-gray-400 hover:bg-gray-50"}`}
                 >
                   인보이스{cnt !== undefined && cnt > 0 ? ` (${cnt})` : ""}
                 </button>
@@ -967,7 +966,7 @@ export function ReservationsTable({
             <div className="ml-auto flex items-center gap-1.5">
               <button
                 onClick={() => onOpenPatientMemo(group)}
-                className="rounded-md border border-emerald-200 bg-white px-2 py-0.5 text-xs text-emerald-700 hover:bg-emerald-50"
+                className="rounded-md border border-gray-200 bg-white px-2 py-0.5 text-xs text-gray-600 hover:bg-gray-50"
               >
                 메모
               </button>
@@ -976,6 +975,12 @@ export function ReservationsTable({
                 className="rounded-md border border-gray-200 bg-white px-2 py-0.5 text-xs text-blue-600 hover:bg-blue-50"
               >
                 수정
+              </button>
+              <button
+                onClick={() => onAddReservation(group.reservations[group.reservations.length - 1])}
+                className="rounded-md border border-gray-200 bg-white px-2 py-0.5 text-xs text-emerald-600 hover:bg-emerald-50"
+              >
+                추가
               </button>
               <button
                 onClick={() => onDeletePatient(group)}
