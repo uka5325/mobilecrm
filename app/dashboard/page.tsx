@@ -175,82 +175,61 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-5">
-      <section className="rounded-[18px] border border-[#edf0f3] bg-white p-5 shadow-[0_2px_14px_rgba(0,0,0,0.04)]">
-        <div className="grid grid-cols-2 items-end gap-3 xl:grid-cols-6">
-          <div>
-            <label className="mb-1 block text-xs text-gray-500">시작일</label>
-            <input
-              type="date"
-              value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
-              className="h-10 min-w-0 w-full appearance-none rounded-xl border border-[#dfe3e8] bg-white px-3 text-sm outline-none transition focus:border-[#1d9e75] focus:ring-4 focus:ring-emerald-100"
-            />
-          </div>
-
-          <div>
-            <label className="mb-1 block text-xs text-gray-500">종료일</label>
-            <input
-              type="date"
-              value={endDate}
-              onChange={(e) => setEndDate(e.target.value)}
-              className="h-10 min-w-0 w-full appearance-none rounded-xl border border-[#dfe3e8] bg-white px-3 text-sm outline-none transition focus:border-[#1d9e75] focus:ring-4 focus:ring-emerald-100"
-            />
-          </div>
-
-          <div>
-            <label className="mb-1 block text-xs text-gray-500">병원</label>
-            <select
-              value={hospitalFilter}
-              onChange={(e) => setHospitalFilter(e.target.value)}
-              className="h-10 w-full rounded-xl border border-[#dfe3e8] bg-white px-3 text-sm outline-none transition focus:border-[#1d9e75] focus:ring-4 focus:ring-emerald-100"
-            >
-              <option value="">전체 병원</option>
-              {hospitals.map((h) => (
-                <option key={h} value={h}>{h}</option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <label className="mb-1 block text-xs text-gray-500">예약 유형</label>
-            <select
-              value={apptTypeFilter}
-              onChange={(e) => setApptTypeFilter(e.target.value)}
-              className="h-10 w-full rounded-xl border border-[#dfe3e8] bg-white px-3 text-sm outline-none transition focus:border-[#1d9e75] focus:ring-4 focus:ring-emerald-100"
-            >
-              <option value="">전체 유형</option>
-              <option value="상담">상담</option>
-              <option value="수술">수술</option>
-              <option value="치료">치료</option>
-              <option value="경과">경과</option>
-            </select>
-          </div>
-
-          <div>
-            <label className="mb-1 block text-xs text-gray-500">상담부위</label>
-            <select
-              value={areaFilter}
-              onChange={(e) => setAreaFilter(e.target.value)}
-              className="h-10 w-full rounded-xl border border-[#dfe3e8] bg-white px-3 text-sm outline-none transition focus:border-[#1d9e75] focus:ring-4 focus:ring-emerald-100"
-            >
-              <option value="">전체 부위</option>
-              {areaOptions.map((area) => (
-                <option key={area} value={area}>{area}</option>
-              ))}
-            </select>
-          </div>
-
-          <div className="flex gap-2">
-            <button
-              onClick={resetFilters}
-              className="h-10 flex-1 rounded-xl bg-[#111827] px-4 text-sm font-medium text-white transition hover:-translate-y-0.5 hover:shadow-md active:scale-95"
-            >
-              초기화
-            </button>
-          </div>
+      <section className="-mx-6 mb-4 rounded-t-2xl border border-[#edf0f3] bg-[#ecfdf5] px-4 py-4 lg:-mx-8 lg:px-8">
+        <div className="flex items-center gap-2 overflow-x-auto [&::-webkit-scrollbar]:hidden">
+          <input
+            type="date"
+            value={startDate}
+            onChange={(e) => setStartDate(e.target.value)}
+            className="h-10 shrink-0 appearance-none rounded-xl border border-[#dfe3e8] bg-white px-3 text-sm outline-none transition focus:border-[#1d9e75] focus:ring-4 focus:ring-emerald-100"
+          />
+          <span className="shrink-0 text-sm text-gray-400">~</span>
+          <input
+            type="date"
+            value={endDate}
+            onChange={(e) => setEndDate(e.target.value)}
+            className="h-10 shrink-0 appearance-none rounded-xl border border-[#dfe3e8] bg-white px-3 text-sm outline-none transition focus:border-[#1d9e75] focus:ring-4 focus:ring-emerald-100"
+          />
+          <select
+            value={hospitalFilter}
+            onChange={(e) => setHospitalFilter(e.target.value)}
+            className="h-10 shrink-0 rounded-xl border border-[#dfe3e8] bg-white px-3 text-sm outline-none transition focus:border-[#1d9e75] focus:ring-4 focus:ring-emerald-100"
+          >
+            <option value="">전체 병원</option>
+            {hospitals.map((h) => (
+              <option key={h} value={h}>{h}</option>
+            ))}
+          </select>
+          <select
+            value={apptTypeFilter}
+            onChange={(e) => setApptTypeFilter(e.target.value)}
+            className="h-10 shrink-0 rounded-xl border border-[#dfe3e8] bg-white px-3 text-sm outline-none transition focus:border-[#1d9e75] focus:ring-4 focus:ring-emerald-100"
+          >
+            <option value="">전체 유형</option>
+            <option value="상담">상담</option>
+            <option value="수술">수술</option>
+            <option value="치료">치료</option>
+            <option value="경과">경과</option>
+          </select>
+          <select
+            value={areaFilter}
+            onChange={(e) => setAreaFilter(e.target.value)}
+            className="h-10 shrink-0 rounded-xl border border-[#dfe3e8] bg-white px-3 text-sm outline-none transition focus:border-[#1d9e75] focus:ring-4 focus:ring-emerald-100"
+          >
+            <option value="">전체 부위</option>
+            {areaOptions.map((area) => (
+              <option key={area} value={area}>{area}</option>
+            ))}
+          </select>
+          <button
+            onClick={resetFilters}
+            className="h-10 shrink-0 rounded-xl bg-black px-4 text-sm font-medium text-white transition hover:-translate-y-0.5 hover:shadow-md active:scale-95"
+          >
+            초기화
+          </button>
         </div>
 
-        <div className="mt-3 flex flex-wrap gap-2">
+        <div className="mt-3 flex gap-2 overflow-x-auto [&::-webkit-scrollbar]:hidden">
           <QuickButton onClick={() => handleQuickRange("today")}>오늘</QuickButton>
           <QuickButton onClick={() => handleQuickRange("week")}>이번 주</QuickButton>
           <QuickButton onClick={() => handleQuickRange("month")}>이번 달</QuickButton>
