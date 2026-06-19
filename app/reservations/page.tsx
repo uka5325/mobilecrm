@@ -489,7 +489,7 @@ export default function ReservationsPage() {
             type="date"
             value={filterDate}
             onChange={(e) => setFilterDate(e.target.value)}
-            className="h-10 w-[120px] shrink-0 appearance-none rounded-xl border border-[#dfe3e8] bg-white px-3 text-sm outline-none focus:border-[#1d9e75]"
+            className="h-10 w-[100px] shrink-0 appearance-none rounded-xl border border-[#dfe3e8] bg-white px-2 text-sm outline-none focus:border-[#1d9e75]"
           />
 
           <button
