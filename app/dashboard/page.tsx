@@ -233,7 +233,6 @@ export default function DashboardPage() {
           <QuickButton onClick={() => handleQuickRange("today")}>오늘</QuickButton>
           <QuickButton onClick={() => handleQuickRange("week")}>이번 주</QuickButton>
           <QuickButton onClick={() => handleQuickRange("month")}>이번 달</QuickButton>
-          <QuickButton onClick={() => handleQuickRange("last7")}>지난 7일</QuickButton>
           <QuickButton onClick={() => handleQuickRange("last30")}>지난 30일</QuickButton>
         </div>
 
