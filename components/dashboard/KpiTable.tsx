@@ -16,21 +16,20 @@ export const KpiTable = memo(function KpiTable({
   return (
     <div>
       <div className="overflow-x-auto">
-        <table className="w-full border-collapse text-sm">
-          <thead>
+        <table className="w-full text-sm">
+          <thead className="border-b border-[#edf0f3] bg-[#f8fafc]">
             <tr>
-              {headers.map((header) => (
+              {headers.map((header, i) => (
                 <th
                   key={header}
-                  className="whitespace-nowrap border-b border-[#edf0f3] bg-gray-50 px-3 py-2.5 text-left text-[11px] font-semibold text-gray-500"
+                  className={`whitespace-nowrap px-4 py-3 text-xs font-semibold text-gray-500 ${i === 0 ? "pl-6 text-left lg:pl-8" : "text-right"}`}
                 >
                   {header}
                 </th>
               ))}
             </tr>
           </thead>
-
-          <tbody>
+          <tbody className="divide-y divide-[#f1f3f5]">
             {rows.length === 0 ? (
               <tr>
                 <td colSpan={headers.length} className="py-8 text-center text-sm text-gray-400">
@@ -39,11 +38,11 @@ export const KpiTable = memo(function KpiTable({
               </tr>
             ) : (
               visibleRows.map((row, rowIndex) => (
-                <tr key={page * pageSize + rowIndex}>
+                <tr key={page * pageSize + rowIndex} className="hover:bg-[#f8fafc]">
                   {row.map((cell, cellIndex) => (
                     <td
                       key={cellIndex}
-                      className="whitespace-nowrap border-b border-[#f1f3f5] px-3 py-3 text-gray-700"
+                      className={`whitespace-nowrap px-4 py-3 ${cellIndex === 0 ? "pl-6 font-medium text-gray-800 lg:pl-8" : "text-right text-gray-600"}`}
                     >
                       {cell}
                     </td>
@@ -56,7 +55,7 @@ export const KpiTable = memo(function KpiTable({
       </div>
 
       {totalPages > 1 && (
-        <div className="mt-2 flex items-center justify-between px-1">
+        <div className="flex items-center justify-between px-6 py-3 lg:px-8">
           <span className="text-[11px] text-gray-400">
             {page * pageSize + 1}–{Math.min((page + 1) * pageSize, rows.length)} / {rows.length}건
           </span>
