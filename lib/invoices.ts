@@ -684,20 +684,30 @@ export type InvoiceListFilter = {
 
 export async function getInvoices(filters?: InvoiceListFilter): Promise<InvoiceRecord[]> {
   const now = new Date();
-  const start = filters?.startDate
-    ? new Date(filters.startDate + "T00:00:00")
-    : new Date(now.getFullYear(), now.getMonth(), 1);
-  const end = filters?.endDate
-    ? new Date(filters.endDate + "T23:59:59")
-    : now;
 
-  const q = query(
-    collection(db, "invoices"),
-    where("isDeleted", "==", false),
-    where("createdAt", ">=", Timestamp.fromDate(start)),
-    where("createdAt", "<=", Timestamp.fromDate(end)),
-    orderBy("createdAt", "desc")
-  );
+  let q;
+  if (!filters?.startDate && !filters?.endDate) {
+    // 전체 기간 조회 (날짜 필터 없음)
+    q = query(
+      collection(db, "invoices"),
+      where("isDeleted", "==", false),
+      orderBy("createdAt", "desc")
+    );
+  } else {
+    const start = filters?.startDate
+      ? new Date(filters.startDate + "T00:00:00")
+      : new Date(now.getFullYear(), now.getMonth(), 1);
+    const end = filters?.endDate
+      ? new Date(filters.endDate + "T23:59:59")
+      : now;
+    q = query(
+      collection(db, "invoices"),
+      where("isDeleted", "==", false),
+      where("createdAt", ">=", Timestamp.fromDate(start)),
+      where("createdAt", "<=", Timestamp.fromDate(end)),
+      orderBy("createdAt", "desc")
+    );
+  }
 
   const snap = await getDocs(q);
   let records = snap.docs.map((docSnap) => mapInvoiceDoc(docSnap.id, docSnap.data()));

@@ -2,9 +2,16 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { getInvoices, type InvoiceRecord, type InvoiceListFilter } from "@/lib/invoices";
 import { todayString } from "@/lib/dateUtils";
 import { toDate } from "@/lib/settingsUtils";
+
+function threeMonthsAgo() {
+  const d = new Date();
+  d.setMonth(d.getMonth() - 3);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
+}
 
 const STATUS_LABEL: Record<string, string> = {
   draft: "임시저장",
@@ -37,9 +44,9 @@ function formatDate(value: unknown): string {
 export function InvoiceListTab() {
   const router = useRouter();
   const today = todayString();
-  const firstOfMonth = today.slice(0, 7) + "-01";
 
-  const [startDate, setStartDate] = useState(firstOfMonth);
+  const [allPeriod, setAllPeriod] = useState(false);
+  const [startDate, setStartDate] = useState(threeMonthsAgo());
   const [endDate, setEndDate] = useState(today);
   const [statusFilter, setStatusFilter] = useState<"" | "draft" | "confirmed" | "void">("");
   const [nameQuery, setNameQuery] = useState("");
@@ -48,14 +55,14 @@ export function InvoiceListTab() {
 
   useEffect(() => {
     load();
-  }, [startDate, endDate, statusFilter]);
+  }, [startDate, endDate, statusFilter, allPeriod]);
 
   async function load() {
     setLoading(true);
     try {
       const filters: InvoiceListFilter = {
-        startDate,
-        endDate,
+        startDate: allPeriod ? undefined : startDate,
+        endDate: allPeriod ? undefined : endDate,
         status: statusFilter || undefined,
       };
       const data = await getInvoices(filters);
@@ -83,20 +90,39 @@ export function InvoiceListTab() {
 
   return (
     <div className="flex flex-col gap-4">
+      {/* 안내 배너 */}
+      <div className="flex items-center justify-between rounded-xl border border-emerald-100 bg-emerald-50 px-4 py-2.5 text-sm">
+        <span className="text-emerald-800">인보이스는 <b>예약 관리</b> 페이지의 각 예약 행에서 생성하거나 열 수 있습니다.</span>
+        <Link href="/reservations" className="ml-3 shrink-0 rounded-lg bg-[#1d9e75] px-3 py-1 text-xs font-semibold text-white hover:bg-[#178a65]">
+          예약 관리 →
+        </Link>
+      </div>
+
       {/* Filters */}
       <div className="flex flex-wrap items-center gap-2">
+        <label className="flex items-center gap-1.5 text-sm text-gray-600 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={allPeriod}
+            onChange={(e) => setAllPeriod(e.target.checked)}
+            className="h-4 w-4 rounded"
+          />
+          전체 기간
+        </label>
         <input
           type="date"
           value={startDate}
           onChange={(e) => setStartDate(e.target.value)}
-          className="h-9 rounded-xl border border-[#dfe3e8] bg-white px-3 text-sm focus:border-[#1d9e75] focus:outline-none"
+          disabled={allPeriod}
+          className="h-9 rounded-xl border border-[#dfe3e8] bg-white px-3 text-sm focus:border-[#1d9e75] focus:outline-none disabled:opacity-40"
         />
         <span className="text-sm text-gray-400">~</span>
         <input
           type="date"
           value={endDate}
           onChange={(e) => setEndDate(e.target.value)}
-          className="h-9 rounded-xl border border-[#dfe3e8] bg-white px-3 text-sm focus:border-[#1d9e75] focus:outline-none"
+          disabled={allPeriod}
+          className="h-9 rounded-xl border border-[#dfe3e8] bg-white px-3 text-sm focus:border-[#1d9e75] focus:outline-none disabled:opacity-40"
         />
         <select
           value={statusFilter}

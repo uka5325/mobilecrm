@@ -31,6 +31,7 @@ export default function CommissionPage() {
   const [endDate, setEndDate] = useState(getTodayStr());
   const [selectedStaffUid, setSelectedStaffUid] = useState("__all__");
   const [patientSearch, setPatientSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"" | "confirmed" | "draft">("");
 
   const [records, setRecords] = useState<InvoiceRecord[]>([]);
   const [loading, setLoading] = useState(false);
@@ -63,7 +64,7 @@ export default function CommissionPage() {
       const results = await getInvoices({
         startDate,
         endDate,
-        status: "confirmed",
+        status: statusFilter || undefined,
         commissionStaffUid: filterUid,
         patientName: patientSearch || undefined,
       });
@@ -145,6 +146,19 @@ export default function CommissionPage() {
               </select>
             </div>
           )}
+
+          <div>
+            <label className="mb-1 block text-xs text-gray-500">인보이스 상태</label>
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)}
+              className="rounded-xl border px-3 py-2 text-sm"
+            >
+              <option value="">전체</option>
+              <option value="confirmed">확정</option>
+              <option value="draft">임시저장</option>
+            </select>
+          </div>
 
           <div>
             <label className="mb-1 block text-xs text-gray-500">환자명 검색</label>
