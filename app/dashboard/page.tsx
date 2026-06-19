@@ -24,7 +24,6 @@ import {
   setQuickRange,
 } from "@/lib/dashboardUtils";
 import { QuickButton } from "@/components/dashboard/QuickButton";
-import { KpiCard } from "@/components/dashboard/KpiCard";
 import { Panel } from "@/components/dashboard/Panel";
 import { KpiTable } from "@/components/dashboard/KpiTable";
 
@@ -243,13 +242,8 @@ export default function DashboardPage() {
         </div>
       </section>
 
-      {/* KPI 카드 */}
-      <section className="grid grid-cols-2 gap-4 md:grid-cols-2 xl:grid-cols-2">
-        <KpiCard label="취소" value={cancelledCount.toLocaleString("ko-KR")} sub={`취소율 ${cancelledRate}%`} />
-      </section>
-
-      {/* 유형별 현황 */}
-      <section className="grid grid-cols-2 gap-3 md:grid-cols-4">
+      {/* 유형별 현황 + 취소 */}
+      <section className="grid grid-cols-2 gap-3 md:grid-cols-3">
         {(["상담", "수술", "치료", "경과"] as const).map((type) => {
           const row = dashboard.apptTypeRows.find((r) => r.name === type);
           const count = row?.total || 0;
@@ -268,6 +262,11 @@ export default function DashboardPage() {
             </div>
           );
         })}
+        <div className="rounded-[14px] border border-black/5 bg-white p-4 shadow-[0_2px_10px_rgba(0,0,0,0.04)]" style={{ borderLeftWidth: 4, borderLeftColor: "#6b7280" }}>
+          <div className="text-xs font-bold text-gray-500">취소</div>
+          <div className="mt-1 text-[24px] font-bold text-gray-900">{cancelledCount.toLocaleString("ko-KR")}</div>
+          <div className="mt-0.5 text-xs text-gray-500">취소율 {cancelledRate}%</div>
+        </div>
       </section>
 
       {/* 병원별 KPI */}
