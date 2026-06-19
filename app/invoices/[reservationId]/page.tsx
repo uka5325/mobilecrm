@@ -126,8 +126,7 @@ export default function InvoiceEditPage() {
         setMessage(result.message || "저장에 실패했습니다.");
         return;
       }
-      applyInvoice(result.invoice);
-      setMessage("저장 완료");
+      router.push("/invoice");
     } catch (e) {
       console.error("[InvoicePage] save error:", e);
       setMessage("저장 중 오류가 발생했습니다.");

@@ -12,6 +12,49 @@ function threeMonthsAgo() {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
 }
 
+function DetailModal({ invoice, onClose }: { invoice: InvoiceRecord; onClose: () => void }) {
+  function fmt(v: number | undefined) {
+    if (v === undefined || v === null) return "-";
+    return Number(v).toLocaleString("ko-KR");
+  }
+  const payLabel: Record<string, string> = { cash: "현금", card: "카드", mixed: "혼합" };
+  const statusLabel: Record<string, string> = { draft: "임시저장", confirmed: "확정", void: "취소" };
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
+      <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+        <div className="mb-4 flex items-center justify-between">
+          <div className="text-lg font-bold">{invoice.patientName} 인보이스 상세</div>
+          <button onClick={onClose} className="text-2xl leading-none text-gray-400 hover:text-gray-700">×</button>
+        </div>
+        <div className="space-y-2 text-sm">
+          {([
+            ["인보이스 ID", invoice.invoiceId],
+            ["병원명", invoice.hospitalName || "-"],
+            ["담당원장", invoice.doctors?.join(", ") || "-"],
+            ["수술/시술명", invoice.surgeryItems || "-"],
+            ["담당자", invoice.commissionStaffName || "-"],
+            ["결제방법", payLabel[invoice.paymentMethod ?? ""] || "-"],
+            ["최종 수술비", fmt(invoice.totalAmount) + " KRW"],
+            ["커미션 기준액", fmt(invoice.commissionBase) + " KRW"],
+            ["커미션율", invoice.commissionRate !== undefined ? `${invoice.commissionRate}%` : "-"],
+            ["커미션액", fmt(invoice.commissionAmount) + " KRW"],
+            ["상태", statusLabel[invoice.status] || invoice.status],
+            ["메모", invoice.memo || "-"],
+          ] as [string, string][]).map(([label, value]) => (
+            <div key={label} className="flex gap-2">
+              <span className="w-28 shrink-0 text-gray-500">{label}</span>
+              <span className="font-medium">{value}</span>
+            </div>
+          ))}
+        </div>
+        <button onClick={onClose} className="mt-5 w-full rounded-xl bg-gray-100 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-200">
+          닫기
+        </button>
+      </div>
+    </div>
+  );
+}
+
 const STATUS_LABEL: Record<string, string> = {
   draft: "임시저장",
   confirmed: "확정",
@@ -51,6 +94,7 @@ export function InvoiceListTab() {
   const [invoices, setInvoices] = useState<InvoiceRecord[]>([]);
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState("");
+  const [selectedInvoice, setSelectedInvoice] = useState<InvoiceRecord | null>(null);
 
   useEffect(() => {
     load();
@@ -111,6 +155,8 @@ export function InvoiceListTab() {
   }
 
   return (
+    <>
+    {selectedInvoice && <DetailModal invoice={selectedInvoice} onClose={() => setSelectedInvoice(null)} />}
     <div className="flex flex-col gap-4">
       {/* 컨트롤바 */}
       <div className="-mx-6 rounded-t-2xl border border-[#edf0f3] bg-[#ecfdf5] px-4 py-4 lg:-mx-8 lg:px-8">
@@ -227,7 +273,7 @@ export function InvoiceListTab() {
                           수정
                         </button>
                         <button
-                          onClick={(e) => { e.stopPropagation(); router.push(`/invoices/${inv.reservationDocId}`); }}
+                          onClick={(e) => { e.stopPropagation(); setSelectedInvoice(inv); }}
                           className="px-2 py-1 text-xs text-gray-500 hover:underline"
                         >
                           보기
@@ -248,5 +294,6 @@ export function InvoiceListTab() {
         )}
       </div>
     </div>
+    </>
   );
 }
