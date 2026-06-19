@@ -214,12 +214,14 @@ export default function CommissionPage() {
             <option value="confirmed">확정</option>
             <option value="draft">임시저장</option>
           </select>
+        </div>
+        <div className="mt-2 flex items-center gap-2 overflow-x-auto [&::-webkit-scrollbar]:hidden">
           <input
             value={patientSearch}
             onChange={(e) => setPatientSearch(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && handleSearch()}
             placeholder="환자명 검색"
-            className="h-10 min-w-[100px] shrink-0 rounded-xl border border-[#dfe3e8] bg-white px-3 text-sm outline-none transition focus:border-[#1d9e75] focus:ring-4 focus:ring-emerald-100"
+            className="h-10 flex-1 rounded-xl border border-[#dfe3e8] bg-white px-3 text-sm outline-none transition focus:border-[#1d9e75] focus:ring-4 focus:ring-emerald-100"
           />
           <button
             onClick={handleSearch}
