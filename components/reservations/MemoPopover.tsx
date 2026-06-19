@@ -77,7 +77,7 @@ export function MemoPopover({
           />
           <button
             onClick={handleAdd}
-            disabled={adding || !newText.trim()}
+            disabled={adding}
             className="mt-2 w-full rounded-xl bg-emerald-600 py-2 text-sm font-medium text-white transition hover:-translate-y-0.5 disabled:opacity-50"
           >
             {adding ? "추가 중..." : "메모 추가"}
@@ -105,7 +105,7 @@ export function MemoPopover({
                         onChange={(e) => onEditTextChange(e.target.value)}
                       />
                     ) : (
-                      <span className="flex-1 text-sm leading-relaxed text-gray-700">{note.memoText}</span>
+                      <span className="flex-1 text-sm leading-relaxed text-gray-700 whitespace-pre-wrap">{note.memoText}</span>
                     )}
                   </div>
 
