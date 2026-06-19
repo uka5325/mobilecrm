@@ -2,9 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import type { User } from "firebase/auth";
-import { getStaffByUid, listenCurrentUser } from "@/lib/auth";
-import type { StaffUser } from "@/lib/auth";
+import { useCurrentUser } from "@/hooks/useCurrentUser";
 import {
   getOrCreateInvoiceDraft,
   updateInvoice,
@@ -34,7 +32,7 @@ export default function InvoiceEditPage() {
   const router = useRouter();
   const reservationDocId = getParamValue(params.reservationId);
 
-  const [currentUser, setCurrentUser] = useState<StaffUser | null>(null);
+  const { currentUser, authReady } = useCurrentUser();
   const [invoice, setInvoice] = useState<InvoiceRecord | null>(null);
   const [staffList, setStaffList] = useState<SettingsStaffRecord[]>([]);
 
@@ -51,24 +49,13 @@ export default function InvoiceEditPage() {
   const [commissionStaffUid, setCommissionStaffUid] = useState("");
   const [commissionStaffName, setCommissionStaffName] = useState("");
 
-  const [loadingUser, setLoadingUser] = useState(true);
-  const [loadingInvoice, setLoadingInvoice] = useState(true);
+  const [loadingInvoice, setLoadingInvoice] = useState(false);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [message, setMessage] = useState("");
 
   useEffect(() => {
-    const unsubscribe = listenCurrentUser(async (user: User | null) => {
-      if (!user) { setLoadingUser(false); return; }
-      const staff = await getStaffByUid(user.uid);
-      setCurrentUser(staff);
-      setLoadingUser(false);
-    });
-    return () => unsubscribe();
-  }, []);
-
-  useEffect(() => {
-    if (!currentUser || !reservationDocId) return;
+    if (!authReady || !currentUser || !reservationDocId) return;
     setLoadingInvoice(true);
     setMessage("");
     getOrCreateInvoiceDraft(reservationDocId, currentUser)
@@ -81,7 +68,7 @@ export default function InvoiceEditPage() {
       })
       .catch(() => setMessage("인보이스 로딩 중 오류가 발생했습니다."))
       .finally(() => setLoadingInvoice(false));
-  }, [currentUser, reservationDocId]);
+  }, [authReady, currentUser, reservationDocId]);
 
   useEffect(() => {
     getStaffListForSettings()
@@ -163,7 +150,7 @@ export default function InvoiceEditPage() {
     }
   }
 
-  if (loadingUser || loadingInvoice) {
+  if (!authReady || loadingInvoice) {
     return (
       <div className="rounded-xl border border-black/10 bg-white p-6 shadow-[0_2px_16px_rgba(0,0,0,0.06)]">
         인보이스를 불러오는 중...
