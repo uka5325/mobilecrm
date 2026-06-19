@@ -569,37 +569,38 @@ export default function SchedulePage() {
     <div className="-mx-6 -mb-6 mt-5 flex h-[calc(100vh-170px)] min-h-[640px] flex-col overflow-hidden rounded-2xl border border-[#edf0f3] bg-white">
       {/* 상단 컨트롤 — 연한 녹색 배너 */}
       <div className="shrink-0 border-b border-[#edf0f3] bg-[#ecfdf5]">
-        {/* 네비게이션 + 뷰 전환 (가로 스크롤) */}
-        <div className="flex items-center gap-2 overflow-x-auto px-4 py-3 [&::-webkit-scrollbar]:hidden">
+        {/* 1행: 네비게이션 */}
+        <div className="flex items-center gap-2 px-4 pt-3">
           <button onClick={() => navigate(-1)} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-[#dfe3e8] bg-white text-gray-500 hover:bg-gray-50">‹</button>
           <button onClick={() => setBaseDate(todayString())} className="h-10 shrink-0 rounded-xl border border-[#dfe3e8] bg-white px-4 text-sm text-gray-600 hover:bg-gray-50">오늘</button>
           <button onClick={() => navigate(1)} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-[#dfe3e8] bg-white text-gray-500 hover:bg-gray-50">›</button>
-          <span className="shrink-0 text-sm font-semibold text-gray-800">{titleText}</span>
-          <div className="ml-auto flex shrink-0 items-center gap-2">
-            <div className="flex h-10 shrink-0 overflow-hidden rounded-xl border border-[#dfe3e8]">
-              {(["day", "week", "month"] as ViewMode[]).map((mode) => (
-                <button
-                  key={mode}
-                  onClick={() => setViewMode(mode)}
-                  className={`h-10 px-4 text-sm font-medium transition ${viewMode === mode ? "bg-[#1d9e75] text-white" : "bg-white text-gray-600 hover:bg-gray-50"}`}
-                >
-                  {VIEW_LABELS[mode]}
-                </button>
-              ))}
-            </div>
-            <input
-              type="date"
-              value={baseDate}
-              onChange={(e) => setBaseDate(e.target.value)}
-              className="h-10 shrink-0 appearance-none rounded-xl border border-[#dfe3e8] bg-white px-3 text-sm text-gray-700 focus:border-[#1d9e75] focus:outline-none"
-            />
-            <button
-              onClick={() => setNewOpen(true)}
-              className="h-10 shrink-0 rounded-xl bg-black px-4 text-sm font-medium text-white transition hover:-translate-y-0.5 hover:shadow-md active:scale-95"
-            >
-              + 고객 등록
-            </button>
+          <span className="truncate text-sm font-semibold text-gray-800">{titleText}</span>
+        </div>
+        {/* 2행: 뷰 전환 + 날짜 + 고객등록 */}
+        <div className="flex items-center gap-2 px-4 py-3">
+          <div className="flex h-10 flex-1 overflow-hidden rounded-xl border border-[#dfe3e8]">
+            {(["day", "week", "month"] as ViewMode[]).map((mode) => (
+              <button
+                key={mode}
+                onClick={() => setViewMode(mode)}
+                className={`h-10 flex-1 text-sm font-medium transition ${viewMode === mode ? "bg-[#1d9e75] text-white" : "bg-white text-gray-600 hover:bg-gray-50"}`}
+              >
+                {VIEW_LABELS[mode]}
+              </button>
+            ))}
           </div>
+          <input
+            type="date"
+            value={baseDate}
+            onChange={(e) => setBaseDate(e.target.value)}
+            className="h-10 shrink-0 appearance-none rounded-xl border border-[#dfe3e8] bg-white px-3 text-sm text-gray-700 focus:border-[#1d9e75] focus:outline-none"
+          />
+          <button
+            onClick={() => setNewOpen(true)}
+            className="h-10 shrink-0 rounded-xl bg-black px-4 text-sm font-medium text-white transition hover:-translate-y-0.5 hover:shadow-md active:scale-95"
+          >
+            + 고객 등록
+          </button>
         </div>
 
         {/* KPI 바 (가로 스크롤) */}
