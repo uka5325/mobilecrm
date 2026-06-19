@@ -119,14 +119,22 @@ function InvoiceEditPanel({
             className="w-full rounded-xl border border-[#dfe3e8] px-3 py-2 text-sm focus:border-[#1d9e75] focus:outline-none" />
         </div>
 
-        <div>
-          <label className="mb-1 block text-xs font-medium text-gray-600">담당 원장</label>
-          <input
-            value={(form.doctors || []).join(", ")}
-            onChange={(e) => setForm((p) => ({ ...p, doctors: e.target.value.split(",").map((s) => s.trim()).filter(Boolean) }))}
-            placeholder="쉼표로 구분"
-            className="w-full rounded-xl border border-[#dfe3e8] px-3 py-2 text-sm focus:border-[#1d9e75] focus:outline-none"
-          />
+        <div className="grid grid-cols-2 gap-2">
+          <div>
+            <label className="mb-1 block text-xs font-medium text-gray-600">담당 원장</label>
+            <input
+              value={(form.doctors || []).join(", ")}
+              onChange={(e) => setForm((p) => ({ ...p, doctors: e.target.value.split(",").map((s) => s.trim()).filter(Boolean) }))}
+              placeholder="쉼표로 구분"
+              className="w-full rounded-xl border border-[#dfe3e8] px-3 py-2 text-sm focus:border-[#1d9e75] focus:outline-none"
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-gray-600">담당자</label>
+            <div className="rounded-xl border border-[#dfe3e8] bg-gray-50 px-3 py-2 text-sm text-gray-600">
+              {invoice.coordinators?.length ? invoice.coordinators.join(", ") : "-"}
+            </div>
+          </div>
         </div>
 
         <div>
@@ -267,6 +275,16 @@ export function InvoiceTab({ reservationDocId, patientId, currentUser }: Props) 
     }
   }
 
+  async function handleDeleteFromList(inv: InvoiceRecord) {
+    if (!confirm("인보이스를 삭제할까요?")) return;
+    setError("");
+    try {
+      const result = await deleteInvoice(inv.id, currentUser);
+      if (!result.success) { setError(result.message || "삭제 실패"); return; }
+      setAllInvoices((prev) => prev.filter((i) => i.id !== inv.id));
+    } catch { setError("삭제 중 오류가 발생했습니다."); }
+  }
+
   async function handleCreate() {
     setCreating(true);
     setError("");
@@ -371,12 +389,20 @@ export function InvoiceTab({ reservationDocId, patientId, currentUser }: Props) 
                     </div>
                     <div className="mt-0.5 text-[10px] text-gray-400">{inv.invoiceId}</div>
                   </div>
-                  <button
-                    onClick={() => setEditingInvoice(inv)}
-                    className="shrink-0 rounded-lg bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-600 hover:bg-gray-200"
-                  >
-                    수정
-                  </button>
+                  <div className="flex shrink-0 gap-1">
+                    <button
+                      onClick={() => setEditingInvoice(inv)}
+                      className="rounded-lg bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-600 hover:bg-gray-200"
+                    >
+                      수정
+                    </button>
+                    <button
+                      onClick={() => handleDeleteFromList(inv)}
+                      className="rounded-lg bg-red-50 px-2.5 py-1 text-xs font-medium text-red-600 hover:bg-red-100"
+                    >
+                      삭제
+                    </button>
+                  </div>
                 </div>
               </div>
             );

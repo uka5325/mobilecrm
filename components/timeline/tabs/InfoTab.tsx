@@ -107,22 +107,24 @@ export function InfoTab({
         />
       </div>
 
-      <div className="mt-3">
-        <EditField
-          label="병원명"
-          value={detailForm.hospital}
-          onChange={(value) => onFormChange({ hospital: value })}
-        />
-      </div>
-
-      <div className="mt-3">
-        <label className="text-xs text-gray-500">담당 원장</label>
-        <input
-          value={detailForm.doctors}
-          onChange={(e) => onFormChange({ doctors: e.target.value })}
-          placeholder="쉼표로 구분"
-          className="mt-1 w-full rounded-xl border border-[#dfe3e8] bg-white px-3 py-2 text-sm transition focus:border-[#1d9e75] focus:outline-none"
-        />
+      <div className="mt-3 grid grid-cols-2 gap-3">
+        <div>
+          <label className="text-xs text-gray-500">병원명</label>
+          <input
+            value={detailForm.hospital}
+            onChange={(e) => onFormChange({ hospital: e.target.value })}
+            className="mt-1 w-full rounded-xl border border-[#dfe3e8] bg-white px-3 py-2 text-sm transition focus:border-[#1d9e75] focus:outline-none"
+          />
+        </div>
+        <div>
+          <label className="text-xs text-gray-500">담당 원장</label>
+          <input
+            value={detailForm.doctors}
+            onChange={(e) => onFormChange({ doctors: e.target.value })}
+            placeholder="쉼표로 구분"
+            className="mt-1 w-full rounded-xl border border-[#dfe3e8] bg-white px-3 py-2 text-sm transition focus:border-[#1d9e75] focus:outline-none"
+          />
+        </div>
       </div>
 
       <div className="mt-3">
