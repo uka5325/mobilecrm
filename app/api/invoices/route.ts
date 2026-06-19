@@ -95,7 +95,30 @@ export async function POST(req: NextRequest) {
 
     const decoded = await adminAuth.verifyIdToken(idToken);
     const uid = decoded.uid;
-    void uid;
+
+    // ── Caller identity & role ────────────────────────────────────────────────
+    let callerRole = "";
+    let callerName = "";
+    {
+      const snap = await adminDb.collection("staff").where("uid", "==", uid).limit(1).get();
+      const doc = snap.empty ? (await adminDb.collection("staff").doc(uid).get()) : snap.docs[0];
+      if (!snap.empty) {
+        callerRole = String(snap.docs[0].data().role || "");
+        callerName = String(snap.docs[0].data().displayName || "");
+      } else if ((doc as FirebaseFirestore.DocumentSnapshot).exists) {
+        callerRole = String((doc as FirebaseFirestore.DocumentSnapshot).data()?.role || "");
+        callerName = String((doc as FirebaseFirestore.DocumentSnapshot).data()?.displayName || "");
+      }
+    }
+
+    // admin은 모든 접근 허용. coordinator 이하는 본인 담당 인보이스만 접근.
+    const isAdmin = callerRole === "admin";
+
+    function isCoordinatorOf(inv: Record<string, unknown>): boolean {
+      if (isAdmin) return true;
+      const coords = Array.isArray(inv.coordinators) ? inv.coordinators as string[] : [];
+      return callerName ? coords.includes(callerName) : false;
+    }
 
     // ── GET_BY_PATIENT ───────────────────────────────────────────────────────
     if (action === "get_by_patient") {
@@ -104,7 +127,8 @@ export async function POST(req: NextRequest) {
         .where("patientId", "==", patientId)
         .orderBy("createdAt", "desc")
         .get();
-      const invoices = snap.docs.map(docToObj).filter((r) => !r.isDeleted);
+      const invoices = snap.docs.map(docToObj)
+        .filter((r) => !r.isDeleted && isCoordinatorOf(r));
       return NextResponse.json({ success: true, invoices });
     }
 
@@ -116,7 +140,8 @@ export async function POST(req: NextRequest) {
         .get();
       for (const d of snap.docs) {
         const obj = docToObj(d);
-        if (!obj.isDeleted) return NextResponse.json({ success: true, invoice: obj });
+        if (!obj.isDeleted && isCoordinatorOf(obj)) return NextResponse.json({ success: true, invoice: obj });
+        if (!obj.isDeleted && !isAdmin) return NextResponse.json({ success: true, invoice: null });
       }
       return NextResponse.json({ success: true, invoice: null });
     }
@@ -132,7 +157,11 @@ export async function POST(req: NextRequest) {
         .get();
       for (const d of existing.docs) {
         if (!d.data().isDeleted) {
-          return NextResponse.json({ success: true, invoice: docToObj(d), alreadyExists: true });
+          const existingInv = docToObj(d);
+          if (!isCoordinatorOf(existingInv)) {
+            return NextResponse.json({ success: false, message: "접근 권한이 없습니다." }, { status: 403 });
+          }
+          return NextResponse.json({ success: true, invoice: existingInv, alreadyExists: true });
         }
       }
 
@@ -142,6 +171,14 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ success: false, message: "예약 정보를 찾을 수 없습니다." });
       }
       const reservation = resSnap.data() as Record<string, unknown>;
+
+      // coordinator 이하: 해당 예약의 담당자인지 확인
+      if (!isAdmin) {
+        const resCoords = Array.isArray(reservation.coordinators) ? reservation.coordinators as string[] : [];
+        if (!callerName || !resCoords.includes(callerName)) {
+          return NextResponse.json({ success: false, message: "담당자만 인보이스를 생성할 수 있습니다." }, { status: 403 });
+        }
+      }
 
       const rawBirth = cleanText(reservation.birthInput || reservation.birth);
       const birthInfo = parseBirthInfo(rawBirth, cleanText(reservation.gender));
@@ -216,6 +253,10 @@ export async function POST(req: NextRequest) {
       }
       const current = invoiceSnap.data() as Record<string, unknown>;
 
+      if (!isCoordinatorOf(current)) {
+        return NextResponse.json({ success: false, message: "접근 권한이 없습니다." }, { status: 403 });
+      }
+
       const patch: Record<string, unknown> = {
         hospitalName: cleanText(fields.hospitalName),
         surgeryItems: cleanText(fields.surgeryItems),
@@ -274,6 +315,10 @@ export async function POST(req: NextRequest) {
       }
       const current = invoiceSnap.data() as Record<string, unknown>;
 
+      if (!isCoordinatorOf(current)) {
+        return NextResponse.json({ success: false, message: "접근 권한이 없습니다." }, { status: 403 });
+      }
+
       await invoiceRef.update({
         isDeleted: true,
         updatedAt: FieldValue.serverTimestamp(),
@@ -325,7 +370,7 @@ export async function POST(req: NextRequest) {
 
       const snap = await query.get();
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      let records = snap.docs.map(docToObj).filter((r: any) => !r.isDeleted);
+      let records = snap.docs.map(docToObj).filter((r: any) => !r.isDeleted && isCoordinatorOf(r));
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       if (status) records = records.filter((r: any) => r.status === status);
       if (patientName) {
