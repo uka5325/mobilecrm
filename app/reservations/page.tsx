@@ -411,6 +411,7 @@ export default function ReservationsPage() {
         hospital: item.hospital,
         appointmentType: item.appointmentType,
         coordinators: item.coordinators,
+        doctors: item.doctors || [],
         depositAmount: field === "depositAmount" ? value : item.depositAmount,
         surgeryCost: field === "surgeryCost" ? value : item.surgeryCost,
         currentDoctorStatusMap: item.doctorStatusMap,

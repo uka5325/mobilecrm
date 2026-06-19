@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, type ReactNode } from "react";
 import type { ReservationRecord, AppointmentType } from "@/lib/reservations";
 import { APPOINTMENT_TYPES } from "@/lib/reservations";
 import { getReservationBirthInfo } from "@/lib/reservationUtils";
@@ -299,7 +299,7 @@ function PatientInvoiceModal({ patientId, patientName, reservations, onClose, on
     );
   }
 
-  const invoiceByReservation = new Map(invoices.map((inv) => [inv.reservationDocId, inv]));
+  const invoiceByReservation = new Map<string, InvoiceRecord>(invoices.map((inv) => [inv.reservationDocId, inv]));
 
   return (
     <div className="fixed inset-0 z-[1100] flex items-center justify-center bg-black/40" onClick={onClose}>
@@ -432,17 +432,60 @@ function InvoiceEditPanelInModal({
   onDeleted: () => void;
   onCancel: () => void;
 }) {
-  const [form, setForm] = useState({
+  const [form, setForm] = useState<{
+    hospitalName: string;
+    surgeryItems: string;
+    totalAmount: number;
+    doctors: string[];
+    memo: string;
+    status: "draft" | "confirmed" | "void";
+    paymentMethod?: "card" | "cash" | "mixed";
+    cardAmount?: number;
+    cashAmount?: number;
+    commissionStaffUid?: string;
+    commissionStaffName?: string;
+    commissionRate?: number;
+  }>({
     hospitalName: invoice.hospitalName || "",
     surgeryItems: invoice.surgeryItems || "",
     totalAmount: invoice.totalAmount || 0,
-    doctors: invoice.doctors || [] as string[],
+    doctors: invoice.doctors || [],
     memo: invoice.memo || "",
-    status: invoice.status || "draft" as "draft" | "confirmed" | "void",
+    status: invoice.status || "draft",
+    paymentMethod: invoice.paymentMethod,
+    cardAmount: invoice.cardAmount,
+    cashAmount: invoice.cashAmount,
+    commissionStaffUid: invoice.commissionStaffUid,
+    commissionStaffName: invoice.commissionStaffName,
+    commissionRate: invoice.commissionRate,
   });
+  const [staffList, setStaffList] = useState<Array<{ uid: string; displayName: string }>>([]);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    import("@/lib/settings").then(({ getStaffListForSettings }) => {
+      getStaffListForSettings()
+        .then((list) => setStaffList(list.filter((s) => s.active && (s.role === "admin" || s.role === "coordinator"))))
+        .catch(() => {});
+    });
+  }, []);
+
+  const computedBase = (() => {
+    if (!form.paymentMethod || !form.totalAmount) return undefined;
+    if (form.paymentMethod === "card") return Math.round(form.totalAmount * 0.97);
+    if (form.paymentMethod === "cash") return form.totalAmount;
+    if (form.paymentMethod === "mixed") {
+      const cash = form.cashAmount || 0;
+      const card = form.cardAmount || 0;
+      return cash + Math.round(card * 0.97);
+    }
+    return undefined;
+  })();
+  const computedCommission = computedBase !== undefined && form.commissionRate
+    ? Math.round(computedBase * form.commissionRate / 100)
+    : undefined;
 
   async function handleSave() {
     setSaving(true);
@@ -455,7 +498,11 @@ function InvoiceEditPanelInModal({
       if (!firebaseUser) { setError("로그인 정보를 확인할 수 없습니다."); return; }
       const staff = await getStaffByUid(firebaseUser.uid);
       if (!staff) { setError("직원 정보를 찾을 수 없습니다."); return; }
-      const result = await updateInvoice(invoice.id, form, staff);
+      const result = await updateInvoice(invoice.id, {
+        ...form,
+        commissionBase: computedBase,
+        commissionAmount: computedCommission,
+      }, staff);
       if (!result.success || !result.invoice) { setError(result.message || "저장 실패"); return; }
       onSaved(result.invoice);
     } catch { setError("저장 중 오류가 발생했습니다."); }
@@ -529,6 +576,65 @@ function InvoiceEditPanelInModal({
         <textarea value={form.memo} onChange={(e) => setForm((p) => ({ ...p, memo: e.target.value }))}
           rows={2} className="w-full resize-none rounded-xl border border-[#dfe3e8] px-3 py-2 text-sm focus:border-[#1d9e75] focus:outline-none" />
       </div>
+
+      {/* 커미션 섹션 */}
+      <div className="rounded-xl border border-[#edf0f3] bg-gray-50 p-3 space-y-2">
+        <div className="text-xs font-semibold text-gray-600">커미션</div>
+        <div>
+          <label className="mb-1 block text-xs text-gray-500">결제방법</label>
+          <select
+            value={form.paymentMethod || ""}
+            onChange={(e) => setForm((p) => ({ ...p, paymentMethod: (e.target.value as "card" | "cash" | "mixed") || undefined }))}
+            className="w-full rounded-xl border border-[#dfe3e8] bg-white px-3 py-2 text-sm focus:border-[#1d9e75] focus:outline-none"
+          >
+            <option value="">선택</option>
+            <option value="card">카드</option>
+            <option value="cash">현금</option>
+            <option value="mixed">혼합</option>
+          </select>
+        </div>
+        {form.paymentMethod === "mixed" && (
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="mb-1 block text-xs text-gray-500">카드금액</label>
+              <input type="number" value={form.cardAmount || ""} onChange={(e) => setForm((p) => ({ ...p, cardAmount: Number(e.target.value) || 0 }))}
+                className="w-full rounded-xl border border-[#dfe3e8] bg-white px-3 py-2 text-sm focus:border-[#1d9e75] focus:outline-none" />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs text-gray-500">현금금액</label>
+              <input type="number" value={form.cashAmount || ""} onChange={(e) => setForm((p) => ({ ...p, cashAmount: Number(e.target.value) || 0 }))}
+                className="w-full rounded-xl border border-[#dfe3e8] bg-white px-3 py-2 text-sm focus:border-[#1d9e75] focus:outline-none" />
+            </div>
+          </div>
+        )}
+        <div>
+          <label className="mb-1 block text-xs text-gray-500">커미션 담당자</label>
+          <select
+            value={form.commissionStaffUid || ""}
+            onChange={(e) => {
+              const uid = e.target.value;
+              const s = staffList.find((x) => x.uid === uid);
+              setForm((p) => ({ ...p, commissionStaffUid: uid || undefined, commissionStaffName: s?.displayName || undefined }));
+            }}
+            className="w-full rounded-xl border border-[#dfe3e8] bg-white px-3 py-2 text-sm focus:border-[#1d9e75] focus:outline-none"
+          >
+            <option value="">담당자 선택</option>
+            {staffList.map((s) => <option key={s.uid} value={s.uid}>{s.displayName}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className="mb-1 block text-xs text-gray-500">커미션율 (%)</label>
+          <input type="number" value={form.commissionRate ?? ""} onChange={(e) => setForm((p) => ({ ...p, commissionRate: e.target.value ? Number(e.target.value) : undefined }))}
+            className="w-full rounded-xl border border-[#dfe3e8] bg-white px-3 py-2 text-sm focus:border-[#1d9e75] focus:outline-none" />
+        </div>
+        {computedBase !== undefined && (
+          <div className="grid grid-cols-2 gap-2 rounded-xl bg-white p-2.5 text-xs">
+            <div><div className="text-gray-400">커미션 기준액</div><div className="font-semibold">{computedBase.toLocaleString()} KRW</div></div>
+            <div><div className="text-gray-400">커미션액</div><div className="font-semibold text-[#1d9e75]">{computedCommission !== undefined ? computedCommission.toLocaleString() : "-"} KRW</div></div>
+          </div>
+        )}
+      </div>
+
       {error && <div className="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-600">{error}</div>}
       <div className="flex gap-2">
         <button onClick={handleSave} disabled={saving}
@@ -579,6 +685,17 @@ export function ReservationsTable({
   const handleCountLoaded = useCallback((pid: string, count: number) => {
     setInvoiceCounts((prev) => ({ ...prev, [pid]: count }));
   }, []);
+
+  useEffect(() => {
+    if (!patientGroups.length) return;
+    patientGroups.forEach((g) => {
+      const pid = g.patientId || g.patientKey;
+      if (!pid) return;
+      getInvoicesByPatientId(pid)
+        .then((invs) => setInvoiceCounts((prev) => ({ ...prev, [pid]: invs.length })))
+        .catch(() => {});
+    });
+  }, [patientGroups]);
 
   function toggleAmountPopover(groupKey: string, type: "deposit" | "surgery") {
     setAmountPopover((prev) =>
@@ -892,7 +1009,7 @@ export function ReservationsTable({
       );
     }
 
-    const rows: React.ReactNode[] = [];
+    const rows: ReactNode[] = [];
 
     patientGroups.forEach((group) => {
       rows.push(renderPatientHeader(group));
