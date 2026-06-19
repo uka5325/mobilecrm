@@ -315,7 +315,7 @@ export function InvoiceTab({ reservationDocId, patientId, currentUser }: Props) 
         currentUser={currentUser}
         onSaved={(inv) => {
           setAllInvoices((prev) => prev.map((i) => i.id === inv.id ? inv : i));
-          setEditingInvoice(inv);
+          setEditingInvoice(null);
         }}
         onDeleted={() => {
           setAllInvoices((prev) => prev.filter((i) => i.id !== editingInvoice.id));
