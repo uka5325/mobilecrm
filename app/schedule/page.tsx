@@ -576,12 +576,12 @@ export default function SchedulePage() {
           <button onClick={() => navigate(1)} className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-[#dfe3e8] bg-white text-gray-500 hover:bg-gray-50">›</button>
           <span className="shrink-0 text-sm font-semibold text-gray-800">{titleText}</span>
           <div className="ml-auto flex shrink-0 items-center gap-2">
-            <div className="flex shrink-0 overflow-hidden rounded-lg border border-[#dfe3e8] bg-white">
+            <div className="flex h-8 shrink-0 overflow-hidden rounded-lg border border-[#dfe3e8] bg-white">
               {(["day", "week", "month"] as ViewMode[]).map((mode) => (
                 <button
                   key={mode}
                   onClick={() => setViewMode(mode)}
-                  className={`px-3 py-1.5 text-xs font-medium transition ${viewMode === mode ? "bg-[#1d9e75] text-white" : "bg-white text-gray-600 hover:bg-gray-50"}`}
+                  className={`h-full px-3 text-xs font-medium transition ${viewMode === mode ? "bg-[#1d9e75] text-white" : "bg-white text-gray-600 hover:bg-gray-50"}`}
                 >
                   {VIEW_LABELS[mode]}
                 </button>
