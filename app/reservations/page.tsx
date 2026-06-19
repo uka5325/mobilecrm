@@ -15,7 +15,7 @@ import { CreateDrawer } from "@/components/reservations/CreateDrawer";
 import { ImportDrawer } from "@/components/reservations/ImportDrawer";
 import { MemoPopover, type MemoPopoverState } from "@/components/reservations/MemoPopover";
 import { ReservationsTable, type PatientGroup, type PatientEditForm } from "@/components/reservations/ReservationsTable";
-import { getReservationNotes, updateReservationNote, deleteReservationNote, type ReservationNote } from "@/lib/reservationNotes";
+import { getReservationNotes, addReservationNote, updateReservationNote, deleteReservationNote, type ReservationNote } from "@/lib/reservationNotes";
 import { toDate } from "@/lib/settingsUtils";
 
 
@@ -139,6 +139,7 @@ export default function ReservationsPage() {
       depositAmount: item.depositAmount || "",
       surgeryCost: item.surgeryCost || "",
       hospital: item.hospital || "",
+      doctors: (item.doctors || []).join(", "),
       appointmentType: item.appointmentType || "상담",
     });
   }
@@ -163,6 +164,7 @@ export default function ReservationsPage() {
           hospital: inlineForm.hospital,
           appointmentType: inlineForm.appointmentType,
           coordinators: inlineForm.coordinators.split(",").map((s) => s.trim()).filter(Boolean),
+          doctors: inlineForm.doctors.split(",").map((s) => s.trim()).filter(Boolean),
           depositAmount: inlineForm.depositAmount,
           surgeryCost: inlineForm.surgeryCost,
           currentDoctorStatusMap: item.doctorStatusMap,
@@ -217,6 +219,20 @@ export default function ReservationsPage() {
       staff: currentUser,
     });
     const notes = await getReservationNotes(memoPopover.item.reservationId, memoPopover.item.id, memoPopover.item.patientId);
+    setMemoPopover((prev) => prev ? { ...prev, notes } : prev);
+  }
+
+  async function handleMemoAdd(text: string) {
+    if (!currentUser || !memoPopover) return;
+    const item = memoPopover.item;
+    await addReservationNote({
+      reservationId: item.reservationId,
+      reservationDocId: item.id,
+      patientId: item.patientId || "",
+      memoText: text,
+      staff: currentUser,
+    });
+    const notes = await getReservationNotes(item.reservationId, item.id, item.patientId);
     setMemoPopover((prev) => prev ? { ...prev, notes } : prev);
   }
 
@@ -448,6 +464,7 @@ export default function ReservationsPage() {
         onEditTextChange={setEditingNoteText}
         onUpdate={handleMemoUpdate}
         onDelete={handleMemoDelete}
+        onAdd={handleMemoAdd}
       />
 
       {pageError && (

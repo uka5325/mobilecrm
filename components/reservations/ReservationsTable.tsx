@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
-import { useRouter } from "next/navigation";
 import type { ReservationRecord, AppointmentType } from "@/lib/reservations";
 import { APPOINTMENT_TYPES } from "@/lib/reservations";
 import { getReservationBirthInfo } from "@/lib/reservationUtils";
@@ -39,6 +38,7 @@ type InlineForm = {
   name: string; birthInput: string; phone: string; nationality: string;
   consultArea: string; reservationDate: string; reservationTime: string;
   coordinators: string; depositAmount: string; surgeryCost: string; hospital: string;
+  doctors: string;
   appointmentType: AppointmentType;
 } | null;
 
@@ -193,115 +193,353 @@ type PatientInvoiceModalProps = {
   patientName: string;
   reservations: ReservationRecord[];
   onClose: () => void;
+  onCountLoaded: (patientId: string, count: number) => void;
 };
 
-function PatientInvoiceModal({ patientId, patientName, reservations, onClose }: PatientInvoiceModalProps) {
-  const router = useRouter();
+function PatientInvoiceModal({ patientId, patientName, reservations, onClose, onCountLoaded }: PatientInvoiceModalProps) {
   const [invoices, setInvoices] = useState<InvoiceRecord[]>([]);
   const [loading, setLoading] = useState(true);
+  const [creating, setCreating] = useState<string | null>(null);
+  const [editingInvoice, setEditingInvoice] = useState<InvoiceRecord | null>(null);
+  const [error, setError] = useState("");
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
       const data = await getInvoicesByPatientId(patientId);
       setInvoices(data);
+      onCountLoaded(patientId, data.length);
     } finally {
       setLoading(false);
     }
-  }, [patientId]);
+  }, [patientId, onCountLoaded]);
 
   useEffect(() => { load(); }, [load]);
 
   async function handleDelete(inv: InvoiceRecord) {
-    if (!confirm(`${patientName}의 인보이스를 삭제할까요?`)) return;
+    if (!confirm(`인보이스를 삭제할까요?`)) return;
+    setError("");
     try {
       const { auth } = await import("@/lib/firebase");
       const { deleteInvoice } = await import("@/lib/invoices");
       const { getStaffByUid } = await import("@/lib/auth");
       const firebaseUser = auth.currentUser;
-      if (!firebaseUser) { alert("로그인 정보를 확인할 수 없습니다."); return; }
+      if (!firebaseUser) { setError("로그인 정보를 확인할 수 없습니다."); return; }
       const staff = await getStaffByUid(firebaseUser.uid);
-      if (!staff) { alert("직원 정보를 찾을 수 없습니다."); return; }
+      if (!staff) { setError("직원 정보를 찾을 수 없습니다."); return; }
       const result = await deleteInvoice(inv.id, staff);
-      if (result.success) load();
-      else alert(result.message || "삭제 실패");
+      if (result.success) {
+        setInvoices((prev) => {
+          const next = prev.filter((i) => i.id !== inv.id);
+          onCountLoaded(patientId, next.length);
+          return next;
+        });
+        if (editingInvoice?.id === inv.id) setEditingInvoice(null);
+      } else setError(result.message || "삭제 실패");
     } catch {
-      alert("삭제 중 오류가 발생했습니다.");
+      setError("삭제 중 오류가 발생했습니다.");
     }
   }
+
+  async function handleCreate(reservationDocId: string) {
+    setCreating(reservationDocId);
+    setError("");
+    try {
+      const { auth } = await import("@/lib/firebase");
+      const { getOrCreateInvoiceDraft } = await import("@/lib/invoices");
+      const { getStaffByUid } = await import("@/lib/auth");
+      const firebaseUser = auth.currentUser;
+      if (!firebaseUser) { setError("로그인 정보를 확인할 수 없습니다."); return; }
+      const staff = await getStaffByUid(firebaseUser.uid);
+      if (!staff) { setError("직원 정보를 찾을 수 없습니다."); return; }
+      const result = await getOrCreateInvoiceDraft(reservationDocId, staff);
+      if (!result.success || !result.invoice) { setError(result.message || "생성 실패"); return; }
+      await load();
+      setEditingInvoice(result.invoice);
+    } catch {
+      setError("생성 중 오류가 발생했습니다.");
+    } finally {
+      setCreating(null);
+    }
+  }
+
+  // inline edit panel
+  if (editingInvoice) {
+    return (
+      <div className="fixed inset-0 z-[1100] flex items-center justify-center bg-black/40" onClick={onClose}>
+        <div
+          className="relative w-full max-w-xl rounded-2xl bg-white shadow-2xl mx-4 max-h-[90vh] flex flex-col"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4 shrink-0">
+            <button onClick={() => setEditingInvoice(null)} className="text-xs text-gray-500 hover:underline">← 목록</button>
+            <span className="text-sm font-bold">{patientName} — 인보이스 수정</span>
+            <button onClick={onClose} className="text-gray-400 hover:text-gray-600">✕</button>
+          </div>
+          <div className="flex-1 overflow-y-auto p-5">
+            <InvoiceEditPanelInModal
+              invoice={editingInvoice}
+              onSaved={(updated) => {
+                setInvoices((prev) => prev.map((i) => i.id === updated.id ? updated : i));
+                setEditingInvoice(null);
+              }}
+              onDeleted={() => {
+                setInvoices((prev) => {
+                  const next = prev.filter((i) => i.id !== editingInvoice.id);
+                  onCountLoaded(patientId, next.length);
+                  return next;
+                });
+                setEditingInvoice(null);
+              }}
+              onCancel={() => setEditingInvoice(null)}
+            />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const invoiceByReservation = new Map(invoices.map((inv) => [inv.reservationDocId, inv]));
 
   return (
     <div className="fixed inset-0 z-[1100] flex items-center justify-center bg-black/40" onClick={onClose}>
       <div
-        className="relative w-full max-w-2xl rounded-2xl bg-white shadow-2xl mx-4 max-h-[85vh] flex flex-col"
+        className="relative w-full max-w-xl rounded-2xl bg-white shadow-2xl mx-4 max-h-[85vh] flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4">
+        <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4 shrink-0">
           <div>
-            <div className="text-base font-bold">{patientName} — 인보이스 목록</div>
+            <div className="text-base font-bold">{patientName} — 인보이스</div>
             <div className="text-xs text-gray-400 mt-0.5">전체 {invoices.length}건</div>
           </div>
           <button onClick={onClose} className="text-xl text-gray-400 hover:text-gray-700">✕</button>
         </div>
 
-        <div className="flex-1 overflow-y-auto">
+        <div className="flex-1 overflow-y-auto p-4 space-y-3">
+          {error && <div className="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-600">{error}</div>}
           {loading ? (
             <div className="py-12 text-center text-sm text-gray-400">로딩 중...</div>
-          ) : invoices.length === 0 ? (
-            <div className="py-12 text-center text-sm text-gray-400">인보이스가 없습니다.</div>
           ) : (
-            <table className="w-full text-sm">
-              <thead className="bg-gray-50 border-b border-gray-100">
-                <tr>
-                  {["병원명", "수술항목", "상태", "수술비", "커미션", ""].map((h) => (
-                    <th key={h} className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500">{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-50">
-                {invoices.map((inv) => {
-                  const matchedRes = reservations.find((r) => r.id === inv.reservationDocId);
+            <>
+              {reservations.map((res) => {
+                const inv = invoiceByReservation.get(res.id);
+                if (inv) {
                   return (
-                    <tr key={inv.id} className="hover:bg-gray-50">
-                      <td className="px-4 py-2.5 font-medium text-gray-800">{inv.hospitalName || "—"}</td>
-                      <td className="px-4 py-2.5 text-gray-600 max-w-[140px] truncate">{inv.surgeryItems || "—"}</td>
-                      <td className="px-4 py-2.5">
-                        <span className={`rounded-lg px-2 py-0.5 text-xs font-semibold ${STATUS_CLASS[inv.status] || ""}`}>
-                          {STATUS_LABEL[inv.status] || inv.status}
-                        </span>
-                        {matchedRes && <span className="ml-1 text-xs text-blue-500">이 환자</span>}
-                      </td>
-                      <td className="px-4 py-2.5 text-gray-700">₩{formatMoney(inv.totalAmount || 0)}</td>
-                      <td className="px-4 py-2.5 text-[#1d9e75]">
-                        {inv.commissionAmount ? `₩${formatMoney(inv.commissionAmount)}` : "—"}
-                      </td>
-                      <td className="px-4 py-2.5">
-                        <div className="flex gap-1">
+                    <div key={res.id} className="rounded-xl border border-[#edf0f3] bg-white p-3">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-sm font-semibold truncate">{inv.hospitalName || "병원명 미입력"}</span>
+                            {inv.doctors?.length > 0 && (
+                              <span className="text-xs text-gray-500">{inv.doctors.join(", ")}</span>
+                            )}
+                            <span className="rounded-full bg-[#1d9e75] px-1.5 py-0.5 text-[10px] font-bold text-white">이 예약</span>
+                          </div>
+                          <div className="mt-0.5 text-xs text-gray-400">{res.reservationDate} {res.reservationTime}</div>
+                          {inv.surgeryItems && (
+                            <div className="mt-0.5 text-xs text-gray-500 truncate">{inv.surgeryItems}</div>
+                          )}
+                          <div className="mt-1 flex items-center gap-2 flex-wrap">
+                            <span className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ${STATUS_CLASS[inv.status] || "bg-gray-100 text-gray-500"}`}>
+                              {STATUS_LABEL[inv.status] || inv.status}
+                            </span>
+                            {inv.totalAmount > 0 && (
+                              <span className="text-xs text-gray-600">₩{formatMoney(inv.totalAmount)}</span>
+                            )}
+                            {inv.commissionAmount ? (
+                              <span className="text-xs text-[#1d9e75]">커미션 ₩{formatMoney(inv.commissionAmount)}</span>
+                            ) : null}
+                          </div>
+                          <div className="mt-0.5 text-[10px] text-gray-400">{inv.invoiceId}</div>
+                        </div>
+                        <div className="flex shrink-0 gap-1">
                           <button
-                            onClick={() => router.push(`/invoices/${inv.reservationDocId}`)}
-                            className="rounded-lg bg-gray-100 px-2 py-1 text-xs font-medium text-gray-600 hover:bg-gray-200"
+                            onClick={() => setEditingInvoice(inv)}
+                            className="rounded-lg bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-600 hover:bg-gray-200"
                           >
                             수정
                           </button>
                           <button
                             onClick={() => handleDelete(inv)}
-                            className="rounded-lg bg-red-50 px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-100"
+                            className="rounded-lg bg-red-50 px-2.5 py-1 text-xs font-medium text-red-600 hover:bg-red-100"
                           >
                             삭제
                           </button>
                         </div>
-                      </td>
-                    </tr>
+                      </div>
+                    </div>
                   );
-                })}
-              </tbody>
-            </table>
+                }
+                return (
+                  <div key={res.id} className="rounded-xl border-2 border-dashed border-[#dfe3e8] p-3 flex items-center justify-between">
+                    <div>
+                      <div className="text-xs font-medium text-gray-700">{res.reservationDate} {res.reservationTime}</div>
+                      <div className="text-xs text-gray-500">{res.hospital || "병원명 없음"} · {res.appointmentType}</div>
+                    </div>
+                    <button
+                      onClick={() => handleCreate(res.id)}
+                      disabled={creating === res.id}
+                      className="rounded-lg bg-black px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50"
+                    >
+                      {creating === res.id ? "생성 중..." : "인보이스 생성"}
+                    </button>
+                  </div>
+                );
+              })}
+              {invoices.filter((inv) => !reservations.find((r) => r.id === inv.reservationDocId)).map((inv) => (
+                <div key={inv.id} className="rounded-xl border border-[#edf0f3] bg-white p-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-sm font-semibold truncate">{inv.hospitalName || "병원명 미입력"}</span>
+                        {inv.doctors?.length > 0 && (
+                          <span className="text-xs text-gray-500">{inv.doctors.join(", ")}</span>
+                        )}
+                      </div>
+                      {inv.surgeryItems && <div className="mt-0.5 text-xs text-gray-500 truncate">{inv.surgeryItems}</div>}
+                      <div className="mt-1 flex items-center gap-2 flex-wrap">
+                        <span className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ${STATUS_CLASS[inv.status] || "bg-gray-100 text-gray-500"}`}>
+                          {STATUS_LABEL[inv.status] || inv.status}
+                        </span>
+                        {inv.totalAmount > 0 && <span className="text-xs text-gray-600">₩{formatMoney(inv.totalAmount)}</span>}
+                        {inv.commissionAmount ? <span className="text-xs text-[#1d9e75]">커미션 ₩{formatMoney(inv.commissionAmount)}</span> : null}
+                      </div>
+                      <div className="mt-0.5 text-[10px] text-gray-400">{inv.invoiceId}</div>
+                    </div>
+                    <div className="flex shrink-0 gap-1">
+                      <button onClick={() => setEditingInvoice(inv)} className="rounded-lg bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-600 hover:bg-gray-200">수정</button>
+                      <button onClick={() => handleDelete(inv)} className="rounded-lg bg-red-50 px-2.5 py-1 text-xs font-medium text-red-600 hover:bg-red-100">삭제</button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </>
           )}
         </div>
+      </div>
+    </div>
+  );
+}
 
-        <div className="border-t border-gray-100 px-6 py-3">
-          <div className="text-xs text-gray-400">인보이스를 새로 추가하려면 각 예약 행의 인보이스+ 버튼을 사용하세요.</div>
+function InvoiceEditPanelInModal({
+  invoice,
+  onSaved,
+  onDeleted,
+  onCancel,
+}: {
+  invoice: InvoiceRecord;
+  onSaved: (inv: InvoiceRecord) => void;
+  onDeleted: () => void;
+  onCancel: () => void;
+}) {
+  const [form, setForm] = useState({
+    hospitalName: invoice.hospitalName || "",
+    surgeryItems: invoice.surgeryItems || "",
+    totalAmount: invoice.totalAmount || 0,
+    doctors: invoice.doctors || [] as string[],
+    memo: invoice.memo || "",
+    status: invoice.status || "draft" as "draft" | "confirmed" | "void",
+  });
+  const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [error, setError] = useState("");
+
+  async function handleSave() {
+    setSaving(true);
+    setError("");
+    try {
+      const { auth } = await import("@/lib/firebase");
+      const { updateInvoice } = await import("@/lib/invoices");
+      const { getStaffByUid } = await import("@/lib/auth");
+      const firebaseUser = auth.currentUser;
+      if (!firebaseUser) { setError("로그인 정보를 확인할 수 없습니다."); return; }
+      const staff = await getStaffByUid(firebaseUser.uid);
+      if (!staff) { setError("직원 정보를 찾을 수 없습니다."); return; }
+      const result = await updateInvoice(invoice.id, form, staff);
+      if (!result.success || !result.invoice) { setError(result.message || "저장 실패"); return; }
+      onSaved(result.invoice);
+    } catch { setError("저장 중 오류가 발생했습니다."); }
+    finally { setSaving(false); }
+  }
+
+  async function handleDelete() {
+    if (!confirm("인보이스를 삭제할까요?")) return;
+    setDeleting(true);
+    setError("");
+    try {
+      const { auth } = await import("@/lib/firebase");
+      const { deleteInvoice } = await import("@/lib/invoices");
+      const { getStaffByUid } = await import("@/lib/auth");
+      const firebaseUser = auth.currentUser;
+      if (!firebaseUser) { setError("로그인 정보를 확인할 수 없습니다."); return; }
+      const staff = await getStaffByUid(firebaseUser.uid);
+      if (!staff) { setError("직원 정보를 찾을 수 없습니다."); return; }
+      const result = await deleteInvoice(invoice.id, staff);
+      if (!result.success) { setError(result.message || "삭제 실패"); return; }
+      onDeleted();
+    } catch { setError("삭제 중 오류가 발생했습니다."); }
+    finally { setDeleting(false); }
+  }
+
+  return (
+    <div className="space-y-3">
+      <div>
+        <label className="mb-1 block text-xs font-medium text-gray-600">병원명</label>
+        <input value={form.hospitalName} onChange={(e) => setForm((p) => ({ ...p, hospitalName: e.target.value }))}
+          className="w-full rounded-xl border border-[#dfe3e8] px-3 py-2 text-sm focus:border-[#1d9e75] focus:outline-none" />
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        <div>
+          <label className="mb-1 block text-xs font-medium text-gray-600">담당 원장</label>
+          <input
+            value={form.doctors.join(", ")}
+            onChange={(e) => setForm((p) => ({ ...p, doctors: e.target.value.split(",").map((s) => s.trim()).filter(Boolean) }))}
+            placeholder="쉼표로 구분"
+            className="w-full rounded-xl border border-[#dfe3e8] px-3 py-2 text-sm focus:border-[#1d9e75] focus:outline-none"
+          />
         </div>
+        <div>
+          <label className="mb-1 block text-xs font-medium text-gray-600">담당자</label>
+          <div className="rounded-xl border border-[#dfe3e8] bg-gray-50 px-3 py-2 text-sm text-gray-600">
+            {invoice.coordinators?.length ? invoice.coordinators.join(", ") : "-"}
+          </div>
+        </div>
+      </div>
+      <div>
+        <label className="mb-1 block text-xs font-medium text-gray-600">수술/시술명</label>
+        <textarea value={form.surgeryItems} onChange={(e) => setForm((p) => ({ ...p, surgeryItems: e.target.value }))}
+          rows={2} className="w-full resize-none rounded-xl border border-[#dfe3e8] px-3 py-2 text-sm focus:border-[#1d9e75] focus:outline-none" />
+      </div>
+      <div>
+        <label className="mb-1 block text-xs font-medium text-gray-600">수술비 (KRW)</label>
+        <input type="number" value={form.totalAmount || ""} onChange={(e) => setForm((p) => ({ ...p, totalAmount: Number(e.target.value) || 0 }))}
+          className="w-full rounded-xl border border-[#dfe3e8] px-3 py-2 text-sm focus:border-[#1d9e75] focus:outline-none" />
+      </div>
+      <div>
+        <label className="mb-1 block text-xs font-medium text-gray-600">상태</label>
+        <select value={form.status} onChange={(e) => setForm((p) => ({ ...p, status: e.target.value as "draft" | "confirmed" | "void" }))}
+          className="w-full rounded-xl border border-[#dfe3e8] px-3 py-2 text-sm focus:border-[#1d9e75] focus:outline-none">
+          <option value="draft">임시저장</option>
+          <option value="confirmed">확정</option>
+          <option value="void">취소</option>
+        </select>
+      </div>
+      <div>
+        <label className="mb-1 block text-xs font-medium text-gray-600">메모</label>
+        <textarea value={form.memo} onChange={(e) => setForm((p) => ({ ...p, memo: e.target.value }))}
+          rows={2} className="w-full resize-none rounded-xl border border-[#dfe3e8] px-3 py-2 text-sm focus:border-[#1d9e75] focus:outline-none" />
+      </div>
+      {error && <div className="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-600">{error}</div>}
+      <div className="flex gap-2">
+        <button onClick={handleSave} disabled={saving}
+          className="flex-1 rounded-xl bg-[#1d9e75] py-2.5 text-sm font-semibold text-white disabled:opacity-50">
+          {saving ? "저장 중..." : "저장"}
+        </button>
+        <button onClick={handleDelete} disabled={deleting}
+          className="rounded-xl border border-red-200 bg-red-50 px-4 py-2.5 text-sm font-medium text-red-600 disabled:opacity-50">
+          {deleting ? "삭제 중..." : "삭제"}
+        </button>
+        <button onClick={onCancel} className="rounded-xl border border-gray-200 px-4 py-2.5 text-sm text-gray-500">취소</button>
       </div>
     </div>
   );
@@ -330,13 +568,17 @@ export function ReservationsTable({
   onOpenPatientMemo,
   onSaveAmount,
 }: Props) {
-  const router = useRouter();
   const cellCls = "border-b border-gray-100 px-2 py-2";
   const inputCls = "w-full rounded-lg border border-[#dfe3e8] px-2 py-1 text-xs focus:border-[#1d9e75] focus:outline-none";
 
   type PopoverState = { groupKey: string; type: "deposit" | "surgery" } | null;
   const [amountPopover, setAmountPopover] = useState<PopoverState>(null);
   const [invoiceModal, setInvoiceModal] = useState<{ patientId: string; patientName: string; reservations: ReservationRecord[] } | null>(null);
+  const [invoiceCounts, setInvoiceCounts] = useState<Record<string, number>>({});
+
+  const handleCountLoaded = useCallback((pid: string, count: number) => {
+    setInvoiceCounts((prev) => ({ ...prev, [pid]: count }));
+  }, []);
 
   function toggleAmountPopover(groupKey: string, type: "deposit" | "surgery") {
     setAmountPopover((prev) =>
@@ -375,6 +617,15 @@ export function ReservationsTable({
             <input className={inputCls} value={f!.hospital} onChange={(e) => onFormChange((p) => p && ({ ...p, hospital: e.target.value }))} placeholder="병원명" />
           ) : (
             <span className="font-medium text-gray-700">{item.hospital || "-"}</span>
+          )}
+        </td>
+
+        {/* 담당 원장 */}
+        <td className={cellCls}>
+          {isEditing ? (
+            <input className={inputCls} value={f!.doctors} onChange={(e) => onFormChange((p) => p && ({ ...p, doctors: e.target.value }))} placeholder="쉼표 구분" />
+          ) : (
+            <span className="text-gray-500 text-xs">{(item.doctors || []).join(", ") || "—"}</span>
           )}
         </td>
 
@@ -464,7 +715,7 @@ export function ReservationsTable({
     if (isEditing && pf) {
       return (
         <tr key={`patient-edit-${group.patientKey}`} className="bg-blue-50">
-          <td colSpan={7} className="border-y border-blue-200 px-4 py-2">
+          <td colSpan={8} className="border-y border-blue-200 px-4 py-2">
             <div className="flex flex-wrap items-center gap-2">
               <input
                 className="h-7 w-[100px] rounded-lg border border-[#dfe3e8] bg-white px-2 text-xs font-bold focus:border-[#1d9e75] focus:outline-none"
@@ -519,7 +770,7 @@ export function ReservationsTable({
 
     return (
       <tr key={`patient-${group.patientKey}`} className="bg-blue-50">
-        <td colSpan={7} className="border-y border-blue-100 px-4 py-2">
+        <td colSpan={8} className="border-y border-blue-100 px-4 py-2">
           {/* 1행: 환자 기본 정보 */}
           <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mb-1.5">
             <span className="text-sm font-bold text-gray-900">{group.name}</span>
@@ -583,12 +834,18 @@ export function ReservationsTable({
               )}
             </div>
 
-            <button
-              onClick={() => setInvoiceModal({ patientId: group.patientId || group.patientKey, patientName: group.name, reservations: group.reservations })}
-              className="rounded-md border border-[#1d9e75] bg-white px-2 py-0.5 text-xs text-[#1d9e75] hover:bg-emerald-50"
-            >
-              인보이스
-            </button>
+            {(() => {
+              const pid = group.patientId || group.patientKey;
+              const cnt = invoiceCounts[pid];
+              return (
+                <button
+                  onClick={() => setInvoiceModal({ patientId: pid, patientName: group.name, reservations: group.reservations })}
+                  className={`rounded-md border px-2 py-0.5 text-xs transition ${cnt !== undefined && cnt > 0 ? "border-[#1d9e75] bg-white text-[#1d9e75] hover:bg-emerald-50" : "border-gray-200 bg-white text-gray-400 hover:bg-gray-50"}`}
+                >
+                  인보이스{cnt !== undefined && cnt > 0 ? ` (${cnt})` : ""}
+                </button>
+              );
+            })()}
 
             <div className="ml-auto flex items-center gap-1.5">
               <button
@@ -623,14 +880,14 @@ export function ReservationsTable({
     if (loading) {
       return (
         <tr>
-          <td colSpan={7} className="py-12 text-center text-gray-400">데이터 로딩 중...</td>
+          <td colSpan={8} className="py-12 text-center text-gray-400">데이터 로딩 중...</td>
         </tr>
       );
     }
     if (patientGroups.length === 0) {
       return (
         <tr>
-          <td colSpan={7} className="py-12 text-center text-gray-400">고객이 없습니다.</td>
+          <td colSpan={8} className="py-12 text-center text-gray-400">고객이 없습니다.</td>
         </tr>
       );
     }
@@ -655,24 +912,26 @@ export function ReservationsTable({
         patientName={invoiceModal.patientName}
         reservations={invoiceModal.reservations}
         onClose={() => setInvoiceModal(null)}
+        onCountLoaded={handleCountLoaded}
       />
     )}
     <div className="-mx-4 sm:-mx-6 lg:-mx-8">
       <div className="overflow-x-auto border-y border-gray-100 bg-white">
         <table className="min-w-[900px] w-full table-fixed border-collapse text-sm">
           <colgroup>
-            <col className="w-[110px]" />
-            <col className="w-[70px]" />
-            <col className="w-[120px]" />
-            <col className="w-[65px]" />
-            <col className="w-[130px]" />
             <col className="w-[100px]" />
-            <col className="w-[135px]" />
+            <col className="w-[60px]" />
+            <col className="w-[100px]" />
+            <col className="w-[90px]" />
+            <col className="w-[60px]" />
+            <col className="w-[110px]" />
+            <col className="w-[90px]" />
+            <col className="w-[120px]" />
           </colgroup>
 
           <thead className="bg-gray-50">
             <tr>
-              {["예약일", "시간", "병원명", "유형", "상담/수술항목", "담당자", "관리"].map((head) => (
+              {["예약일", "시간", "병원명", "담당 원장", "유형", "상담/수술항목", "담당자", "관리"].map((head) => (
                 <th key={head} className="border-b border-gray-200 px-4 py-3 text-left text-xs font-semibold text-gray-500">
                   {head}
                 </th>
