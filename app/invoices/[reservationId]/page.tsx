@@ -66,7 +66,7 @@ export default function InvoiceEditPage() {
         }
         applyInvoice(result.invoice);
       })
-      .catch(() => setMessage("인보이스 로딩 중 오류가 발생했습니다."))
+      .catch((e) => { console.error("[InvoicePage] load error:", e); setMessage("인보이스 로딩 중 오류가 발생했습니다."); })
       .finally(() => setLoadingInvoice(false));
   }, [authReady, currentUser, reservationDocId]);
 
@@ -128,7 +128,8 @@ export default function InvoiceEditPage() {
       }
       applyInvoice(result.invoice);
       setMessage("저장 완료");
-    } catch {
+    } catch (e) {
+      console.error("[InvoicePage] save error:", e);
       setMessage("저장 중 오류가 발생했습니다.");
     } finally {
       setSaving(false);
@@ -143,7 +144,8 @@ export default function InvoiceEditPage() {
       const result = await deleteInvoice(invoice.id, currentUser);
       if (result.success) router.back();
       else setMessage(result.message || "삭제 실패");
-    } catch {
+    } catch (e) {
+      console.error("[InvoicePage] delete error:", e);
       setMessage("삭제 중 오류가 발생했습니다.");
     } finally {
       setDeleting(false);

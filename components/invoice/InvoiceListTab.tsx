@@ -51,6 +51,7 @@ export function InvoiceListTab() {
   const [nameQuery, setNameQuery] = useState("");
   const [invoices, setInvoices] = useState<InvoiceRecord[]>([]);
   const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState("");
 
   useEffect(() => {
     load();
@@ -58,6 +59,7 @@ export function InvoiceListTab() {
 
   async function load() {
     setLoading(true);
+    setLoadError("");
     try {
       const filters: InvoiceListFilter = {
         startDate,
@@ -66,6 +68,9 @@ export function InvoiceListTab() {
       };
       const data = await getInvoices(filters);
       setInvoices(data);
+    } catch (e) {
+      console.error("[InvoiceListTab] load error:", e);
+      setLoadError("인보이스 목록을 불러오지 못했습니다. F12 콘솔에서 오류를 확인하세요.");
     } finally {
       setLoading(false);
     }
@@ -155,6 +160,10 @@ export function InvoiceListTab() {
         {loading ? (
           <div className="flex items-center justify-center py-16 text-sm text-gray-400">
             데이터 로딩 중...
+          </div>
+        ) : loadError ? (
+          <div className="flex items-center justify-center py-16 text-sm text-red-500">
+            {loadError}
           </div>
         ) : filtered.length === 0 ? (
           <div className="flex items-center justify-center py-16 text-sm text-gray-400">

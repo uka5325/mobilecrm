@@ -189,7 +189,7 @@ export async function getOrCreateInvoiceDraft(
 
     patientName: reservation.name || reservation.patientName,
     birth: birthInfo.birth,
-    birthDisplay: birthInfo.birthDisplay.replace(/[^0-9]/g, "").slice(2),
+    birthDisplay: (birthInfo.birthDisplay || "").replace(/[^0-9]/g, "").slice(2),
     gender: birthInfo.gender,
     nationality: reservation.nationality,
     phone: reservation.phone,
@@ -364,7 +364,6 @@ export async function getInvoices(filters?: InvoiceListFilter): Promise<InvoiceR
   if (!filters?.startDate && !filters?.endDate) {
     q = query(
       collection(db, "invoices"),
-      where("isDeleted", "==", false),
       orderBy("createdAt", "desc")
     );
   } else {
@@ -376,7 +375,6 @@ export async function getInvoices(filters?: InvoiceListFilter): Promise<InvoiceR
       : now;
     q = query(
       collection(db, "invoices"),
-      where("isDeleted", "==", false),
       where("createdAt", ">=", Timestamp.fromDate(start)),
       where("createdAt", "<=", Timestamp.fromDate(end)),
       orderBy("createdAt", "desc")
@@ -384,7 +382,9 @@ export async function getInvoices(filters?: InvoiceListFilter): Promise<InvoiceR
   }
 
   const snap = await getDocs(q);
-  let records = snap.docs.map((docSnap) => mapInvoiceDoc(docSnap.id, docSnap.data()));
+  let records = snap.docs
+    .map((docSnap) => mapInvoiceDoc(docSnap.id, docSnap.data()))
+    .filter((r) => !r.isDeleted);
 
   if (filters?.status) {
     records = records.filter((r) => r.status === filters.status);

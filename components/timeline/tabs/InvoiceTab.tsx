@@ -6,10 +6,10 @@ import {
   getOrCreateInvoiceDraft,
   updateInvoice,
   deleteInvoice,
+  getInvoiceByReservationDocId,
   type InvoiceRecord,
   type InvoiceUpdatePayload,
 } from "@/lib/invoices";
-import { getInvoiceByReservationDocId } from "@/lib/invoices";
 import { getStaffListForSettings, type SettingsStaffRecord } from "@/lib/settings";
 import { calcCommissionBase, calcCommission, paymentMethodLabel } from "@/lib/commissionUtils";
 
@@ -64,7 +64,7 @@ export function InvoiceTab({ reservationDocId, currentUser }: Props) {
         setInvoice(inv);
         if (inv) populateForm(inv);
       })
-      .catch(() => setError("인보이스를 불러오지 못했습니다."))
+      .catch((e) => { console.error("[InvoiceTab] load error:", e); setError("인보이스를 불러오지 못했습니다."); })
       .finally(() => setLoading(false));
   }, [reservationDocId]);
 
@@ -109,7 +109,8 @@ export function InvoiceTab({ reservationDocId, currentUser }: Props) {
       setInvoice(result.invoice);
       populateForm(result.invoice);
       setMessage("인보이스가 생성되었습니다.");
-    } catch {
+    } catch (e) {
+      console.error("[InvoiceTab] create error:", e);
       setError("인보이스 생성 중 오류가 발생했습니다.");
     } finally {
       setSaving(false);
@@ -134,7 +135,8 @@ export function InvoiceTab({ reservationDocId, currentUser }: Props) {
       }
       setInvoice(result.invoice);
       setMessage("저장되었습니다.");
-    } catch {
+    } catch (e) {
+      console.error("[InvoiceTab] save error:", e);
       setError("저장 중 오류가 발생했습니다.");
     } finally {
       setSaving(false);
@@ -152,7 +154,8 @@ export function InvoiceTab({ reservationDocId, currentUser }: Props) {
       setInvoice(null);
       setForm({ hospitalName: "", surgeryItems: "", totalAmount: 0, memo: "", status: "draft" });
       setMessage("인보이스가 삭제되었습니다.");
-    } catch {
+    } catch (e) {
+      console.error("[InvoiceTab] delete error:", e);
       setError("삭제 중 오류가 발생했습니다.");
     } finally {
       setDeleting(false);
