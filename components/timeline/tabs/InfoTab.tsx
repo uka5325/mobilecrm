@@ -47,7 +47,7 @@ type Props = {
 };
 
 const TYPE_COLORS: Record<string, string> = {
-  상담: "#2563eb", 수술: "#ef4444", 치료: "#16a34a", 경과: "#f59e0b",
+  상담: "#2563eb", 수술: "#ef4444", 치료: "#16a34a", 경과: "#f59e0b", 진료: "#7c3aed", 검진: "#0891b2",
 };
 
 export function InfoTab({

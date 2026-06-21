@@ -117,7 +117,7 @@ export default function DashboardPage() {
       .map((item) => finalizeCounter(item))
       .sort((a, b) => b.total - a.total || cleanText(a.name).localeCompare(cleanText(b.name)));
 
-    const apptTypeRows = (["상담", "수술", "치료", "경과"] as const).map((type) => {
+    const apptTypeRows = (["상담", "수술", "치료", "경과", "진료", "검진"] as const).map((type) => {
       const counter = apptTypeMap[type] || emptyCounter(type);
       return finalizeCounter(counter, summary.total);
     });
@@ -170,6 +170,8 @@ export default function DashboardPage() {
     수술: "#ef4444",
     치료: "#16a34a",
     경과: "#f59e0b",
+    진료: "#7c3aed",
+    검진: "#0891b2",
   };
 
   return (
@@ -211,6 +213,8 @@ export default function DashboardPage() {
             <option value="수술">수술</option>
             <option value="치료">치료</option>
             <option value="경과">경과</option>
+            <option value="진료">진료</option>
+            <option value="검진">검진</option>
           </select>
           <select
             value={areaFilter}
@@ -244,7 +248,7 @@ export default function DashboardPage() {
 
       {/* 유형별 현황 + 취소 */}
       <section className="grid grid-cols-2 gap-3 md:grid-cols-3">
-        {(["상담", "수술", "치료", "경과"] as const).map((type) => {
+        {(["상담", "수술", "치료", "경과", "진료", "검진"] as const).map((type) => {
           const row = dashboard.apptTypeRows.find((r) => r.name === type);
           const count = row?.total || 0;
           const completed = row?.completedCount || 0;

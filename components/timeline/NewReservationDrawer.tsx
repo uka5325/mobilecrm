@@ -192,7 +192,7 @@ export function NewReservationDrawer({ open, onClose, currentUser, initialDate, 
             <div className="mt-2 flex gap-2 flex-wrap">
               {APPOINTMENT_TYPES.map((type) => {
                 const colors: Record<string, string> = {
-                  상담: "#2563eb", 수술: "#ef4444", 치료: "#16a34a", 경과: "#f59e0b",
+                  상담: "#2563eb", 수술: "#ef4444", 치료: "#16a34a", 경과: "#f59e0b", 진료: "#7c3aed", 검진: "#0891b2",
                 };
                 const active = form.appointmentType === type;
                 return (

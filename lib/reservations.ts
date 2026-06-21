@@ -25,15 +25,17 @@ export type DoctorOption = {
   orderNo: number;
 };
 
-export type AppointmentType = "상담" | "수술" | "치료" | "경과";
+export type AppointmentType = "상담" | "수술" | "치료" | "경과" | "진료" | "검진";
 
-export const APPOINTMENT_TYPES: AppointmentType[] = ["상담", "수술", "치료", "경과"];
+export const APPOINTMENT_TYPES: AppointmentType[] = ["상담", "수술", "치료", "경과", "진료", "검진"];
 
 export const APPOINTMENT_TYPE_COLORS: Record<AppointmentType, string> = {
   상담: "#2563eb",
   수술: "#ef4444",
   치료: "#16a34a",
   경과: "#f59e0b",
+  진료: "#7c3aed",
+  검진: "#0891b2",
 };
 
 export type ReservationStatus =
@@ -176,7 +178,7 @@ function normalizeDuplicateKey(params: CreateReservationParams) {
 
 function normalizeAppointmentType(value: unknown): AppointmentType {
   const v = cleanText(value);
-  if (v === "상담" || v === "수술" || v === "치료" || v === "경과") return v;
+  if (v === "상담" || v === "수술" || v === "치료" || v === "경과" || v === "진료" || v === "검진") return v;
   return "상담";
 }
 

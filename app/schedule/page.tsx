@@ -541,7 +541,7 @@ export default function SchedulePage() {
   const { reservations, loading, refresh } = useScheduleData(startDate, endDate, authReady);
 
   const kpi = useMemo(() => {
-    const counts: Record<string, number> = { 상담: 0, 수술: 0, 치료: 0, 경과: 0 };
+    const counts: Record<string, number> = { 상담: 0, 수술: 0, 치료: 0, 경과: 0, 진료: 0, 검진: 0 };
     reservations.forEach((r) => { counts[r.appointmentType || "상담"] = (counts[r.appointmentType || "상담"] || 0) + 1; });
     return counts;
   }, [reservations]);
@@ -606,7 +606,7 @@ export default function SchedulePage() {
         {/* KPI 바 (가로 스크롤) */}
         <div className="flex items-center gap-3 overflow-x-auto px-4 pb-3 [&::-webkit-scrollbar]:hidden">
           <span className="shrink-0 text-xs text-gray-500">전체 {reservations.length}건</span>
-          {(["상담", "수술", "치료", "경과"] as AppointmentType[]).map((type) => (
+          {(["상담", "수술", "치료", "경과", "진료", "검진"] as AppointmentType[]).map((type) => (
             <div key={type} className="flex shrink-0 items-center gap-1.5">
               <div className="h-2.5 w-2.5 rounded-sm" style={{ backgroundColor: APPOINTMENT_TYPE_COLORS[type] }} />
               <span className="text-xs text-gray-600">{type} {kpi[type] || 0}</span>
