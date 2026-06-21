@@ -820,31 +820,37 @@ export function ReservationsTable({
     const consultAreas = getConsultAreas(group.reservations, "상담");
     const surgeryAreas = getConsultAreas(group.reservations, "수술");
 
+    const makeKey = (r: typeof group.reservations[0]) => [
+      (r.hospital || "").trim().toLowerCase(),
+      (r.doctors || []).map((d) => d.trim().toLowerCase()).sort().join(","),
+      (r.consultArea || "").trim().toLowerCase(),
+    ].join("|");
+
     const depositRows = (() => {
       const seen = new Set<string>();
-      return group.reservations.filter((r) => {
-        const key = [
-          (r.hospital || "").trim().toLowerCase(),
-          (r.doctors || []).map((d) => d.trim().toLowerCase()).sort().join(","),
-          (r.consultArea || "").trim().toLowerCase(),
-        ].join("|");
-        if (seen.has(key)) return false;
-        seen.add(key);
-        return true;
-      }).map((r) => ({ id: r.id, date: r.reservationDate || "", hospital: r.hospital || "", amount: r.depositAmount || "" }));
+      return [...group.reservations]
+        .sort((a, b) => (b.depositAmount ? 1 : 0) - (a.depositAmount ? 1 : 0))
+        .filter((r) => {
+          if (!r.depositAmount) return false;
+          const key = makeKey(r);
+          if (seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        })
+        .map((r) => ({ id: r.id, date: r.reservationDate || "", hospital: r.hospital || "", amount: r.depositAmount || "" }));
     })();
     const surgeryRows = (() => {
       const seen = new Set<string>();
-      return group.reservations.filter((r) => {
-        const key = [
-          (r.hospital || "").trim().toLowerCase(),
-          (r.doctors || []).map((d) => d.trim().toLowerCase()).sort().join(","),
-          (r.consultArea || "").trim().toLowerCase(),
-        ].join("|");
-        if (seen.has(key)) return false;
-        seen.add(key);
-        return true;
-      }).map((r) => ({ id: r.id, date: r.reservationDate || "", hospital: r.hospital || "", amount: r.surgeryCost || "" }));
+      return [...group.reservations]
+        .sort((a, b) => (b.surgeryCost ? 1 : 0) - (a.surgeryCost ? 1 : 0))
+        .filter((r) => {
+          if (!r.surgeryCost) return false;
+          const key = makeKey(r);
+          if (seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        })
+        .map((r) => ({ id: r.id, date: r.reservationDate || "", hospital: r.hospital || "", amount: r.surgeryCost || "" }));
     })();
 
     const depositPopoverOpen = amountPopover?.groupKey === group.patientKey && amountPopover.type === "deposit";
