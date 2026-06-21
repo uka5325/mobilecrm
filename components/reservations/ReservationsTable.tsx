@@ -32,6 +32,8 @@ const APPT_TYPE_COLORS: Record<AppointmentType, string> = {
   수술: "#ef4444",
   치료: "#16a34a",
   경과: "#f59e0b",
+  진료: "#7c3aed",
+  검진: "#0891b2",
 };
 
 type InlineForm = {
