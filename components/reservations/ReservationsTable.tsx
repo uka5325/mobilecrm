@@ -713,7 +713,7 @@ export function ReservationsTable({
         {/* 예약일 */}
         <td className={cellCls}>
           {isEditing ? (
-            <input type="date" className={inputCls} value={f!.reservationDate} onChange={(e) => onFormChange((p) => p && ({ ...p, reservationDate: e.target.value }))} />
+            <input type="date" className="h-[26px] w-[110px] rounded-lg border border-[#dfe3e8] px-1 text-xs focus:border-[#1d9e75] focus:outline-none" value={f!.reservationDate} onChange={(e) => onFormChange((p) => p && ({ ...p, reservationDate: e.target.value }))} />
           ) : (
             <span className="text-gray-700">{item.reservationDate || "—"}</span>
           )}
