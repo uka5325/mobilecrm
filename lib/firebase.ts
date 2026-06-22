@@ -48,9 +48,7 @@ export const auth = createAuth();
 function createFirestore() {
   if (!app) return null as unknown as ReturnType<typeof getFirestore>;
   try {
-    return initializeFirestore(app, {
-      experimentalForceLongPolling: true,
-    });
+    return initializeFirestore(app, { experimentalForceLongPolling: true });
   } catch {
     return getFirestore(app);
   }

@@ -1,4 +1,5 @@
-import { auth } from "./firebase";
+import { auth, db } from "./firebase";
+import { collection, onSnapshot, query, where, getDocs } from "firebase/firestore";
 import type { StaffUser } from "./auth";
 import { cleanText } from "./stringUtils";
 import { createLog } from "./logs";
@@ -368,19 +369,46 @@ export async function getAllReservations(): Promise<{
   };
 }
 
-const ALL_RESERVATIONS_POLL_MS = 8000;
+// 클라이언트 SDK로 의사 목록 조회 (세션 내 캐싱)
+let _clientDoctorsCache: DoctorOption[] | null = null;
+let _clientDoctorsCacheAt = 0;
+const CLIENT_DOCTORS_TTL = 10 * 60 * 1000;
+
+async function getClientDoctors(): Promise<DoctorOption[]> {
+  if (_clientDoctorsCache && Date.now() - _clientDoctorsCacheAt < CLIENT_DOCTORS_TTL) {
+    return _clientDoctorsCache;
+  }
+  const snap = await getDocs(
+    query(collection(db, "staff"), where("role", "==", "doctor"), where("active", "==", true))
+  );
+  const doctors: DoctorOption[] = snap.docs
+    .map((d) => {
+      const data = d.data();
+      return {
+        uid: d.id,
+        displayName: cleanText(data.displayName || data.display_name || data.name),
+        email: cleanText(data.email),
+        orderNo: cleanNumber(data.orderNo ?? data.order_no),
+      };
+    })
+    .filter((d) => d.displayName)
+    .sort((a, b) => a.orderNo - b.orderNo || a.displayName.localeCompare(b.displayName));
+  _clientDoctorsCache = doctors;
+  _clientDoctorsCacheAt = Date.now();
+  return doctors;
+}
 
 export async function fetchAllReservationsOnce(): Promise<{
   reservations: ReservationRecord[];
   doctors: DoctorOption[];
 }> {
-  const sixMonthsAgo = (() => {
+  const threeMonthsAgo = (() => {
     const d = new Date();
-    d.setMonth(d.getMonth() - 6);
+    d.setMonth(d.getMonth() - 3);
     return d.toISOString().slice(0, 10);
   })();
 
-  const result = await callReservationsApi("read_all", { from: sixMonthsAgo });
+  const result = await callReservationsApi("read_all", { from: threeMonthsAgo });
   const rawReservations = (result.reservations as Record<string, unknown>[] | undefined) || [];
   const rawDoctors = (result.doctors as Record<string, unknown>[] | undefined) || [];
 
@@ -416,66 +444,81 @@ export function subscribeAllReservations(
   }) => void,
   onError?: (error: Error) => void
 ) {
-  let cancelled = false;
+  let unsubscribeSnapshot: (() => void) | null = null;
+  let latestDoctors: DoctorOption[] = [];
+  let seedDelivered = false;
 
-  async function fetchAndEmit() {
-    if (cancelled) return;
+  const unsubscribeAuth = auth.onAuthStateChanged((user) => {
+    if (unsubscribeSnapshot) { unsubscribeSnapshot(); unsubscribeSnapshot = null; }
+    if (!user) return;
 
-    const sixMonthsAgo = (() => {
+    const threeMonthsAgo = (() => {
       const d = new Date();
-      d.setMonth(d.getMonth() - 6);
+      d.setMonth(d.getMonth() - 3);
       return d.toISOString().slice(0, 10);
     })();
 
-    try {
-      const result = await callReservationsApi("read_all", { from: sixMonthsAgo });
-      if (cancelled || !result.success) return;
+    // Immediately seed with API data so UI shows content even if onSnapshot is slow/fails
+    callReservationsApi("read_all", { from: threeMonthsAgo })
+      .then((result) => {
+        if (!seedDelivered && result.success) {
+          const rawReservations = (result.reservations as Record<string, unknown>[] | undefined) || [];
+          const rawDoctors = (result.doctors as Record<string, unknown>[] | undefined) || [];
+          const reservations = rawReservations
+            .map((r) => mapReservationDoc(String(r.id || ""), r))
+            .filter((item) => !item.isDeleted)
+            .sort((a, b) => {
+              const aa = `${a.reservationDate} ${a.reservationTime} ${a.name}`;
+              const bb = `${b.reservationDate} ${b.reservationTime} ${b.name}`;
+              return aa.localeCompare(bb);
+            });
+          const doctors: DoctorOption[] = rawDoctors
+            .map((d) => ({
+              uid: String(d.id || ""),
+              displayName: cleanText(d.displayName || d["display_name"] || d.name),
+              email: cleanText(d.email),
+              orderNo: cleanNumber(d.orderNo ?? d["order_no"]),
+            }))
+            .filter((d) => d.displayName)
+            .sort((a, b) => a.orderNo - b.orderNo || a.displayName.localeCompare(b.displayName));
+          if (doctors.length) latestDoctors = doctors;
+          callback({ reservations, doctors: doctors.length ? doctors : makeDoctorOptionsFromReservations(reservations) });
+        }
+      })
+      .catch(() => {});
 
-      const rawReservations = (result.reservations as Record<string, unknown>[] | undefined) || [];
-      const rawDoctors = (result.doctors as Record<string, unknown>[] | undefined) || [];
+    getClientDoctors().then((d) => { latestDoctors = d; }).catch(() => {});
 
-      const reservations = rawReservations
-        .map((r) => mapReservationDoc(String(r.id || ""), r))
-        .filter((item) => !item.isDeleted)
-        .sort((a, b) => {
-          const aa = `${a.reservationDate} ${a.reservationTime} ${a.name}`;
-          const bb = `${b.reservationDate} ${b.reservationTime} ${b.name}`;
-          return aa.localeCompare(bb);
-        });
-
-      const doctors: DoctorOption[] = rawDoctors
-        .map((d) => ({
-          uid: String(d.id || ""),
-          displayName: cleanText(d.displayName || d["display_name"] || d.name),
-          email: cleanText(d.email),
-          orderNo: cleanNumber(d.orderNo ?? d["order_no"]),
-        }))
-        .filter((d) => d.displayName)
-        .sort((a, b) => a.orderNo - b.orderNo || a.displayName.localeCompare(b.displayName));
-
-      const fallbackDoctors = makeDoctorOptionsFromReservations(reservations);
-      callback({
-        reservations,
-        doctors: doctors.length ? doctors : fallbackDoctors,
-      });
-    } catch (error) {
-      if (!cancelled) {
+    unsubscribeSnapshot = onSnapshot(
+      query(collection(db, "reservations"), where("reservationDate", ">=", threeMonthsAgo)),
+      (snap) => {
+        // skip empty cache snapshots — they would wipe the API seed data
+        if (snap.metadata.fromCache && snap.empty) return;
+        seedDelivered = true;
+        const reservations = snap.docs
+          .map((d) => mapReservationDoc(d.id, d.data() as Record<string, unknown>))
+          .filter((item) => !item.isDeleted)
+          .sort((a, b) => {
+            const aa = `${a.reservationDate} ${a.reservationTime} ${a.name}`;
+            const bb = `${b.reservationDate} ${b.reservationTime} ${b.name}`;
+            return aa.localeCompare(bb);
+          });
+        const fallback = makeDoctorOptionsFromReservations(reservations);
+        callback({ reservations, doctors: latestDoctors.length ? latestDoctors : fallback });
+      },
+      (error) => {
         console.error("[subscribeAllReservations error]", error);
-        onError?.(error as Error);
+        onError?.(error);
       }
-    }
-  }
-
-  fetchAndEmit();
-  const intervalId = setInterval(fetchAndEmit, ALL_RESERVATIONS_POLL_MS);
+    );
+  });
 
   return () => {
-    cancelled = true;
-    clearInterval(intervalId);
+    seedDelivered = true;
+    unsubscribeAuth();
+    unsubscribeSnapshot?.();
   };
 }
-
-const TIMELINE_POLL_MS = 6000;
 
 export function subscribeTimelineReservations(
   date: string,
@@ -485,56 +528,73 @@ export function subscribeTimelineReservations(
   }) => void,
   onError?: (error: Error) => void
 ) {
-  let cancelled = false;
+  let unsubscribeSnapshot: (() => void) | null = null;
+  let latestDoctors: DoctorOption[] = [];
+  let seedDelivered = false;
 
-  async function fetchAndEmit() {
-    if (cancelled) return;
+  const unsubscribeAuth = auth.onAuthStateChanged((user) => {
+    if (unsubscribeSnapshot) { unsubscribeSnapshot(); unsubscribeSnapshot = null; }
+    if (!user) return;
 
-    try {
-      const result = await callReservationsApi("read_by_date", { date });
-      if (cancelled || !result.success) return;
+    // Immediately seed with API data so UI shows content even if onSnapshot is slow/fails
+    callReservationsApi("read_by_date", { date })
+      .then((result) => {
+        if (!seedDelivered && result.success) {
+          const rawReservations = (result.reservations as Record<string, unknown>[] | undefined) || [];
+          const rawDoctors = (result.doctors as Record<string, unknown>[] | undefined) || [];
+          const reservations = rawReservations
+            .map((r) => mapReservationDoc(String(r.id || ""), r))
+            .filter((item) => !item.isDeleted)
+            .sort((a, b) => {
+              const aa = `${a.reservationTime} ${a.name}`;
+              const bb = `${b.reservationTime} ${b.name}`;
+              return aa.localeCompare(bb);
+            });
+          const doctors: DoctorOption[] = rawDoctors
+            .map((d) => ({
+              uid: String(d.id || ""),
+              displayName: cleanText(d.displayName || d["display_name"] || d.name),
+              email: cleanText(d.email),
+              orderNo: cleanNumber(d.orderNo ?? d["order_no"]),
+            }))
+            .filter((d) => d.displayName)
+            .sort((a, b) => a.orderNo - b.orderNo || a.displayName.localeCompare(b.displayName));
+          if (doctors.length) latestDoctors = doctors;
+          callback({ reservations, doctors: doctors.length ? doctors : makeDoctorOptionsFromReservations(reservations) });
+        }
+      })
+      .catch(() => {});
 
-      const rawReservations = (result.reservations as Record<string, unknown>[] | undefined) || [];
-      const rawDoctors = (result.doctors as Record<string, unknown>[] | undefined) || [];
+    getClientDoctors().then((d) => { latestDoctors = d; }).catch(() => {});
 
-      const reservations = rawReservations
-        .map((r) => mapReservationDoc(String(r.id || ""), r))
-        .filter((item) => !item.isDeleted)
-        .sort((a, b) => {
-          const aa = `${a.reservationTime} ${a.name}`;
-          const bb = `${b.reservationTime} ${b.name}`;
-          return aa.localeCompare(bb);
-        });
-
-      const doctors: DoctorOption[] = rawDoctors
-        .map((d) => ({
-          uid: String(d.id || ""),
-          displayName: cleanText(d.displayName || d["display_name"] || d.name),
-          email: cleanText(d.email),
-          orderNo: cleanNumber(d.orderNo ?? d["order_no"]),
-        }))
-        .filter((d) => d.displayName)
-        .sort((a, b) => a.orderNo - b.orderNo || a.displayName.localeCompare(b.displayName));
-
-      const fallbackDoctors = makeDoctorOptionsFromReservations(reservations);
-      callback({
-        reservations,
-        doctors: doctors.length ? doctors : fallbackDoctors,
-      });
-    } catch (error) {
-      if (!cancelled) {
+    unsubscribeSnapshot = onSnapshot(
+      query(collection(db, "reservations"), where("reservationDate", "==", date)),
+      (snap) => {
+        // skip empty cache snapshots — they would wipe the API seed data
+        if (snap.metadata.fromCache && snap.empty) return;
+        seedDelivered = true;
+        const reservations = snap.docs
+          .map((d) => mapReservationDoc(d.id, d.data() as Record<string, unknown>))
+          .filter((item) => !item.isDeleted)
+          .sort((a, b) => {
+            const aa = `${a.reservationTime} ${a.name}`;
+            const bb = `${b.reservationTime} ${b.name}`;
+            return aa.localeCompare(bb);
+          });
+        const fallback = makeDoctorOptionsFromReservations(reservations);
+        callback({ reservations, doctors: latestDoctors.length ? latestDoctors : fallback });
+      },
+      (error) => {
         console.error("[subscribeTimelineReservations error]", error);
-        onError?.(error as Error);
+        onError?.(error);
       }
-    }
-  }
-
-  fetchAndEmit();
-  const intervalId = setInterval(fetchAndEmit, TIMELINE_POLL_MS);
+    );
+  });
 
   return () => {
-    cancelled = true;
-    clearInterval(intervalId);
+    seedDelivered = true;
+    unsubscribeAuth();
+    unsubscribeSnapshot?.();
   };
 }
 

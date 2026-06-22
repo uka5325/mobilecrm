@@ -69,11 +69,21 @@ let _callerCache: { role: string; name: string } | null = null;
 const _invoicesByPatientCache = new Map<string, InvoiceRecord[]>();
 
 export function getInvoicesByPatientCache(patientId: string): InvoiceRecord[] | undefined {
-  return _invoicesByPatientCache.get(patientId);
+  if (_invoicesByPatientCache.has(patientId)) return _invoicesByPatientCache.get(patientId);
+  try {
+    const raw = sessionStorage.getItem(`inv_${patientId}`);
+    if (raw) {
+      const d = JSON.parse(raw) as InvoiceRecord[];
+      _invoicesByPatientCache.set(patientId, d);
+      return d;
+    }
+  } catch {}
+  return undefined;
 }
 
 export function invalidateInvoicesByPatientCache(patientId: string) {
   _invoicesByPatientCache.delete(patientId);
+  try { sessionStorage.removeItem(`inv_${patientId}`); } catch {}
 }
 
 async function callInvoicesApi(action: string, payload: Record<string, unknown>) {
@@ -156,6 +166,7 @@ export async function getInvoicesByPatientId(patientId: string): Promise<Invoice
   if (!result.success || !Array.isArray(result.invoices)) return [];
   const records = (result.invoices as Record<string, unknown>[]).map(mapInvoiceDoc);
   _invoicesByPatientCache.set(patientId, records);
+  try { sessionStorage.setItem(`inv_${patientId}`, JSON.stringify(records)); } catch {}
   return records;
 }
 

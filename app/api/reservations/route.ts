@@ -27,6 +27,20 @@ function docToObj(d: any): Record<string, unknown> {
   return toSerializable({ id: d.id, ...d.data() }) as Record<string, unknown>;
 }
 
+// 의사 목록은 거의 변경되지 않으므로 서버 메모리에 10분 캐싱
+let _doctorsCache: Record<string, unknown>[] | null = null;
+let _doctorsCacheAt = 0;
+const DOCTORS_CACHE_TTL = 10 * 60 * 1000;
+
+async function getCachedDoctors(): Promise<Record<string, unknown>[]> {
+  if (_doctorsCache && Date.now() - _doctorsCacheAt < DOCTORS_CACHE_TTL) return _doctorsCache;
+  const snap = await adminDb.collection("staff").where("role", "==", "doctor").where("active", "==", true).get();
+  const result = snap.docs.map(docToObj);
+  _doctorsCache = result;
+  _doctorsCacheAt = Date.now();
+  return result;
+}
+
 function normDupKey(r: Record<string, unknown>) {
   const docs = Array.isArray(r.doctors)
     ? [...(r.doctors as string[])].sort().join("|")
@@ -61,23 +75,19 @@ export async function POST(req: NextRequest) {
         return d.toISOString().slice(0, 10);
       })();
 
-      const [rSnap, dSnap] = await Promise.all([
+      const [rSnap, doctors] = await Promise.all([
         adminDb
           .collection("reservations")
           .where("reservationDate", ">=", sixMonthsAgo)
           .orderBy("reservationDate", "desc")
           .get(),
-        adminDb
-          .collection("staff")
-          .where("role", "==", "doctor")
-          .where("active", "==", true)
-          .get(),
+        getCachedDoctors(),
       ]);
 
       return NextResponse.json({
         success: true,
         reservations: rSnap.docs.map(docToObj),
-        doctors: dSnap.docs.map(docToObj),
+        doctors,
       });
     }
 
@@ -85,22 +95,18 @@ export async function POST(req: NextRequest) {
     if (action === "read_by_date") {
       const { date } = (payload || {}) as { date: string };
 
-      const [rSnap, dSnap] = await Promise.all([
+      const [rSnap, doctors] = await Promise.all([
         adminDb
           .collection("reservations")
           .where("reservationDate", "==", date)
           .get(),
-        adminDb
-          .collection("staff")
-          .where("role", "==", "doctor")
-          .where("active", "==", true)
-          .get(),
+        getCachedDoctors(),
       ]);
 
       return NextResponse.json({
         success: true,
         reservations: rSnap.docs.map(docToObj),
-        doctors: dSnap.docs.map(docToObj),
+        doctors,
       });
     }
 
@@ -116,12 +122,8 @@ export async function POST(req: NextRequest) {
 
     // ── READ: doctors only ────────────────────────────────────────────────
     if (action === "read_doctors") {
-      const dSnap = await adminDb
-        .collection("staff")
-        .where("role", "==", "doctor")
-        .where("active", "==", true)
-        .get();
-      return NextResponse.json({ success: true, doctors: dSnap.docs.map(docToObj) });
+      const doctors = await getCachedDoctors();
+      return NextResponse.json({ success: true, doctors });
     }
 
     // ── CREATE ────────────────────────────────────────────────────────────

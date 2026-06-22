@@ -446,13 +446,23 @@ export async function updateConferenceMemo(memoId: string, memoText: string, sta
 ============================================================ */
 
 let _staffListCache: SettingsStaffRecord[] | null = null;
+const _STAFF_CACHE_KEY = "mcrm_staff_list";
+const _STAFF_CACHE_TTL = 5 * 60 * 1000;
 
 export function clearStaffListCache() {
   _staffListCache = null;
+  try { localStorage.removeItem(_STAFF_CACHE_KEY); } catch {}
 }
 
 export async function getStaffListForSettings(): Promise<SettingsStaffRecord[]> {
   if (_staffListCache) return _staffListCache;
+  try {
+    const raw = localStorage.getItem(_STAFF_CACHE_KEY);
+    if (raw) {
+      const { ts, data } = JSON.parse(raw) as { ts: number; data: SettingsStaffRecord[] };
+      if (Date.now() - ts < _STAFF_CACHE_TTL) { _staffListCache = data; return data; }
+    }
+  } catch {}
   const result = await callSettingsApi("get_staff_list");
   const rawList = (result.staff as Record<string, unknown>[] | undefined) || [];
 
@@ -491,6 +501,7 @@ export async function getStaffListForSettings(): Promise<SettingsStaffRecord[]> 
         a.displayName.localeCompare(b.displayName)
       );
     });
+  try { localStorage.setItem(_STAFF_CACHE_KEY, JSON.stringify({ ts: Date.now(), data: sorted })); } catch {}
   _staffListCache = sorted;
   return _staffListCache;
 }
