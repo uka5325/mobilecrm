@@ -357,25 +357,34 @@ export async function POST(req: NextRequest) {
       const { startDate, endDate, status, patientName, commissionStaffUid } =
         (payload || {}) as Record<string, string>;
 
-      // 기본 조회 범위: 최근 3개월 (startDate 없을 때)
-      const effectiveStart = startDate || (() => {
-        const d = new Date(); d.setMonth(d.getMonth() - 3);
-        return d.toISOString().slice(0, 10);
-      })();
-      const effectiveEnd = endDate || new Date().toISOString().slice(0, 10);
-
-      // surgeryDate 범위 쿼리로 Firestore에서 필터링 (전체 스캔 방지)
+      // surgeryDate가 빈 문자열이거나 누락된 기존 인보이스도 포함해야 하므로
+      // Firestore 쿼리는 createdAt 정렬 + limit(200)만 적용하고
+      // 날짜 필터링은 JS에서 처리 (surgeryDate 없는 경우 createdAt fallback)
       const snap = await adminDb.collection("invoices")
-        .where("isDeleted", "==", false)
-        .where("surgeryDate", ">=", effectiveStart)
-        .where("surgeryDate", "<=", effectiveEnd)
-        .orderBy("surgeryDate", "desc")
+        .orderBy("createdAt", "desc")
         .limit(200)
         .get();
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      let records = snap.docs.map(docToObj).filter((r: any) => isCoordinatorOf(r));
+      let records = snap.docs.map(docToObj).filter((r: any) => !r.isDeleted && isCoordinatorOf(r));
 
+      // 수술날짜 기준 필터 (surgeryDate 없는 기존 인보이스는 createdAt 날짜로 대체)
+      if (startDate || endDate) {
+        const sd = startDate || "0000-00-00";
+        const ed = endDate || "9999-99-99";
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        records = records.filter((r: any) => {
+          const effectiveDate: string = r.surgeryDate
+            ? String(r.surgeryDate)
+            : (() => {
+                const ts = r.createdAt;
+                if (!ts) return "";
+                const d = typeof ts === "number" ? new Date(ts) : new Date(ts);
+                return d.toISOString().slice(0, 10);
+              })();
+          return effectiveDate >= sd && effectiveDate <= ed;
+        });
+      }
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       if (status) records = records.filter((r: any) => r.status === status);
       if (patientName) {
