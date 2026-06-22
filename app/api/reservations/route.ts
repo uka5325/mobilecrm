@@ -35,9 +35,10 @@ const DOCTORS_CACHE_TTL = 10 * 60 * 1000;
 async function getCachedDoctors(): Promise<Record<string, unknown>[]> {
   if (_doctorsCache && Date.now() - _doctorsCacheAt < DOCTORS_CACHE_TTL) return _doctorsCache;
   const snap = await adminDb.collection("staff").where("role", "==", "doctor").where("active", "==", true).get();
-  _doctorsCache = snap.docs.map(docToObj);
+  const result = snap.docs.map(docToObj);
+  _doctorsCache = result;
   _doctorsCacheAt = Date.now();
-  return _doctorsCache;
+  return result;
 }
 
 function normDupKey(r: Record<string, unknown>) {
