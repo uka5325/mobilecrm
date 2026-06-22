@@ -15,7 +15,7 @@ import { CreateDrawer } from "@/components/reservations/CreateDrawer";
 import { ImportDrawer } from "@/components/reservations/ImportDrawer";
 import { MemoPopover, type MemoPopoverState } from "@/components/reservations/MemoPopover";
 import { ReservationsTable, type PatientGroup, type PatientEditForm } from "@/components/reservations/ReservationsTable";
-import { getReservationNotes, updateReservationNote, deleteReservationNote, type ReservationNote } from "@/lib/reservationNotes";
+import { getReservationNotes, addReservationNote, updateReservationNote, deleteReservationNote, type ReservationNote } from "@/lib/reservationNotes";
 import { toDate } from "@/lib/settingsUtils";
 
 
@@ -32,13 +32,14 @@ export default function ReservationsPage() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [importDrawerOpen, setImportDrawerOpen] = useState(false);
 
-  const [addPatient, setAddPatient] = useState<{ name: string; birthInput: string; phone: string; nationality: string; patientId: string; hospital?: string; consultArea?: string; appointmentType?: import("@/lib/reservations").AppointmentType; coordinators?: string; depositAmount?: string; surgeryCost?: string } | undefined>();
+  const [addPatient, setAddPatient] = useState<{ name: string; birthInput: string; phone: string; nationality: string; patientId: string; hospital?: string; consultArea?: string; appointmentType?: import("@/lib/reservations").AppointmentType; coordinators?: string; doctors?: string; depositAmount?: string; surgeryCost?: string } | undefined>();
 
   const [inlineEditId, setInlineEditId] = useState<string | null>(null);
   const [inlineForm, setInlineForm] = useState<{
     name: string; birthInput: string; phone: string; nationality: string;
     consultArea: string; reservationDate: string; reservationTime: string;
     coordinators: string; depositAmount: string; surgeryCost: string; hospital: string;
+    doctors: string;
     appointmentType: AppointmentType;
   } | null>(null);
   const [inlineSaving, setInlineSaving] = useState(false);
@@ -99,6 +100,7 @@ export default function ReservationsPage() {
       if (!map.has(key)) {
         map.set(key, {
           patientKey: key,
+          patientId: r.patientId || key,
           name: r.name,
           birth: r.birth,
           birthInput: r.birthInput || r.birth || "",
@@ -138,6 +140,7 @@ export default function ReservationsPage() {
       depositAmount: item.depositAmount || "",
       surgeryCost: item.surgeryCost || "",
       hospital: item.hospital || "",
+      doctors: (item.doctors || []).join(", "),
       appointmentType: item.appointmentType || "상담",
     });
   }
@@ -162,6 +165,7 @@ export default function ReservationsPage() {
           hospital: inlineForm.hospital,
           appointmentType: inlineForm.appointmentType,
           coordinators: inlineForm.coordinators.split(",").map((s) => s.trim()).filter(Boolean),
+          doctors: inlineForm.doctors.split(",").map((s) => s.trim()).filter(Boolean),
           depositAmount: inlineForm.depositAmount,
           surgeryCost: inlineForm.surgeryCost,
           currentDoctorStatusMap: item.doctorStatusMap,
@@ -216,6 +220,20 @@ export default function ReservationsPage() {
       staff: currentUser,
     });
     const notes = await getReservationNotes(memoPopover.item.reservationId, memoPopover.item.id, memoPopover.item.patientId);
+    setMemoPopover((prev) => prev ? { ...prev, notes } : prev);
+  }
+
+  async function handleMemoAdd(text: string) {
+    if (!currentUser || !memoPopover) return;
+    const item = memoPopover.item;
+    await addReservationNote({
+      reservationId: item.reservationId,
+      reservationDocId: item.id,
+      patientId: item.patientId || "",
+      memoText: text,
+      staff: currentUser,
+    });
+    const notes = await getReservationNotes(item.reservationId, item.id, item.patientId);
     setMemoPopover((prev) => prev ? { ...prev, notes } : prev);
   }
 
@@ -373,6 +391,37 @@ export default function ReservationsPage() {
     await openMemoPopover(rep);
   }
 
+  async function handleSaveAmount(reservationId: string, field: "depositAmount" | "surgeryCost", value: string) {
+    if (!currentUser) return;
+    const item = reservations.find((r) => r.id === reservationId);
+    if (!item) return;
+    await updateReservationFull(
+      item.id,
+      item.reservationId,
+      item.patientId,
+      {
+        name: item.name,
+        birthInput: item.birthInput || item.birth || "",
+        birth: item.birthInput || item.birth || "",
+        phone: item.phone,
+        nationality: item.nationality,
+        consultArea: item.consultArea,
+        reservationDate: item.reservationDate,
+        reservationTime: item.reservationTime,
+        hospital: item.hospital,
+        appointmentType: item.appointmentType,
+        coordinators: item.coordinators,
+        doctors: item.doctors || [],
+        depositAmount: field === "depositAmount" ? value : item.depositAmount,
+        surgeryCost: field === "surgeryCost" ? value : item.surgeryCost,
+        currentDoctorStatusMap: item.doctorStatusMap,
+        currentDoctorStatusMetaMap: item.doctorStatusMetaMap,
+      },
+      currentUser
+    );
+    await refresh();
+  }
+
   async function handleDelete(item: ReservationRecord) {
     if (!currentUser) return;
 
@@ -399,6 +448,7 @@ export default function ReservationsPage() {
       consultArea: item.consultArea || "",
       appointmentType: item.appointmentType,
       coordinators: (item.coordinators || []).join(", "),
+      doctors: (item.doctors || []).join(", "),
       depositAmount: item.depositAmount || "",
       surgeryCost: item.surgeryCost || "",
     });
@@ -417,6 +467,7 @@ export default function ReservationsPage() {
         onEditTextChange={setEditingNoteText}
         onUpdate={handleMemoUpdate}
         onDelete={handleMemoDelete}
+        onAdd={handleMemoAdd}
       />
 
       {pageError && (
@@ -425,8 +476,8 @@ export default function ReservationsPage() {
         </div>
       )}
 
-      <div className="-mx-6 mb-4 rounded-t-2xl border border-[#edf0f3] bg-[#ecfdf5] px-6 py-4 lg:-mx-8 lg:px-8">
-        <div className="flex flex-wrap items-center gap-2">
+      <div className="-mx-6 mb-4 rounded-t-2xl border border-[#edf0f3] bg-[#ecfdf5] px-4 py-4 lg:-mx-8 lg:px-8">
+        <div className="flex items-center gap-2">
           <input
             type="text"
             value={search}
@@ -439,12 +490,12 @@ export default function ReservationsPage() {
             type="date"
             value={filterDate}
             onChange={(e) => setFilterDate(e.target.value)}
-            className="h-10 w-[160px] appearance-none rounded-xl border border-[#dfe3e8] bg-white px-3 text-sm outline-none focus:border-[#1d9e75]"
+            className="h-10 w-[100px] shrink-0 appearance-none rounded-xl border border-[#dfe3e8] bg-white px-2 text-sm outline-none focus:border-[#1d9e75]"
           />
 
           <button
             onClick={() => setFilterDate("")}
-            className="h-10 w-[110px] rounded-xl border border-[#dfe3e8] bg-white px-4 text-sm text-gray-700 transition hover:-translate-y-0.5 hover:bg-gray-50 active:scale-95"
+            className="h-10 shrink-0 whitespace-nowrap rounded-xl border border-[#dfe3e8] bg-white px-3 text-sm text-gray-700 transition hover:-translate-y-0.5 hover:bg-gray-50 active:scale-95"
           >
             날짜 초기화
           </button>
@@ -453,21 +504,21 @@ export default function ReservationsPage() {
         <div className="mt-2 flex items-center gap-2">
           <button
             onClick={() => { setAddPatient(undefined); setDrawerOpen(true); }}
-            className="h-10 rounded-xl bg-black px-4 text-sm font-medium text-white transition hover:-translate-y-0.5 hover:shadow-md active:scale-95"
+            className="h-10 flex-1 whitespace-nowrap rounded-xl bg-black px-4 text-sm font-medium text-white transition hover:-translate-y-0.5 hover:shadow-md active:scale-95"
           >
             + 고객 등록
           </button>
           <button
             onClick={() => setImportDrawerOpen(true)}
-            className="h-10 rounded-xl border border-[#dfe3e8] bg-white px-4 text-sm text-gray-700 transition hover:-translate-y-0.5 hover:bg-gray-50 active:scale-95"
+            className="h-10 flex-1 whitespace-nowrap rounded-xl border border-[#dfe3e8] bg-white px-4 text-sm text-gray-700 transition hover:-translate-y-0.5 hover:bg-gray-50 active:scale-95"
           >
             🔗 외부 링크 가져오기
           </button>
 
-          <div className="relative ml-auto">
+          <div className="relative flex-1">
             <button
               onClick={() => setDownloadOpen((v) => !v)}
-              className="h-10 w-[110px] rounded-xl border border-[#dfe3e8] bg-white px-4 text-sm text-gray-700 transition hover:-translate-y-0.5 hover:bg-gray-50 active:scale-95"
+              className="h-10 w-full whitespace-nowrap rounded-xl border border-[#dfe3e8] bg-white px-4 text-sm text-gray-700 transition hover:-translate-y-0.5 hover:bg-gray-50 active:scale-95"
             >
               📥 다운로드
             </button>
@@ -543,6 +594,7 @@ export default function ReservationsPage() {
         onCancelPatientEdit={() => { setPatientEditId(null); setPatientEditForm(null); }}
         onDeletePatient={handleDeletePatient}
         onOpenPatientMemo={openPatientMemoPopover}
+        onSaveAmount={handleSaveAmount}
       />
 
       {currentUser && (

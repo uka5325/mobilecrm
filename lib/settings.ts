@@ -650,6 +650,8 @@ export type AppointmentTypeColorMap = {
   수술: string;
   치료: string;
   경과: string;
+  진료: string;
+  검진: string;
 };
 
 export const DEFAULT_APPOINTMENT_TYPE_COLORS: AppointmentTypeColorMap = {
@@ -657,6 +659,8 @@ export const DEFAULT_APPOINTMENT_TYPE_COLORS: AppointmentTypeColorMap = {
   수술: "#ef4444",
   치료: "#16a34a",
   경과: "#f59e0b",
+  진료: "#7c3aed",
+  검진: "#0891b2",
 };
 
 const APPT_COLOR_CACHE_KEY = "crm_appt_type_colors";
@@ -671,6 +675,8 @@ function normalizeAppointmentTypeColors(
     수술: normalizeHexColor(colors?.수술, DEFAULT_APPOINTMENT_TYPE_COLORS.수술),
     치료: normalizeHexColor(colors?.치료, DEFAULT_APPOINTMENT_TYPE_COLORS.치료),
     경과: normalizeHexColor(colors?.경과, DEFAULT_APPOINTMENT_TYPE_COLORS.경과),
+    진료: normalizeHexColor(colors?.진료, DEFAULT_APPOINTMENT_TYPE_COLORS.진료),
+    검진: normalizeHexColor(colors?.검진, DEFAULT_APPOINTMENT_TYPE_COLORS.검진),
   };
 }
 

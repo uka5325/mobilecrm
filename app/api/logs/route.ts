@@ -51,7 +51,7 @@ export async function POST(req: NextRequest) {
 
     // ── READ ─────────────────────────────────────────────────────────────────
     if (action === "read") {
-      const { reservationId, targetId } = payload as { reservationId?: string; targetId?: string };
+      const { reservationId, targetId, patientId } = payload as { reservationId?: string; targetId?: string; patientId?: string };
       const result: Record<string, unknown> = {};
 
       const run = async (field: string, value: string) => {
@@ -66,6 +66,7 @@ export async function POST(req: NextRequest) {
       await Promise.all([
         run("reservationId", reservationId || ""),
         run("targetId", targetId || ""),
+        run("patientId", patientId || ""),
       ]);
 
       const list = Object.values(result).sort((a, b) => {

@@ -42,6 +42,7 @@ type DetailForm = {
   coordinators: string;
   depositAmount: string;
   surgeryCost: string;
+  doctors: string;
   completed: boolean;
   cancelled: boolean;
 };
@@ -69,7 +70,7 @@ export function DetailDrawer({ open, reservation, currentUser, onClose, onRefres
     name: "", birthInput: "", phone: "", nationality: "",
     consultArea: "", reservationDate: todayString(),
     reservationTime: "", hospital: "", appointmentType: "상담",
-    coordinators: "", depositAmount: "", surgeryCost: "", completed: false, cancelled: false,
+    coordinators: "", depositAmount: "", surgeryCost: "", doctors: "", completed: false, cancelled: false,
   });
 
   const [logs, setLogs] = useState<LogRecord[]>([]);
@@ -107,6 +108,7 @@ export function DetailDrawer({ open, reservation, currentUser, onClose, onRefres
       coordinators: (reservation.coordinators || []).join(", "),
       depositAmount: reservation.depositAmount || "",
       surgeryCost: reservation.surgeryCost || "",
+      doctors: (reservation.doctors || []).join(", "),
       completed: reservation.completed === true,
       cancelled: (reservation as unknown as Record<string, unknown>).cancelled === true,
     });
@@ -126,7 +128,7 @@ export function DetailDrawer({ open, reservation, currentUser, onClose, onRefres
     setLogsError("");
     setLogs([]);
     try {
-      const list = await getLogsByReservationId(item.reservationId, item.id);
+      const list = await getLogsByReservationId(item.reservationId, item.id, item.patientId);
       if (mounted && !mounted.current) return;
       setLogs(list);
     } catch {
@@ -175,6 +177,7 @@ export function DetailDrawer({ open, reservation, currentUser, onClose, onRefres
           coordinators: splitComma(detailForm.coordinators),
           depositAmount: detailForm.depositAmount,
           surgeryCost: detailForm.surgeryCost,
+          doctors: splitComma(detailForm.doctors),
           completed: detailForm.completed,
           currentDoctorStatusMap: selectedReservation.doctorStatusMap,
           currentDoctorStatusMetaMap: selectedReservation.doctorStatusMetaMap,
@@ -200,6 +203,7 @@ export function DetailDrawer({ open, reservation, currentUser, onClose, onRefres
         coordinators: splitComma(detailForm.coordinators),
         depositAmount: detailForm.depositAmount,
         surgeryCost: detailForm.surgeryCost,
+        doctors: splitComma(detailForm.doctors),
         completed: detailForm.completed,
       };
 
@@ -236,6 +240,7 @@ export function DetailDrawer({ open, reservation, currentUser, onClose, onRefres
         hospital: detailForm.hospital,
         appointmentType: detailForm.appointmentType,
         coordinators: splitComma(detailForm.coordinators),
+        doctors: splitComma(detailForm.doctors),
         depositAmount: detailForm.depositAmount,
         surgeryCost: detailForm.surgeryCost,
         completed: next,
@@ -270,6 +275,7 @@ export function DetailDrawer({ open, reservation, currentUser, onClose, onRefres
         hospital: detailForm.hospital,
         appointmentType: detailForm.appointmentType,
         coordinators: splitComma(detailForm.coordinators),
+        doctors: splitComma(detailForm.doctors),
         depositAmount: detailForm.depositAmount,
         surgeryCost: detailForm.surgeryCost,
         completed: detailForm.completed,
@@ -364,6 +370,7 @@ export function DetailDrawer({ open, reservation, currentUser, onClose, onRefres
     consultArea: selectedReservation.consultArea,
     appointmentType: selectedReservation.appointmentType,
     coordinators: (selectedReservation.coordinators || []).join(", "),
+    doctors: (selectedReservation.doctors || []).join(", "),
     depositAmount: selectedReservation.depositAmount,
     surgeryCost: selectedReservation.surgeryCost,
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -385,9 +392,13 @@ export function DetailDrawer({ open, reservation, currentUser, onClose, onRefres
               {birthGenderText && (
                 <div className="mt-0.5 text-sm text-gray-500">{birthGenderText}</div>
               )}
-              {(selectedReservation.hospital || selectedReservation.reservationTime) && (
+              {(selectedReservation.hospital || selectedReservation.reservationTime || (selectedReservation.doctors && selectedReservation.doctors.length > 0)) && (
                 <div className="mt-0.5 text-sm text-gray-500">
-                  {[selectedReservation.hospital, selectedReservation.reservationTime].filter(Boolean).join(" · ")}
+                  {[
+                    selectedReservation.hospital,
+                    selectedReservation.doctors?.length ? selectedReservation.doctors.join(", ") : null,
+                    selectedReservation.reservationTime,
+                  ].filter(Boolean).join(" · ")}
                 </div>
               )}
               {selectedReservation.consultArea && (
@@ -516,6 +527,7 @@ export function DetailDrawer({ open, reservation, currentUser, onClose, onRefres
           {activeTab === "invoice" && selectedReservation && (
             <InvoiceTab
               reservationDocId={selectedReservation.id}
+              patientId={selectedReservation.patientId}
               currentUser={currentUser}
             />
           )}

@@ -126,8 +126,7 @@ export default function InvoiceEditPage() {
         setMessage(result.message || "저장에 실패했습니다.");
         return;
       }
-      applyInvoice(result.invoice);
-      setMessage("저장 완료");
+      router.push("/invoice");
     } catch (e) {
       console.error("[InvoicePage] save error:", e);
       setMessage("저장 중 오류가 발생했습니다.");
@@ -219,6 +218,12 @@ export default function InvoiceEditPage() {
                 className="w-full rounded-xl border px-3 py-2 text-sm focus:border-[#1d9e75] focus:outline-none"
                 placeholder="병원명 입력"
               />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs text-gray-500">담당 원장</label>
+              <div className="w-full rounded-xl border border-[#edf0f3] bg-gray-50 px-3 py-2 text-sm text-gray-600">
+                {invoice.doctors?.join(", ") || "-"}
+              </div>
             </div>
             <div>
               <label className="mb-1 block text-xs text-gray-500">수술/시술명</label>

@@ -10,6 +10,8 @@ export type MemoPopoverState = {
   loading: boolean;
 } | null;
 
+import { useState } from "react";
+
 type Props = {
   memoPopover: MemoPopoverState;
   editingNoteId: string | null;
@@ -20,6 +22,7 @@ type Props = {
   onEditTextChange: (text: string) => void;
   onUpdate: (note: ReservationNote) => void;
   onDelete: (note: ReservationNote) => void;
+  onAdd: (text: string) => Promise<void>;
 };
 
 export function MemoPopover({
@@ -32,14 +35,29 @@ export function MemoPopover({
   onEditTextChange,
   onUpdate,
   onDelete,
+  onAdd,
 }: Props) {
+  const [newText, setNewText] = useState("");
+  const [adding, setAdding] = useState(false);
+
   if (!memoPopover) return null;
+
+  async function handleAdd() {
+    if (!newText.trim()) return;
+    setAdding(true);
+    try {
+      await onAdd(newText.trim());
+      setNewText("");
+    } finally {
+      setAdding(false);
+    }
+  }
 
   return (
     <>
       <div className="fixed inset-0 z-[9994]" onClick={onClose} />
-      <div className="fixed left-1/2 top-1/2 z-[9995] w-[420px] max-w-[90vw] -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-[#edf0f3] bg-white shadow-2xl">
-        <div className="flex items-center justify-between border-b border-[#edf0f3] px-5 py-4">
+      <div className="fixed left-1/2 top-1/2 z-[9995] w-[460px] max-w-[90vw] -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-[#edf0f3] bg-white shadow-2xl flex flex-col max-h-[90vh]">
+        <div className="flex items-center justify-between border-b border-[#edf0f3] px-5 py-4 shrink-0">
           <div>
             <div className="font-bold text-gray-800">{memoPopover.item.name} 메모</div>
             <div className="text-xs text-gray-400">
@@ -49,7 +67,24 @@ export function MemoPopover({
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600">✕</button>
         </div>
 
-        <div className="max-h-[360px] overflow-y-auto p-5">
+        <div className="border-b border-[#edf0f3] px-5 py-3 shrink-0">
+          <textarea
+            rows={2}
+            value={newText}
+            onChange={(e) => setNewText(e.target.value)}
+            placeholder="새 메모 입력..."
+            className="w-full resize-none rounded-xl border border-[#dfe3e8] px-3 py-2 text-sm focus:border-emerald-500 focus:outline-none"
+          />
+          <button
+            onClick={handleAdd}
+            disabled={adding}
+            className="mt-2 w-full rounded-xl bg-emerald-600 py-2 text-sm font-medium text-white transition hover:-translate-y-0.5 disabled:opacity-50"
+          >
+            {adding ? "추가 중..." : "메모 추가"}
+          </button>
+        </div>
+
+        <div className="overflow-y-auto p-5 flex-1">
           {memoPopover.loading ? (
             <div className="py-8 text-center text-sm text-gray-400">메모 로딩 중...</div>
           ) : memoPopover.notes.length === 0 ? (
@@ -70,7 +105,7 @@ export function MemoPopover({
                         onChange={(e) => onEditTextChange(e.target.value)}
                       />
                     ) : (
-                      <span className="flex-1 text-sm leading-relaxed text-gray-700">{note.memoText}</span>
+                      <span className="flex-1 text-sm leading-relaxed text-gray-700 whitespace-pre-wrap">{note.memoText}</span>
                     )}
                   </div>
 

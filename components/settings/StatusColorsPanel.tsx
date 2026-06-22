@@ -8,7 +8,7 @@ import { getReadableTextColor } from "@/lib/colorUtils";
 import { isValidHex } from "@/lib/settingsUtils";
 import { SectionHeader, EmptyBox } from "@/components/settings/ui";
 
-const TYPE_KEYS = ["상담", "수술", "치료", "경과"] as const;
+const TYPE_KEYS = ["상담", "수술", "치료", "경과", "진료", "검진"] as const;
 type ApptType = typeof TYPE_KEYS[number];
 
 const TYPE_HELP: Record<ApptType, string> = {
@@ -16,6 +16,8 @@ const TYPE_HELP: Record<ApptType, string> = {
   수술: "수술 예약 카드 색상",
   치료: "치료 예약 카드 색상",
   경과: "경과 관찰 예약 카드 색상",
+  진료: "진료 예약 카드 색상",
+  검진: "검진 예약 카드 색상",
 };
 
 type Props = {

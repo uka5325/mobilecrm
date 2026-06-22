@@ -7,6 +7,7 @@ import type { StaffUser } from "@/lib/auth";
 import { getInvoices, type InvoiceRecord } from "@/lib/invoices";
 import { getStaffListForSettings, type SettingsStaffRecord } from "@/lib/settings";
 import { paymentMethodLabel } from "@/lib/commissionUtils";
+import { QuickButton } from "@/components/dashboard/QuickButton";
 
 function formatMoney(value: number | undefined) {
   if (value === undefined || value === null) return "-";
@@ -23,6 +24,82 @@ function getFirstDayOfMonth() {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
 }
 
+function pad(n: number) { return String(n).padStart(2, "0"); }
+function monthRange(offset: number) {
+  const d = new Date();
+  d.setDate(1);
+  d.setMonth(d.getMonth() + offset);
+  const y = d.getFullYear(), m = d.getMonth();
+  const lastDay = new Date(y, m + 1, 0).getDate();
+  return { start: `${y}-${pad(m + 1)}-01`, end: `${y}-${pad(m + 1)}-${pad(lastDay)}` };
+}
+
+function downloadCSV(records: InvoiceRecord[]) {
+  const header = ["환자명", "병원명", "담당자", "결제방법", "최종수술비", "커미션기준액", "커미션율(%)", "커미션액"];
+  const rows = records.map((r) => [
+    r.patientName,
+    r.hospitalName || "",
+    r.commissionStaffName || "",
+    paymentMethodLabel(r.paymentMethod),
+    r.totalAmount ?? "",
+    r.commissionBase ?? "",
+    r.commissionRate ?? "",
+    r.commissionAmount ?? "",
+  ]);
+  const csv = [header, ...rows].map((row) => row.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(",")).join("\n");
+  const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `커미션내역_${getTodayStr()}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function DetailModal({ invoice, onClose }: { invoice: InvoiceRecord; onClose: () => void }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
+      <div
+        className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="mb-4 flex items-center justify-between">
+          <div className="text-lg font-bold">{invoice.patientName} 정산 상세</div>
+          <button onClick={onClose} className="text-2xl leading-none text-gray-400 hover:text-gray-700">×</button>
+        </div>
+        <div className="space-y-2 text-sm">
+          {[
+            ["인보이스 ID", invoice.invoiceId],
+            ["수술날짜", invoice.surgeryDate || "-"],
+            ["병원명", invoice.hospitalName || "-"],
+            ["담당원장", invoice.doctors?.join(", ") || "-"],
+            ["수술/시술명", invoice.surgeryItems || "-"],
+            ["담당자", invoice.commissionStaffName || "-"],
+            ["결제방법", paymentMethodLabel(invoice.paymentMethod)],
+            ["최종 수술비", formatMoney(invoice.totalAmount) + " KRW"],
+            ["커미션 기준액", formatMoney(invoice.commissionBase) + " KRW"],
+            ["커미션율", invoice.commissionRate !== undefined ? `${invoice.commissionRate}%` : "-"],
+            ["커미션액", formatMoney(invoice.commissionAmount) + " KRW"],
+            ["상태", { draft: "임시저장", confirmed: "확정", void: "취소" }[invoice.status] || invoice.status],
+            ["메모", invoice.memo || "-"],
+          ].map(([label, value]) => (
+            <div key={label} className="flex gap-2">
+              <span className="w-28 shrink-0 text-gray-500">{label}</span>
+              <span className="font-medium">{value}</span>
+            </div>
+          ))}
+        </div>
+        <button
+          onClick={onClose}
+          className="mt-5 w-full rounded-xl bg-gray-100 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-200"
+        >
+          닫기
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function CommissionPage() {
   const [currentUser, setCurrentUser] = useState<StaffUser | null>(null);
   const [staffList, setStaffList] = useState<SettingsStaffRecord[]>([]);
@@ -36,6 +113,7 @@ export default function CommissionPage() {
   const [records, setRecords] = useState<InvoiceRecord[]>([]);
   const [loading, setLoading] = useState(false);
   const [searched, setSearched] = useState(false);
+  const [selectedInvoice, setSelectedInvoice] = useState<InvoiceRecord | null>(null);
 
   useEffect(() => {
     const unsub = listenCurrentUser(async (user: User | null) => {
@@ -78,7 +156,6 @@ export default function CommissionPage() {
 
   const isAdmin = currentUser?.role === "admin";
 
-  // 담당자별 소계
   const staffSubtotals = useMemo(() => {
     const map: Record<string, { name: string; count: number; totalAmount: number; totalCommission: number }> = {};
     for (const r of records) {
@@ -108,76 +185,73 @@ export default function CommissionPage() {
 
   return (
     <div className="space-y-5 pb-12">
-      {/* 필터 */}
-      <div className="rounded-2xl border border-black/10 bg-white p-5 shadow-[0_2px_16px_rgba(0,0,0,0.06)]">
-        <div className="mb-4 text-base font-bold">커미션 조회</div>
-        <div className="flex flex-wrap items-end gap-3">
-          <div>
-            <label className="mb-1 block text-xs text-gray-500">시작일</label>
-            <input
-              type="date"
-              value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
-              className="rounded-xl border px-3 py-2 text-sm"
-            />
-          </div>
-          <div>
-            <label className="mb-1 block text-xs text-gray-500">종료일</label>
-            <input
-              type="date"
-              value={endDate}
-              onChange={(e) => setEndDate(e.target.value)}
-              className="rounded-xl border px-3 py-2 text-sm"
-            />
-          </div>
+      {selectedInvoice && (
+        <DetailModal invoice={selectedInvoice} onClose={() => setSelectedInvoice(null)} />
+      )}
 
+      {/* 컨트롤바 */}
+      <div className="-mx-6 rounded-t-2xl border border-[#edf0f3] bg-[#ecfdf5] px-4 py-4 lg:-mx-8 lg:px-8">
+        {/* 1행: 날짜 */}
+        <div className="flex items-center gap-2">
+          <input
+            type="date"
+            value={startDate}
+            onChange={(e) => setStartDate(e.target.value)}
+            className="h-10 min-w-0 flex-1 appearance-none rounded-xl border border-[#dfe3e8] bg-white px-3 text-sm outline-none transition focus:border-[#1d9e75] focus:ring-4 focus:ring-emerald-100"
+          />
+          <span className="shrink-0 text-sm text-gray-400">~</span>
+          <input
+            type="date"
+            value={endDate}
+            onChange={(e) => setEndDate(e.target.value)}
+            className="h-10 min-w-0 flex-1 appearance-none rounded-xl border border-[#dfe3e8] bg-white px-3 text-sm outline-none transition focus:border-[#1d9e75] focus:ring-4 focus:ring-emerald-100"
+          />
+        </div>
+        {/* 2행: 담당자 + 상태 */}
+        <div className="mt-2 flex items-center gap-2">
           {isAdmin && (
-            <div>
-              <label className="mb-1 block text-xs text-gray-500">담당자</label>
-              <select
-                value={selectedStaffUid}
-                onChange={(e) => setSelectedStaffUid(e.target.value)}
-                className="rounded-xl border px-3 py-2 text-sm"
-              >
-                <option value="__all__">전체 직원</option>
-                {staffList.map((s) => (
-                  <option key={s.uid} value={s.uid}>{s.displayName}</option>
-                ))}
-              </select>
-            </div>
-          )}
-
-          <div>
-            <label className="mb-1 block text-xs text-gray-500">인보이스 상태</label>
             <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)}
-              className="rounded-xl border px-3 py-2 text-sm"
+              value={selectedStaffUid}
+              onChange={(e) => setSelectedStaffUid(e.target.value)}
+              className="h-10 min-w-0 flex-1 rounded-xl border border-[#dfe3e8] bg-white px-2 text-sm outline-none transition focus:border-[#1d9e75] focus:ring-4 focus:ring-emerald-100"
             >
-              <option value="">전체</option>
-              <option value="confirmed">확정</option>
-              <option value="draft">임시저장</option>
+              <option value="__all__">전체 직원</option>
+              {staffList.map((s) => (
+                <option key={s.uid} value={s.uid}>{s.displayName}</option>
+              ))}
             </select>
-          </div>
-
-          <div>
-            <label className="mb-1 block text-xs text-gray-500">환자명 검색</label>
-            <input
-              value={patientSearch}
-              onChange={(e) => setPatientSearch(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && handleSearch()}
-              placeholder="환자명"
-              className="rounded-xl border px-3 py-2 text-sm"
-            />
-          </div>
-
+          )}
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)}
+            className="h-10 min-w-0 flex-1 rounded-xl border border-[#dfe3e8] bg-white px-2 text-sm outline-none transition focus:border-[#1d9e75] focus:ring-4 focus:ring-emerald-100"
+          >
+            <option value="">전체 상태</option>
+            <option value="confirmed">확정</option>
+            <option value="draft">임시저장</option>
+          </select>
+        </div>
+        {/* 3행: 환자명 검색 + 조회 */}
+        <div className="mt-2 flex items-center gap-2">
+          <input
+            value={patientSearch}
+            onChange={(e) => setPatientSearch(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && handleSearch()}
+            placeholder="환자명 검색"
+            className="h-10 min-w-0 flex-1 rounded-xl border border-[#dfe3e8] bg-white px-3 text-sm outline-none transition focus:border-[#1d9e75] focus:ring-4 focus:ring-emerald-100"
+          />
           <button
             onClick={handleSearch}
             disabled={loading}
-            className="rounded-xl bg-[#1d9e75] px-5 py-2 text-sm font-semibold text-white disabled:opacity-50"
+            className="h-10 shrink-0 rounded-xl bg-black px-5 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:shadow-md active:scale-95 disabled:opacity-50"
           >
             {loading ? "조회 중..." : "조회"}
           </button>
+        </div>
+        {/* 퀵필터 */}
+        <div className="mt-3 flex gap-2 overflow-x-auto [&::-webkit-scrollbar]:hidden">
+          <QuickButton onClick={() => { const r = monthRange(0); setStartDate(r.start); setEndDate(r.end); }}>이번 달</QuickButton>
+          <QuickButton onClick={() => { const r = monthRange(1); setStartDate(r.start); setEndDate(r.end); }}>다음 달</QuickButton>
         </div>
       </div>
 
@@ -185,42 +259,44 @@ export default function CommissionPage() {
       {searched && (
         <>
           {/* 합계 카드 */}
-          <div className="grid gap-4 sm:grid-cols-3">
-            <div className="rounded-2xl border border-black/10 bg-white p-5 shadow-[0_2px_16px_rgba(0,0,0,0.06)]">
-              <div className="text-xs text-gray-500">총 건수</div>
-              <div className="mt-1 text-2xl font-bold">{grandTotal.count}건</div>
+          <div className="grid gap-3 sm:grid-cols-3">
+            <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-gray-700">
+              <div className="text-xs font-semibold opacity-60">총 건수</div>
+              <div className="mt-0.5 text-lg font-extrabold">{grandTotal.count}건</div>
             </div>
-            <div className="rounded-2xl border border-black/10 bg-white p-5 shadow-[0_2px_16px_rgba(0,0,0,0.06)]">
-              <div className="text-xs text-gray-500">총 수술금액</div>
-              <div className="mt-1 text-2xl font-bold">{formatMoney(grandTotal.amount)} KRW</div>
+            <div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-blue-700">
+              <div className="text-xs font-semibold opacity-60">총 수술금액</div>
+              <div className="mt-0.5 text-lg font-extrabold">{formatMoney(grandTotal.amount)} KRW</div>
             </div>
-            <div className="rounded-2xl border border-[#1d9e75]/30 bg-emerald-50 p-5 shadow-[0_2px_16px_rgba(0,0,0,0.06)]">
-              <div className="text-xs text-gray-500">총 커미션</div>
-              <div className="mt-1 text-2xl font-bold text-[#1d9e75]">{formatMoney(grandTotal.commission)} KRW</div>
+            <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-emerald-700">
+              <div className="text-xs font-semibold opacity-60">총 커미션</div>
+              <div className="mt-0.5 text-lg font-extrabold">{formatMoney(grandTotal.commission)} KRW</div>
             </div>
           </div>
 
-          {/* 담당자별 소계 (전체 조회 시) */}
+          {/* 담당자별 소계 */}
           {isAdmin && selectedStaffUid === "__all__" && staffSubtotals.length > 0 && (
-            <div className="rounded-2xl border border-black/10 bg-white p-5 shadow-[0_2px_16px_rgba(0,0,0,0.06)]">
-              <div className="mb-3 font-bold">담당자별 소계</div>
+            <div className="-mx-6 border-t border-[#edf0f3] bg-white lg:-mx-8">
+              <div className="flex items-center justify-between px-6 py-4 lg:px-8">
+                <div className="text-sm font-bold text-gray-800">담당자별 소계</div>
+              </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b text-xs text-gray-500">
-                      <th className="py-2 text-left">담당자</th>
-                      <th className="py-2 text-right">건수</th>
-                      <th className="py-2 text-right">수술금액 합계</th>
-                      <th className="py-2 text-right">커미션 합계</th>
+                  <thead className="border-b border-[#edf0f3] bg-[#f8fafc]">
+                    <tr className="text-xs text-gray-500">
+                      <th className="px-6 py-3 text-left lg:px-8">담당자</th>
+                      <th className="px-4 py-3 text-right">건수</th>
+                      <th className="px-4 py-3 text-right">수술금액 합계</th>
+                      <th className="px-4 py-3 text-right">커미션 합계</th>
                     </tr>
                   </thead>
-                  <tbody>
+                  <tbody className="divide-y divide-[#f1f3f5]">
                     {staffSubtotals.map((s) => (
-                      <tr key={s.name} className="border-b last:border-b-0">
-                        <td className="py-2 font-medium">{s.name}</td>
-                        <td className="py-2 text-right">{s.count}건</td>
-                        <td className="py-2 text-right">{formatMoney(s.totalAmount)}</td>
-                        <td className="py-2 text-right font-semibold text-[#1d9e75]">{formatMoney(s.totalCommission)}</td>
+                      <tr key={s.name}>
+                        <td className="px-6 py-3 font-medium text-gray-800 lg:px-8">{s.name}</td>
+                        <td className="px-4 py-3 text-right text-gray-600">{s.count}건</td>
+                        <td className="px-4 py-3 text-right text-gray-700">{formatMoney(s.totalAmount)}</td>
+                        <td className="px-4 py-3 text-right font-semibold text-[#1d9e75]">{formatMoney(s.totalCommission)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -230,18 +306,29 @@ export default function CommissionPage() {
           )}
 
           {/* 상세 테이블 */}
-          <div className="rounded-2xl border border-black/10 bg-white shadow-[0_2px_16px_rgba(0,0,0,0.06)]">
-            <div className="border-b px-5 py-4 font-bold">상세 내역</div>
+          <div className="-mx-6 border-t border-[#edf0f3] bg-white lg:-mx-8">
+            <div className="flex items-center justify-between px-6 py-4 lg:px-8">
+              <div className="text-sm font-bold text-gray-800">상세 내역</div>
+              {records.length > 0 && (
+                <button
+                  onClick={() => downloadCSV(records)}
+                  className="rounded-xl border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50"
+                >
+                  CSV 다운로드
+                </button>
+              )}
+            </div>
             {records.length === 0 ? (
-              <div className="px-5 py-8 text-center text-sm text-gray-400">
-                해당 기간에 커미션 정보가 있는 확정 인보이스가 없습니다.
+              <div className="px-6 py-10 text-center text-sm text-gray-400">
+                해당 기간에 커미션 정보가 있는 인보이스가 없습니다.
               </div>
             ) : (
               <div className="overflow-x-auto">
-                <table className="w-full min-w-[860px] text-sm">
-                  <thead>
-                    <tr className="border-b bg-gray-50 text-xs text-gray-500">
-                      <th className="px-4 py-3 text-left">환자명</th>
+                <table className="w-full min-w-[900px] text-sm">
+                  <thead className="border-b border-[#edf0f3] bg-[#f8fafc]">
+                    <tr className="text-xs text-gray-500">
+                      <th className="px-6 py-3 text-left lg:px-8">환자명</th>
+                      <th className="px-4 py-3 text-left">병원명</th>
                       <th className="px-4 py-3 text-left">담당자</th>
                       <th className="px-4 py-3 text-left">결제방법</th>
                       <th className="px-4 py-3 text-right">최종 수술비</th>
@@ -250,10 +337,15 @@ export default function CommissionPage() {
                       <th className="px-4 py-3 text-right">커미션액</th>
                     </tr>
                   </thead>
-                  <tbody>
+                  <tbody className="divide-y divide-[#f1f3f5]">
                     {records.map((r) => (
-                      <tr key={r.id} className="border-b last:border-b-0 hover:bg-gray-50">
-                        <td className="px-4 py-3 font-medium">{r.patientName}</td>
+                      <tr
+                        key={r.id}
+                        className="cursor-pointer whitespace-nowrap transition hover:bg-[#f8fafc]"
+                        onClick={() => setSelectedInvoice(r)}
+                      >
+                        <td className="px-6 py-3 font-semibold text-gray-800 lg:px-8">{r.patientName}</td>
+                        <td className="px-4 py-3 text-gray-600">{r.hospitalName || "-"}</td>
                         <td className="px-4 py-3 text-gray-600">{r.commissionStaffName || "-"}</td>
                         <td className="px-4 py-3">
                           <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${
@@ -265,9 +357,9 @@ export default function CommissionPage() {
                             {paymentMethodLabel(r.paymentMethod)}
                           </span>
                         </td>
-                        <td className="px-4 py-3 text-right">{formatMoney(r.totalAmount)}</td>
-                        <td className="px-4 py-3 text-right">{formatMoney(r.commissionBase)}</td>
-                        <td className="px-4 py-3 text-right">
+                        <td className="px-4 py-3 text-right text-gray-700">{formatMoney(r.totalAmount)}</td>
+                        <td className="px-4 py-3 text-right text-gray-700">{formatMoney(r.commissionBase)}</td>
+                        <td className="px-4 py-3 text-right text-gray-600">
                           {r.commissionRate !== undefined && r.commissionRate !== null ? `${r.commissionRate}%` : "-"}
                         </td>
                         <td className="px-4 py-3 text-right font-semibold text-[#1d9e75]">

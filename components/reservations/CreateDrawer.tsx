@@ -16,6 +16,7 @@ type InitialPatient = {
   consultArea?: string;
   appointmentType?: AppointmentType;
   coordinators?: string;
+  doctors?: string;
   depositAmount?: string;
   surgeryCost?: string;
 };
@@ -38,6 +39,7 @@ const EMPTY_FORM = (date: string, patient?: InitialPatient) => ({
   reservationDate: date,
   reservationTime: "",
   hospital: patient?.hospital || "",
+  doctors: patient?.doctors || "",
   appointmentType: (patient?.appointmentType || "상담") as AppointmentType,
   coordinators: patient?.coordinators || "",
   depositAmount: patient?.depositAmount || "",
@@ -78,6 +80,7 @@ export function CreateDrawer({ open, onClose, currentUser, initialDate, initialP
           reservationDate: form.reservationDate,
           reservationTime: form.reservationTime,
           hospital: form.hospital,
+          doctors: form.doctors.split(",").map((s) => s.trim()).filter(Boolean),
           appointmentType: form.appointmentType,
           coordinators: form.coordinators.split(",").map((s) => s.trim()).filter(Boolean),
           depositAmount: form.depositAmount,
@@ -107,7 +110,7 @@ export function CreateDrawer({ open, onClose, currentUser, initialDate, initialP
     <>
       <div className="fixed inset-0 z-[998] bg-black/35" onClick={onClose} />
 
-      <div className="fixed right-0 top-0 z-[1001] flex h-[100dvh] w-[390px] max-w-[calc(100vw-12px)] flex-col bg-white shadow-[-8px_0_30px_rgba(0,0,0,0.12)]">
+      <div className="fixed right-0 top-0 z-[1001] flex h-[100dvh] w-[420px] max-w-[calc(100vw-12px)] flex-col bg-white shadow-[-8px_0_30px_rgba(0,0,0,0.12)]">
         <div className="flex shrink-0 items-center justify-between border-b border-[#edf0f3] px-6 py-5">
           <div>
             <div className="text-xl font-bold">
@@ -168,14 +171,25 @@ export function CreateDrawer({ open, onClose, currentUser, initialDate, initialP
             </div>
           </div>
 
-          <div>
-            <label className="text-xs text-gray-500">병원명</label>
-            <input
-              value={form.hospital}
-              onChange={(e) => setForm((p) => ({ ...p, hospital: e.target.value }))}
-              placeholder="예: 강남성형외과"
-              className="mt-1 w-full rounded-xl border border-[#dfe3e8] px-3 py-2 text-sm transition focus:border-[#1d9e75] focus:outline-none"
-            />
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs text-gray-500">병원명</label>
+              <input
+                value={form.hospital}
+                onChange={(e) => setForm((p) => ({ ...p, hospital: e.target.value }))}
+                placeholder="예: 강남성형외과"
+                className="mt-1 w-full rounded-xl border border-[#dfe3e8] px-3 py-2 text-sm transition focus:border-[#1d9e75] focus:outline-none"
+              />
+            </div>
+            <div>
+              <label className="text-xs text-gray-500">담당 원장</label>
+              <input
+                value={form.doctors}
+                onChange={(e) => setForm((p) => ({ ...p, doctors: e.target.value }))}
+                placeholder="쉼표로 구분"
+                className="mt-1 w-full rounded-xl border border-[#dfe3e8] px-3 py-2 text-sm transition focus:border-[#1d9e75] focus:outline-none"
+              />
+            </div>
           </div>
 
           <div>
@@ -183,14 +197,14 @@ export function CreateDrawer({ open, onClose, currentUser, initialDate, initialP
             <div className="mt-2 flex gap-2 flex-wrap">
               {APPOINTMENT_TYPES.map((type) => {
                 const colors: Record<string, string> = {
-                  상담: "#2563eb", 수술: "#ef4444", 치료: "#16a34a", 경과: "#f59e0b",
+                  상담: "#2563eb", 수술: "#ef4444", 치료: "#16a34a", 경과: "#f59e0b", 진료: "#7c3aed", 검진: "#0891b2",
                 };
                 const active = form.appointmentType === type;
                 return (
                   <button
                     key={type}
                     onClick={() => setForm((p) => ({ ...p, appointmentType: type }))}
-                    className="rounded-xl border px-4 py-2 text-sm font-semibold transition hover:-translate-y-0.5 active:scale-95"
+                    className="rounded-xl border px-3 py-1.5 text-sm font-semibold transition hover:-translate-y-0.5 active:scale-95"
                     style={{
                       backgroundColor: active ? colors[type] : "#f9fafb",
                       color: active ? "#fff" : "#374151",
