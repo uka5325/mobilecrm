@@ -7,6 +7,7 @@ import type { StaffUser } from "@/lib/auth";
 import { getInvoices, type InvoiceRecord } from "@/lib/invoices";
 import { getStaffListForSettings, type SettingsStaffRecord } from "@/lib/settings";
 import { paymentMethodLabel } from "@/lib/commissionUtils";
+import { QuickButton } from "@/components/dashboard/QuickButton";
 
 function formatMoney(value: number | undefined) {
   if (value === undefined || value === null) return "-";
@@ -191,20 +192,9 @@ export default function CommissionPage() {
       {/* 컨트롤바 */}
       <div className="-mx-6 rounded-t-2xl border border-[#edf0f3] bg-[#ecfdf5] px-4 py-4 lg:-mx-8 lg:px-8">
         {/* 퀵필터 */}
-        <div className="mb-2 flex gap-2">
-          {[{ label: "이번달", offset: 0 }, { label: "다음달", offset: 1 }].map(({ label, offset }) => {
-            const r = monthRange(offset);
-            const active = startDate === r.start && endDate === r.end;
-            return (
-              <button
-                key={label}
-                onClick={() => { setStartDate(r.start); setEndDate(r.end); }}
-                className={`rounded-xl border px-4 py-1.5 text-sm font-semibold transition hover:-translate-y-0.5 active:scale-95 ${active ? "border-emerald-600 bg-emerald-600 text-white" : "border-[#dfe3e8] bg-white text-gray-600"}`}
-              >
-                {label}
-              </button>
-            );
-          })}
+        <div className="mb-3 flex gap-2 overflow-x-auto [&::-webkit-scrollbar]:hidden">
+          <QuickButton onClick={() => { const r = monthRange(0); setStartDate(r.start); setEndDate(r.end); }}>이번 달</QuickButton>
+          <QuickButton onClick={() => { const r = monthRange(1); setStartDate(r.start); setEndDate(r.end); }}>다음 달</QuickButton>
         </div>
         {/* 1행: 날짜 */}
         <div className="flex items-center gap-2">
