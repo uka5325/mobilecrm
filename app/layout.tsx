@@ -3,8 +3,8 @@ import "./globals.css";
 import AppProviders from "@/components/AppProviders";
 
 export const metadata: Metadata = {
-  title: "상담회 CRM",
-  description: "상담회 전용 CRM",
+  title: "모바일 CRM",
+  description: "모바일 CRM 예약관리 시스템",
 };
 
 export default function RootLayout({

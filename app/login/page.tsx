@@ -100,13 +100,11 @@ export default function LoginPage() {
 
               <div>
                 <div className="text-base font-semibold text-white max-[1023px]:text-2xl">
-                  상담회 CRM
+                  모바일 CRM
                 </div>
 
                 <div className="mt-1 text-xs leading-relaxed text-white/45 max-[1023px]:hidden">
-                  해외 상담회
-                  <br />
-                  실시간 운영 시스템
+                  예약관리 시스템
                 </div>
               </div>
             </div>
