@@ -374,13 +374,13 @@ export async function fetchAllReservationsOnce(): Promise<{
   reservations: ReservationRecord[];
   doctors: DoctorOption[];
 }> {
-  const sixMonthsAgo = (() => {
+  const threeMonthsAgo = (() => {
     const d = new Date();
-    d.setMonth(d.getMonth() - 6);
+    d.setMonth(d.getMonth() - 3);
     return d.toISOString().slice(0, 10);
   })();
 
-  const result = await callReservationsApi("read_all", { from: sixMonthsAgo });
+  const result = await callReservationsApi("read_all", { from: threeMonthsAgo });
   const rawReservations = (result.reservations as Record<string, unknown>[] | undefined) || [];
   const rawDoctors = (result.doctors as Record<string, unknown>[] | undefined) || [];
 
@@ -421,14 +421,14 @@ export function subscribeAllReservations(
   async function fetchAndEmit() {
     if (cancelled) return;
 
-    const sixMonthsAgo = (() => {
+    const threeMonthsAgo = (() => {
       const d = new Date();
-      d.setMonth(d.getMonth() - 6);
+      d.setMonth(d.getMonth() - 3);
       return d.toISOString().slice(0, 10);
     })();
 
     try {
-      const result = await callReservationsApi("read_all", { from: sixMonthsAgo });
+      const result = await callReservationsApi("read_all", { from: threeMonthsAgo });
       if (cancelled || !result.success) return;
 
       const rawReservations = (result.reservations as Record<string, unknown>[] | undefined) || [];
