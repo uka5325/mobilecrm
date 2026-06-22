@@ -448,6 +448,7 @@ export default function ReservationsPage() {
       consultArea: item.consultArea || "",
       appointmentType: item.appointmentType,
       coordinators: (item.coordinators || []).join(", "),
+      doctors: (item.doctors || []).join(", "),
       depositAmount: item.depositAmount || "",
       surgeryCost: item.surgeryCost || "",
     });

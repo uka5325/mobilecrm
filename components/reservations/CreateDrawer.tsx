@@ -16,6 +16,7 @@ type InitialPatient = {
   consultArea?: string;
   appointmentType?: AppointmentType;
   coordinators?: string;
+  doctors?: string;
   depositAmount?: string;
   surgeryCost?: string;
 };
@@ -38,7 +39,7 @@ const EMPTY_FORM = (date: string, patient?: InitialPatient) => ({
   reservationDate: date,
   reservationTime: "",
   hospital: patient?.hospital || "",
-  doctors: "",
+  doctors: patient?.doctors || "",
   appointmentType: (patient?.appointmentType || "상담") as AppointmentType,
   coordinators: patient?.coordinators || "",
   depositAmount: patient?.depositAmount || "",

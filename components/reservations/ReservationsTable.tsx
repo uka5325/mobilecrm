@@ -825,6 +825,7 @@ export function ReservationsTable({
     const makeKey = (r: typeof group.reservations[0]) => [
       (r.hospital || "").trim().toLowerCase(),
       (r.consultArea || "").trim().toLowerCase(),
+      (r.doctors || []).map((d) => d.trim().toLowerCase()).sort().join(","),
     ].join("|");
 
     const depositRows = (() => {

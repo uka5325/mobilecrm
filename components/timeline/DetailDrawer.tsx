@@ -370,6 +370,7 @@ export function DetailDrawer({ open, reservation, currentUser, onClose, onRefres
     consultArea: selectedReservation.consultArea,
     appointmentType: selectedReservation.appointmentType,
     coordinators: (selectedReservation.coordinators || []).join(", "),
+    doctors: (selectedReservation.doctors || []).join(", "),
     depositAmount: selectedReservation.depositAmount,
     surgeryCost: selectedReservation.surgeryCost,
   // eslint-disable-next-line react-hooks/exhaustive-deps
