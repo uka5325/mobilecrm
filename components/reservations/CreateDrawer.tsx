@@ -204,7 +204,7 @@ export function CreateDrawer({ open, onClose, currentUser, initialDate, initialP
                   <button
                     key={type}
                     onClick={() => setForm((p) => ({ ...p, appointmentType: type }))}
-                    className="rounded-xl border px-4 py-2 text-sm font-semibold transition hover:-translate-y-0.5 active:scale-95"
+                    className="rounded-xl border px-3 py-1.5 text-sm font-semibold transition hover:-translate-y-0.5 active:scale-95"
                     style={{
                       backgroundColor: active ? colors[type] : "#f9fafb",
                       color: active ? "#fff" : "#374151",
