@@ -96,6 +96,16 @@ export function FilesTab({ reservationDocId, reservationId, patientId, currentUs
     if (!files || files.length === 0) return;
     setError("");
     const fileArr = Array.from(files);
+
+    // 파일 크기 및 타입 검증 (업로드 전)
+    const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+    const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/heic", "image/heif", "image/webp", "image/gif"];
+    const invalidFiles = fileArr.filter((f) => f.size > MAX_FILE_SIZE || !ALLOWED_TYPES.includes(f.type));
+    if (invalidFiles.length > 0) {
+      setError(`업로드 불가 파일이 있습니다: ${invalidFiles.map((f) => f.name).join(", ")}\n(최대 10MB, 이미지 파일만 허용)`);
+      return;
+    }
+
     // Reset input after extracting files — iOS Safari cancels the upload if reset too early
     setTimeout(() => { if (photoInputRef.current) photoInputRef.current.value = ""; }, 0);
     setUploadingCount((n) => n + fileArr.length);
@@ -104,11 +114,24 @@ export function FilesTab({ reservationDocId, reservationId, patientId, currentUs
     // Run this batch independently — does not block the button
     (async () => {
       try {
-        const compressed = await Promise.all(fileArr.map((f) => compressImage(f)));
+        // 최대 5개씩 청크 단위로 업로드 (동시 업로드 폭탄 방지)
+        const MAX_CONCURRENT = 5;
+        const allCompressed: File[] = [];
+        for (let i = 0; i < fileArr.length; i += MAX_CONCURRENT) {
+          const chunk = fileArr.slice(i, i + MAX_CONCURRENT);
+          const chunkCompressed = await Promise.all(chunk.map((f) => compressImage(f)));
+          allCompressed.push(...chunkCompressed);
+        }
+        const compressed = allCompressed;
 
-        const storageResults = await Promise.all(
-          compressed.map((f) => uploadPhotoToStorage(reservationDocId, f).then((r) => ({ f, ...r })))
-        );
+        const storageResults: { f: File; storagePath: string; fileUrl: string }[] = [];
+        for (let i = 0; i < compressed.length; i += MAX_CONCURRENT) {
+          const chunk = compressed.slice(i, i + MAX_CONCURRENT);
+          const chunkResults = await Promise.all(
+            chunk.map((f) => uploadPhotoToStorage(reservationDocId, f).then((r) => ({ f, ...r })))
+          );
+          storageResults.push(...chunkResults);
+        }
 
         // Show optimistic items immediately
         const optimisticItems: PhotoRecord[] = storageResults.map(({ f, storagePath }) => {

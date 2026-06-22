@@ -52,6 +52,7 @@ function InvoiceEditPanel({
   const [form, setForm] = useState<InvoiceUpdatePayload>({
     hospitalName: invoice.hospitalName || "",
     surgeryItems: invoice.surgeryItems || "",
+    surgeryDate: invoice.surgeryDate || "",
     totalAmount: invoice.totalAmount || 0,
     paymentMethod: invoice.paymentMethod,
     cardAmount: invoice.cardAmount,
@@ -118,6 +119,16 @@ function InvoiceEditPanel({
           <label className="mb-1 block text-xs font-medium text-gray-600">병원명</label>
           <input value={form.hospitalName} onChange={(e) => setForm((p) => ({ ...p, hospitalName: e.target.value }))}
             className="w-full rounded-xl border border-[#dfe3e8] px-3 py-2 text-sm focus:border-[#1d9e75] focus:outline-none" />
+        </div>
+
+        <div>
+          <label className="mb-1 block text-xs font-medium text-gray-600">수술날짜</label>
+          <input
+            type="date"
+            value={form.surgeryDate || ""}
+            onChange={(e) => setForm((p) => ({ ...p, surgeryDate: e.target.value }))}
+            className="w-full rounded-xl border border-[#dfe3e8] px-3 py-2 text-sm focus:border-[#1d9e75] focus:outline-none"
+          />
         </div>
 
         <div className="grid grid-cols-2 gap-2">
@@ -235,12 +246,63 @@ function InvoiceEditPanel({
   );
 }
 
+function InvoiceDetailView({
+  invoice,
+  onEdit,
+  onBack,
+}: {
+  invoice: InvoiceRecord;
+  onEdit: () => void;
+  onBack: () => void;
+}) {
+  const PAY_LABEL: Record<string, string> = { cash: "현금", card: "카드", mixed: "혼합" };
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <button onClick={onBack} className="text-xs text-gray-500 hover:underline">← 목록</button>
+        <span className={`rounded-lg px-2.5 py-1 text-xs font-semibold ${STATUS_CLS[invoice.status] || "bg-gray-100 text-gray-500"}`}>
+          {STATUS_LABEL[invoice.status] || invoice.status}
+        </span>
+        <span className="text-xs text-gray-400">{invoice.invoiceId}</span>
+      </div>
+
+      <div className="rounded-xl border border-[#edf0f3] bg-white p-4 space-y-2 text-sm">
+        {([
+          ["병원명", invoice.hospitalName || "-"],
+          ["수술날짜", invoice.surgeryDate || "-"],
+          ["수술/시술명", invoice.surgeryItems || "-"],
+          ["담당원장", invoice.doctors?.join(", ") || "-"],
+          ["담당자", invoice.coordinators?.join(", ") || "-"],
+          ["수술비", invoice.totalAmount ? `₩${Number(invoice.totalAmount).toLocaleString("ko-KR")}` : "-"],
+          ["결제방법", PAY_LABEL[invoice.paymentMethod ?? ""] || "-"],
+          ["커미션율", invoice.commissionRate !== undefined ? `${invoice.commissionRate}%` : "-"],
+          ["커미션액", invoice.commissionAmount ? `₩${Number(invoice.commissionAmount).toLocaleString("ko-KR")}` : "-"],
+          ["메모", invoice.memo || "-"],
+        ] as [string, string][]).map(([label, value]) => (
+          <div key={label} className="flex gap-2">
+            <span className="w-24 shrink-0 text-xs text-gray-500">{label}</span>
+            <span className="text-xs font-medium text-gray-800">{value}</span>
+          </div>
+        ))}
+      </div>
+
+      <button
+        onClick={onEdit}
+        className="w-full rounded-xl bg-[#1d9e75] px-4 py-2.5 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:shadow-md active:scale-95"
+      >
+        수정하기
+      </button>
+    </div>
+  );
+}
+
 export function InvoiceTab({ reservationDocId, patientId, currentUser }: Props) {
   const [allInvoices, setAllInvoices] = useState<InvoiceRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState("");
   const [editingInvoice, setEditingInvoice] = useState<InvoiceRecord | null>(null);
+  const [viewingInvoice, setViewingInvoice] = useState<InvoiceRecord | null>(null);
   const [staffList, setStaffList] = useState<SettingsStaffRecord[]>([]);
 
   useEffect(() => {
@@ -307,6 +369,17 @@ export function InvoiceTab({ reservationDocId, patientId, currentUser }: Props) 
   }
 
   if (loading) return <div className="py-8 text-center text-sm text-gray-400">불러오는 중...</div>;
+
+  // 보기 패널 표시 중
+  if (viewingInvoice) {
+    return (
+      <InvoiceDetailView
+        invoice={viewingInvoice}
+        onEdit={() => { setEditingInvoice(viewingInvoice); setViewingInvoice(null); }}
+        onBack={() => setViewingInvoice(null)}
+      />
+    );
+  }
 
   // 편집 패널 표시 중
   if (editingInvoice) {
@@ -378,6 +451,9 @@ export function InvoiceTab({ reservationDocId, patientId, currentUser }: Props) 
                     {inv.surgeryItems && (
                       <div className="mt-0.5 text-xs text-gray-500 truncate">{inv.surgeryItems}</div>
                     )}
+                    {inv.surgeryDate && (
+                      <div className="mt-0.5 text-xs text-gray-400">수술일: {inv.surgeryDate}</div>
+                    )}
                     <div className="mt-1 flex items-center gap-2 flex-wrap">
                       <span className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ${STATUS_CLS[inv.status] || "bg-gray-100 text-gray-500"}`}>
                         {STATUS_LABEL[inv.status] || inv.status}
@@ -392,6 +468,12 @@ export function InvoiceTab({ reservationDocId, patientId, currentUser }: Props) 
                     <div className="mt-0.5 text-[10px] text-gray-400">{inv.invoiceId}</div>
                   </div>
                   <div className="flex shrink-0 gap-1">
+                    <button
+                      onClick={() => setViewingInvoice(inv)}
+                      className="rounded-lg bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-600 hover:bg-blue-100"
+                    >
+                      보기
+                    </button>
                     <button
                       onClick={() => setEditingInvoice(inv)}
                       className="rounded-lg bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-600 hover:bg-gray-200"

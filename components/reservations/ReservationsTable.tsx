@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect, useCallback, type ReactNode } from "react";
 import type { ReservationRecord, AppointmentType } from "@/lib/reservations";
 import { APPOINTMENT_TYPES } from "@/lib/reservations";
+import { calcCommissionBase, calcCommission } from "@/lib/commissionUtils";
 import { getReservationBirthInfo } from "@/lib/reservationUtils";
 import type { InvoiceRecord } from "@/lib/invoices";
 import { getInvoicesByPatientId, getInvoicesByPatientCache, invalidateInvoicesByPatientCache } from "@/lib/invoices";
@@ -204,6 +205,7 @@ function PatientInvoiceModal({ patientId, patientName, reservations, onClose, on
   const [loading, setLoading] = useState(!cached);
   const [creating, setCreating] = useState<string | null>(null);
   const [editingInvoice, setEditingInvoice] = useState<InvoiceRecord | null>(null);
+  const [viewingInvoice, setViewingInvoice] = useState<InvoiceRecord | null>(null);
   const [error, setError] = useState("");
 
   const load = useCallback(async () => {
@@ -265,6 +267,54 @@ function PatientInvoiceModal({ patientId, patientName, reservations, onClose, on
     } finally {
       setCreating(null);
     }
+  }
+
+  // 읽기 전용 보기 패널
+  if (viewingInvoice) {
+    const PAY_LABEL: Record<string, string> = { cash: "현금", card: "카드", mixed: "혼합" };
+    return (
+      <div className="fixed inset-0 z-[1100] flex items-center justify-center bg-black/40" onClick={onClose}>
+        <div
+          className="relative w-full max-w-xl rounded-2xl bg-white shadow-2xl mx-4 max-h-[85vh] flex flex-col"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4 shrink-0">
+            <button onClick={() => setViewingInvoice(null)} className="text-xs text-gray-500 hover:underline">← 목록</button>
+            <span className="text-sm font-bold">{patientName} — 인보이스 상세</span>
+            <button onClick={onClose} className="text-gray-400 hover:text-gray-600">✕</button>
+          </div>
+          <div className="flex-1 overflow-y-auto p-5 space-y-2 text-sm">
+            {([
+              ["인보이스 ID", viewingInvoice.invoiceId],
+              ["병원명", viewingInvoice.hospitalName || "-"],
+              ["수술날짜", viewingInvoice.surgeryDate || "-"],
+              ["수술/시술명", viewingInvoice.surgeryItems || "-"],
+              ["담당원장", viewingInvoice.doctors?.join(", ") || "-"],
+              ["담당자", viewingInvoice.coordinators?.join(", ") || "-"],
+              ["수술비", viewingInvoice.totalAmount ? `₩${Number(viewingInvoice.totalAmount).toLocaleString("ko-KR")}` : "-"],
+              ["결제방법", PAY_LABEL[viewingInvoice.paymentMethod ?? ""] || "-"],
+              ["커미션율", viewingInvoice.commissionRate !== undefined ? `${viewingInvoice.commissionRate}%` : "-"],
+              ["커미션액", viewingInvoice.commissionAmount ? `₩${Number(viewingInvoice.commissionAmount).toLocaleString("ko-KR")}` : "-"],
+              ["상태", STATUS_LABEL[viewingInvoice.status] || viewingInvoice.status],
+              ["메모", viewingInvoice.memo || "-"],
+            ] as [string, string][]).map(([label, value]) => (
+              <div key={label} className="flex gap-2">
+                <span className="w-24 shrink-0 text-gray-500">{label}</span>
+                <span className="font-medium">{value}</span>
+              </div>
+            ))}
+          </div>
+          <div className="shrink-0 border-t border-gray-100 p-4">
+            <button
+              onClick={() => { setEditingInvoice(viewingInvoice); setViewingInvoice(null); }}
+              className="w-full rounded-xl bg-[#1d9e75] py-2.5 text-sm font-semibold text-white"
+            >
+              수정하기
+            </button>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   // inline edit panel
@@ -358,6 +408,12 @@ function PatientInvoiceModal({ patientId, patientName, reservations, onClose, on
                         </div>
                         <div className="flex shrink-0 gap-1">
                           <button
+                            onClick={() => setViewingInvoice(inv)}
+                            className="rounded-lg bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-600 hover:bg-blue-100"
+                          >
+                            보기
+                          </button>
+                          <button
                             onClick={() => setEditingInvoice(inv)}
                             className="rounded-lg bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-600 hover:bg-gray-200"
                           >
@@ -411,6 +467,7 @@ function PatientInvoiceModal({ patientId, patientName, reservations, onClose, on
                       <div className="mt-0.5 text-[10px] text-gray-400">{inv.invoiceId}</div>
                     </div>
                     <div className="flex shrink-0 gap-1">
+                      <button onClick={() => setViewingInvoice(inv)} className="rounded-lg bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-600 hover:bg-blue-100">보기</button>
                       <button onClick={() => setEditingInvoice(inv)} className="rounded-lg bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-600 hover:bg-gray-200">수정</button>
                       <button onClick={() => handleDelete(inv)} className="rounded-lg bg-red-50 px-2.5 py-1 text-xs font-medium text-red-600 hover:bg-red-100">삭제</button>
                     </div>
@@ -438,6 +495,7 @@ function InvoiceEditPanelInModal({
 }) {
   const [form, setForm] = useState<{
     hospitalName: string;
+    surgeryDate: string;
     surgeryItems: string;
     totalAmount: number;
     doctors: string[];
@@ -451,6 +509,7 @@ function InvoiceEditPanelInModal({
     commissionRate?: number;
   }>({
     hospitalName: invoice.hospitalName || "",
+    surgeryDate: invoice.surgeryDate || "",
     surgeryItems: invoice.surgeryItems || "",
     totalAmount: invoice.totalAmount || 0,
     doctors: invoice.doctors || [],
@@ -476,19 +535,11 @@ function InvoiceEditPanelInModal({
     });
   }, []);
 
-  const computedBase = (() => {
-    if (!form.paymentMethod || !form.totalAmount) return undefined;
-    if (form.paymentMethod === "card") return Math.round(form.totalAmount * 0.97);
-    if (form.paymentMethod === "cash") return form.totalAmount;
-    if (form.paymentMethod === "mixed") {
-      const cash = form.cashAmount || 0;
-      const card = form.cardAmount || 0;
-      return cash + Math.round(card * 0.97);
-    }
-    return undefined;
-  })();
+  const computedBase = form.paymentMethod && form.totalAmount
+    ? calcCommissionBase(form.totalAmount, form.paymentMethod, form.cardAmount, form.cashAmount)
+    : undefined;
   const computedCommission = computedBase !== undefined && form.commissionRate
-    ? Math.round(computedBase * form.commissionRate / 100)
+    ? calcCommission(computedBase, form.commissionRate)
     : undefined;
 
   async function handleSave() {
@@ -538,6 +589,15 @@ function InvoiceEditPanelInModal({
         <label className="mb-1 block text-xs font-medium text-gray-600">병원명</label>
         <input value={form.hospitalName} onChange={(e) => setForm((p) => ({ ...p, hospitalName: e.target.value }))}
           className="w-full rounded-xl border border-[#dfe3e8] px-3 py-2 text-sm focus:border-[#1d9e75] focus:outline-none" />
+      </div>
+      <div>
+        <label className="mb-1 block text-xs font-medium text-gray-600">수술날짜</label>
+        <input
+          type="date"
+          value={form.surgeryDate}
+          onChange={(e) => setForm((p) => ({ ...p, surgeryDate: e.target.value }))}
+          className="w-full rounded-xl border border-[#dfe3e8] px-3 py-2 text-sm focus:border-[#1d9e75] focus:outline-none"
+        />
       </div>
       <div className="grid grid-cols-2 gap-2">
         <div>

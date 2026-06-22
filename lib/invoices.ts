@@ -49,6 +49,7 @@ export type InvoiceRecord = {
 export type InvoiceUpdatePayload = {
   hospitalName: string;
   surgeryItems: string;
+  surgeryDate?: string;
   totalAmount: number;
   paymentMethod?: "card" | "cash" | "mixed";
   cardAmount?: number;
@@ -132,6 +133,7 @@ function mapInvoiceDoc(data: Record<string, unknown>): InvoiceRecord {
 
     hospitalName: cleanText(data.hospitalName),
     surgeryItems: cleanText(data.surgeryItems),
+    surgeryDate: cleanText(data.surgeryDate),
     totalAmount: toNumber(data.totalAmount),
 
     paymentMethod: (["card", "cash", "mixed"].includes(String(data.paymentMethod))
@@ -212,6 +214,7 @@ export async function updateInvoice(
     staffCode: staff.staffCode || "",
     hospitalName: payload.hospitalName,
     surgeryItems: payload.surgeryItems,
+    surgeryDate: payload.surgeryDate,
     totalAmount: payload.totalAmount,
     paymentMethod: payload.paymentMethod,
     cardAmount: payload.cardAmount,

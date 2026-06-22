@@ -129,6 +129,7 @@ export async function POST(req: NextRequest) {
       const snap = await adminDb.collection("invoices")
         .where("patientId", "==", patientId)
         .orderBy("createdAt", "desc")
+        .limit(50)
         .get();
       const invoices = snap.docs.map(docToObj)
         .filter((r) => !r.isDeleted && isCoordinatorOf(r));
@@ -264,6 +265,7 @@ export async function POST(req: NextRequest) {
       const patch: Record<string, unknown> = {
         hospitalName: cleanText(fields.hospitalName),
         surgeryItems: cleanText(fields.surgeryItems),
+        surgeryDate: cleanText(fields.surgeryDate ?? ""),
         totalAmount: toNumber(fields.totalAmount),
         paymentMethod: fields.paymentMethod ?? null,
         cardAmount: fields.cardAmount !== undefined ? toNumber(fields.cardAmount) : null,
@@ -356,24 +358,22 @@ export async function POST(req: NextRequest) {
       const { startDate, endDate, status, patientName, commissionStaffUid } =
         (payload || {}) as Record<string, string>;
 
-      const snap = await adminDb.collection("invoices").orderBy("createdAt", "desc").get();
+      const snap = await adminDb.collection("invoices")
+        .orderBy("createdAt", "desc")
+        .limit(200)
+        .get();
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       let records = snap.docs.map(docToObj).filter((r: any) => !r.isDeleted && isCoordinatorOf(r));
 
-      // 수술날짜 기준 필터 (surgeryDate 없는 기존 인보이스는 createdAt 날짜로 대체)
+      // 날짜 필터: surgeryDate 있으면 surgeryDate 기준, 없으면 createdAt 기준
       if (startDate || endDate) {
         const sd = startDate || "0000-00-00";
-        const ed = endDate || "9999-99-99";
+        const ed = endDate   || "9999-99-99";
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         records = records.filter((r: any) => {
-          const effectiveDate: string = r.surgeryDate
-            ? String(r.surgeryDate)
-            : (() => {
-                const ts = r.createdAt;
-                if (!ts) return "";
-                const d = typeof ts === "number" ? new Date(ts) : new Date(ts);
-                return d.toISOString().slice(0, 10);
-              })();
+          const ts = r.createdAt;
+          const fallback = ts ? new Date(typeof ts === "number" ? ts : Number(ts)).toISOString().slice(0, 10) : "";
+          const effectiveDate = r.surgeryDate ? String(r.surgeryDate) : fallback;
           return effectiveDate >= sd && effectiveDate <= ed;
         });
       }
