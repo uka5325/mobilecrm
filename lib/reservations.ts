@@ -368,7 +368,7 @@ export async function getAllReservations(): Promise<{
   };
 }
 
-const ALL_RESERVATIONS_POLL_MS = 8000;
+const ALL_RESERVATIONS_POLL_MS = 20000;
 
 export async function fetchAllReservationsOnce(): Promise<{
   reservations: ReservationRecord[];
@@ -475,7 +475,7 @@ export function subscribeAllReservations(
   };
 }
 
-const TIMELINE_POLL_MS = 6000;
+const TIMELINE_POLL_MS = 15000;
 
 export function subscribeTimelineReservations(
   date: string,
