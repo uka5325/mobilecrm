@@ -191,11 +191,6 @@ export default function CommissionPage() {
 
       {/* 컨트롤바 */}
       <div className="-mx-6 rounded-t-2xl border border-[#edf0f3] bg-[#ecfdf5] px-4 py-4 lg:-mx-8 lg:px-8">
-        {/* 퀵필터 */}
-        <div className="mb-3 flex gap-2 overflow-x-auto [&::-webkit-scrollbar]:hidden">
-          <QuickButton onClick={() => { const r = monthRange(0); setStartDate(r.start); setEndDate(r.end); }}>이번 달</QuickButton>
-          <QuickButton onClick={() => { const r = monthRange(1); setStartDate(r.start); setEndDate(r.end); }}>다음 달</QuickButton>
-        </div>
         {/* 1행: 날짜 */}
         <div className="flex items-center gap-2">
           <input
@@ -252,6 +247,11 @@ export default function CommissionPage() {
           >
             {loading ? "조회 중..." : "조회"}
           </button>
+        </div>
+        {/* 퀵필터 */}
+        <div className="mt-3 flex gap-2 overflow-x-auto [&::-webkit-scrollbar]:hidden">
+          <QuickButton onClick={() => { const r = monthRange(0); setStartDate(r.start); setEndDate(r.end); }}>이번 달</QuickButton>
+          <QuickButton onClick={() => { const r = monthRange(1); setStartDate(r.start); setEndDate(r.end); }}>다음 달</QuickButton>
         </div>
       </div>
 
