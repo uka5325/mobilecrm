@@ -41,6 +41,7 @@ function DetailModal({ invoice, onClose }: { invoice: InvoiceRecord; onClose: ()
           {([
             ["인보이스 ID", invoice.invoiceId],
             ["병원명", invoice.hospitalName || "-"],
+            ["수술날짜", invoice.surgeryDate || "-"],
             ["담당원장", invoice.doctors?.join(", ") || "-"],
             ["수술/시술명", invoice.surgeryItems || "-"],
             ["담당자", invoice.commissionStaffName || "-"],
@@ -266,7 +267,7 @@ export function InvoiceListTab() {
                     className="cursor-pointer whitespace-nowrap transition hover:bg-[#f8fafc]"
                     onClick={() => router.push(`/invoices/${inv.reservationDocId}`)}
                   >
-                    <td className="px-4 py-3 text-gray-500">{formatDate(inv.createdAt)}</td>
+                    <td className="px-4 py-3 text-gray-500">{inv.surgeryDate || formatDate(inv.createdAt)}</td>
                     <td className="px-4 py-3 font-semibold text-gray-800">{inv.patientName}</td>
                     <td className="px-4 py-3 text-gray-600">{inv.hospitalName || "-"}</td>
                     <td className="max-w-[140px] overflow-hidden text-ellipsis px-4 py-3 text-gray-600">{inv.surgeryItems || "-"}</td>

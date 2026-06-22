@@ -265,6 +265,7 @@ export async function POST(req: NextRequest) {
       const patch: Record<string, unknown> = {
         hospitalName: cleanText(fields.hospitalName),
         surgeryItems: cleanText(fields.surgeryItems),
+        surgeryDate: cleanText(fields.surgeryDate ?? ""),
         totalAmount: toNumber(fields.totalAmount),
         paymentMethod: fields.paymentMethod ?? null,
         cardAmount: fields.cardAmount !== undefined ? toNumber(fields.cardAmount) : null,
@@ -357,34 +358,50 @@ export async function POST(req: NextRequest) {
       const { startDate, endDate, status, patientName, commissionStaffUid } =
         (payload || {}) as Record<string, string>;
 
-      // surgeryDate가 빈 문자열이거나 누락된 기존 인보이스도 포함해야 하므로
-      // Firestore 쿼리는 createdAt 정렬 + limit(200)만 적용하고
-      // 날짜 필터링은 JS에서 처리 (surgeryDate 없는 경우 createdAt fallback)
-      const snap = await adminDb.collection("invoices")
-        .orderBy("createdAt", "desc")
-        .limit(200)
-        .get();
+      // surgeryDate가 있는 경우 Firestore 범위 쿼리 적용 (billing 최적화)
+      // surgeryDate 없는 기존 인보이스는 별도 쿼리로 createdAt 기준 fallback
+      let records: Record<string, unknown>[] = [];
+      if (startDate && endDate) {
+        const [mainSnap, fallbackSnap] = await Promise.all([
+          // surgeryDate 범위 쿼리 (날짜 세팅된 신규 인보이스)
+          adminDb.collection("invoices")
+            .where("surgeryDate", ">=", startDate)
+            .where("surgeryDate", "<=", endDate)
+            .orderBy("surgeryDate", "desc")
+            .limit(200)
+            .get(),
+          // surgeryDate 없는 기존 인보이스: createdAt 범위로 fallback
+          adminDb.collection("invoices")
+            .where("surgeryDate", "==", "")
+            .orderBy("createdAt", "desc")
+            .limit(100)
+            .get(),
+        ]);
+        const seen = new Set<string>();
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        mainSnap.docs.forEach((d: any) => {
+          if (!seen.has(d.id)) { seen.add(d.id); records.push(docToObj(d)); }
+        });
+        // fallback: createdAt 날짜가 범위 내인 것만 포함
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        fallbackSnap.docs.forEach((d: any) => {
+          if (seen.has(d.id)) return;
+          const obj = docToObj(d);
+          const ts = obj.createdAt;
+          if (!ts) return;
+          const dateStr = new Date(typeof ts === "number" ? ts : Number(ts)).toISOString().slice(0, 10);
+          if (dateStr >= startDate && dateStr <= endDate) { seen.add(d.id); records.push(obj); }
+        });
+      } else {
+        const snap = await adminDb.collection("invoices")
+          .orderBy("createdAt", "desc")
+          .limit(200)
+          .get();
+        records = snap.docs.map(docToObj);
+      }
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      let records = snap.docs.map(docToObj).filter((r: any) => !r.isDeleted && isCoordinatorOf(r));
-
-      // 수술날짜 기준 필터 (surgeryDate 없는 기존 인보이스는 createdAt 날짜로 대체)
-      if (startDate || endDate) {
-        const sd = startDate || "0000-00-00";
-        const ed = endDate || "9999-99-99";
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        records = records.filter((r: any) => {
-          const effectiveDate: string = r.surgeryDate
-            ? String(r.surgeryDate)
-            : (() => {
-                const ts = r.createdAt;
-                if (!ts) return "";
-                const d = typeof ts === "number" ? new Date(ts) : new Date(ts);
-                return d.toISOString().slice(0, 10);
-              })();
-          return effectiveDate >= sd && effectiveDate <= ed;
-        });
-      }
+      records = records.filter((r: any) => !r.isDeleted && isCoordinatorOf(r));
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       if (status) records = records.filter((r: any) => r.status === status);
       if (patientName) {

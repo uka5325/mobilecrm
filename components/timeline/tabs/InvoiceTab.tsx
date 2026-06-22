@@ -52,6 +52,7 @@ function InvoiceEditPanel({
   const [form, setForm] = useState<InvoiceUpdatePayload>({
     hospitalName: invoice.hospitalName || "",
     surgeryItems: invoice.surgeryItems || "",
+    surgeryDate: invoice.surgeryDate || "",
     totalAmount: invoice.totalAmount || 0,
     paymentMethod: invoice.paymentMethod,
     cardAmount: invoice.cardAmount,
@@ -118,6 +119,16 @@ function InvoiceEditPanel({
           <label className="mb-1 block text-xs font-medium text-gray-600">병원명</label>
           <input value={form.hospitalName} onChange={(e) => setForm((p) => ({ ...p, hospitalName: e.target.value }))}
             className="w-full rounded-xl border border-[#dfe3e8] px-3 py-2 text-sm focus:border-[#1d9e75] focus:outline-none" />
+        </div>
+
+        <div>
+          <label className="mb-1 block text-xs font-medium text-gray-600">수술날짜</label>
+          <input
+            type="date"
+            value={form.surgeryDate || ""}
+            onChange={(e) => setForm((p) => ({ ...p, surgeryDate: e.target.value }))}
+            className="w-full rounded-xl border border-[#dfe3e8] px-3 py-2 text-sm focus:border-[#1d9e75] focus:outline-none"
+          />
         </div>
 
         <div className="grid grid-cols-2 gap-2">
@@ -377,6 +388,9 @@ export function InvoiceTab({ reservationDocId, patientId, currentUser }: Props) 
                     </div>
                     {inv.surgeryItems && (
                       <div className="mt-0.5 text-xs text-gray-500 truncate">{inv.surgeryItems}</div>
+                    )}
+                    {inv.surgeryDate && (
+                      <div className="mt-0.5 text-xs text-gray-400">수술일: {inv.surgeryDate}</div>
                     )}
                     <div className="mt-1 flex items-center gap-2 flex-wrap">
                       <span className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ${STATUS_CLS[inv.status] || "bg-gray-100 text-gray-500"}`}>
