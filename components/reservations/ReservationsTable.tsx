@@ -688,16 +688,7 @@ export function ReservationsTable({
     setInvoiceCounts((prev) => ({ ...prev, [pid]: count }));
   }, []);
 
-  useEffect(() => {
-    if (!patientGroups.length) return;
-    patientGroups.forEach((g) => {
-      const pid = g.patientId || g.patientKey;
-      if (!pid) return;
-      getInvoicesByPatientId(pid)
-        .then((invs) => setInvoiceCounts((prev) => ({ ...prev, [pid]: invs.length })))
-        .catch(() => {});
-    });
-  }, [patientGroups]);
+  // 인보이스 건수는 PatientInvoiceModal의 onCountLoaded 콜백으로 지연 업데이트
 
   function toggleAmountPopover(groupKey: string, type: "deposit" | "surgery") {
     setAmountPopover((prev) =>
