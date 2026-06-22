@@ -80,8 +80,8 @@ export default function LoginPage() {
   }
 
   const menuItems = [
-    { icon: "📋", label: "타임라인" },
-    { icon: "👥", label: "예약관리" },
+    { icon: "📋", label: "스케줄" },
+    { icon: "👥", label: "고객관리" },
     { icon: "🧾", label: "인보이스" },
     { icon: "📊", label: "KPI 대시보드" },
   ];
