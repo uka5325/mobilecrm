@@ -37,6 +37,7 @@ function normDupKey(r: Record<string, unknown>) {
     String(r.reservationTime || ""),
     String(r.phone || "").replace(/[^0-9+]/g, ""),
     String(r.hospital || ""),
+    String(r.appointmentType || ""),
     docs,
   ].join("__");
 }
