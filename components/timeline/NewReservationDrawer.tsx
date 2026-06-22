@@ -105,7 +105,7 @@ export function NewReservationDrawer({ open, onClose, currentUser, initialDate, 
     <>
       <div className="fixed inset-0 z-[998] bg-black/35" onClick={onClose} />
 
-      <div className="fixed right-0 top-0 z-[1001] flex h-[100dvh] w-[390px] max-w-[calc(100vw-12px)] flex-col bg-white shadow-[-8px_0_30px_rgba(0,0,0,0.12)]">
+      <div className="fixed right-0 top-0 z-[1001] flex h-[100dvh] w-[420px] max-w-[calc(100vw-12px)] flex-col bg-white shadow-[-8px_0_30px_rgba(0,0,0,0.12)]">
         <div className="flex shrink-0 items-center justify-between border-b border-[#edf0f3] px-6 py-5">
           <div>
             <div className="text-xl font-bold">
@@ -199,7 +199,7 @@ export function NewReservationDrawer({ open, onClose, currentUser, initialDate, 
                   <button
                     key={type}
                     onClick={() => setForm((p) => ({ ...p, appointmentType: type }))}
-                    className="rounded-xl border px-3 py-1.5 text-sm font-semibold transition hover:-translate-y-0.5 active:scale-95"
+                    className="rounded-xl border px-4 py-2 text-sm font-semibold transition hover:-translate-y-0.5 active:scale-95"
                     style={{
                       backgroundColor: active ? colors[type] : "#f9fafb",
                       color: active ? "#fff" : "#374151",
