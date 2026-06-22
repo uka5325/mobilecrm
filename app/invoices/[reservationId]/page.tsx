@@ -218,7 +218,7 @@ export default function InvoiceEditPage() {
               <input
                 value={hospitalName}
                 onChange={(e) => setHospitalName(e.target.value)}
-                className="w-full rounded-xl border px-3 py-2 text-sm focus:border-[#1d9e75] focus:outline-none"
+                className="w-full rounded-xl border border-[#dfe3e8] px-3 py-2 text-sm focus:border-[#1d9e75] focus:outline-none"
                 placeholder="병원명 입력"
               />
             </div>
@@ -228,7 +228,7 @@ export default function InvoiceEditPage() {
                 type="date"
                 value={surgeryDate}
                 onChange={(e) => setSurgeryDate(e.target.value)}
-                className="w-full rounded-xl border px-3 py-2 text-sm focus:border-[#1d9e75] focus:outline-none"
+                className="w-full rounded-xl border border-[#dfe3e8] px-3 py-2 text-sm focus:border-[#1d9e75] focus:outline-none"
               />
             </div>
             <div>
@@ -243,7 +243,7 @@ export default function InvoiceEditPage() {
                 value={surgeryItems}
                 onChange={(e) => setSurgeryItems(e.target.value)}
                 rows={3}
-                className="w-full rounded-xl border px-3 py-2 text-sm focus:border-[#1d9e75] focus:outline-none"
+                className="w-full rounded-xl border border-[#dfe3e8] px-3 py-2 text-sm focus:border-[#1d9e75] focus:outline-none"
                 placeholder="수술 및 시술 항목 입력"
               />
             </div>
@@ -252,7 +252,7 @@ export default function InvoiceEditPage() {
               <input
                 value={totalAmount ? formatMoney(totalAmount) : ""}
                 onChange={(e) => setTotalAmount(parseMoney(e.target.value))}
-                className="w-full rounded-xl border px-3 py-2 text-right text-sm focus:border-[#1d9e75] focus:outline-none"
+                className="w-full rounded-xl border border-[#dfe3e8] px-3 py-2 text-right text-sm focus:border-[#1d9e75] focus:outline-none"
                 placeholder="0"
               />
             </div>
@@ -261,7 +261,7 @@ export default function InvoiceEditPage() {
               <select
                 value={status}
                 onChange={(e) => setStatus(e.target.value as "draft" | "confirmed" | "void")}
-                className="w-full rounded-xl border px-3 py-2 text-sm focus:border-[#1d9e75] focus:outline-none"
+                className="w-full rounded-xl border border-[#dfe3e8] px-3 py-2 text-sm focus:border-[#1d9e75] focus:outline-none"
               >
                 <option value="draft">임시저장</option>
                 <option value="confirmed">확정</option>
@@ -274,7 +274,7 @@ export default function InvoiceEditPage() {
                 value={memo}
                 onChange={(e) => setMemo(e.target.value)}
                 rows={2}
-                className="w-full rounded-xl border px-3 py-2 text-sm focus:border-[#1d9e75] focus:outline-none"
+                className="w-full rounded-xl border border-[#dfe3e8] px-3 py-2 text-sm focus:border-[#1d9e75] focus:outline-none"
               />
             </div>
           </div>
@@ -290,7 +290,7 @@ export default function InvoiceEditPage() {
             <select
               value={paymentMethod}
               onChange={(e) => setPaymentMethod(e.target.value as PaymentMethod | "")}
-              className="w-full rounded-xl border px-3 py-2 text-sm"
+              className="w-full rounded-xl border border-[#dfe3e8] px-3 py-2 text-sm focus:border-[#1d9e75] focus:outline-none"
             >
               <option value="">선택</option>
               <option value="cash">현금</option>
@@ -306,7 +306,7 @@ export default function InvoiceEditPage() {
                 <input
                   value={cardAmount ? formatMoney(cardAmount) : ""}
                   onChange={(e) => setCardAmount(parseMoney(e.target.value))}
-                  className="w-full rounded-xl border px-3 py-2 text-right text-sm"
+                  className="w-full rounded-xl border border-[#dfe3e8] px-3 py-2 text-right text-sm focus:border-[#1d9e75] focus:outline-none"
                   placeholder="0"
                 />
               </div>
@@ -315,7 +315,7 @@ export default function InvoiceEditPage() {
                 <input
                   value={cashAmount ? formatMoney(cashAmount) : ""}
                   onChange={(e) => setCashAmount(parseMoney(e.target.value))}
-                  className="w-full rounded-xl border px-3 py-2 text-right text-sm"
+                  className="w-full rounded-xl border border-[#dfe3e8] px-3 py-2 text-right text-sm focus:border-[#1d9e75] focus:outline-none"
                   placeholder="0"
                 />
               </div>
@@ -332,7 +332,7 @@ export default function InvoiceEditPage() {
                 const found = staffList.find((s) => s.uid === uid);
                 setCommissionStaffName(found?.displayName || "");
               }}
-              className="w-full rounded-xl border px-3 py-2 text-sm"
+              className="w-full rounded-xl border border-[#dfe3e8] px-3 py-2 text-sm focus:border-[#1d9e75] focus:outline-none"
             >
               <option value="">선택</option>
               {staffList.map((s) => (
@@ -350,7 +350,7 @@ export default function InvoiceEditPage() {
               step={0.1}
               value={commissionRate}
               onChange={(e) => setCommissionRate(e.target.value === "" ? "" : Number(e.target.value))}
-              className="w-full rounded-xl border px-3 py-2 text-right text-sm"
+              className="w-full rounded-xl border border-[#dfe3e8] px-3 py-2 text-right text-sm focus:border-[#1d9e75] focus:outline-none"
               placeholder="예: 15"
             />
           </div>
