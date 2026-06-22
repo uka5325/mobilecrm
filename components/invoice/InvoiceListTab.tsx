@@ -12,6 +12,16 @@ function threeMonthsAgo() {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
 }
 
+function pad(n: number) { return String(n).padStart(2, "0"); }
+function monthRange(offset: number) {
+  const d = new Date();
+  d.setDate(1);
+  d.setMonth(d.getMonth() + offset);
+  const y = d.getFullYear(), m = d.getMonth();
+  const lastDay = new Date(y, m + 1, 0).getDate();
+  return { start: `${y}-${pad(m + 1)}-01`, end: `${y}-${pad(m + 1)}-${pad(lastDay)}` };
+}
+
 function DetailModal({ invoice, onClose }: { invoice: InvoiceRecord; onClose: () => void }) {
   function fmt(v: number | undefined) {
     if (v === undefined || v === null) return "-";
@@ -160,6 +170,22 @@ export function InvoiceListTab() {
     <div className="flex flex-col gap-4">
       {/* 컨트롤바 */}
       <div className="-mx-6 rounded-t-2xl border border-[#edf0f3] bg-[#ecfdf5] px-4 py-4 lg:-mx-8 lg:px-8">
+        {/* 퀵필터 */}
+        <div className="mb-2 flex gap-2">
+          {[{ label: "이번달", offset: 0 }, { label: "다음달", offset: 1 }].map(({ label, offset }) => {
+            const r = monthRange(offset);
+            const active = startDate === r.start && endDate === r.end;
+            return (
+              <button
+                key={label}
+                onClick={() => { setStartDate(r.start); setEndDate(r.end); }}
+                className={`rounded-xl border px-4 py-1.5 text-sm font-semibold transition hover:-translate-y-0.5 active:scale-95 ${active ? "border-emerald-600 bg-emerald-600 text-white" : "border-[#dfe3e8] bg-white text-gray-600"}`}
+              >
+                {label}
+              </button>
+            );
+          })}
+        </div>
         <div className="flex items-center gap-2">
           <input
             type="date"
