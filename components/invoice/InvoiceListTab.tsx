@@ -158,7 +158,7 @@ export function InvoiceListTab() {
       const staff = await getStaffByUid(firebaseUser.uid);
       if (!staff) { alert("직원 정보를 찾을 수 없습니다."); return; }
       const result = await deleteInvoice(inv.id, staff);
-      if (result.success) load();
+      if (result.success) setInvoices((prev) => prev.filter((i) => i.id !== inv.id));
       else alert(result.message || "삭제 실패");
     } catch {
       alert("삭제 중 오류가 발생했습니다.");
