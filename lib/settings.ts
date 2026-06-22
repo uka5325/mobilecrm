@@ -445,11 +445,18 @@ export async function updateConferenceMemo(memoId: string, memoText: string, sta
    직원 관리
 ============================================================ */
 
+let _staffListCache: SettingsStaffRecord[] | null = null;
+
+export function clearStaffListCache() {
+  _staffListCache = null;
+}
+
 export async function getStaffListForSettings(): Promise<SettingsStaffRecord[]> {
+  if (_staffListCache) return _staffListCache;
   const result = await callSettingsApi("get_staff_list");
   const rawList = (result.staff as Record<string, unknown>[] | undefined) || [];
 
-  return rawList
+  const sorted = rawList
     .map((data) => ({
       id: cleanText(data.id),
       uid: cleanText(data.uid || data.id),
@@ -484,6 +491,8 @@ export async function getStaffListForSettings(): Promise<SettingsStaffRecord[]> 
         a.displayName.localeCompare(b.displayName)
       );
     });
+  _staffListCache = sorted;
+  return _staffListCache;
 }
 
 export async function updateStaffFromSettings(

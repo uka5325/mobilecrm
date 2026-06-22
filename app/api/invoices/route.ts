@@ -90,24 +90,27 @@ async function writeLog(params: {
 
 export async function POST(req: NextRequest) {
   try {
-    const { idToken, action, payload } = await req.json();
+    const { idToken, action, payload, callerRole: clientRole, callerName: clientName } = await req.json();
     if (!idToken) return NextResponse.json({ success: false, message: "인증 토큰 없음" }, { status: 401 });
 
     const decoded = await adminAuth.verifyIdToken(idToken);
     const uid = decoded.uid;
 
     // ── Caller identity & role ────────────────────────────────────────────────
-    let callerRole = "";
-    let callerName = "";
-    {
+    // 클라이언트가 캐싱한 role/name을 우선 사용. 없으면 DB 조회 fallback.
+    let callerRole = String(clientRole || "");
+    let callerName = String(clientName || "");
+    if (!callerRole) {
       const snap = await adminDb.collection("staff").where("uid", "==", uid).limit(1).get();
-      const doc = snap.empty ? (await adminDb.collection("staff").doc(uid).get()) : snap.docs[0];
       if (!snap.empty) {
         callerRole = String(snap.docs[0].data().role || "");
         callerName = String(snap.docs[0].data().displayName || "");
-      } else if ((doc as FirebaseFirestore.DocumentSnapshot).exists) {
-        callerRole = String((doc as FirebaseFirestore.DocumentSnapshot).data()?.role || "");
-        callerName = String((doc as FirebaseFirestore.DocumentSnapshot).data()?.displayName || "");
+      } else {
+        const doc = await adminDb.collection("staff").doc(uid).get();
+        if (doc.exists) {
+          callerRole = String(doc.data()?.role || "");
+          callerName = String(doc.data()?.displayName || "");
+        }
       }
     }
 

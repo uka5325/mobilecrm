@@ -63,6 +63,8 @@ export type InvoiceUpdatePayload = {
   status?: "draft" | "confirmed" | "void";
 };
 
+let _callerCache: { role: string; name: string } | null = null;
+
 async function callInvoicesApi(action: string, payload: Record<string, unknown>) {
   const firebaseUser = auth.currentUser;
   if (!firebaseUser) {
@@ -72,9 +74,13 @@ async function callInvoicesApi(action: string, payload: Record<string, unknown>)
   const res = await fetch("/api/invoices", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ idToken, action, payload }),
+    body: JSON.stringify({ idToken, action, payload, callerRole: _callerCache?.role, callerName: _callerCache?.name }),
   });
   return res.json() as Promise<Record<string, unknown> & { success: boolean; message?: string }>;
+}
+
+export function setInvoicesCallerCache(role: string, name: string) {
+  _callerCache = { role, name };
 }
 
 function toNumber(value: unknown) {
