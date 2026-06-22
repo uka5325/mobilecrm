@@ -435,38 +435,46 @@ export function subscribeAllReservations(
   }) => void,
   onError?: (error: Error) => void
 ) {
-  const threeMonthsAgo = (() => {
-    const d = new Date();
-    d.setMonth(d.getMonth() - 3);
-    return d.toISOString().slice(0, 10);
-  })();
-
+  let unsubscribeSnapshot: (() => void) | null = null;
   let latestDoctors: DoctorOption[] = [];
-  getClientDoctors().then((d) => { latestDoctors = d; }).catch(() => {});
 
-  const q = query(collection(db, "reservations"), where("reservationDate", ">=", threeMonthsAgo));
+  const unsubscribeAuth = auth.onAuthStateChanged((user) => {
+    if (unsubscribeSnapshot) { unsubscribeSnapshot(); unsubscribeSnapshot = null; }
+    if (!user) return;
 
-  const unsubscribe = onSnapshot(
-    q,
-    (snap) => {
-      const reservations = snap.docs
-        .map((d) => mapReservationDoc(d.id, d.data() as Record<string, unknown>))
-        .filter((item) => !item.isDeleted)
-        .sort((a, b) => {
-          const aa = `${a.reservationDate} ${a.reservationTime} ${a.name}`;
-          const bb = `${b.reservationDate} ${b.reservationTime} ${b.name}`;
-          return aa.localeCompare(bb);
-        });
-      const fallback = makeDoctorOptionsFromReservations(reservations);
-      callback({ reservations, doctors: latestDoctors.length ? latestDoctors : fallback });
-    },
-    (error) => {
-      console.error("[subscribeAllReservations error]", error);
-      onError?.(error);
-    }
-  );
+    const threeMonthsAgo = (() => {
+      const d = new Date();
+      d.setMonth(d.getMonth() - 3);
+      return d.toISOString().slice(0, 10);
+    })();
 
-  return unsubscribe;
+    getClientDoctors().then((d) => { latestDoctors = d; }).catch(() => {});
+
+    unsubscribeSnapshot = onSnapshot(
+      query(collection(db, "reservations"), where("reservationDate", ">=", threeMonthsAgo)),
+      (snap) => {
+        const reservations = snap.docs
+          .map((d) => mapReservationDoc(d.id, d.data() as Record<string, unknown>))
+          .filter((item) => !item.isDeleted)
+          .sort((a, b) => {
+            const aa = `${a.reservationDate} ${a.reservationTime} ${a.name}`;
+            const bb = `${b.reservationDate} ${b.reservationTime} ${b.name}`;
+            return aa.localeCompare(bb);
+          });
+        const fallback = makeDoctorOptionsFromReservations(reservations);
+        callback({ reservations, doctors: latestDoctors.length ? latestDoctors : fallback });
+      },
+      (error) => {
+        console.error("[subscribeAllReservations error]", error);
+        onError?.(error);
+      }
+    );
+  });
+
+  return () => {
+    unsubscribeAuth();
+    unsubscribeSnapshot?.();
+  };
 }
 
 export function subscribeTimelineReservations(
@@ -477,32 +485,40 @@ export function subscribeTimelineReservations(
   }) => void,
   onError?: (error: Error) => void
 ) {
+  let unsubscribeSnapshot: (() => void) | null = null;
   let latestDoctors: DoctorOption[] = [];
-  getClientDoctors().then((d) => { latestDoctors = d; }).catch(() => {});
 
-  const q = query(collection(db, "reservations"), where("reservationDate", "==", date));
+  const unsubscribeAuth = auth.onAuthStateChanged((user) => {
+    if (unsubscribeSnapshot) { unsubscribeSnapshot(); unsubscribeSnapshot = null; }
+    if (!user) return;
 
-  const unsubscribe = onSnapshot(
-    q,
-    (snap) => {
-      const reservations = snap.docs
-        .map((d) => mapReservationDoc(d.id, d.data() as Record<string, unknown>))
-        .filter((item) => !item.isDeleted)
-        .sort((a, b) => {
-          const aa = `${a.reservationTime} ${a.name}`;
-          const bb = `${b.reservationTime} ${b.name}`;
-          return aa.localeCompare(bb);
-        });
-      const fallback = makeDoctorOptionsFromReservations(reservations);
-      callback({ reservations, doctors: latestDoctors.length ? latestDoctors : fallback });
-    },
-    (error) => {
-      console.error("[subscribeTimelineReservations error]", error);
-      onError?.(error);
-    }
-  );
+    getClientDoctors().then((d) => { latestDoctors = d; }).catch(() => {});
 
-  return unsubscribe;
+    unsubscribeSnapshot = onSnapshot(
+      query(collection(db, "reservations"), where("reservationDate", "==", date)),
+      (snap) => {
+        const reservations = snap.docs
+          .map((d) => mapReservationDoc(d.id, d.data() as Record<string, unknown>))
+          .filter((item) => !item.isDeleted)
+          .sort((a, b) => {
+            const aa = `${a.reservationTime} ${a.name}`;
+            const bb = `${b.reservationTime} ${b.name}`;
+            return aa.localeCompare(bb);
+          });
+        const fallback = makeDoctorOptionsFromReservations(reservations);
+        callback({ reservations, doctors: latestDoctors.length ? latestDoctors : fallback });
+      },
+      (error) => {
+        console.error("[subscribeTimelineReservations error]", error);
+        onError?.(error);
+      }
+    );
+  });
+
+  return () => {
+    unsubscribeAuth();
+    unsubscribeSnapshot?.();
+  };
 }
 
 export async function getTimelineReservations(date: string): Promise<{
