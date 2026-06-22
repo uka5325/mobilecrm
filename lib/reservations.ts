@@ -492,6 +492,8 @@ export function subscribeAllReservations(
     unsubscribeSnapshot = onSnapshot(
       query(collection(db, "reservations"), where("reservationDate", ">=", threeMonthsAgo)),
       (snap) => {
+        // skip empty cache snapshots — they would wipe the API seed data
+        if (snap.metadata.fromCache && snap.empty) return;
         seedDelivered = true;
         const reservations = snap.docs
           .map((d) => mapReservationDoc(d.id, d.data() as Record<string, unknown>))
@@ -568,6 +570,8 @@ export function subscribeTimelineReservations(
     unsubscribeSnapshot = onSnapshot(
       query(collection(db, "reservations"), where("reservationDate", "==", date)),
       (snap) => {
+        // skip empty cache snapshots — they would wipe the API seed data
+        if (snap.metadata.fromCache && snap.empty) return;
         seedDelivered = true;
         const reservations = snap.docs
           .map((d) => mapReservationDoc(d.id, d.data() as Record<string, unknown>))
