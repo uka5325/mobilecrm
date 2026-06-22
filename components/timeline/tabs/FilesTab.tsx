@@ -124,7 +124,7 @@ export function FilesTab({ reservationDocId, reservationId, patientId, currentUs
         }
         const compressed = allCompressed;
 
-        const storageResults: { f: File; storagePath: string }[] = [];
+        const storageResults: { f: File; storagePath: string; fileUrl: string }[] = [];
         for (let i = 0; i < compressed.length; i += MAX_CONCURRENT) {
           const chunk = compressed.slice(i, i + MAX_CONCURRENT);
           const chunkResults = await Promise.all(
