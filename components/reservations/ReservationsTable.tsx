@@ -5,7 +5,7 @@ import type { ReservationRecord, AppointmentType } from "@/lib/reservations";
 import { APPOINTMENT_TYPES } from "@/lib/reservations";
 import { getReservationBirthInfo } from "@/lib/reservationUtils";
 import type { InvoiceRecord } from "@/lib/invoices";
-import { getInvoicesByPatientId } from "@/lib/invoices";
+import { getInvoicesByPatientId, getInvoicesByPatientCache, invalidateInvoicesByPatientCache } from "@/lib/invoices";
 
 export type PatientGroup = {
   patientKey: string;
@@ -199,14 +199,15 @@ type PatientInvoiceModalProps = {
 };
 
 function PatientInvoiceModal({ patientId, patientName, reservations, onClose, onCountLoaded }: PatientInvoiceModalProps) {
-  const [invoices, setInvoices] = useState<InvoiceRecord[]>([]);
-  const [loading, setLoading] = useState(true);
+  const cached = getInvoicesByPatientCache(patientId);
+  const [invoices, setInvoices] = useState<InvoiceRecord[]>(cached ?? []);
+  const [loading, setLoading] = useState(!cached);
   const [creating, setCreating] = useState<string | null>(null);
   const [editingInvoice, setEditingInvoice] = useState<InvoiceRecord | null>(null);
   const [error, setError] = useState("");
 
   const load = useCallback(async () => {
-    setLoading(true);
+    if (!getInvoicesByPatientCache(patientId)) setLoading(true);
     try {
       const data = await getInvoicesByPatientId(patientId);
       setInvoices(data);
@@ -231,6 +232,7 @@ function PatientInvoiceModal({ patientId, patientName, reservations, onClose, on
       if (!staff) { setError("직원 정보를 찾을 수 없습니다."); return; }
       const result = await deleteInvoice(inv.id, staff);
       if (result.success) {
+        invalidateInvoicesByPatientCache(patientId);
         setInvoices((prev) => {
           const next = prev.filter((i) => i.id !== inv.id);
           onCountLoaded(patientId, next.length);
@@ -688,7 +690,16 @@ export function ReservationsTable({
     setInvoiceCounts((prev) => ({ ...prev, [pid]: count }));
   }, []);
 
-  // 인보이스 건수는 PatientInvoiceModal의 onCountLoaded 콜백으로 지연 업데이트
+  useEffect(() => {
+    if (!patientGroups.length) return;
+    patientGroups.forEach((g) => {
+      const pid = g.patientId || g.patientKey;
+      if (!pid) return;
+      getInvoicesByPatientId(pid)
+        .then((invs) => setInvoiceCounts((prev) => ({ ...prev, [pid]: invs.length })))
+        .catch(() => {});
+    });
+  }, [patientGroups]);
 
   function toggleAmountPopover(groupKey: string, type: "deposit" | "surgery") {
     setAmountPopover((prev) =>

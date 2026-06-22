@@ -65,6 +65,17 @@ export type InvoiceUpdatePayload = {
 
 let _callerCache: { role: string; name: string } | null = null;
 
+// 환자별 인보이스 결과 캐시 (pre-fetch 결과를 모달에서 즉시 재사용)
+const _invoicesByPatientCache = new Map<string, InvoiceRecord[]>();
+
+export function getInvoicesByPatientCache(patientId: string): InvoiceRecord[] | undefined {
+  return _invoicesByPatientCache.get(patientId);
+}
+
+export function invalidateInvoicesByPatientCache(patientId: string) {
+  _invoicesByPatientCache.delete(patientId);
+}
+
 async function callInvoicesApi(action: string, payload: Record<string, unknown>) {
   const firebaseUser = auth.currentUser;
   if (!firebaseUser) {
@@ -143,7 +154,9 @@ function mapInvoiceDoc(data: Record<string, unknown>): InvoiceRecord {
 export async function getInvoicesByPatientId(patientId: string): Promise<InvoiceRecord[]> {
   const result = await callInvoicesApi("get_by_patient", { patientId });
   if (!result.success || !Array.isArray(result.invoices)) return [];
-  return (result.invoices as Record<string, unknown>[]).map(mapInvoiceDoc);
+  const records = (result.invoices as Record<string, unknown>[]).map(mapInvoiceDoc);
+  _invoicesByPatientCache.set(patientId, records);
+  return records;
 }
 
 export async function getInvoiceByReservationDocId(reservationDocId: string) {
