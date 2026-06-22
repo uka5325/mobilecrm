@@ -71,9 +71,8 @@ export function useReservationData(
         setLoading(false);
       },
       (error) => {
-        console.error(error);
+        console.error("[subscribeAllReservations]", error);
         setLoading(false);
-        alert("예약 실시간 데이터를 불러오지 못했습니다.");
       }
     );
 
