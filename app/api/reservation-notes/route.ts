@@ -28,7 +28,10 @@ export async function POST(req: NextRequest) {
 
       const run = async (field: string, value: string) => {
         if (!value) return;
-        const snap = await adminDb.collection("reservationNotes").where(field, "==", value).get();
+        const snap = await adminDb.collection("reservationNotes")
+          .where(field, "==", value)
+          .limit(100)
+          .get();
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         snap.docs.forEach((d: any) => {
           const data = d.data();
@@ -39,11 +42,12 @@ export async function POST(req: NextRequest) {
         });
       };
 
-      await Promise.all([
-        run("reservationId", reservationId || ""),
-        run("reservationDocId", reservationDocId || ""),
-        run("patientId", patientId || ""),
-      ]);
+      // 우선순위 단일 쿼리: reservationDocId > reservationId > patientId (3중 과금 방지)
+      const primaryField = reservationDocId ? "reservationDocId"
+        : reservationId ? "reservationId"
+        : "patientId";
+      const primaryValue = reservationDocId || reservationId || patientId || "";
+      await run(primaryField, primaryValue);
 
       const notes = Object.values(noteMap).sort((a, b) => {
         const at = Number((a as Record<string, unknown>).createdAt || 0);

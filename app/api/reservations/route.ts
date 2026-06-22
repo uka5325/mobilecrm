@@ -69,17 +69,19 @@ export async function POST(req: NextRequest) {
     // ── READ: all reservations (last N months) + doctors ──────────────────
     if (action === "read_all") {
       const { from } = (payload || {}) as { from?: string };
-      const sixMonthsAgo = from || (() => {
+      // 기본 조회 범위: 45일 전 (약 1.5개월) — 6개월 전체 스캔 방지
+      const fromDate = from || (() => {
         const d = new Date();
-        d.setMonth(d.getMonth() - 6);
+        d.setDate(d.getDate() - 45);
         return d.toISOString().slice(0, 10);
       })();
 
       const [rSnap, doctors] = await Promise.all([
         adminDb
           .collection("reservations")
-          .where("reservationDate", ">=", sixMonthsAgo)
+          .where("reservationDate", ">=", fromDate)
           .orderBy("reservationDate", "desc")
+          .limit(500)
           .get(),
         getCachedDoctors(),
       ]);
@@ -157,6 +159,7 @@ export async function POST(req: NextRequest) {
           .collection("reservations")
           .where("reservationDate", "==", dupDate)
           .where("isDeleted", "==", false)
+          .limit(50)
           .get();
 
         const inKey = normDupKey(reservation);

@@ -60,7 +60,7 @@ export async function POST(req: NextRequest) {
 
     // ── READ: staff list ──────────────────────────────────────────────────
     if (action === "get_staff_list") {
-      const snap = await adminDb.collection("staff").get();
+      const snap = await adminDb.collection("staff").orderBy("displayName").limit(200).get();
       return NextResponse.json({ success: true, staff: snap.docs.map(docToObj) });
     }
 

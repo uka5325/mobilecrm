@@ -129,6 +129,7 @@ export async function POST(req: NextRequest) {
       const snap = await adminDb.collection("invoices")
         .where("patientId", "==", patientId)
         .orderBy("createdAt", "desc")
+        .limit(50)
         .get();
       const invoices = snap.docs.map(docToObj)
         .filter((r) => !r.isDeleted && isCoordinatorOf(r));
@@ -356,27 +357,25 @@ export async function POST(req: NextRequest) {
       const { startDate, endDate, status, patientName, commissionStaffUid } =
         (payload || {}) as Record<string, string>;
 
-      const snap = await adminDb.collection("invoices").orderBy("createdAt", "desc").get();
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      let records = snap.docs.map(docToObj).filter((r: any) => !r.isDeleted && isCoordinatorOf(r));
+      // 기본 조회 범위: 최근 3개월 (startDate 없을 때)
+      const effectiveStart = startDate || (() => {
+        const d = new Date(); d.setMonth(d.getMonth() - 3);
+        return d.toISOString().slice(0, 10);
+      })();
+      const effectiveEnd = endDate || new Date().toISOString().slice(0, 10);
 
-      // 수술날짜 기준 필터 (surgeryDate 없는 기존 인보이스는 createdAt 날짜로 대체)
-      if (startDate || endDate) {
-        const sd = startDate || "0000-00-00";
-        const ed = endDate || "9999-99-99";
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        records = records.filter((r: any) => {
-          const effectiveDate: string = r.surgeryDate
-            ? String(r.surgeryDate)
-            : (() => {
-                const ts = r.createdAt;
-                if (!ts) return "";
-                const d = typeof ts === "number" ? new Date(ts) : new Date(ts);
-                return d.toISOString().slice(0, 10);
-              })();
-          return effectiveDate >= sd && effectiveDate <= ed;
-        });
-      }
+      // surgeryDate 범위 쿼리로 Firestore에서 필터링 (전체 스캔 방지)
+      const snap = await adminDb.collection("invoices")
+        .where("isDeleted", "==", false)
+        .where("surgeryDate", ">=", effectiveStart)
+        .where("surgeryDate", "<=", effectiveEnd)
+        .orderBy("surgeryDate", "desc")
+        .limit(200)
+        .get();
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let records = snap.docs.map(docToObj).filter((r: any) => isCoordinatorOf(r));
+
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       if (status) records = records.filter((r: any) => r.status === status);
       if (patientName) {

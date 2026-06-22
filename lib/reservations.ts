@@ -336,7 +336,7 @@ export async function getAllReservations(): Promise<{
 }> {
   const fromDate = (() => {
     const d = new Date();
-    d.setMonth(d.getMonth() - 12);
+    d.setDate(d.getDate() - 45);
     return d.toISOString().slice(0, 10);
   })();
 
@@ -402,13 +402,13 @@ export async function fetchAllReservationsOnce(): Promise<{
   reservations: ReservationRecord[];
   doctors: DoctorOption[];
 }> {
-  const threeMonthsAgo = (() => {
+  const fromDate = (() => {
     const d = new Date();
-    d.setMonth(d.getMonth() - 3);
+    d.setDate(d.getDate() - 45);
     return d.toISOString().slice(0, 10);
   })();
 
-  const result = await callReservationsApi("read_all", { from: threeMonthsAgo });
+  const result = await callReservationsApi("read_all", { from: fromDate });
   const rawReservations = (result.reservations as Record<string, unknown>[] | undefined) || [];
   const rawDoctors = (result.doctors as Record<string, unknown>[] | undefined) || [];
 
@@ -452,14 +452,14 @@ export function subscribeAllReservations(
     if (unsubscribeSnapshot) { unsubscribeSnapshot(); unsubscribeSnapshot = null; }
     if (!user) return;
 
-    const threeMonthsAgo = (() => {
+    const fromDate = (() => {
       const d = new Date();
-      d.setMonth(d.getMonth() - 3);
+      d.setDate(d.getDate() - 45);
       return d.toISOString().slice(0, 10);
     })();
 
     // Immediately seed with API data so UI shows content even if onSnapshot is slow/fails
-    callReservationsApi("read_all", { from: threeMonthsAgo })
+    callReservationsApi("read_all", { from: fromDate })
       .then((result) => {
         if (!seedDelivered && result.success) {
           const rawReservations = (result.reservations as Record<string, unknown>[] | undefined) || [];
@@ -490,7 +490,7 @@ export function subscribeAllReservations(
     getClientDoctors().then((d) => { latestDoctors = d; }).catch(() => {});
 
     unsubscribeSnapshot = onSnapshot(
-      query(collection(db, "reservations"), where("reservationDate", ">=", threeMonthsAgo)),
+      query(collection(db, "reservations"), where("reservationDate", ">=", fromDate)),
       (snap) => {
         // skip empty cache snapshots — they would wipe the API seed data
         if (snap.metadata.fromCache && snap.empty) return;

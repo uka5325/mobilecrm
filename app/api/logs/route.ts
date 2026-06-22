@@ -52,28 +52,28 @@ export async function POST(req: NextRequest) {
     // ── READ ─────────────────────────────────────────────────────────────────
     if (action === "read") {
       const { reservationId, targetId, patientId } = payload as { reservationId?: string; targetId?: string; patientId?: string };
-      const result: Record<string, unknown> = {};
+      const LOG_LIMIT = 50;
 
-      const run = async (field: string, value: string) => {
-        if (!value) return;
-        const snap = await adminDb.collection("logs").where(field, "==", value).orderBy("createdAt", "desc").get();
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        snap.docs.forEach((d: any) => {
-          result[d.id] = toSer({ id: d.id, ...d.data() });
-        });
-      };
+      // 우선순위 단일 쿼리: reservationId > targetId > patientId
+      // 3중 쿼리를 피해 과금을 최대 66% 절감
+      const primaryField = reservationId ? "reservationId"
+        : targetId ? "targetId"
+        : patientId ? "patientId"
+        : null;
+      const primaryValue = reservationId || targetId || patientId || "";
 
-      await Promise.all([
-        run("reservationId", reservationId || ""),
-        run("targetId", targetId || ""),
-        run("patientId", patientId || ""),
-      ]);
+      if (!primaryField || !primaryValue) {
+        return NextResponse.json({ success: true, logs: [] });
+      }
 
-      const list = Object.values(result).sort((a, b) => {
-        const at = Number((a as Record<string, unknown>).createdAt || 0);
-        const bt = Number((b as Record<string, unknown>).createdAt || 0);
-        return bt - at;
-      });
+      const snap = await adminDb.collection("logs")
+        .where(primaryField, "==", primaryValue)
+        .orderBy("createdAt", "desc")
+        .limit(LOG_LIMIT)
+        .get();
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const list = snap.docs.map((d: any) => toSer({ id: d.id, ...d.data() }));
 
       return NextResponse.json({ success: true, logs: list });
     }
