@@ -408,19 +408,28 @@ export async function fetchAllReservationsOnce(): Promise<{
     return d.toISOString().slice(0, 10);
   })();
 
-  const [snap, doctors] = await Promise.all([
-    getDocs(query(collection(db, "reservations"), where("reservationDate", ">=", threeMonthsAgo))),
-    getClientDoctors(),
-  ]);
+  const result = await callReservationsApi("read_all", { from: threeMonthsAgo });
+  const rawReservations = (result.reservations as Record<string, unknown>[] | undefined) || [];
+  const rawDoctors = (result.doctors as Record<string, unknown>[] | undefined) || [];
 
-  const reservations = snap.docs
-    .map((d) => mapReservationDoc(d.id, d.data() as Record<string, unknown>))
+  const reservations = rawReservations
+    .map((r) => mapReservationDoc(String(r.id || ""), r))
     .filter((item) => !item.isDeleted)
     .sort((a, b) => {
       const aa = `${a.reservationDate} ${a.reservationTime} ${a.name}`;
       const bb = `${b.reservationDate} ${b.reservationTime} ${b.name}`;
       return aa.localeCompare(bb);
     });
+
+  const doctors: DoctorOption[] = rawDoctors
+    .map((d) => ({
+      uid: String(d.id || ""),
+      displayName: cleanText(d.displayName || d["display_name"] || d.name),
+      email: cleanText(d.email),
+      orderNo: cleanNumber(d.orderNo ?? d["order_no"]),
+    }))
+    .filter((d) => d.displayName)
+    .sort((a, b) => a.orderNo - b.orderNo || a.displayName.localeCompare(b.displayName));
 
   return {
     reservations,
