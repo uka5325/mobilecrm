@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect, useCallback, type ReactNode } from "react";
 import type { ReservationRecord, AppointmentType } from "@/lib/reservations";
 import { APPOINTMENT_TYPES } from "@/lib/reservations";
+import { calcCommissionBase, calcCommission } from "@/lib/commissionUtils";
 import { getReservationBirthInfo } from "@/lib/reservationUtils";
 import type { InvoiceRecord } from "@/lib/invoices";
 import { getInvoicesByPatientId, getInvoicesByPatientCache, invalidateInvoicesByPatientCache } from "@/lib/invoices";
@@ -534,19 +535,11 @@ function InvoiceEditPanelInModal({
     });
   }, []);
 
-  const computedBase = (() => {
-    if (!form.paymentMethod || !form.totalAmount) return undefined;
-    if (form.paymentMethod === "card") return Math.round(form.totalAmount * 0.97);
-    if (form.paymentMethod === "cash") return form.totalAmount;
-    if (form.paymentMethod === "mixed") {
-      const cash = form.cashAmount || 0;
-      const card = form.cardAmount || 0;
-      return cash + Math.round(card * 0.97);
-    }
-    return undefined;
-  })();
+  const computedBase = form.paymentMethod && form.totalAmount
+    ? calcCommissionBase(form.totalAmount, form.paymentMethod, form.cardAmount, form.cashAmount)
+    : undefined;
   const computedCommission = computedBase !== undefined && form.commissionRate
-    ? Math.round(computedBase * form.commissionRate / 100)
+    ? calcCommission(computedBase, form.commissionRate)
     : undefined;
 
   async function handleSave() {
