@@ -2,9 +2,16 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { getInvoices, type InvoiceRecord, type InvoiceListFilter } from "@/lib/invoices";
 import { todayString } from "@/lib/dateUtils";
 import { toDate } from "@/lib/settingsUtils";
+
+function threeMonthsAgo() {
+  const d = new Date();
+  d.setMonth(d.getMonth() - 3);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
+}
 
 const STATUS_LABEL: Record<string, string> = {
   draft: "임시저장",
@@ -37,14 +44,14 @@ function formatDate(value: unknown): string {
 export function InvoiceListTab() {
   const router = useRouter();
   const today = todayString();
-  const firstOfMonth = today.slice(0, 7) + "-01";
 
-  const [startDate, setStartDate] = useState(firstOfMonth);
+  const [startDate, setStartDate] = useState(threeMonthsAgo());
   const [endDate, setEndDate] = useState(today);
   const [statusFilter, setStatusFilter] = useState<"" | "draft" | "confirmed" | "void">("");
   const [nameQuery, setNameQuery] = useState("");
   const [invoices, setInvoices] = useState<InvoiceRecord[]>([]);
   const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState("");
 
   useEffect(() => {
     load();
@@ -52,6 +59,7 @@ export function InvoiceListTab() {
 
   async function load() {
     setLoading(true);
+    setLoadError("");
     try {
       const filters: InvoiceListFilter = {
         startDate,
@@ -60,6 +68,9 @@ export function InvoiceListTab() {
       };
       const data = await getInvoices(filters);
       setInvoices(data);
+    } catch (e) {
+      console.error("[InvoiceListTab] load error:", e);
+      setLoadError("인보이스 목록을 불러오지 못했습니다. F12 콘솔에서 오류를 확인하세요.");
     } finally {
       setLoading(false);
     }
@@ -76,13 +87,20 @@ export function InvoiceListTab() {
     return {
       total: filtered.length,
       confirmed: confirmed.length,
-      eventTotal: confirmed.reduce((s, i) => s + i.eventTotal, 0),
-      balance: confirmed.reduce((s, i) => s + i.balanceAmount, 0),
+      totalAmount: confirmed.reduce((s, i) => s + (i.totalAmount || 0), 0),
     };
   }, [filtered]);
 
   return (
     <div className="flex flex-col gap-4">
+      {/* 안내 배너 */}
+      <div className="flex items-center justify-between rounded-xl border border-emerald-100 bg-emerald-50 px-4 py-2.5 text-sm">
+        <span className="text-emerald-800">인보이스는 <b>예약 관리</b> 페이지의 각 예약 행에서 생성하거나 열 수 있습니다.</span>
+        <Link href="/reservations" className="ml-3 shrink-0 rounded-lg bg-[#1d9e75] px-3 py-1 text-xs font-semibold text-white hover:bg-[#178a65]">
+          예약 관리 →
+        </Link>
+      </div>
+
       {/* Filters */}
       <div className="flex flex-wrap items-center gap-2">
         <input
@@ -124,12 +142,11 @@ export function InvoiceListTab() {
       </div>
 
       {/* KPI */}
-      <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
+      <div className="grid grid-cols-3 gap-2">
         {[
-          { label: "전체", value: kpi.total, className: "bg-gray-50 border-gray-200" },
-          { label: "확정", value: kpi.confirmed, className: "bg-emerald-50 border-emerald-200 text-emerald-700" },
-          { label: "이벤트가 합계", value: `₩${formatMoney(kpi.eventTotal)}`, className: "bg-blue-50 border-blue-200 text-blue-700" },
-          { label: "잔금 합계", value: `₩${formatMoney(kpi.balance)}`, className: "bg-orange-50 border-orange-200 text-orange-700" },
+          { label: "전체", value: kpi.total + "건", className: "bg-gray-50 border-gray-200" },
+          { label: "확정", value: kpi.confirmed + "건", className: "bg-emerald-50 border-emerald-200 text-emerald-700" },
+          { label: "확정 수술비 합계", value: `₩${formatMoney(kpi.totalAmount)}`, className: "bg-blue-50 border-blue-200 text-blue-700" },
         ].map((box) => (
           <div key={box.label} className={`rounded-xl border px-4 py-2.5 ${box.className}`}>
             <div className="text-xs font-semibold opacity-70">{box.label}</div>
@@ -144,6 +161,10 @@ export function InvoiceListTab() {
           <div className="flex items-center justify-center py-16 text-sm text-gray-400">
             데이터 로딩 중...
           </div>
+        ) : loadError ? (
+          <div className="flex items-center justify-center py-16 text-sm text-red-500">
+            {loadError}
+          </div>
         ) : filtered.length === 0 ? (
           <div className="flex items-center justify-center py-16 text-sm text-gray-400">
             조건에 맞는 인보이스가 없습니다.
@@ -153,7 +174,7 @@ export function InvoiceListTab() {
             <table className="w-full text-sm">
               <thead className="border-b border-[#edf0f3] bg-[#f8fafc]">
                 <tr>
-                  {["날짜", "환자명", "담당원장", "상태", "이벤트가", "잔금", ""].map((h) => (
+                  {["날짜", "환자명", "병원명", "수술명", "담당원장", "상태", "수술비", ""].map((h) => (
                     <th
                       key={h}
                       className="px-4 py-3 text-left text-xs font-semibold text-gray-500"
@@ -172,6 +193,8 @@ export function InvoiceListTab() {
                   >
                     <td className="px-4 py-3 text-gray-500">{formatDate(inv.createdAt)}</td>
                     <td className="px-4 py-3 font-medium text-gray-800">{inv.patientName}</td>
+                    <td className="px-4 py-3 text-gray-600">{inv.hospitalName || "-"}</td>
+                    <td className="px-4 py-3 text-gray-600 max-w-[140px] truncate">{inv.surgeryItems || "-"}</td>
                     <td className="px-4 py-3 text-gray-600">{inv.doctors.join(", ") || "-"}</td>
                     <td className="px-4 py-3">
                       <span
@@ -181,10 +204,7 @@ export function InvoiceListTab() {
                       </span>
                     </td>
                     <td className="px-4 py-3 font-medium text-gray-700">
-                      ₩{formatMoney(inv.eventTotal)}
-                    </td>
-                    <td className="px-4 py-3 text-gray-600">
-                      ₩{formatMoney(inv.balanceAmount)}
+                      ₩{formatMoney(inv.totalAmount || 0)}
                     </td>
                     <td className="px-4 py-3">
                       <button

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import type { ReservationRecord, AppointmentType } from "@/lib/reservations";
 import { APPOINTMENT_TYPES } from "@/lib/reservations";
 import { getReservationBirthInfo } from "@/lib/reservationUtils";
@@ -145,6 +146,7 @@ export function ReservationsTable({
   onDeletePatient,
   onOpenPatientMemo,
 }: Props) {
+  const router = useRouter();
   const cellCls = "border-b border-gray-100 px-2 py-2";
   const inputCls = "w-full rounded-lg border border-[#dfe3e8] px-2 py-1 text-xs focus:border-[#1d9e75] focus:outline-none";
 
@@ -241,10 +243,16 @@ export function ReservationsTable({
               </button>
             </div>
           ) : (
-            <div className="flex justify-center gap-0.5">
+            <div className="flex flex-wrap justify-center gap-0.5">
               <button onClick={() => onStartEdit(item)} className="px-2 py-1 text-xs text-blue-600 hover:underline">수정</button>
               <button onClick={() => onAddReservation(item)} className="px-2 py-1 text-xs text-emerald-600 hover:underline">추가</button>
               <button onClick={() => onDelete(item)} className="px-2 py-1 text-xs text-red-500 hover:underline">삭제</button>
+              <button
+                onClick={() => router.push(`/invoices/${item.id}`)}
+                className="px-2 py-1 text-xs font-medium text-[#1d9e75] hover:underline"
+              >
+                {item.invoiceDocId ? "인보이스" : "인보이스+"}
+              </button>
             </div>
           )}
         </td>
@@ -459,12 +467,12 @@ export function ReservationsTable({
         <table className="min-w-[900px] w-full table-fixed border-collapse text-sm">
           <colgroup>
             <col className="w-[110px]" />
-            <col className="w-[75px]" />
-            <col className="w-[130px]" />
             <col className="w-[70px]" />
-            <col className="w-[140px]" />
-            <col className="w-[110px]" />
-            <col className="w-[110px]" />
+            <col className="w-[120px]" />
+            <col className="w-[65px]" />
+            <col className="w-[130px]" />
+            <col className="w-[100px]" />
+            <col className="w-[135px]" />
           </colgroup>
 
           <thead className="bg-gray-50">

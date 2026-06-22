@@ -12,12 +12,14 @@ type AppShellProps = {
   children: ReactNode;
 };
 
-const menuItems = [
-  { href: "/", label: "홈", icon: "🏠" },
-  { href: "/schedule", label: "스케줄", icon: "📅" },
-  { href: "/reservations", label: "고객관리", icon: "👥" },
-  { href: "/dashboard", label: "KPI 대시보드", icon: "📊" },
-  { href: "/settings", label: "설정", icon: "⚙️" },
+const allMenuItems = [
+  { href: "/", label: "홈", icon: "🏠", roles: null },
+  { href: "/schedule", label: "스케줄", icon: "📅", roles: null },
+  { href: "/reservations", label: "고객관리", icon: "👥", roles: null },
+  { href: "/dashboard", label: "KPI 대시보드", icon: "📊", roles: null },
+  { href: "/invoice", label: "인보이스", icon: "🧾", roles: null },
+  { href: "/commission", label: "커미션", icon: "💰", roles: ["admin", "coordinator"] },
+  { href: "/settings", label: "설정", icon: "⚙️", roles: null },
 ];
 
 const pageInfo: Record<string, { title: string; description: string }> = {
@@ -40,6 +42,14 @@ const pageInfo: Record<string, { title: string; description: string }> = {
   "/dashboard": {
     title: "KPI 대시보드",
     description: "병원별·유형별 주요 지표를 확인합니다.",
+  },
+  "/invoice": {
+    title: "인보이스",
+    description: "인보이스 목록을 조회하고 관리합니다.",
+  },
+  "/commission": {
+    title: "커미션",
+    description: "담당자별 커미션을 조회하고 정산합니다.",
   },
   "/settings": {
     title: "설정",
@@ -333,7 +343,7 @@ export default function AppShell({ children }: AppShellProps) {
           </div>
 
           <nav className="mt-5 flex flex-col gap-[7px]">
-            {menuItems.map((item) => {
+            {allMenuItems.filter((item) => !item.roles || (staffUser && item.roles.includes(staffUser.role))).map((item) => {
               const active =
                 item.href === "/"
                   ? pathname === "/"
@@ -416,7 +426,7 @@ export default function AppShell({ children }: AppShellProps) {
         </div>
 
         <nav className="mt-5 flex gap-2 overflow-x-auto pb-1">
-          {menuItems.map((item) => {
+          {allMenuItems.filter((item) => !item.roles || (staffUser && item.roles.includes(staffUser.role))).map((item) => {
             const active =
               item.href === "/"
                 ? pathname === "/"
