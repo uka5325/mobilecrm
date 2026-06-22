@@ -199,6 +199,7 @@ export async function POST(req: NextRequest) {
         coordinators: Array.isArray(reservation.coordinators) ? reservation.coordinators : [],
         hospitalName: cleanText(reservation.hospital),
         surgeryItems: cleanText(reservation.consultArea) || "",
+        surgeryDate: cleanText(reservation.reservationDate) || "",
         totalAmount: (() => {
           const raw = cleanText(reservation.surgeryCost).replace(/[^0-9.]/g, "");
           const n = parseFloat(raw);
@@ -352,25 +353,27 @@ export async function POST(req: NextRequest) {
       const { startDate, endDate, status, patientName, commissionStaffUid } =
         (payload || {}) as Record<string, string>;
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      let query: any = adminDb.collection("invoices");
-
-      if (startDate || endDate) {
-        const start = startDate
-          ? new Date(startDate + "T00:00:00")
-          : (() => { const d = new Date(); d.setMonth(d.getMonth() - 3); return d; })();
-        const end = endDate ? new Date(endDate + "T23:59:59") : new Date();
-        query = query
-          .where("createdAt", ">=", start)
-          .where("createdAt", "<=", end)
-          .orderBy("createdAt", "desc");
-      } else {
-        query = query.orderBy("createdAt", "desc");
-      }
-
-      const snap = await query.get();
+      const snap = await adminDb.collection("invoices").orderBy("createdAt", "desc").get();
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       let records = snap.docs.map(docToObj).filter((r: any) => !r.isDeleted && isCoordinatorOf(r));
+
+      // 수술날짜 기준 필터 (surgeryDate 없는 기존 인보이스는 createdAt 날짜로 대체)
+      if (startDate || endDate) {
+        const sd = startDate || "0000-00-00";
+        const ed = endDate || "9999-99-99";
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        records = records.filter((r: any) => {
+          const effectiveDate: string = r.surgeryDate
+            ? String(r.surgeryDate)
+            : (() => {
+                const ts = r.createdAt;
+                if (!ts) return "";
+                const d = typeof ts === "number" ? new Date(ts) : new Date(ts);
+                return d.toISOString().slice(0, 10);
+              })();
+          return effectiveDate >= sd && effectiveDate <= ed;
+        });
+      }
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       if (status) records = records.filter((r: any) => r.status === status);
       if (patientName) {

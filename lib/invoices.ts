@@ -32,6 +32,7 @@ export type InvoiceRecord = {
   commissionBase?: number;
   commissionAmount?: number;
 
+  surgeryDate?: string;
   memo?: string;
   status: "draft" | "confirmed" | "void";
 

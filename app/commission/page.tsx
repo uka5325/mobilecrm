@@ -59,6 +59,7 @@ function DetailModal({ invoice, onClose }: { invoice: InvoiceRecord; onClose: ()
         <div className="space-y-2 text-sm">
           {[
             ["인보이스 ID", invoice.invoiceId],
+            ["수술날짜", invoice.surgeryDate || "-"],
             ["병원명", invoice.hospitalName || "-"],
             ["담당원장", invoice.doctors?.join(", ") || "-"],
             ["수술/시술명", invoice.surgeryItems || "-"],
