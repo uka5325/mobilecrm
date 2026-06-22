@@ -37,6 +37,7 @@ export default function InvoiceEditPage() {
   const [staffList, setStaffList] = useState<SettingsStaffRecord[]>([]);
 
   const [hospitalName, setHospitalName] = useState("");
+  const [surgeryDate, setSurgeryDate] = useState("");
   const [surgeryItems, setSurgeryItems] = useState("");
   const [totalAmount, setTotalAmount] = useState(0);
   const [status, setStatus] = useState<"draft" | "confirmed" | "void">("draft");
@@ -79,6 +80,7 @@ export default function InvoiceEditPage() {
   function applyInvoice(inv: InvoiceRecord) {
     setInvoice(inv);
     setHospitalName(inv.hospitalName || "");
+    setSurgeryDate(inv.surgeryDate || "");
     setSurgeryItems(inv.surgeryItems || "");
     setTotalAmount(inv.totalAmount || 0);
     setStatus(inv.status || "draft");
@@ -107,6 +109,7 @@ export default function InvoiceEditPage() {
         invoice.id,
         {
           hospitalName,
+          surgeryDate,
           surgeryItems,
           totalAmount,
           paymentMethod: paymentMethod || undefined,
@@ -217,6 +220,15 @@ export default function InvoiceEditPage() {
                 onChange={(e) => setHospitalName(e.target.value)}
                 className="w-full rounded-xl border px-3 py-2 text-sm focus:border-[#1d9e75] focus:outline-none"
                 placeholder="병원명 입력"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs text-gray-500">수술날짜</label>
+              <input
+                type="date"
+                value={surgeryDate}
+                onChange={(e) => setSurgeryDate(e.target.value)}
+                className="w-full rounded-xl border px-3 py-2 text-sm focus:border-[#1d9e75] focus:outline-none"
               />
             </div>
             <div>

@@ -358,50 +358,25 @@ export async function POST(req: NextRequest) {
       const { startDate, endDate, status, patientName, commissionStaffUid } =
         (payload || {}) as Record<string, string>;
 
-      // surgeryDate가 있는 경우 Firestore 범위 쿼리 적용 (billing 최적화)
-      // surgeryDate 없는 기존 인보이스는 별도 쿼리로 createdAt 기준 fallback
-      let records: Record<string, unknown>[] = [];
-      if (startDate && endDate) {
-        const [mainSnap, fallbackSnap] = await Promise.all([
-          // surgeryDate 범위 쿼리 (날짜 세팅된 신규 인보이스)
-          adminDb.collection("invoices")
-            .where("surgeryDate", ">=", startDate)
-            .where("surgeryDate", "<=", endDate)
-            .orderBy("surgeryDate", "desc")
-            .limit(200)
-            .get(),
-          // surgeryDate 없는 기존 인보이스: createdAt 범위로 fallback
-          adminDb.collection("invoices")
-            .where("surgeryDate", "==", "")
-            .orderBy("createdAt", "desc")
-            .limit(100)
-            .get(),
-        ]);
-        const seen = new Set<string>();
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        mainSnap.docs.forEach((d: any) => {
-          if (!seen.has(d.id)) { seen.add(d.id); records.push(docToObj(d)); }
-        });
-        // fallback: createdAt 날짜가 범위 내인 것만 포함
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        fallbackSnap.docs.forEach((d: any) => {
-          if (seen.has(d.id)) return;
-          const obj = docToObj(d);
-          const ts = obj.createdAt;
-          if (!ts) return;
-          const dateStr = new Date(typeof ts === "number" ? ts : Number(ts)).toISOString().slice(0, 10);
-          if (dateStr >= startDate && dateStr <= endDate) { seen.add(d.id); records.push(obj); }
-        });
-      } else {
-        const snap = await adminDb.collection("invoices")
-          .orderBy("createdAt", "desc")
-          .limit(200)
-          .get();
-        records = snap.docs.map(docToObj);
-      }
-
+      const snap = await adminDb.collection("invoices")
+        .orderBy("createdAt", "desc")
+        .limit(200)
+        .get();
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      records = records.filter((r: any) => !r.isDeleted && isCoordinatorOf(r));
+      let records = snap.docs.map(docToObj).filter((r: any) => !r.isDeleted && isCoordinatorOf(r));
+
+      // 날짜 필터: surgeryDate 있으면 surgeryDate 기준, 없으면 createdAt 기준
+      if (startDate || endDate) {
+        const sd = startDate || "0000-00-00";
+        const ed = endDate   || "9999-99-99";
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        records = records.filter((r: any) => {
+          const ts = r.createdAt;
+          const fallback = ts ? new Date(typeof ts === "number" ? ts : Number(ts)).toISOString().slice(0, 10) : "";
+          const effectiveDate = r.surgeryDate ? String(r.surgeryDate) : fallback;
+          return effectiveDate >= sd && effectiveDate <= ed;
+        });
+      }
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       if (status) records = records.filter((r: any) => r.status === status);
       if (patientName) {
