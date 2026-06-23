@@ -750,17 +750,6 @@ export function ReservationsTable({
     setInvoiceCounts((prev) => ({ ...prev, [pid]: count }));
   }, []);
 
-  useEffect(() => {
-    if (!patientGroups.length) return;
-    patientGroups.forEach((g) => {
-      const pid = g.patientId || g.patientKey;
-      if (!pid) return;
-      getInvoicesByPatientId(pid)
-        .then((invs) => setInvoiceCounts((prev) => ({ ...prev, [pid]: invs.length })))
-        .catch(() => {});
-    });
-  }, [patientGroups]);
-
   function toggleAmountPopover(groupKey: string, type: "deposit" | "surgery") {
     setAmountPopover((prev) =>
       prev?.groupKey === groupKey && prev.type === type ? null : { groupKey, type }
