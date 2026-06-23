@@ -37,7 +37,6 @@ type Props = {
   memoError?: string;
   memoSuccess?: string;
   recentNotes: ReservationNote[];
-  currentReservationDocId?: string;
   onFormChange: (updates: Partial<DetailForm>) => void;
   onSave: () => void;
   onMemoTextChange: (text: string) => void;
@@ -61,7 +60,6 @@ export function InfoTab({
   memoError,
   memoSuccess,
   recentNotes,
-  currentReservationDocId,
   onFormChange,
   onSave,
   onMemoTextChange,
@@ -263,7 +261,6 @@ export function InfoTab({
                 key={note.id}
                 note={note}
                 compact
-                isOtherReservation={!!currentReservationDocId && note.reservationDocId !== currentReservationDocId}
                 onUpdate={onUpdateNote}
                 onDelete={onDeleteNote}
               />

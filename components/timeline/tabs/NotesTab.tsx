@@ -6,7 +6,6 @@ import { NoteCard } from "@/components/timeline/NoteCard";
 type Props = {
   memoText: string;
   notes: ReservationNote[];
-  currentReservationDocId?: string;
   memoError?: string;
   memoSuccess?: string;
   onMemoTextChange: (text: string) => void;
@@ -15,7 +14,7 @@ type Props = {
   onDeleteNote: (note: ReservationNote) => Promise<void>;
 };
 
-export function NotesTab({ memoText, notes, currentReservationDocId, memoError, memoSuccess, onMemoTextChange, onAddMemo, onUpdateNote, onDeleteNote }: Props) {
+export function NotesTab({ memoText, notes, memoError, memoSuccess, onMemoTextChange, onAddMemo, onUpdateNote, onDeleteNote }: Props) {
   return (
     <div>
       <textarea
@@ -48,7 +47,6 @@ export function NotesTab({ memoText, notes, currentReservationDocId, memoError, 
             <NoteCard
               key={note.id}
               note={note}
-              isOtherReservation={!!currentReservationDocId && note.reservationDocId !== currentReservationDocId}
               onUpdate={onUpdateNote}
               onDelete={onDeleteNote}
             />
