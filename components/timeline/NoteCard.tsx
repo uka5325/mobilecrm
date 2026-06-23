@@ -7,11 +7,12 @@ import { formatLogDate } from "@/lib/timelineUtils";
 type Props = {
   note: ReservationNote;
   compact?: boolean;
+  isOtherReservation?: boolean;
   onUpdate: (note: ReservationNote, newText: string) => Promise<void>;
   onDelete: (note: ReservationNote) => Promise<void>;
 };
 
-export function NoteCard({ note, compact = false, onUpdate, onDelete }: Props) {
+export function NoteCard({ note, compact = false, isOtherReservation = false, onUpdate, onDelete }: Props) {
   const [editing, setEditing] = useState(false);
   const [editText, setEditText] = useState(note.memoText);
 
@@ -53,9 +54,14 @@ export function NoteCard({ note, compact = false, onUpdate, onDelete }: Props) {
       ) : (
         <>
           <div className="mb-1 flex items-center justify-between gap-2">
-            <span className="truncate font-semibold text-emerald-700">
-              {note.createdBy || "작성자"}
-            </span>
+            <div className="flex min-w-0 items-center gap-1.5">
+              <span className="truncate font-semibold text-emerald-700">
+                {note.createdBy || "작성자"}
+              </span>
+              {isOtherReservation && (
+                <span className="shrink-0 rounded bg-blue-50 px-1.5 py-0.5 text-[10px] font-medium text-blue-500">다른 예약건</span>
+              )}
+            </div>
             <span className="shrink-0 text-xs text-gray-400">{formatLogDate(note.createdAt)}</span>
           </div>
           <div className="whitespace-pre-line leading-6 text-gray-700">{note.memoText}</div>

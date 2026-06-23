@@ -488,6 +488,7 @@ export function DetailDrawer({ open, reservation, currentUser, onClose, onRefres
               memoError={memoError}
               memoSuccess={memoSuccess}
               recentNotes={recentNotes}
+              currentReservationDocId={selectedReservation.id}
               onFormChange={(updates) => setDetailForm((p) => ({ ...p, ...updates }))}
               onSave={handleSaveDetail}
               onMemoTextChange={setMemoText}
@@ -511,6 +512,7 @@ export function DetailDrawer({ open, reservation, currentUser, onClose, onRefres
             <NotesTab
               memoText={memoText}
               notes={notes}
+              currentReservationDocId={selectedReservation.id}
               memoError={memoError}
               memoSuccess={memoSuccess}
               onMemoTextChange={setMemoText}
