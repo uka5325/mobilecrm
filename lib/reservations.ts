@@ -1,5 +1,5 @@
 import { auth, db } from "./firebase";
-import { collection, onSnapshot, query, where, getDocs } from "firebase/firestore";
+import { collection, onSnapshot, query, where, getDocs, limit } from "firebase/firestore";
 import type { StaffUser } from "./auth";
 import { cleanText } from "./stringUtils";
 import { createLog } from "./logs";
@@ -459,7 +459,7 @@ export function subscribeAllReservations(
     })();
 
     const hasLoadedBefore = (() => {
-      try { return localStorage.getItem("crm_loaded_once") === "true"; } catch { return false; }
+      try { return localStorage.getItem("crm_loaded_once_v1") === "true"; } catch { return false; }
     })();
 
     // Seed with API data only on first visit (no IndexedDB cache yet)
@@ -496,11 +496,11 @@ export function subscribeAllReservations(
     getClientDoctors().then((d) => { latestDoctors = d; }).catch(() => {});
 
     unsubscribeSnapshot = onSnapshot(
-      query(collection(db, "reservations"), where("reservationDate", ">=", fromDate)),
+      query(collection(db, "reservations"), where("reservationDate", ">=", fromDate), limit(500)),
       (snap) => {
         // skip empty cache snapshots — they would wipe the API seed data
         if (snap.metadata.fromCache && snap.empty) return;
-        try { localStorage.setItem("crm_loaded_once", "true"); } catch {}
+        try { localStorage.setItem("crm_loaded_once_v1", "true"); } catch {}
         seedDelivered = true;
         const reservations = snap.docs
           .map((d) => mapReservationDoc(d.id, d.data() as Record<string, unknown>))
@@ -544,7 +544,7 @@ export function subscribeTimelineReservations(
     if (!user) return;
 
     const hasLoadedBefore = (() => {
-      try { return localStorage.getItem("crm_loaded_once") === "true"; } catch { return false; }
+      try { return localStorage.getItem("crm_loaded_once_v1") === "true"; } catch { return false; }
     })();
 
     // Seed with API data only on first visit (no IndexedDB cache yet)
@@ -585,7 +585,7 @@ export function subscribeTimelineReservations(
       (snap) => {
         // skip empty cache snapshots — they would wipe the API seed data
         if (snap.metadata.fromCache && snap.empty) return;
-        try { localStorage.setItem("crm_loaded_once", "true"); } catch {}
+        try { localStorage.setItem("crm_loaded_once_v1", "true"); } catch {}
         seedDelivered = true;
         const reservations = snap.docs
           .map((d) => mapReservationDoc(d.id, d.data() as Record<string, unknown>))
@@ -948,6 +948,7 @@ export type UpdateReservationParams = {
   surgeryCost?: string;
   currentDoctorStatusMap?: Record<string, string>;
   currentDoctorStatusMetaMap?: ReservationRecord["doctorStatusMetaMap"];
+  clientUpdatedAt?: number;
 };
 
 export async function updateReservationFull(
@@ -1042,6 +1043,7 @@ export async function updateReservationFull(
     patientId,
     reservationPatch,
     patientPatch,
+    clientUpdatedAt: params.clientUpdatedAt,
   });
 
   if (!apiResult.success) {

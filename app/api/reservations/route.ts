@@ -196,15 +196,32 @@ export async function POST(req: NextRequest) {
         patientId,
         reservationPatch,
         patientPatch,
+        clientUpdatedAt,
       } = payload as {
         reservationDocId: string;
         patientDocId?: string;
         patientId?: string;
         reservationPatch: Record<string, unknown>;
         patientPatch?: Record<string, unknown>;
+        clientUpdatedAt?: number;
       };
 
       const now = FieldValue.serverTimestamp();
+
+      if (clientUpdatedAt !== undefined) {
+        const currentSnap = await adminDb.collection("reservations").doc(reservationDocId).get();
+        if (currentSnap.exists) {
+          const serverUpdatedAt = currentSnap.data()?.updatedAt;
+          const serverMs = serverUpdatedAt?.toMillis?.() ?? 0;
+          if (serverMs > 0 && Math.abs(serverMs - clientUpdatedAt) > 1000) {
+            return NextResponse.json({
+              success: false,
+              conflict: true,
+              message: "다른 사용자가 이미 수정했습니다. 새로고침 후 다시 시도해주세요.",
+            });
+          }
+        }
+      }
 
       await adminDb.collection("reservations").doc(reservationDocId).update({
         ...reservationPatch,
@@ -272,7 +289,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: false, message: "알 수 없는 action" }, { status: 400 });
   } catch (e) {
     console.error("[api/reservations]", e);
-    const msg = e instanceof Error ? e.message : String(e);
-    return NextResponse.json({ success: false, message: `서버 오류: ${msg}` }, { status: 500 });
+    return NextResponse.json({ success: false, message: "서버 오류" }, { status: 500 });
   }
 }

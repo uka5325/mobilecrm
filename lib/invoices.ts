@@ -69,14 +69,19 @@ let _callerCache: { role: string; name: string } | null = null;
 // 환자별 인보이스 결과 캐시 (pre-fetch 결과를 모달에서 즉시 재사용)
 const _invoicesByPatientCache = new Map<string, InvoiceRecord[]>();
 
+const INVOICE_CACHE_TTL = 45 * 60 * 1000; // 45분
+
 export function getInvoicesByPatientCache(patientId: string): InvoiceRecord[] | undefined {
   if (_invoicesByPatientCache.has(patientId)) return _invoicesByPatientCache.get(patientId);
   try {
     const raw = sessionStorage.getItem(`inv_${patientId}`);
     if (raw) {
-      const d = JSON.parse(raw) as InvoiceRecord[];
-      _invoicesByPatientCache.set(patientId, d);
-      return d;
+      const parsed = JSON.parse(raw) as { cachedAt?: number; data: InvoiceRecord[] };
+      if (parsed.cachedAt && Date.now() - parsed.cachedAt < INVOICE_CACHE_TTL) {
+        _invoicesByPatientCache.set(patientId, parsed.data);
+        return parsed.data;
+      }
+      sessionStorage.removeItem(`inv_${patientId}`);
     }
   } catch {}
   return undefined;
@@ -168,7 +173,7 @@ export async function getInvoicesByPatientId(patientId: string): Promise<Invoice
   if (!result.success || !Array.isArray(result.invoices)) return [];
   const records = (result.invoices as Record<string, unknown>[]).map(mapInvoiceDoc);
   _invoicesByPatientCache.set(patientId, records);
-  try { sessionStorage.setItem(`inv_${patientId}`, JSON.stringify(records)); } catch {}
+  try { sessionStorage.setItem(`inv_${patientId}`, JSON.stringify({ cachedAt: Date.now(), data: records })); } catch {}
   return records;
 }
 

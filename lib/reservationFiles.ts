@@ -138,6 +138,9 @@ export async function uploadPhotoToStorage(
   reservationDocId: string,
   file: File
 ): Promise<{ storagePath: string; fileUrl: string }> {
+  if (file.size > 10 * 1024 * 1024) {
+    throw new Error("파일 크기는 10MB 이하여야 합니다.");
+  }
   const ts = Date.now();
   const uid = typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID().slice(0, 8) : Math.random().toString(36).slice(2, 10);
   const safeName = sanitizeFileName(file.name);
