@@ -78,6 +78,24 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: true, logs: list });
     }
 
+    // ── READ_BATCH ────────────────────────────────────────────────────────────
+    if (action === "read_batch") {
+      const { reservationIds } = payload as { reservationIds: string[] };
+      if (!Array.isArray(reservationIds) || !reservationIds.length)
+        return NextResponse.json({ success: true, logs: [] });
+
+      const ids = reservationIds.slice(0, 30);
+      const snap = await adminDb.collection("logs")
+        .where("reservationId", "in", ids)
+        .orderBy("createdAt", "desc")
+        .limit(ids.length * 5)
+        .get();
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const list = snap.docs.map((d: any) => toSer({ id: d.id, ...d.data() }));
+      return NextResponse.json({ success: true, logs: list });
+    }
+
     return NextResponse.json({ success: false, message: "알 수 없는 action" }, { status: 400 });
   } catch (e) {
     console.error("[/api/logs]", e);

@@ -745,6 +745,8 @@ export function ReservationsTable({
   const [amountPopover, setAmountPopover] = useState<PopoverState>(null);
   const [invoiceModal, setInvoiceModal] = useState<{ patientId: string; patientName: string; reservations: ReservationRecord[] } | null>(null);
   const [invoiceCounts, setInvoiceCounts] = useState<Record<string, number>>({});
+  const invoiceCountsRef = useRef<Record<string, number>>({});
+  useEffect(() => { invoiceCountsRef.current = invoiceCounts; }, [invoiceCounts]);
 
   const handleCountLoaded = useCallback((pid: string, count: number) => {
     setInvoiceCounts((prev) => ({ ...prev, [pid]: count }));
@@ -754,7 +756,7 @@ export function ReservationsTable({
     if (!patientGroups.length) return;
     patientGroups.forEach((g) => {
       const pid = g.patientId || g.patientKey;
-      if (!pid) return;
+      if (!pid || pid in invoiceCountsRef.current) return;
       getInvoiceCountByPatientId(pid)
         .then((count) => setInvoiceCounts((prev) => ({ ...prev, [pid]: count })))
         .catch(() => {});
