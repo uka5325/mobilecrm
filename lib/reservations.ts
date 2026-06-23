@@ -462,7 +462,6 @@ export function subscribeAllReservations(
     unsubscribeSnapshot = onSnapshot(
       query(collection(db, "reservations"), where("reservationDate", ">=", fromDate)),
       (snap) => {
-        if (snap.metadata.fromCache && snap.empty) return;
         const reservations = snap.docs
           .map((d) => mapReservationDoc(d.id, d.data() as Record<string, unknown>))
           .filter((item) => !item.isDeleted)
@@ -507,7 +506,6 @@ export function subscribeTimelineReservations(
     unsubscribeSnapshot = onSnapshot(
       query(collection(db, "reservations"), where("reservationDate", "==", date)),
       (snap) => {
-        if (snap.metadata.fromCache && snap.empty) return;
         const reservations = snap.docs
           .map((d) => mapReservationDoc(d.id, d.data() as Record<string, unknown>))
           .filter((item) => !item.isDeleted)
