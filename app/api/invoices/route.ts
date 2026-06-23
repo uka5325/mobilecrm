@@ -123,6 +123,16 @@ export async function POST(req: NextRequest) {
       return callerName ? coords.includes(callerName) : false;
     }
 
+    // ── COUNT_BY_PATIENT ─────────────────────────────────────────────────────
+    if (action === "count_by_patient") {
+      const { patientId } = payload as { patientId: string };
+      const countSnap = await adminDb.collection("invoices")
+        .where("patientId", "==", patientId)
+        .count()
+        .get();
+      return NextResponse.json({ success: true, count: countSnap.data().count });
+    }
+
     // ── GET_BY_PATIENT ───────────────────────────────────────────────────────
     if (action === "get_by_patient") {
       const { patientId } = payload as { patientId: string };

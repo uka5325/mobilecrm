@@ -6,7 +6,7 @@ import { APPOINTMENT_TYPES } from "@/lib/reservations";
 import { calcCommissionBase, calcCommission } from "@/lib/commissionUtils";
 import { getReservationBirthInfo } from "@/lib/reservationUtils";
 import type { InvoiceRecord } from "@/lib/invoices";
-import { getInvoicesByPatientId, getInvoicesByPatientCache, invalidateInvoicesByPatientCache } from "@/lib/invoices";
+import { getInvoicesByPatientId, getInvoicesByPatientCache, invalidateInvoicesByPatientCache, getInvoiceCountByPatientId } from "@/lib/invoices";
 
 export type PatientGroup = {
   patientKey: string;
@@ -749,6 +749,17 @@ export function ReservationsTable({
   const handleCountLoaded = useCallback((pid: string, count: number) => {
     setInvoiceCounts((prev) => ({ ...prev, [pid]: count }));
   }, []);
+
+  useEffect(() => {
+    if (!patientGroups.length) return;
+    patientGroups.forEach((g) => {
+      const pid = g.patientId || g.patientKey;
+      if (!pid) return;
+      getInvoiceCountByPatientId(pid)
+        .then((count) => setInvoiceCounts((prev) => ({ ...prev, [pid]: count })))
+        .catch(() => {});
+    });
+  }, [patientGroups]);
 
   function toggleAmountPopover(groupKey: string, type: "deposit" | "surgery") {
     setAmountPopover((prev) =>
