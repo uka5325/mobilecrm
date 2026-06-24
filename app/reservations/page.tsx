@@ -654,7 +654,7 @@ export default function ReservationsPage() {
       {/* 환자 전체 이력 모달 */}
       {historyPatientId && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setHistoryPatientId(null)}>
-          <div className="mx-4 w-full max-w-lg rounded-2xl bg-white p-5 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+          <div className="mx-4 w-full max-w-xl rounded-2xl bg-white p-5 shadow-2xl" onClick={(e) => e.stopPropagation()}>
             <div className="mb-3 flex items-center justify-between">
               <span className="text-base font-bold text-gray-800">{historyPatientName} — 전체 예약 이력</span>
               <button onClick={() => setHistoryPatientId(null)} className="text-2xl leading-none text-gray-400 hover:text-gray-700">×</button>
@@ -667,28 +667,24 @@ export default function ReservationsPage() {
             ) : (
               <div className="max-h-[60vh] divide-y divide-gray-100 overflow-y-auto rounded-xl border border-gray-100">
                 {historyList.map((r) => (
-                  <div key={r.id} className="flex flex-col gap-0.5 px-4 py-2.5 text-sm">
-                    <div className="flex items-center gap-2">
-                      <span className="w-24 shrink-0 text-xs text-gray-400">{r.reservationDate}</span>
-                      {r.reservationTime && <span className="text-xs text-gray-400">{r.reservationTime}</span>}
-                      <span className="text-gray-700">{r.appointmentType}</span>
-                      {r.consultArea && <span className="text-xs text-gray-500">{r.consultArea}</span>}
-                      <span className="ml-auto text-xs text-gray-400">
-                        {r.completed ? "완료" : (r.operationStatus && r.operationStatus !== "내원전" ? r.operationStatus : "")}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-1.5 pl-24">
-                      <span className="text-xs text-gray-400">{r.hospital}</span>
-                      <div className="ml-auto flex gap-1.5">
-                        <button
-                          onClick={() => setHistoryEditTarget(r)}
-                          className="rounded border border-blue-200 px-2 py-0.5 text-xs text-blue-600 hover:bg-blue-50"
-                        >수정</button>
-                        <button
-                          onClick={() => handleHistoryDelete(r)}
-                          className="rounded border border-red-200 px-2 py-0.5 text-xs text-red-500 hover:bg-red-50"
-                        >삭제</button>
-                      </div>
+                  <div key={r.id} className="flex items-center gap-2 px-4 py-2.5 text-sm">
+                    <span className="w-20 shrink-0 text-xs text-gray-400">{r.reservationDate}</span>
+                    {r.reservationTime && <span className="shrink-0 text-xs text-gray-400">{r.reservationTime}</span>}
+                    <span className="shrink-0 text-gray-700">{r.appointmentType}</span>
+                    {r.consultArea && <span className="shrink-0 text-xs text-gray-500">{r.consultArea}</span>}
+                    <span className="shrink-0 text-xs text-gray-400">{r.hospital}</span>
+                    <span className="shrink-0 text-xs text-gray-400">
+                      {r.completed ? "완료" : (r.operationStatus && r.operationStatus !== "내원전" ? r.operationStatus : "")}
+                    </span>
+                    <div className="ml-auto flex shrink-0 gap-1.5">
+                      <button
+                        onClick={() => setHistoryEditTarget(r)}
+                        className="rounded border border-blue-200 px-2 py-0.5 text-xs text-blue-600 hover:bg-blue-50"
+                      >수정</button>
+                      <button
+                        onClick={() => handleHistoryDelete(r)}
+                        className="rounded border border-red-200 px-2 py-0.5 text-xs text-red-500 hover:bg-red-50"
+                      >삭제</button>
                     </div>
                   </div>
                 ))}
