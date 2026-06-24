@@ -1120,9 +1120,6 @@ export function ReservationsTable({
 
     patientGroups.forEach((group) => {
       rows.push(renderPatientHeader(group));
-      group.reservations.forEach((item) => {
-        rows.push(renderReservationRow(item));
-      });
     });
 
     return rows;

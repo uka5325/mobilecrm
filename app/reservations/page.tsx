@@ -757,7 +757,9 @@ export default function ReservationsPage() {
                     <span className="w-24 shrink-0 text-gray-400">{r.reservationDate}</span>
                     <span className="text-gray-700">{r.hospital}</span>
                     <span className="text-gray-500">{r.appointmentType}</span>
-                    <span className="text-xs text-gray-400">{r.operationStatus}</span>
+                    <span className="text-xs text-gray-400">
+                      {r.completed ? "완료" : (r.operationStatus && r.operationStatus !== "내원전" ? r.operationStatus : "")}
+                    </span>
                     <div className="ml-auto flex gap-1.5">
                       <button
                         onClick={() => setHistoryEditTarget(r)}
