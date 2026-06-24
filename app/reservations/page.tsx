@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { DetailDrawer } from "@/components/timeline/DetailDrawer";
 import {
   deleteReservation,
   updateReservationFull,
@@ -75,6 +76,18 @@ export default function ReservationsPage() {
   const [historyHasMore, setHistoryHasMore] = useState(false);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState("");
+  const [historyEditTarget, setHistoryEditTarget] = useState<ReservationRecord | null>(null);
+
+  async function handleHistoryDelete(r: ReservationRecord) {
+    if (!currentUser) return;
+    if (!confirm(`${r.reservationDate} 예약을 삭제할까요?`)) return;
+    const result = await deleteReservation(r.id, r.reservationId, currentUser);
+    if (result.success) {
+      setHistoryList((prev) => prev.filter((x) => x.id !== r.id));
+    } else {
+      alert(result.message || "삭제 실패");
+    }
+  }
 
   async function handleRangeSearch() {
     if (!rangeFrom || !rangeTo) { setRangeError("시작일과 종료일을 모두 입력하세요."); return; }
@@ -744,7 +757,17 @@ export default function ReservationsPage() {
                     <span className="w-24 shrink-0 text-gray-400">{r.reservationDate}</span>
                     <span className="text-gray-700">{r.hospital}</span>
                     <span className="text-gray-500">{r.appointmentType}</span>
-                    <span className="ml-auto text-xs text-gray-400">{r.operationStatus}</span>
+                    <span className="text-xs text-gray-400">{r.operationStatus}</span>
+                    <div className="ml-auto flex gap-1.5">
+                      <button
+                        onClick={() => setHistoryEditTarget(r)}
+                        className="rounded border border-blue-200 px-2 py-0.5 text-xs text-blue-600 hover:bg-blue-50"
+                      >수정</button>
+                      <button
+                        onClick={() => handleHistoryDelete(r)}
+                        className="rounded border border-red-200 px-2 py-0.5 text-xs text-red-500 hover:bg-red-50"
+                      >삭제</button>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -760,6 +783,19 @@ export default function ReservationsPage() {
             )}
           </div>
         </div>
+      )}
+
+      {currentUser && (
+        <DetailDrawer
+          open={!!historyEditTarget}
+          reservation={historyEditTarget}
+          currentUser={currentUser}
+          onClose={() => setHistoryEditTarget(null)}
+          onRefreshLatestLog={async () => {}}
+          onRefresh={() => {
+            if (historyPatientId) openPatientHistory(historyPatientId, historyPatientName);
+          }}
+        />
       )}
 
       <ReservationsTable
