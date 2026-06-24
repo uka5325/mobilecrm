@@ -22,10 +22,11 @@ import { toDate } from "@/lib/settingsUtils";
 
 
 export default function ReservationsPage() {
-  const { currentUser, authReady } = useCurrentUser();
+  const { currentUser, authReady, firebaseReady } = useCurrentUser();
   const { reservations, loading, refresh } = useReservationData(
     currentUser,
-    authReady
+    authReady,
+    firebaseReady
   );
 
   const [search, setSearch] = useState("");
