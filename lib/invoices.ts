@@ -92,13 +92,23 @@ async function callInvoicesApi(action: string, payload: Record<string, unknown>)
   if (!firebaseUser) {
     return { success: false as const, message: "로그인 상태를 확인할 수 없습니다. 페이지를 새로고침 후 다시 시도해주세요." };
   }
-  const idToken = await firebaseUser.getIdToken();
-  const res = await fetch("/api/invoices", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ idToken, action, payload, callerRole: _callerCache?.role, callerName: _callerCache?.name }),
-  });
-  return res.json() as Promise<Record<string, unknown> & { success: boolean; message?: string }>;
+  if (!navigator.onLine) {
+    return { success: false as const, message: "인터넷 연결을 확인해주세요." };
+  }
+  try {
+    const idToken = await firebaseUser.getIdToken();
+    const res = await fetch("/api/invoices", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ idToken, action, payload, callerRole: _callerCache?.role, callerName: _callerCache?.name }),
+    });
+    if (!res.ok) {
+      return { success: false as const, message: `서버 오류가 발생했습니다. (${res.status})` };
+    }
+    return res.json() as Promise<Record<string, unknown> & { success: boolean; message?: string }>;
+  } catch {
+    return { success: false as const, message: "네트워크 오류가 발생했습니다. 연결 상태를 확인해주세요." };
+  }
 }
 
 export function setInvoicesCallerCache(role: string, name: string) {
