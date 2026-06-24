@@ -208,6 +208,7 @@ function PatientInvoiceModal({ patientId, patientName, reservations, onClose, on
   const [editingInvoice, setEditingInvoice] = useState<InvoiceRecord | null>(null);
   const [viewingInvoice, setViewingInvoice] = useState<InvoiceRecord | null>(null);
   const [error, setError] = useState("");
+  const [showCreatePanel, setShowCreatePanel] = useState(false);
 
   const load = useCallback(async () => {
     if (!getInvoicesByPatientCache(patientId)) setLoading(true);
@@ -355,6 +356,9 @@ function PatientInvoiceModal({ patientId, patientName, reservations, onClose, on
   }
 
   const invoiceByReservation = new Map<string, InvoiceRecord>(invoices.map((inv) => [inv.reservationDocId, inv]));
+  const surgeryReservationsWithoutInvoice = reservations.filter(
+    (r) => r.appointmentType === "수술" && !invoiceByReservation.has(r.id)
+  );
 
   return (
     <div className="fixed inset-0 z-[1100] flex items-center justify-center bg-black/40" onClick={onClose}>
@@ -431,25 +435,7 @@ function PatientInvoiceModal({ patientId, patientName, reservations, onClose, on
                     </div>
                   );
                 }
-                return (
-                  <div key={res.id} className="rounded-xl border-2 border-dashed border-[#dfe3e8] p-3 flex items-center justify-between">
-                    <div>
-                      <div className="text-xs font-medium text-gray-700">{res.reservationDate} {res.reservationTime}</div>
-                      <div className="text-xs text-gray-500">{res.hospital || "병원명 없음"} · {res.appointmentType}</div>
-                    </div>
-                    {res.appointmentType === "수술" ? (
-                      <button
-                        onClick={() => handleCreate(res.id)}
-                        disabled={creating === res.id}
-                        className="rounded-lg bg-black px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50"
-                      >
-                        {creating === res.id ? "생성 중..." : "인보이스 생성"}
-                      </button>
-                    ) : (
-                      <span className="text-xs text-gray-400">수술 건만 생성 가능</span>
-                    )}
-                  </div>
-                );
+                return null;
               })}
               {invoices.filter((inv) => !reservations.find((r) => r.id === inv.reservationDocId)).map((inv) => (
                 <div key={inv.id} className="rounded-xl border border-[#edf0f3] bg-white p-3">
@@ -479,6 +465,35 @@ function PatientInvoiceModal({ patientId, patientName, reservations, onClose, on
                   </div>
                 </div>
               ))}
+              {surgeryReservationsWithoutInvoice.length > 0 && (
+                <div className="mt-1">
+                  <button
+                    onClick={() => setShowCreatePanel((v) => !v)}
+                    className="w-full rounded-xl border border-[#1d9e75] px-3 py-2 text-sm font-medium text-[#1d9e75] hover:bg-emerald-50"
+                  >
+                    {showCreatePanel ? "닫기" : "+ 인보이스 생성"}
+                  </button>
+                  {showCreatePanel && (
+                    <div className="mt-2 space-y-2">
+                      {surgeryReservationsWithoutInvoice.map((res) => (
+                        <div key={res.id} className="flex items-center justify-between rounded-xl border border-dashed border-[#dfe3e8] p-3">
+                          <div>
+                            <div className="text-xs font-medium text-gray-700">{res.reservationDate} {res.reservationTime}</div>
+                            <div className="text-xs text-gray-500">{res.hospital || "병원명 없음"} · 수술</div>
+                          </div>
+                          <button
+                            onClick={() => { handleCreate(res.id); setShowCreatePanel(false); }}
+                            disabled={creating === res.id}
+                            className="rounded-lg bg-black px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50"
+                          >
+                            {creating === res.id ? "생성 중..." : "생성"}
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
             </>
           )}
         </div>
