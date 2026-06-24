@@ -711,6 +711,7 @@ function normalizeAppointmentTypeColors(
   return {
     상담: normalizeHexColor(colors?.상담, DEFAULT_APPOINTMENT_TYPE_COLORS.상담),
     수술: normalizeHexColor(colors?.수술, DEFAULT_APPOINTMENT_TYPE_COLORS.수술),
+    시술: normalizeHexColor(colors?.시술, DEFAULT_APPOINTMENT_TYPE_COLORS.시술),
     치료: normalizeHexColor(colors?.치료, DEFAULT_APPOINTMENT_TYPE_COLORS.치료),
     경과: normalizeHexColor(colors?.경과, DEFAULT_APPOINTMENT_TYPE_COLORS.경과),
     진료: normalizeHexColor(colors?.진료, DEFAULT_APPOINTMENT_TYPE_COLORS.진료),
