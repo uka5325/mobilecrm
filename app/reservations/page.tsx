@@ -21,6 +21,39 @@ import { getReservationNotes, addReservationNote, updateReservationNote, deleteR
 import { toDate } from "@/lib/settingsUtils";
 
 
+const HISTORY_CACHE_PREFIX = "crm_history_";
+const HISTORY_CACHE_TTL = 3 * 60 * 1000;
+
+type HistoryCacheEntry = {
+  reservations: ReservationRecord[];
+  nextCursor: string | null;
+  hasMore: boolean;
+  cachedAt: number;
+};
+
+function getHistoryCache(patientId: string): HistoryCacheEntry | null {
+  try {
+    const raw = localStorage.getItem(HISTORY_CACHE_PREFIX + patientId);
+    if (!raw) return null;
+    const parsed: HistoryCacheEntry = JSON.parse(raw);
+    if (Date.now() - parsed.cachedAt > HISTORY_CACHE_TTL) return null;
+    return parsed;
+  } catch { return null; }
+}
+
+function setHistoryCache(patientId: string, entry: Omit<HistoryCacheEntry, "cachedAt">) {
+  try {
+    localStorage.setItem(
+      HISTORY_CACHE_PREFIX + patientId,
+      JSON.stringify({ ...entry, cachedAt: Date.now() })
+    );
+  } catch {}
+}
+
+function invalidateHistoryCache(patientId: string) {
+  try { localStorage.removeItem(HISTORY_CACHE_PREFIX + patientId); } catch {}
+}
+
 export default function ReservationsPage() {
   const { currentUser, authReady, firebaseReady } = useCurrentUser();
   const { reservations, loading, refresh } = useReservationData(
@@ -80,6 +113,7 @@ export default function ReservationsPage() {
     const result = await deleteReservation(r.id, r.reservationId, currentUser);
     if (result.success) {
       setHistoryList((prev) => prev.filter((x) => x.id !== r.id));
+      if (historyPatientId) invalidateHistoryCache(historyPatientId);
     } else {
       alert(result.message || "삭제 실패");
     }
@@ -89,18 +123,29 @@ export default function ReservationsPage() {
   async function openPatientHistory(patientId: string, name: string) {
     setHistoryPatientId(patientId);
     setHistoryPatientName(name);
+    setHistoryPage(1);
+    setHistoryCursorStack([]);
+    setHistoryError("");
+
+    const cached = getHistoryCache(patientId);
+    if (cached) {
+      setHistoryList(cached.reservations);
+      setHistoryNextCursor(cached.nextCursor);
+      setHistoryHasMore(cached.hasMore);
+      setHistoryLoading(false);
+      return;
+    }
+
     setHistoryList([]);
     setHistoryNextCursor(null);
     setHistoryHasMore(false);
     setHistoryLoading(true);
-    setHistoryError("");
-    setHistoryPage(1);
-    setHistoryCursorStack([]);
     try {
       const result = await getPatientReservationHistory(patientId);
       setHistoryList(result.reservations);
       setHistoryNextCursor(result.nextCursor);
       setHistoryHasMore(result.hasMore);
+      setHistoryCache(patientId, result);
     } catch (e) {
       setHistoryError(e instanceof Error ? e.message : "이력 조회 중 오류가 발생했습니다.");
     } finally {
@@ -716,7 +761,10 @@ export default function ReservationsPage() {
           onClose={() => setHistoryEditTarget(null)}
           onRefreshLatestLog={async () => {}}
           onRefresh={() => {
-            if (historyPatientId) openPatientHistory(historyPatientId, historyPatientName);
+            if (historyPatientId) {
+              invalidateHistoryCache(historyPatientId);
+              openPatientHistory(historyPatientId, historyPatientName);
+            }
           }}
         />
       )}
