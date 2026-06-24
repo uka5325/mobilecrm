@@ -228,10 +228,10 @@ export function CreateDrawer({ open, onClose, currentUser, initialDate, initialP
                 <div>
                   <label className="text-xs text-gray-500">예약시간</label>
                   <input
+                    type="time"
                     value={resForm.reservationTime}
                     onChange={(e) => setResForm((p) => ({ ...p, reservationTime: e.target.value }))}
-                    placeholder="10:00"
-                    className="mt-1 w-full rounded-xl border border-[#dfe3e8] px-3 py-2 text-sm transition focus:border-[#1d9e75] focus:outline-none"
+                    className="mt-1 min-w-0 w-full appearance-none rounded-xl border border-[#dfe3e8] px-3 py-2 text-sm transition focus:border-[#1d9e75] focus:outline-none"
                   />
                 </div>
               </div>
