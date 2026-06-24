@@ -6,7 +6,7 @@ import { parseBirthInfo } from "@/lib/reservationUtils";
 import type { StaffUser } from "@/lib/auth";
 import { todayString } from "@/lib/dateUtils";
 
-const APPOINTMENT_TYPES: AppointmentType[] = ["상담", "수술", "치료", "경과", "진료", "검진"];
+const APPOINTMENT_TYPES: AppointmentType[] = ["상담", "수술", "시술", "치료", "경과", "진료", "검진"];
 
 type InitialPatient = {
   name?: string;
