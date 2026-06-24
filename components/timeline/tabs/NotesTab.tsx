@@ -1,7 +1,10 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import { type ReservationNote } from "@/lib/reservationNotes";
 import { NoteCard } from "@/components/timeline/NoteCard";
+
+const PAGE_SIZE = 10;
 
 type Props = {
   memoText: string;
@@ -15,6 +18,13 @@ type Props = {
 };
 
 export function NotesTab({ memoText, notes, memoError, memoSuccess, onMemoTextChange, onAddMemo, onUpdateNote, onDeleteNote }: Props) {
+  const [page, setPage] = useState(1);
+
+  useEffect(() => { setPage(1); }, [notes.length]);
+
+  const totalPages = Math.ceil(notes.length / PAGE_SIZE);
+  const pagedNotes = notes.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+
   return (
     <div>
       <textarea
@@ -43,14 +53,35 @@ export function NotesTab({ memoText, notes, memoError, memoSuccess, onMemoTextCh
             등록된 메모가 없습니다.
           </div>
         ) : (
-          notes.map((note) => (
-            <NoteCard
-              key={note.id}
-              note={note}
-              onUpdate={onUpdateNote}
-              onDelete={onDeleteNote}
-            />
-          ))
+          <>
+            {pagedNotes.map((note) => (
+              <NoteCard
+                key={note.id}
+                note={note}
+                onUpdate={onUpdateNote}
+                onDelete={onDeleteNote}
+              />
+            ))}
+            {totalPages > 1 && (
+              <div className="flex items-center justify-center gap-3 pt-1">
+                <button
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  disabled={page === 1}
+                  className="rounded-lg border border-[#dfe3e8] px-3 py-1 text-xs text-gray-600 disabled:opacity-40"
+                >
+                  이전
+                </button>
+                <span className="text-xs text-gray-500">{page} / {totalPages}</span>
+                <button
+                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={page === totalPages}
+                  className="rounded-lg border border-[#dfe3e8] px-3 py-1 text-xs text-gray-600 disabled:opacity-40"
+                >
+                  다음
+                </button>
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>

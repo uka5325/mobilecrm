@@ -42,11 +42,11 @@ export async function POST(req: NextRequest) {
         });
       };
 
-      // 우선순위 단일 쿼리: reservationDocId > reservationId > patientId (3중 과금 방지)
-      const primaryField = reservationDocId ? "reservationDocId"
-        : reservationId ? "reservationId"
-        : "patientId";
-      const primaryValue = reservationDocId || reservationId || patientId || "";
+      // patientId 우선: 동일 환자의 모든 예약 메모를 한번에 조회
+      const primaryField = patientId ? "patientId"
+        : reservationDocId ? "reservationDocId"
+        : "reservationId";
+      const primaryValue = patientId || reservationDocId || reservationId || "";
       await run(primaryField, primaryValue);
 
       const notes = Object.values(noteMap).sort((a, b) => {
