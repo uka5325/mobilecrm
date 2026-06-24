@@ -31,6 +31,7 @@ export type PatientEditForm = {
 const APPT_TYPE_COLORS: Record<AppointmentType, string> = {
   상담: "#2563eb",
   수술: "#ef4444",
+  시술: "#db2777",
   치료: "#16a34a",
   경과: "#f59e0b",
   진료: "#7c3aed",
