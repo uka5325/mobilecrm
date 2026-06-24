@@ -8,6 +8,7 @@ import {
   serverTimestamp,
   setDoc,
   startAfter,
+  type QueryConstraint,
   type QueryDocumentSnapshot,
   updateDoc,
   where,
@@ -556,7 +557,7 @@ export async function updateStaffFromSettings(
     let hasMore = true;
 
     while (hasMore) {
-      const constraints = [
+      const constraints: QueryConstraint[] = [
         where("doctors", "array-contains", oldDisplayName),
         limit(CHUNK),
         ...(lastDoc ? [startAfter(lastDoc)] : []),
