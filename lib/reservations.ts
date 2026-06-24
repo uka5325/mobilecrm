@@ -1072,6 +1072,33 @@ export async function updateReservationFull(
   return { success: true };
 }
 
+export async function searchReservationsByDateRange(
+  from: string,
+  to: string
+): Promise<ReservationRecord[]> {
+  const result = await callReservationsApi("read_all", { from, to });
+  if (!result.success) throw new Error(String(result.message || "검색 실패"));
+  const raw = (result.reservations as Record<string, unknown>[] | undefined) || [];
+  return raw
+    .map((r) => mapReservationDoc(String(r.id || ""), r))
+    .filter((item) => !item.isDeleted)
+    .sort((a, b) => `${b.reservationDate} ${b.reservationTime}`.localeCompare(`${a.reservationDate} ${a.reservationTime}`));
+}
+
+export async function getPatientReservationHistory(
+  patientId: string,
+  cursor?: string
+): Promise<{ reservations: ReservationRecord[]; nextCursor: string | null; hasMore: boolean }> {
+  const result = await callReservationsApi("patient_history", { patientId, cursor });
+  if (!result.success) throw new Error(String(result.message || "이력 조회 실패"));
+  const raw = (result.reservations as Record<string, unknown>[] | undefined) || [];
+  return {
+    reservations: raw.map((r) => mapReservationDoc(String(r.id || ""), r)),
+    nextCursor: (result.nextCursor as string | null) ?? null,
+    hasMore: Boolean(result.hasMore),
+  };
+}
+
 export async function deleteReservation(
   reservationDocId: string,
   reservationId: string,

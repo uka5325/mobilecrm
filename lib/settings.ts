@@ -3,9 +3,12 @@ import {
   doc,
   getDoc,
   getDocs,
+  limit,
   query,
   serverTimestamp,
   setDoc,
+  startAfter,
+  type QueryDocumentSnapshot,
   updateDoc,
   where,
   writeBatch,
@@ -548,16 +551,28 @@ export async function updateStaffFromSettings(
 
   const newDisplayName = typeof updatePayload.displayName === "string" ? updatePayload.displayName : "";
   if (oldDisplayName && newDisplayName && oldDisplayName !== newDisplayName) {
-    const resSnap = await getDocs(
-      query(collection(db, "reservations"), where("doctors", "array-contains", oldDisplayName))
-    );
-    for (let i = 0; i < resSnap.docs.length; i += 400) {
+    const CHUNK = 400;
+    let lastDoc: QueryDocumentSnapshot | null = null;
+    let hasMore = true;
+
+    while (hasMore) {
+      const constraints = [
+        where("doctors", "array-contains", oldDisplayName),
+        limit(CHUNK),
+        ...(lastDoc ? [startAfter(lastDoc)] : []),
+      ];
+      const snap = await getDocs(query(collection(db, "reservations"), ...constraints));
+      if (snap.empty) break;
+
       const batch = writeBatch(db);
-      resSnap.docs.slice(i, i + 400).forEach((d) => {
+      snap.docs.forEach((d) => {
         const doctors = (d.data().doctors as string[] | undefined) || [];
         batch.update(d.ref, { doctors: doctors.map((n) => (n === oldDisplayName ? newDisplayName : n)) });
       });
       await batch.commit();
+
+      lastDoc = snap.docs[snap.docs.length - 1];
+      hasMore = snap.docs.length === CHUNK;
     }
   }
 

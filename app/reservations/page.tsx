@@ -4,6 +4,8 @@ import { useMemo, useState } from "react";
 import {
   deleteReservation,
   updateReservationFull,
+  searchReservationsByDateRange,
+  getPatientReservationHistory,
   type ReservationRecord,
   type AppointmentType,
 } from "@/lib/reservations";
@@ -57,6 +59,72 @@ export default function ReservationsPage() {
   const [dlEnd, setDlEnd] = useState(todayString);
   const [downloading, setDownloading] = useState(false);
   const [pageError, setPageError] = useState("");
+
+  // 기간 검색
+  const [rangeFrom, setRangeFrom] = useState("");
+  const [rangeTo, setRangeTo] = useState("");
+  const [rangeResults, setRangeResults] = useState<ReservationRecord[] | null>(null);
+  const [rangeLoading, setRangeLoading] = useState(false);
+  const [rangeError, setRangeError] = useState("");
+
+  // 환자 전체 이력
+  const [historyPatientId, setHistoryPatientId] = useState<string | null>(null);
+  const [historyPatientName, setHistoryPatientName] = useState("");
+  const [historyList, setHistoryList] = useState<ReservationRecord[]>([]);
+  const [historyNextCursor, setHistoryNextCursor] = useState<string | null>(null);
+  const [historyHasMore, setHistoryHasMore] = useState(false);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState("");
+
+  async function handleRangeSearch() {
+    if (!rangeFrom || !rangeTo) { setRangeError("시작일과 종료일을 모두 입력하세요."); return; }
+    if (rangeFrom > rangeTo) { setRangeError("시작일이 종료일보다 늦을 수 없습니다."); return; }
+    setRangeLoading(true);
+    setRangeError("");
+    try {
+      const results = await searchReservationsByDateRange(rangeFrom, rangeTo);
+      setRangeResults(results);
+    } catch (e) {
+      setRangeError(e instanceof Error ? e.message : "검색 중 오류가 발생했습니다.");
+    } finally {
+      setRangeLoading(false);
+    }
+  }
+
+  async function openPatientHistory(patientId: string, name: string) {
+    setHistoryPatientId(patientId);
+    setHistoryPatientName(name);
+    setHistoryList([]);
+    setHistoryNextCursor(null);
+    setHistoryHasMore(false);
+    setHistoryLoading(true);
+    setHistoryError("");
+    try {
+      const result = await getPatientReservationHistory(patientId);
+      setHistoryList(result.reservations);
+      setHistoryNextCursor(result.nextCursor);
+      setHistoryHasMore(result.hasMore);
+    } catch (e) {
+      setHistoryError(e instanceof Error ? e.message : "이력 조회 중 오류가 발생했습니다.");
+    } finally {
+      setHistoryLoading(false);
+    }
+  }
+
+  async function loadMoreHistory() {
+    if (!historyPatientId || !historyNextCursor) return;
+    setHistoryLoading(true);
+    try {
+      const result = await getPatientReservationHistory(historyPatientId, historyNextCursor);
+      setHistoryList((prev) => [...prev, ...result.reservations]);
+      setHistoryNextCursor(result.nextCursor);
+      setHistoryHasMore(result.hasMore);
+    } catch (e) {
+      setHistoryError(e instanceof Error ? e.message : "추가 로드 중 오류가 발생했습니다.");
+    } finally {
+      setHistoryLoading(false);
+    }
+  }
 
   const filteredReservations = useMemo(() => {
     const keyword = search.trim().toLowerCase();
@@ -501,6 +569,45 @@ export default function ReservationsPage() {
           </button>
         </div>
 
+        {/* 기간 검색 */}
+        <div className="mt-2 flex items-center gap-2">
+          <input
+            type="date"
+            value={rangeFrom}
+            onChange={(e) => setRangeFrom(e.target.value)}
+            className="h-10 w-[110px] shrink-0 appearance-none rounded-xl border border-[#dfe3e8] bg-white px-2 text-sm outline-none focus:border-[#1d9e75]"
+          />
+          <span className="shrink-0 text-xs text-gray-400">~</span>
+          <input
+            type="date"
+            value={rangeTo}
+            onChange={(e) => setRangeTo(e.target.value)}
+            className="h-10 w-[110px] shrink-0 appearance-none rounded-xl border border-[#dfe3e8] bg-white px-2 text-sm outline-none focus:border-[#1d9e75]"
+          />
+          <button
+            onClick={handleRangeSearch}
+            disabled={rangeLoading}
+            className="h-10 shrink-0 rounded-xl bg-[#1d9e75] px-3 text-sm font-medium text-white transition hover:-translate-y-0.5 hover:bg-emerald-700 active:scale-95 disabled:opacity-50"
+          >
+            {rangeLoading ? "검색 중..." : "기간 검색"}
+          </button>
+          {rangeResults !== null && (
+            <button
+              onClick={() => { setRangeResults(null); setRangeError(""); }}
+              className="h-10 shrink-0 rounded-xl border border-[#dfe3e8] bg-white px-3 text-sm text-gray-600 transition hover:bg-gray-50 active:scale-95"
+            >
+              초기화
+            </button>
+          )}
+        </div>
+        {rangeError && <div className="mt-1 text-xs text-red-500">{rangeError}</div>}
+        {rangeResults !== null && (
+          <div className="mt-1 text-xs text-gray-500">
+            기간 검색 결과: <span className="font-semibold text-emerald-700">{rangeResults.length}건</span>
+            {" "}({rangeFrom} ~ {rangeTo})
+          </div>
+        )}
+
         <div className="mt-2 flex items-center gap-2">
           <button
             onClick={() => { setAddPatient(undefined); setDrawerOpen(true); }}
@@ -573,6 +680,69 @@ export default function ReservationsPage() {
         전체 {reservations.length}건 / 표시 {filteredReservations.length}건
       </div>
 
+      {/* 기간 검색 결과 */}
+      {rangeResults !== null && (
+        <div className="mb-4 rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
+          <div className="mb-3 flex items-center justify-between">
+            <span className="text-sm font-bold text-emerald-800">기간 검색 결과 ({rangeFrom} ~ {rangeTo})</span>
+            <button onClick={() => { setRangeResults(null); setRangeError(""); }} className="text-xs text-gray-400 hover:text-gray-700">✕ 닫기</button>
+          </div>
+          {rangeResults.length === 0 ? (
+            <div className="py-4 text-center text-sm text-gray-400">해당 기간에 예약이 없습니다.</div>
+          ) : (
+            <div className="divide-y divide-emerald-100 rounded-xl bg-white overflow-hidden">
+              {rangeResults.map((r) => (
+                <div key={r.id} className="flex items-center gap-3 px-4 py-2.5 text-sm">
+                  <span className="w-24 shrink-0 text-gray-400">{r.reservationDate}</span>
+                  <span className="font-semibold text-gray-800">{r.name}</span>
+                  <span className="text-gray-500">{r.hospital}</span>
+                  <span className="text-gray-400">{r.appointmentType}</span>
+                  <span className="ml-auto text-xs text-gray-400">{r.operationStatus}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* 환자 전체 이력 모달 */}
+      {historyPatientId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setHistoryPatientId(null)}>
+          <div className="mx-4 w-full max-w-lg rounded-2xl bg-white p-5 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="mb-3 flex items-center justify-between">
+              <span className="text-base font-bold text-gray-800">{historyPatientName} — 전체 예약 이력</span>
+              <button onClick={() => setHistoryPatientId(null)} className="text-2xl leading-none text-gray-400 hover:text-gray-700">×</button>
+            </div>
+            {historyError && <div className="mb-2 text-sm text-red-500">{historyError}</div>}
+            {historyLoading && historyList.length === 0 ? (
+              <div className="py-8 text-center text-sm text-gray-400">로딩 중...</div>
+            ) : historyList.length === 0 ? (
+              <div className="py-8 text-center text-sm text-gray-400">예약 이력이 없습니다.</div>
+            ) : (
+              <div className="max-h-[60vh] divide-y divide-gray-100 overflow-y-auto rounded-xl border border-gray-100">
+                {historyList.map((r) => (
+                  <div key={r.id} className="flex items-center gap-3 px-4 py-2.5 text-sm">
+                    <span className="w-24 shrink-0 text-gray-400">{r.reservationDate}</span>
+                    <span className="text-gray-700">{r.hospital}</span>
+                    <span className="text-gray-500">{r.appointmentType}</span>
+                    <span className="ml-auto text-xs text-gray-400">{r.operationStatus}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+            {historyHasMore && (
+              <button
+                onClick={loadMoreHistory}
+                disabled={historyLoading}
+                className="mt-3 w-full rounded-xl border border-[#dfe3e8] py-2 text-sm text-gray-600 transition hover:bg-gray-50 disabled:opacity-50"
+              >
+                {historyLoading ? "로딩 중..." : "다음 페이지 →"}
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
       <ReservationsTable
         patientGroups={patientGroups}
         loading={loading}
@@ -594,6 +764,7 @@ export default function ReservationsPage() {
         onCancelPatientEdit={() => { setPatientEditId(null); setPatientEditForm(null); }}
         onDeletePatient={handleDeletePatient}
         onOpenPatientMemo={openPatientMemoPopover}
+        onOpenPatientHistory={openPatientHistory}
         onSaveAmount={handleSaveAmount}
       />
 

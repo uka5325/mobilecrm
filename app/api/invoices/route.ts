@@ -356,13 +356,20 @@ export async function POST(req: NextRequest) {
 
     // ── LIST ─────────────────────────────────────────────────────────────────
     if (action === "list") {
-      const { startDate, endDate, status, patientName, commissionStaffUid } =
+      const { startDate, endDate, status, patientName, commissionStaffUid, cursor } =
         (payload || {}) as Record<string, string>;
 
-      const snap = await adminDb.collection("invoices")
-        .orderBy("createdAt", "desc")
-        .limit(200)
-        .get();
+      const PAGE_SIZE = 50;
+      let q = adminDb.collection("invoices").orderBy("createdAt", "desc").limit(PAGE_SIZE);
+      if (cursor) {
+        const cursorDoc = await adminDb.collection("invoices").doc(cursor).get();
+        if (cursorDoc.exists) q = q.startAfter(cursorDoc) as typeof q;
+      }
+
+      const snap = await q.get();
+      const hasMore = snap.docs.length === PAGE_SIZE;
+      const nextCursor = hasMore ? snap.docs[snap.docs.length - 1].id : null;
+
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       let records = snap.docs.map(docToObj).filter((r: any) => !r.isDeleted && isCoordinatorOf(r));
 
@@ -388,7 +395,7 @@ export async function POST(req: NextRequest) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       if (commissionStaffUid) records = records.filter((r: any) => r.commissionStaffUid === commissionStaffUid);
 
-      return NextResponse.json({ success: true, invoices: records });
+      return NextResponse.json({ success: true, invoices: records, nextCursor, hasMore });
     }
 
     return NextResponse.json({ success: false, message: "알 수 없는 action" }, { status: 400 });

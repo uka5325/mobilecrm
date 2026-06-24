@@ -265,16 +265,26 @@ export type InvoiceListFilter = {
   status?: "draft" | "confirmed" | "void" | "";
   patientName?: string;
   commissionStaffUid?: string;
+  cursor?: string;
 };
 
-export async function getInvoices(filters?: InvoiceListFilter): Promise<InvoiceRecord[]> {
+export async function getInvoices(
+  filters?: InvoiceListFilter
+): Promise<{ invoices: InvoiceRecord[]; nextCursor: string | null; hasMore: boolean }> {
   const result = await callInvoicesApi("list", {
     startDate: filters?.startDate || "",
     endDate: filters?.endDate || "",
     status: filters?.status || "",
     patientName: filters?.patientName || "",
     commissionStaffUid: filters?.commissionStaffUid || "",
+    cursor: filters?.cursor || "",
   });
-  if (!result.success || !Array.isArray(result.invoices)) return [];
-  return (result.invoices as Record<string, unknown>[]).map(mapInvoiceDoc);
+  if (!result.success || !Array.isArray(result.invoices)) {
+    return { invoices: [], nextCursor: null, hasMore: false };
+  }
+  return {
+    invoices: (result.invoices as Record<string, unknown>[]).map(mapInvoiceDoc),
+    nextCursor: (result.nextCursor as string | null) ?? null,
+    hasMore: Boolean(result.hasMore),
+  };
 }

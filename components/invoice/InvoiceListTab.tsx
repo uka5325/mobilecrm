@@ -107,12 +107,19 @@ export function InvoiceListTab() {
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState("");
   const [selectedInvoice, setSelectedInvoice] = useState<InvoiceRecord | null>(null);
+  const [cursor, setCursor] = useState<string | null>(null);
+  const [cursorStack, setCursorStack] = useState<(string | null)[]>([]);
+  const [hasMore, setHasMore] = useState(false);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
 
   useEffect(() => {
-    load();
+    setCursor(null);
+    setCursorStack([]);
+    load(null);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [startDate, endDate, statusFilter]);
 
-  async function load() {
+  async function load(activeCursor: string | null) {
     setLoading(true);
     setLoadError("");
     try {
@@ -120,15 +127,33 @@ export function InvoiceListTab() {
         startDate,
         endDate,
         status: statusFilter || undefined,
+        cursor: activeCursor || undefined,
       };
-      const data = await getInvoices(filters);
-      setInvoices(data);
+      const result = await getInvoices(filters);
+      setInvoices(result.invoices);
+      setHasMore(result.hasMore);
+      setNextCursor(result.nextCursor);
     } catch (e) {
       console.error("[InvoiceListTab] load error:", e);
       setLoadError("인보이스 목록을 불러오지 못했습니다. F12 콘솔에서 오류를 확인하세요.");
     } finally {
       setLoading(false);
     }
+  }
+
+  function handleNextPage() {
+    if (!nextCursor) return;
+    setCursorStack((prev) => [...prev, cursor]);
+    setCursor(nextCursor);
+    load(nextCursor);
+  }
+
+  function handlePrevPage() {
+    const stack = [...cursorStack];
+    const prev = stack.pop() ?? null;
+    setCursorStack(stack);
+    setCursor(prev);
+    load(prev);
   }
 
   const filtered = useMemo(() => {
@@ -311,6 +336,27 @@ export function InvoiceListTab() {
             </table>
           </div>
         )}
+      </div>
+
+      {/* 페이지네이션 */}
+      <div className="flex items-center justify-between border-t border-[#edf0f3] pt-3">
+        <button
+          onClick={handlePrevPage}
+          disabled={cursorStack.length === 0 || loading}
+          className="rounded-xl border border-[#dfe3e8] bg-white px-4 py-2 text-sm text-gray-700 transition hover:-translate-y-0.5 hover:bg-gray-50 active:scale-95 disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          ← 이전 페이지
+        </button>
+        <span className="text-xs text-gray-400">
+          {cursorStack.length > 0 ? `${cursorStack.length + 1}페이지` : "1페이지"} · {invoices.length}건
+        </span>
+        <button
+          onClick={handleNextPage}
+          disabled={!hasMore || loading}
+          className="rounded-xl border border-[#dfe3e8] bg-white px-4 py-2 text-sm text-gray-700 transition hover:-translate-y-0.5 hover:bg-gray-50 active:scale-95 disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          다음 페이지 →
+        </button>
       </div>
     </div>
     </>

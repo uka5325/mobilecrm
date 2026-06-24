@@ -67,6 +67,7 @@ type Props = {
   onCancelPatientEdit: () => void;
   onDeletePatient: (group: PatientGroup) => void;
   onOpenPatientMemo: (group: PatientGroup) => void;
+  onOpenPatientHistory?: (patientId: string, name: string) => void;
   onSaveAmount: (reservationId: string, field: "depositAmount" | "surgeryCost", value: string) => Promise<void>;
 };
 
@@ -736,6 +737,7 @@ export function ReservationsTable({
   onCancelPatientEdit,
   onDeletePatient,
   onOpenPatientMemo,
+  onOpenPatientHistory,
   onSaveAmount,
 }: Props) {
   const cellCls = "border-b border-gray-100 px-2 py-2";
@@ -1056,6 +1058,14 @@ export function ReservationsTable({
             })()}
 
             <div className="ml-auto flex items-center gap-1.5">
+              {onOpenPatientHistory && (
+                <button
+                  onClick={() => onOpenPatientHistory(group.patientId, group.name)}
+                  className="rounded-md border border-purple-200 bg-white px-2 py-0.5 text-xs text-purple-600 hover:bg-purple-50"
+                >
+                  전체 이력
+                </button>
+              )}
               <button
                 onClick={() => onOpenPatientMemo(group)}
                 className="rounded-md border border-gray-200 bg-white px-2 py-0.5 text-xs text-gray-600 hover:bg-gray-50"

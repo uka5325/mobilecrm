@@ -68,7 +68,7 @@ export async function POST(req: NextRequest) {
 
     // ── READ: all reservations (last N months) + doctors ──────────────────
     if (action === "read_all") {
-      const { from } = (payload || {}) as { from?: string };
+      const { from, to } = (payload || {}) as { from?: string; to?: string };
       // 기본 조회 범위: 45일 전 (약 1.5개월) — 6개월 전체 스캔 방지
       const fromDate = from || (() => {
         const d = new Date();
@@ -76,20 +76,48 @@ export async function POST(req: NextRequest) {
         return d.toISOString().slice(0, 10);
       })();
 
-      const [rSnap, doctors] = await Promise.all([
-        adminDb
-          .collection("reservations")
-          .where("reservationDate", ">=", fromDate)
-          .orderBy("reservationDate", "desc")
-          .limit(500)
-          .get(),
-        getCachedDoctors(),
-      ]);
+      let resQ = adminDb
+        .collection("reservations")
+        .where("reservationDate", ">=", fromDate)
+        .orderBy("reservationDate", "desc")
+        .limit(500);
+      if (to) resQ = resQ.where("reservationDate", "<=", to) as typeof resQ;
+
+      const [rSnap, doctors] = await Promise.all([resQ.get(), getCachedDoctors()]);
 
       return NextResponse.json({
         success: true,
         reservations: rSnap.docs.map(docToObj),
         doctors,
+      });
+    }
+
+    // ── READ: patient full reservation history (no date limit, cursor pagination) ──
+    if (action === "patient_history") {
+      const { patientId, cursor } = (payload || {}) as { patientId?: string; cursor?: string };
+      if (!patientId) {
+        return NextResponse.json({ success: false, message: "patientId가 없습니다." }, { status: 400 });
+      }
+
+      let q = adminDb
+        .collection("reservations")
+        .where("patientId", "==", patientId)
+        .where("isDeleted", "==", false)
+        .orderBy("reservationDate", "desc")
+        .limit(50);
+
+      if (cursor) {
+        const cursorDoc = await adminDb.collection("reservations").doc(cursor).get();
+        if (cursorDoc.exists) q = q.startAfter(cursorDoc) as typeof q;
+      }
+
+      const snap = await q.get();
+      const hasMore = snap.docs.length === 50;
+      return NextResponse.json({
+        success: true,
+        reservations: snap.docs.map(docToObj),
+        nextCursor: hasMore ? snap.docs[snap.docs.length - 1].id : null,
+        hasMore,
       });
     }
 
