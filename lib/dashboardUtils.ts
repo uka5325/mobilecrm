@@ -296,8 +296,8 @@ export function finalizeCounter(counter: Counter, shareBase?: number): KpiRow {
     ...counter,
     visitRate: rate(counter.visited, counter.total),
     noShowRate: rate(counter.noShow, counter.total),
-    surgeryRate: rate(counter.surgery, counter.visited || counter.total),
-    shareRate: shareBase ? rate(counter.total, shareBase) : 0,
+    surgeryRate: rate(counter.surgery, counter.consultCount || counter.total),
+    shareRate: shareBase ? rate(counter.consultCount, shareBase) : 0,
   };
 }
 

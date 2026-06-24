@@ -124,7 +124,7 @@ export default function DashboardPage() {
 
     const areaRows = Object.values(areaMap)
       .filter((item) => item.total > 0)
-      .map((item) => finalizeCounter(item, summary.total))
+      .map((item) => finalizeCounter(item, summary.consultCount))
       .sort((a, b) => b.total - a.total || cleanText(a.name).localeCompare(cleanText(b.name)));
 
     return { summary: finalizedSummary, hospitalRows, apptTypeRows, areaRows };
@@ -279,7 +279,7 @@ export default function DashboardPage() {
           headers={["병원명", "상담", "내원", "수술예약", "완료", "전환율", "예약금"]}
           rows={dashboard.hospitalRows.map((row) => [
             row.name || "미지정",
-            row.total.toLocaleString("ko-KR"),
+            row.consultCount.toLocaleString("ko-KR"),
             row.visited.toLocaleString("ko-KR"),
             row.surgery.toLocaleString("ko-KR"),
             row.completedCount.toLocaleString("ko-KR"),
@@ -294,7 +294,7 @@ export default function DashboardPage() {
           headers={["상담부위", "상담", "수술예약", "전환율", "비중", "예약금"]}
           rows={dashboard.areaRows.map((row) => [
             row.name || "미지정",
-            row.total.toLocaleString("ko-KR"),
+            row.consultCount.toLocaleString("ko-KR"),
             row.surgery.toLocaleString("ko-KR"),
             pctText(row.surgeryRate),
             pctText(row.shareRate || 0),
