@@ -87,7 +87,7 @@ export async function loginWithEmail(email: string, password: string) {
     return { success: true, user: data.user, redirect: "/" };
   } catch (error) {
     const code = (error as { code?: string }).code ?? "";
-    console.error("[Auth] 로그인 실패:", code, error);
+    console.error("[Auth] 로그인 실패:", code, (error as Error)?.message ?? "");
     return {
       success: false,
       message: LOGIN_FAIL_MESSAGE,

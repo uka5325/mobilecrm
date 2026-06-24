@@ -247,7 +247,7 @@ export default function ReservationsPage() {
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       setPageError(`수정 오류: ${msg}`);
-      console.error("[ReservationsPage] inline save error:", err);
+      console.error("[ReservationsPage] inline save error:", (err as Error)?.message ?? "");
     } finally {
       setInlineSaving(false);
     }

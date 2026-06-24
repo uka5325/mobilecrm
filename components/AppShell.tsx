@@ -194,7 +194,7 @@ export default function AppShell({ children }: AppShellProps) {
 
         setLoading(false);
       } catch (error) {
-        console.error("Staff refresh error:", error);
+        console.error("Staff refresh error:", (error as Error)?.message ?? "");
 
         clearCachedStaff();
         setStaffUser(null);
@@ -257,7 +257,7 @@ export default function AppShell({ children }: AppShellProps) {
 
         setLoading(false);
       } catch (error) {
-        console.error("Auth check error:", error);
+        console.error("Auth check error:", (error as Error)?.message ?? "");
 
         if (!alive) return;
 

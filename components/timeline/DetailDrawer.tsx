@@ -214,7 +214,7 @@ export function DetailDrawer({ open, reservation, currentUser, onClose, onRefres
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       setDetailError(`저장 오류: ${msg}`);
-      console.error("[DetailDrawer] save error:", err);
+      console.error("[DetailDrawer] save error:", (err as Error)?.message ?? "");
     } finally {
       setDetailSaving(false);
     }

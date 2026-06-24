@@ -134,7 +134,7 @@ export function InvoiceListTab() {
       setHasMore(result.hasMore);
       setNextCursor(result.nextCursor);
     } catch (e) {
-      console.error("[InvoiceListTab] load error:", e);
+      console.error("[InvoiceListTab] load error:", (e as Error)?.message ?? "");
       setLoadError("인보이스 목록을 불러오지 못했습니다. F12 콘솔에서 오류를 확인하세요.");
     } finally {
       setLoading(false);

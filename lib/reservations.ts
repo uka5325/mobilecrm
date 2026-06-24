@@ -517,7 +517,7 @@ export function subscribeAllReservations(
         callback({ reservations, doctors: latestDoctors.length ? latestDoctors : fallback });
       },
       (error) => {
-        console.error("[subscribeAllReservations error]", error);
+        console.error("[subscribeAllReservations error]", (error as Error)?.message ?? "");
         onError?.(error);
       }
     );
@@ -595,7 +595,7 @@ export function subscribeTimelineReservations(
         callback({ reservations, doctors: latestDoctors.length ? latestDoctors : fallback });
       },
       (error) => {
-        console.error("[subscribeTimelineReservations error]", error);
+        console.error("[subscribeTimelineReservations error]", (error as Error)?.message ?? "");
         onError?.(error);
       }
     );

@@ -103,7 +103,7 @@ export default function SettingsPage() {
         const staff = await getStaffByUid(user.uid);
         setCurrentUser(staff || null);
       } catch (err) {
-        console.error(err);
+        console.error((err as Error)?.message ?? "");
         setCurrentUser(null);
       } finally {
         setAuthLoading(false);
@@ -126,7 +126,7 @@ export default function SettingsPage() {
       setGeneralSettings(loadedGeneral);
       setSelectedCountry(loadedGeneral.appCountry);
     } catch (err) {
-      console.error(err);
+      console.error((err as Error)?.message ?? "");
       setError("설정 데이터를 불러오지 못했습니다.");
     } finally {
       setLoading(false);
@@ -140,7 +140,7 @@ export default function SettingsPage() {
       const list = await getConferenceMemos(date, 50);
       setMemos(list);
     } catch (err) {
-      console.error(err);
+      console.error((err as Error)?.message ?? "");
       setError("메모를 불러오지 못했습니다.");
     } finally {
       setMemoLoading(false);
@@ -154,7 +154,7 @@ export default function SettingsPage() {
       const list = await getStaffListForSettings();
       setStaffList(list);
     } catch (err) {
-      console.error(err);
+      console.error((err as Error)?.message ?? "");
       setError("직원 목록을 불러오지 못했습니다.");
     } finally {
       setStaffLoading(false);
@@ -183,7 +183,7 @@ export default function SettingsPage() {
       setInitialColors(savedColors);
       setMessage("유형별 색상이 저장되었습니다.");
     } catch (err) {
-      console.error(err);
+      console.error((err as Error)?.message ?? "");
       setError(getErrorMessage(err));
     } finally {
       setSaving(false);
@@ -202,7 +202,7 @@ export default function SettingsPage() {
       setInitialColors(resetColors);
       setMessage("기본 색상으로 복원되었습니다.");
     } catch (err) {
-      console.error(err);
+      console.error((err as Error)?.message ?? "");
       setError(getErrorMessage(err));
     } finally {
       setSaving(false);
@@ -219,7 +219,7 @@ export default function SettingsPage() {
       setSelectedCountry(saved.appCountry);
       setMessage("기본 설정이 저장되었습니다.");
     } catch (err) {
-      console.error(err);
+      console.error((err as Error)?.message ?? "");
       setError(getErrorMessage(err));
     } finally {
       setSaving(false);
@@ -237,7 +237,7 @@ export default function SettingsPage() {
       await loadMemos(memoDate);
       setMessage("메모가 추가되었습니다.");
     } catch (err) {
-      console.error(err);
+      console.error((err as Error)?.message ?? "");
       setError(getErrorMessage(err));
     } finally {
       setSaving(false);
@@ -255,7 +255,7 @@ export default function SettingsPage() {
       await loadMemos(memoDate);
       setMessage("메모가 삭제되었습니다.");
     } catch (err) {
-      console.error(err);
+      console.error((err as Error)?.message ?? "");
       setError(getErrorMessage(err));
     } finally {
       setSaving(false);
@@ -270,7 +270,7 @@ export default function SettingsPage() {
       await loadMemos(memoDate);
       setMessage("메모가 수정되었습니다.");
     } catch (err) {
-      console.error(err);
+      console.error((err as Error)?.message ?? "");
       setError(getErrorMessage(err));
     }
   }
@@ -285,7 +285,7 @@ export default function SettingsPage() {
       setNewPassword("");
       setMessage("비밀번호가 변경되었습니다.");
     } catch (err) {
-      console.error(err);
+      console.error((err as Error)?.message ?? "");
       setError(getErrorMessage(err));
     } finally {
       setSaving(false);
@@ -416,7 +416,7 @@ export default function SettingsPage() {
                             notifyStaffSettingsUpdated();
                             setMessage("직원 정보가 저장되었습니다.");
                           } catch (err) {
-                            console.error(err);
+                            console.error((err as Error)?.message ?? "");
                             setError(getErrorMessage(err));
                           } finally {
                             setSaving(false);
@@ -434,7 +434,7 @@ export default function SettingsPage() {
                             notifyStaffSettingsUpdated();
                             setMessage("직원이 비활성화되었습니다.");
                           } catch (err) {
-                            console.error(err);
+                            console.error((err as Error)?.message ?? "");
                             setError(getErrorMessage(err));
                           } finally {
                             setSaving(false);

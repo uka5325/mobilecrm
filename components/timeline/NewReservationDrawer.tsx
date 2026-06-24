@@ -93,7 +93,7 @@ export function NewReservationDrawer({ open, onClose, currentUser, initialDate, 
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       setErrorMessage(`저장 오류: ${msg}`);
-      console.error("[NewReservationDrawer] save error:", err);
+      console.error("[NewReservationDrawer] save error:", (err as Error)?.message ?? "");
     } finally {
       setSaving(false);
     }

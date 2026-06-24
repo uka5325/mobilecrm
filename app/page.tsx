@@ -102,7 +102,7 @@ export default function HomePage() {
       const data = await getTimelineReservations(todayString());
       setReservations(data.reservations || []);
     } catch (error) {
-      console.error(error);
+      console.error("홈 데이터 로드 실패:", (error as Error)?.message ?? "");
       setLoadError("홈 데이터를 불러오지 못했습니다.");
     } finally {
       setLoading(false);
@@ -116,7 +116,7 @@ export default function HomePage() {
       const list = await getConferenceMemos(todayString(), 10);
       setTodayMemos(list);
     } catch (error) {
-      console.error("오늘의 메모를 불러오지 못했습니다.", error);
+      console.error("오늘의 메모를 불러오지 못했습니다.", (error as Error)?.message ?? "");
       setTodayMemos([]);
     } finally {
       setMemoLoading(false);

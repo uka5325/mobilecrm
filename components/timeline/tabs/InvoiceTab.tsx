@@ -332,7 +332,7 @@ export function InvoiceTab({ reservationDocId, patientId, currentUser }: Props) 
       }
       setAllInvoices(invoices);
     } catch (e) {
-      console.error("[InvoiceTab] load error:", e);
+      console.error("[InvoiceTab] load error:", (e as Error)?.message ?? "");
       setError("인보이스를 불러오지 못했습니다.");
     } finally {
       setLoading(false);
@@ -361,7 +361,7 @@ export function InvoiceTab({ reservationDocId, patientId, currentUser }: Props) 
       await loadInvoices();
       setEditingInvoice(result.invoice);
     } catch (e) {
-      console.error("[InvoiceTab] create error:", e);
+      console.error("[InvoiceTab] create error:", (e as Error)?.message ?? "");
       setError("인보이스 생성 중 오류가 발생했습니다.");
     } finally {
       setCreating(false);
