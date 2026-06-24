@@ -56,7 +56,7 @@ type Props = {
   onSaveEdit: (item: ReservationRecord) => void;
   onCancelEdit: () => void;
   onDelete: (item: ReservationRecord) => void;
-  onAddReservation: (item: ReservationRecord) => void;
+  onAddReservation: (group: PatientGroup) => void;
   // 환자 헤더 편집
   patientEditId: string | null;
   patientEditForm: PatientEditForm | null;
@@ -1098,7 +1098,7 @@ export function ReservationsTable({
                 수정
               </button>
               <button
-                onClick={() => onAddReservation(group.reservations[group.reservations.length - 1])}
+                onClick={() => onAddReservation(group)}
                 className="rounded-md border border-gray-200 bg-white px-2 py-0.5 text-xs text-emerald-600 hover:bg-emerald-50"
               >
                 추가

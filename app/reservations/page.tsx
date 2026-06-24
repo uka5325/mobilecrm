@@ -72,7 +72,7 @@ export default function ReservationsPage() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [importDrawerOpen, setImportDrawerOpen] = useState(false);
 
-  const [addPatient, setAddPatient] = useState<{ name: string; birthInput: string; phone: string; nationality: string; patientId: string; hospital?: string; consultArea?: string; appointmentType?: import("@/lib/reservations").AppointmentType; coordinators?: string; doctors?: string; depositAmount?: string; surgeryCost?: string } | undefined>();
+  const [addPatient, setAddPatient] = useState<{ name: string; birthInput: string; phone: string; nationality: string; patientId: string } | undefined>();
 
   const [inlineEditId, setInlineEditId] = useState<string | null>(null);
   const [inlineForm, setInlineForm] = useState<{
@@ -614,20 +614,13 @@ export default function ReservationsPage() {
     await refresh();
   }
 
-  function handleAddReservation(item: ReservationRecord) {
+  function handleAddReservation(group: PatientGroup) {
     setAddPatient({
-      name: item.name,
-      birthInput: item.birthInput || item.birth || "",
-      phone: item.phone || "",
-      nationality: item.nationality || "",
-      patientId: item.patientId,
-      hospital: item.hospital || "",
-      consultArea: item.consultArea || "",
-      appointmentType: item.appointmentType,
-      coordinators: (item.coordinators || []).join(", "),
-      doctors: (item.doctors || []).join(", "),
-      depositAmount: item.depositAmount || "",
-      surgeryCost: item.surgeryCost || "",
+      name: group.name,
+      birthInput: group.birthInput || group.birth || "",
+      phone: group.phone || "",
+      nationality: group.nationality || "",
+      patientId: group.patientId,
     });
     setDrawerOpen(true);
   }
@@ -856,7 +849,11 @@ export default function ReservationsPage() {
           currentUser={currentUser}
           initialDate={undefined}
           initialPatient={addPatient}
-          onCreated={() => { listPatients().then(setPatients); }}
+          mode={addPatient ? "reservation" : "register"}
+          onCreated={addPatient
+            ? () => { refresh(); listPatients().then(setPatients); }
+            : () => { listPatients().then(setPatients); }
+          }
         />
       )}
 
