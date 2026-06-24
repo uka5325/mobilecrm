@@ -194,6 +194,40 @@ export default function ReservationsPage() {
     });
   }, [filteredReservations]);
 
+  const rangePatientGroups = useMemo<PatientGroup[]>(() => {
+    if (!rangeResults) return [];
+    const map = new Map<string, PatientGroup>();
+    for (const r of rangeResults) {
+      const key = r.patientId || `${r.name}_${r.birth}`;
+      if (!map.has(key)) {
+        map.set(key, {
+          patientKey: key,
+          patientId: r.patientId || key,
+          name: r.name,
+          birth: r.birth,
+          birthInput: r.birthInput || r.birth || "",
+          gender: r.gender,
+          phone: r.phone,
+          nationality: r.nationality,
+          reservations: [],
+        });
+      }
+      map.get(key)!.reservations.push(r);
+    }
+    for (const g of map.values()) {
+      g.reservations.sort((a, b) =>
+        (a.reservationDate + a.reservationTime).localeCompare(b.reservationDate + b.reservationTime)
+      );
+    }
+    return [...map.values()].sort((a, b) => {
+      const lA = a.reservations[a.reservations.length - 1]?.reservationDate || "";
+      const lB = b.reservations[b.reservations.length - 1]?.reservationDate || "";
+      return lB.localeCompare(lA);
+    });
+  }, [rangeResults]);
+
+  const activeGroups = rangeResults !== null ? rangePatientGroups : patientGroups;
+
   function startInlineEdit(item: ReservationRecord) {
     setInlineEditId(item.id);
     setInlineForm({
@@ -680,28 +714,13 @@ export default function ReservationsPage() {
         전체 {reservations.length}건 / 표시 {filteredReservations.length}건
       </div>
 
-      {/* 기간 검색 결과 */}
+      {/* 기간 검색 활성 배너 */}
       {rangeResults !== null && (
-        <div className="mb-4 rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
-          <div className="mb-3 flex items-center justify-between">
-            <span className="text-sm font-bold text-emerald-800">기간 검색 결과 ({rangeFrom} ~ {rangeTo})</span>
-            <button onClick={() => { setRangeResults(null); setRangeError(""); }} className="text-xs text-gray-400 hover:text-gray-700">✕ 닫기</button>
-          </div>
-          {rangeResults.length === 0 ? (
-            <div className="py-4 text-center text-sm text-gray-400">해당 기간에 예약이 없습니다.</div>
-          ) : (
-            <div className="divide-y divide-emerald-100 rounded-xl bg-white overflow-hidden">
-              {rangeResults.map((r) => (
-                <div key={r.id} className="flex items-center gap-3 px-4 py-2.5 text-sm">
-                  <span className="w-24 shrink-0 text-gray-400">{r.reservationDate}</span>
-                  <span className="font-semibold text-gray-800">{r.name}</span>
-                  <span className="text-gray-500">{r.hospital}</span>
-                  <span className="text-gray-400">{r.appointmentType}</span>
-                  <span className="ml-auto text-xs text-gray-400">{r.operationStatus}</span>
-                </div>
-              ))}
-            </div>
-          )}
+        <div className="mb-2 flex items-center justify-between rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2">
+          <span className="text-sm font-semibold text-emerald-800">
+            기간 검색 결과: {rangeFrom} ~ {rangeTo} ({rangeResults.length}건)
+          </span>
+          <button onClick={() => { setRangeResults(null); setRangeError(""); }} className="text-xs text-gray-400 hover:text-gray-700">✕ 닫기</button>
         </div>
       )}
 
@@ -744,7 +763,7 @@ export default function ReservationsPage() {
       )}
 
       <ReservationsTable
-        patientGroups={patientGroups}
+        patientGroups={activeGroups}
         loading={loading}
         inlineEditId={inlineEditId}
         inlineForm={inlineForm}
