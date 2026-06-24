@@ -152,7 +152,7 @@ function useScheduleData(startDate: string, endDate: string, authReady: boolean)
 }
 
 // ─── DayCard ─────────────────────────────────────────────────────────────────
-function DayCard({ item, top, onClick }: { item: ReservationRecord; top: number; onClick: () => void }) {
+function DayCard({ item, top, col, totalCols, onClick }: { item: ReservationRecord; top: number; col: number; totalCols: number; onClick: () => void }) {
   const cancelled = item.cancelled === true;
   const color = cancelled ? "#fef08a" : item.completed ? "#9ca3af" : getAppointmentColor(item.appointmentType);
   const textColor = cancelled ? "#78350f" : "white";
@@ -163,8 +163,16 @@ function DayCard({ item, top, onClick }: { item: ReservationRecord; top: number;
   return (
     <button
       onClick={onClick}
-      className="absolute left-1 right-1 flex flex-col overflow-hidden rounded-md px-2 py-1 text-left shadow-sm transition hover:brightness-110 active:scale-[0.99]"
-      style={{ top, height: CARD_HEIGHT, backgroundColor: color, opacity: item.completed ? 0.75 : 1, color: textColor }}
+      className="absolute flex flex-col overflow-hidden rounded-md px-2 py-1 text-left shadow-sm transition hover:brightness-110 active:scale-[0.99]"
+      style={{
+        top,
+        height: CARD_HEIGHT,
+        backgroundColor: color,
+        opacity: item.completed ? 0.75 : 1,
+        color: textColor,
+        left: `calc(${(col / totalCols) * 100}% + 2px)`,
+        width: `calc(${(1 / totalCols) * 100}% - 4px)`,
+      }}
     >
       <div className={`truncate text-[11px] font-bold leading-tight ${cancelled ? "line-through" : ""}`}>{item.name}</div>
       <div className={`truncate text-[10px] opacity-85 leading-tight ${cancelled ? "line-through" : ""}`}>
@@ -182,27 +190,29 @@ function DayCard({ item, top, onClick }: { item: ReservationRecord; top: number;
   );
 }
 
-// ─── buildStackedPositions ────────────────────────────────────────────────────
-// cardH: the actual rendered card height. Used to detect and resolve overlap.
-function buildStackedPositions(items: ReservationRecord[], cardH = CARD_HEIGHT) {
+// ─── buildColumnPositions ─────────────────────────────────────────────────────
+// Places overlapping cards side-by-side in columns instead of stacking vertically.
+function buildColumnPositions(items: ReservationRecord[], cardH = CARD_HEIGHT) {
   const sorted = [...items].sort((a, b) =>
     timeToMinutes(a.reservationTime || "00:00") - timeToMinutes(b.reservationTime || "00:00")
   );
-  const result: { item: ReservationRecord; top: number }[] = [];
+  const placed: { item: ReservationRecord; top: number; bottom: number; col: number }[] = [];
+  const columns: number[] = [];
+
   for (const item of sorted) {
-    const t = item.reservationTime || "";
-    const base = minutesToPx(timeToMinutes(t || `${START_HOUR}:00`));
-    // Find minimum top that doesn't overlap any previously placed card
-    let top = base;
-    for (const placed of result) {
-      const placedBottom = placed.top + cardH + 2;
-      if (top < placedBottom && placed.top < top + cardH + 2) {
-        top = Math.max(top, placedBottom);
-      }
-    }
-    result.push({ item, top });
+    const top = minutesToPx(timeToMinutes(item.reservationTime || `${START_HOUR}:00`));
+    const bottom = top + cardH;
+    let col = columns.findIndex((colBottom) => colBottom <= top + 1);
+    if (col === -1) { col = columns.length; columns.push(bottom + 2); }
+    else columns[col] = bottom + 2;
+    placed.push({ item, top, bottom, col });
   }
-  return result;
+
+  return placed.map(({ item, top, bottom, col }) => {
+    const overlapping = placed.filter((p) => p.top < bottom && p.bottom > top);
+    const totalCols = Math.max(...overlapping.map((p) => p.col + 1));
+    return { item, top, col, totalCols };
+  });
 }
 
 // ─── Hour grid lines (absolute, reusable) ─────────────────────────────────────
@@ -238,7 +248,7 @@ function DayView({
   const columnData = useMemo(() => {
     return hospitals.map((hospital) => {
       const items = reservations.filter((r) => (r.hospital || "미지정") === hospital);
-      const positioned = buildStackedPositions(items);
+      const positioned = buildColumnPositions(items);
       const contentH = positioned.length > 0
         ? Math.max(...positioned.map((p) => p.top + CARD_HEIGHT + 4))
         : 0;
@@ -313,8 +323,8 @@ function DayView({
             {/* card + grid area */}
             <div className="relative" style={{ height: maxH }}>
               <HourGrid rows={gridRows} />
-              {positioned.map(({ item, top }) => (
-                <DayCard key={item.id} item={item} top={top} onClick={() => onCardClick(item)} />
+              {positioned.map(({ item, top, col, totalCols }) => (
+                <DayCard key={item.id} item={item} top={top} col={col} totalCols={totalCols} onClick={() => onCardClick(item)} />
               ))}
             </div>
           </div>
@@ -325,7 +335,7 @@ function DayView({
 }
 
 // ─── WeekDayCard (compact for week view) ─────────────────────────────────────
-function WeekDayCard({ item, top, onClick }: { item: ReservationRecord; top: number; onClick: () => void }) {
+function WeekDayCard({ item, top, col, totalCols, onClick }: { item: ReservationRecord; top: number; col: number; totalCols: number; onClick: () => void }) {
   const cancelled = item.cancelled === true;
   const color = cancelled ? "#fef08a" : item.completed ? "#9ca3af" : getAppointmentColor(item.appointmentType);
   const textColor = cancelled ? "#78350f" : "white";
@@ -333,8 +343,16 @@ function WeekDayCard({ item, top, onClick }: { item: ReservationRecord; top: num
   return (
     <button
       onClick={onClick}
-      className="absolute left-0.5 right-0.5 overflow-hidden rounded px-1 text-left shadow-sm transition hover:brightness-110 active:scale-[0.99]"
-      style={{ top, height: WEEK_CARD_H, backgroundColor: color, opacity: item.completed ? 0.75 : 1, color: textColor }}
+      className="absolute overflow-hidden rounded px-1 text-left shadow-sm transition hover:brightness-110 active:scale-[0.99]"
+      style={{
+        top,
+        height: WEEK_CARD_H,
+        backgroundColor: color,
+        opacity: item.completed ? 0.75 : 1,
+        color: textColor,
+        left: `calc(${(col / totalCols) * 100}% + 1px)`,
+        width: `calc(${(1 / totalCols) * 100}% - 2px)`,
+      }}
       title={[item.name, time, item.hospital, item.consultArea].filter(Boolean).join(" · ")}
     >
       <div className={`truncate text-[10px] font-semibold leading-tight ${cancelled ? "line-through" : ""}`}>
@@ -360,7 +378,7 @@ function WeekView({
   const dayData = useMemo(() => {
     return days.map((day) => {
       const dayItems = reservations.filter((r) => r.reservationDate === day);
-      const positioned = buildStackedPositions(dayItems, WEEK_CARD_H);
+      const positioned = buildColumnPositions(dayItems, WEEK_CARD_H);
       const contentH = positioned.length > 0
         ? Math.max(...positioned.map((p) => p.top + WEEK_CARD_H + 4))
         : 0;
@@ -417,8 +435,8 @@ function WeekView({
               </div>
               <div className="relative" style={{ height: maxH }}>
                 <HourGrid rows={gridRows} />
-                {positioned.map(({ item, top }) => (
-                  <WeekDayCard key={item.id} item={item} top={top} onClick={() => onCardClick(item)} />
+                {positioned.map(({ item, top, col, totalCols }) => (
+                  <WeekDayCard key={item.id} item={item} top={top} col={col} totalCols={totalCols} onClick={() => onCardClick(item)} />
                 ))}
               </div>
             </div>
