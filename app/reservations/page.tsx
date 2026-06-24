@@ -67,7 +67,7 @@ export default function ReservationsPage() {
   const [search, setSearch] = useState("");
   const [groupPage, setGroupPage] = useState(1);
   const PAGE_SIZE = 20;
-  const [patientOnlyList, setPatientOnlyList] = useState<PatientRecord[]>([]);
+  const [patients, setPatients] = useState<PatientRecord[]>([]);
 
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [importDrawerOpen, setImportDrawerOpen] = useState(false);
@@ -225,8 +225,35 @@ export default function ReservationsPage() {
   }, [reservations, search]);
 
 
+  const filteredPatients = useMemo(() => {
+    const keyword = search.trim().toLowerCase();
+    if (!keyword) return patients;
+    return patients.filter((p) =>
+      [p.name, p.phone, p.nationality, p.birth, p.birthInput]
+        .join(" ").toLowerCase().includes(keyword)
+    );
+  }, [patients, search]);
+
   const patientGroups = useMemo<PatientGroup[]>(() => {
     const map = new Map<string, PatientGroup>();
+
+    // 1. patients 컬렉션을 단일 소스로 먼저 등록
+    for (const p of filteredPatients) {
+      if (!p.patientId) continue;
+      map.set(p.patientId, {
+        patientKey: p.patientId,
+        patientId: p.patientId,
+        name: p.name,
+        birth: p.birth || "",
+        birthInput: p.birthInput || p.birth || "",
+        gender: p.gender || "",
+        phone: p.phone || "",
+        nationality: p.nationality || "",
+        reservations: [],
+      });
+    }
+
+    // 2. reservations를 환자 그룹에 결합 (patients에 없는 레거시 데이터는 fallback 그룹 생성)
     for (const r of filteredReservations) {
       const key = r.patientId || `${r.name}_${r.birth}`;
       if (!map.has(key)) {
@@ -244,6 +271,8 @@ export default function ReservationsPage() {
       }
       map.get(key)!.reservations.push(r);
     }
+
+    // 3. 각 그룹 내 예약 날짜순 정렬
     for (const g of map.values()) {
       g.reservations.sort((a, b) =>
         (a.reservationDate + a.reservationTime).localeCompare(
@@ -251,35 +280,20 @@ export default function ReservationsPage() {
         )
       );
     }
-    // 예약 없는 환자(patients 컬렉션 전용) 추가
-    for (const p of patientOnlyList) {
-      if (p.patientId && !map.has(p.patientId)) {
-        map.set(p.patientId, {
-          patientKey: p.patientId,
-          patientId: p.patientId,
-          name: p.name,
-          birth: p.birth || "",
-          birthInput: p.birthInput || p.birth || "",
-          gender: p.gender || "",
-          phone: p.phone || "",
-          nationality: p.nationality || "",
-          reservations: [],
-        });
-      }
-    }
 
+    // 4. 최신 예약날짜 기준 내림차순 (예약 없는 환자는 하단)
     return [...map.values()].sort((a, b) => {
       const latestA = a.reservations[a.reservations.length - 1]?.reservationDate || "";
       const latestB = b.reservations[b.reservations.length - 1]?.reservationDate || "";
       return latestB.localeCompare(latestA);
     });
-  }, [filteredReservations, patientOnlyList]);
+  }, [filteredPatients, filteredReservations]);
 
   useEffect(() => { setGroupPage(1); }, [search]);
 
   useEffect(() => {
     if (!authReady) return;
-    listPatients().then(setPatientOnlyList);
+    listPatients().then(setPatients);
   }, [authReady]);
 
   const pagedGroups = useMemo(() => {
@@ -842,7 +856,7 @@ export default function ReservationsPage() {
           currentUser={currentUser}
           initialDate={undefined}
           initialPatient={addPatient}
-          onCreated={() => { listPatients().then(setPatientOnlyList); }}
+          onCreated={() => { listPatients().then(setPatients); }}
         />
       )}
 
