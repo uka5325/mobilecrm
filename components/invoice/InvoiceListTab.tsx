@@ -231,7 +231,7 @@ export function InvoiceListTab() {
             className="h-10 min-w-0 flex-1 rounded-xl border border-[#dfe3e8] bg-white px-3 text-sm outline-none transition focus:border-[#1d9e75] focus:ring-4 focus:ring-emerald-100"
           />
           <button
-            onClick={load}
+            onClick={() => load(cursor)}
             className="h-10 shrink-0 rounded-xl border border-[#dfe3e8] bg-white px-4 text-sm font-medium text-gray-600 transition hover:-translate-y-0.5 hover:shadow-sm active:scale-95"
           >
             새로고침
