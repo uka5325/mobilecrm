@@ -176,10 +176,12 @@ export async function POST(req: NextRequest) {
 
       const now = FieldValue.serverTimestamp();
       const patientRef = adminDb.collection("patients").doc();
-      await patientRef.set({ ...patient, createdAt: now, updatedAt: now });
-
       const reservationRef = adminDb.collection("reservations").doc();
-      await reservationRef.set({ ...reservation, createdAt: now, updatedAt: now });
+
+      const batch = adminDb.batch();
+      batch.set(patientRef, { ...patient, createdAt: now, updatedAt: now });
+      batch.set(reservationRef, { ...reservation, createdAt: now, updatedAt: now });
+      await batch.commit();
 
       return NextResponse.json({
         success: true,

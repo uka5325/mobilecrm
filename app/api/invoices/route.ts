@@ -40,7 +40,8 @@ function makeInvoiceId(reservation: Record<string, unknown>) {
     .replace(/[\\/#?[\]*.]/g, " ")
     .replace(/\s+/g, "")
     .slice(0, 20);
-  return `INV-${yy}${mm}${dd}-${namePart}`;
+  const suffix = Date.now().toString(36);
+  return `INV-${yy}${mm}${dd}-${namePart}-${suffix}`;
 }
 
 function parseBirthInfo(rawValue: string, rawGender?: string) {
