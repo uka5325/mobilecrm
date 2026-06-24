@@ -6,8 +6,10 @@ import {
   deleteReservation,
   updateReservationFull,
   getPatientReservationHistory,
+  listPatients,
   type ReservationRecord,
   type AppointmentType,
+  type PatientRecord,
 } from "@/lib/reservations";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useReservationData } from "@/hooks/useReservationData";
@@ -65,6 +67,7 @@ export default function ReservationsPage() {
   const [search, setSearch] = useState("");
   const [groupPage, setGroupPage] = useState(1);
   const PAGE_SIZE = 20;
+  const [patientOnlyList, setPatientOnlyList] = useState<PatientRecord[]>([]);
 
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [importDrawerOpen, setImportDrawerOpen] = useState(false);
@@ -248,14 +251,36 @@ export default function ReservationsPage() {
         )
       );
     }
+    // 예약 없는 환자(patients 컬렉션 전용) 추가
+    for (const p of patientOnlyList) {
+      if (p.patientId && !map.has(p.patientId)) {
+        map.set(p.patientId, {
+          patientKey: p.patientId,
+          patientId: p.patientId,
+          name: p.name,
+          birth: p.birth || "",
+          birthInput: p.birthInput || p.birth || "",
+          gender: p.gender || "",
+          phone: p.phone || "",
+          nationality: p.nationality || "",
+          reservations: [],
+        });
+      }
+    }
+
     return [...map.values()].sort((a, b) => {
       const latestA = a.reservations[a.reservations.length - 1]?.reservationDate || "";
       const latestB = b.reservations[b.reservations.length - 1]?.reservationDate || "";
       return latestB.localeCompare(latestA);
     });
-  }, [filteredReservations]);
+  }, [filteredReservations, patientOnlyList]);
 
   useEffect(() => { setGroupPage(1); }, [search]);
+
+  useEffect(() => {
+    if (!authReady) return;
+    listPatients().then(setPatientOnlyList);
+  }, [authReady]);
 
   const pagedGroups = useMemo(() => {
     const start = (groupPage - 1) * PAGE_SIZE;
@@ -817,7 +842,7 @@ export default function ReservationsPage() {
           currentUser={currentUser}
           initialDate={undefined}
           initialPatient={addPatient}
-          onCreated={refresh}
+          onCreated={() => { listPatients().then(setPatientOnlyList); }}
         />
       )}
 

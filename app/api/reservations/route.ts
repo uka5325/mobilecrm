@@ -156,6 +156,29 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: true, doctors });
     }
 
+    // ── CREATE PATIENT ONLY ───────────────────────────────────────────────
+    if (action === "create_patient") {
+      const { patient } = payload as { patient: Record<string, unknown> };
+      const now = FieldValue.serverTimestamp();
+      const ref = adminDb.collection("patients").doc();
+      await ref.set({ ...patient, createdAt: now, updatedAt: now });
+      return NextResponse.json({ success: true, patientDocId: ref.id });
+    }
+
+    // ── LIST PATIENTS ─────────────────────────────────────────────────────
+    if (action === "list_patients") {
+      const snap = await adminDb.collection("patients")
+        .orderBy("createdAt", "desc")
+        .get();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const patients = snap.docs.flatMap((d: any) => {
+        const data = d.data();
+        if (data.isDeleted === true) return [];
+        return [toSerializable({ id: d.id, ...data })];
+      });
+      return NextResponse.json({ success: true, patients });
+    }
+
     // ── CREATE ────────────────────────────────────────────────────────────
     if (action === "create") {
       const { patient, reservation } = payload as {

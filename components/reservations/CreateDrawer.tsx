@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { createReservation, type AppointmentType } from "@/lib/reservations";
+import { createPatientOnly } from "@/lib/reservations";
 import { parseBirthInfo } from "@/lib/reservationUtils";
 import type { StaffUser } from "@/lib/auth";
 import { todayString } from "@/lib/dateUtils";
@@ -14,7 +14,6 @@ type InitialPatient = {
   patientId?: string;
   hospital?: string;
   consultArea?: string;
-  appointmentType?: AppointmentType;
   coordinators?: string;
   doctors?: string;
   depositAmount?: string;
@@ -60,22 +59,12 @@ export function CreateDrawer({ open, onClose, currentUser, initialDate, initialP
     setErrorMessage("");
 
     try {
-      const result = await createReservation(
+      const result = await createPatientOnly(
         {
           name: form.name,
           birthInput: form.birthInput,
-          birth: form.birthInput,
           phone: form.phone,
           nationality: form.nationality,
-          consultArea: "",
-          reservationDate: form.reservationDate,
-          reservationTime: "",
-          hospital: "",
-          doctors: [],
-          appointmentType: "상담" as AppointmentType,
-          coordinators: [],
-          depositAmount: "",
-          surgeryCost: "",
           patientId: initialPatient?.patientId,
         },
         currentUser

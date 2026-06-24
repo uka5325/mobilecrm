@@ -769,6 +769,62 @@ export async function createReservation(
   };
 }
 
+export type PatientRecord = {
+  id: string;
+  patientId: string;
+  name: string;
+  birth?: string;
+  birthInput?: string;
+  gender?: string;
+  phone?: string;
+  nationality?: string;
+};
+
+export async function createPatientOnly(
+  params: { name: string; birthInput: string; phone: string; nationality: string; patientId?: string },
+  currentUser: StaffUser
+): Promise<{ success: boolean; message?: string; patientDocId?: string }> {
+  const name = cleanText(params.name);
+  if (!name) return { success: false, message: "이름을 입력하세요." };
+
+  const patientId = cleanText(params.patientId) || makeDateBasedId("P");
+  const parsed = parseBirthInfo(params.birthInput || "", "");
+
+  const patient = {
+    patientId,
+    name,
+    birth: parsed.birth,
+    birthInput: parsed.birthInput,
+    gender: parsed.gender,
+    phone: cleanText(params.phone),
+    nationality: cleanText(params.nationality),
+    createdBy: currentUser.displayName,
+    createdByUid: currentUser.uid,
+    updatedBy: currentUser.displayName,
+    updatedByUid: currentUser.uid,
+  };
+
+  const result = await callReservationsApi("create_patient", { patient });
+  return result.success
+    ? { success: true, patientDocId: String(result.patientDocId || "") }
+    : { success: false, message: cleanText(result.message) || "등록 실패" };
+}
+
+export async function listPatients(): Promise<PatientRecord[]> {
+  const result = await callReservationsApi("list_patients", {});
+  if (!result.success || !Array.isArray(result.patients)) return [];
+  return (result.patients as Record<string, unknown>[]).map((p) => ({
+    id: cleanText(p.id),
+    patientId: cleanText(p.patientId),
+    name: cleanText(p.name),
+    birth: cleanText(p.birth),
+    birthInput: cleanText(p.birthInput),
+    gender: cleanText(p.gender),
+    phone: cleanText(p.phone),
+    nationality: cleanText(p.nationality),
+  }));
+}
+
 export async function createReservationsBatch(
   payloads: CreateReservationParams[],
   staff: StaffUser
