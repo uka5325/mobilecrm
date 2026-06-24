@@ -1150,16 +1150,6 @@ export function ReservationsTable({
             <col className="w-[120px]" />
           </colgroup>
 
-          <thead className="bg-gray-50">
-            <tr>
-              {["예약일", "시간", "병원명", "담당 원장", "유형", "상담/수술항목", "담당자", "관리"].map((head) => (
-                <th key={head} className="border-b border-gray-200 px-4 py-3 text-left text-xs font-semibold text-gray-500">
-                  {head}
-                </th>
-              ))}
-            </tr>
-          </thead>
-
           <tbody>{renderBody()}</tbody>
         </table>
       </div>

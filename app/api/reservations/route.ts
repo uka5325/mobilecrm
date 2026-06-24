@@ -104,7 +104,7 @@ export async function POST(req: NextRequest) {
         .where("patientId", "==", patientId)
         .where("isDeleted", "==", false)
         .orderBy("reservationDate", "desc")
-        .limit(50);
+        .limit(10);
 
       if (cursor) {
         const cursorDoc = await adminDb.collection("reservations").doc(cursor).get();
@@ -112,7 +112,7 @@ export async function POST(req: NextRequest) {
       }
 
       const snap = await q.get();
-      const hasMore = snap.docs.length === 50;
+      const hasMore = snap.docs.length === 10;
       return NextResponse.json({
         success: true,
         reservations: snap.docs.map(docToObj),

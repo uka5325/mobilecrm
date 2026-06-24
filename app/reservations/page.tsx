@@ -1,11 +1,10 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { DetailDrawer } from "@/components/timeline/DetailDrawer";
 import {
   deleteReservation,
   updateReservationFull,
-  searchReservationsByDateRange,
   getPatientReservationHistory,
   type ReservationRecord,
   type AppointmentType,
@@ -30,7 +29,8 @@ export default function ReservationsPage() {
   );
 
   const [search, setSearch] = useState("");
-  const [filterDate, setFilterDate] = useState("");
+  const [groupPage, setGroupPage] = useState(1);
+  const PAGE_SIZE = 20;
 
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [importDrawerOpen, setImportDrawerOpen] = useState(false);
@@ -61,13 +61,6 @@ export default function ReservationsPage() {
   const [downloading, setDownloading] = useState(false);
   const [pageError, setPageError] = useState("");
 
-  // 기간 검색
-  const [rangeFrom, setRangeFrom] = useState("");
-  const [rangeTo, setRangeTo] = useState("");
-  const [rangeResults, setRangeResults] = useState<ReservationRecord[] | null>(null);
-  const [rangeLoading, setRangeLoading] = useState(false);
-  const [rangeError, setRangeError] = useState("");
-
   // 환자 전체 이력
   const [historyPatientId, setHistoryPatientId] = useState<string | null>(null);
   const [historyPatientName, setHistoryPatientName] = useState("");
@@ -77,6 +70,8 @@ export default function ReservationsPage() {
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState("");
   const [historyEditTarget, setHistoryEditTarget] = useState<ReservationRecord | null>(null);
+  const [historyPage, setHistoryPage] = useState(1);
+  const [historyCursorStack, setHistoryCursorStack] = useState<(string | null)[]>([]);
 
   async function handleHistoryDelete(r: ReservationRecord) {
     if (!currentUser) return;
@@ -89,20 +84,6 @@ export default function ReservationsPage() {
     }
   }
 
-  async function handleRangeSearch() {
-    if (!rangeFrom || !rangeTo) { setRangeError("시작일과 종료일을 모두 입력하세요."); return; }
-    if (rangeFrom > rangeTo) { setRangeError("시작일이 종료일보다 늦을 수 없습니다."); return; }
-    setRangeLoading(true);
-    setRangeError("");
-    try {
-      const results = await searchReservationsByDateRange(rangeFrom, rangeTo);
-      setRangeResults(results);
-    } catch (e) {
-      setRangeError(e instanceof Error ? e.message : "검색 중 오류가 발생했습니다.");
-    } finally {
-      setRangeLoading(false);
-    }
-  }
 
   async function openPatientHistory(patientId: string, name: string) {
     setHistoryPatientId(patientId);
@@ -112,6 +93,8 @@ export default function ReservationsPage() {
     setHistoryHasMore(false);
     setHistoryLoading(true);
     setHistoryError("");
+    setHistoryPage(1);
+    setHistoryCursorStack([]);
     try {
       const result = await getPatientReservationHistory(patientId);
       setHistoryList(result.reservations);
@@ -124,16 +107,37 @@ export default function ReservationsPage() {
     }
   }
 
-  async function loadMoreHistory() {
+  async function loadNextHistory() {
     if (!historyPatientId || !historyNextCursor) return;
     setHistoryLoading(true);
     try {
       const result = await getPatientReservationHistory(historyPatientId, historyNextCursor);
-      setHistoryList((prev) => [...prev, ...result.reservations]);
+      setHistoryCursorStack((prev) => [...prev, historyNextCursor]);
+      setHistoryList(result.reservations);
       setHistoryNextCursor(result.nextCursor);
       setHistoryHasMore(result.hasMore);
+      setHistoryPage((p) => p + 1);
     } catch (e) {
       setHistoryError(e instanceof Error ? e.message : "추가 로드 중 오류가 발생했습니다.");
+    } finally {
+      setHistoryLoading(false);
+    }
+  }
+
+  async function loadPrevHistory() {
+    if (!historyPatientId || historyPage <= 1) return;
+    const stack = [...historyCursorStack];
+    const prevCursor = stack.pop() ?? null;
+    setHistoryCursorStack(stack);
+    setHistoryLoading(true);
+    try {
+      const result = await getPatientReservationHistory(historyPatientId, prevCursor ?? undefined);
+      setHistoryList(result.reservations);
+      setHistoryNextCursor(result.nextCursor);
+      setHistoryHasMore(result.hasMore);
+      setHistoryPage((p) => p - 1);
+    } catch (e) {
+      setHistoryError(e instanceof Error ? e.message : "이전 페이지 로드 중 오류가 발생했습니다.");
     } finally {
       setHistoryLoading(false);
     }
@@ -143,8 +147,6 @@ export default function ReservationsPage() {
     const keyword = search.trim().toLowerCase();
 
     return reservations.filter((item) => {
-      if (filterDate && item.reservationDate !== filterDate) return false;
-
       if (!keyword) return true;
 
       const birthInfo = getReservationBirthInfo(item);
@@ -171,7 +173,7 @@ export default function ReservationsPage() {
 
       return target.includes(keyword);
     });
-  }, [reservations, search, filterDate]);
+  }, [reservations, search]);
 
 
   const patientGroups = useMemo<PatientGroup[]>(() => {
@@ -207,39 +209,14 @@ export default function ReservationsPage() {
     });
   }, [filteredReservations]);
 
-  const rangePatientGroups = useMemo<PatientGroup[]>(() => {
-    if (!rangeResults) return [];
-    const map = new Map<string, PatientGroup>();
-    for (const r of rangeResults) {
-      const key = r.patientId || `${r.name}_${r.birth}`;
-      if (!map.has(key)) {
-        map.set(key, {
-          patientKey: key,
-          patientId: r.patientId || key,
-          name: r.name,
-          birth: r.birth,
-          birthInput: r.birthInput || r.birth || "",
-          gender: r.gender,
-          phone: r.phone,
-          nationality: r.nationality,
-          reservations: [],
-        });
-      }
-      map.get(key)!.reservations.push(r);
-    }
-    for (const g of map.values()) {
-      g.reservations.sort((a, b) =>
-        (a.reservationDate + a.reservationTime).localeCompare(b.reservationDate + b.reservationTime)
-      );
-    }
-    return [...map.values()].sort((a, b) => {
-      const lA = a.reservations[a.reservations.length - 1]?.reservationDate || "";
-      const lB = b.reservations[b.reservations.length - 1]?.reservationDate || "";
-      return lB.localeCompare(lA);
-    });
-  }, [rangeResults]);
+  useEffect(() => { setGroupPage(1); }, [search]);
 
-  const activeGroups = rangeResults !== null ? rangePatientGroups : patientGroups;
+  const pagedGroups = useMemo(() => {
+    const start = (groupPage - 1) * PAGE_SIZE;
+    return patientGroups.slice(start, start + PAGE_SIZE);
+  }, [patientGroups, groupPage, PAGE_SIZE]);
+
+  const totalPages = Math.max(1, Math.ceil(patientGroups.length / PAGE_SIZE));
 
   function startInlineEdit(item: ReservationRecord) {
     setInlineEditId(item.id);
@@ -600,60 +577,7 @@ export default function ReservationsPage() {
             placeholder="이름, 상담부위, 원장 검색..."
             className="h-10 min-w-0 flex-1 rounded-xl border border-[#dfe3e8] bg-white px-4 text-sm outline-none focus:border-[#1d9e75]"
           />
-
-          <input
-            type="date"
-            value={filterDate}
-            onChange={(e) => setFilterDate(e.target.value)}
-            className="h-10 w-[100px] shrink-0 appearance-none rounded-xl border border-[#dfe3e8] bg-white px-2 text-sm outline-none focus:border-[#1d9e75]"
-          />
-
-          <button
-            onClick={() => setFilterDate("")}
-            className="h-10 shrink-0 whitespace-nowrap rounded-xl border border-[#dfe3e8] bg-white px-3 text-sm text-gray-700 transition hover:-translate-y-0.5 hover:bg-gray-50 active:scale-95"
-          >
-            날짜 초기화
-          </button>
         </div>
-
-        {/* 기간 검색 */}
-        <div className="mt-2 flex items-center gap-2">
-          <input
-            type="date"
-            value={rangeFrom}
-            onChange={(e) => setRangeFrom(e.target.value)}
-            className="h-10 w-[110px] shrink-0 appearance-none rounded-xl border border-[#dfe3e8] bg-white px-2 text-sm outline-none focus:border-[#1d9e75]"
-          />
-          <span className="shrink-0 text-xs text-gray-400">~</span>
-          <input
-            type="date"
-            value={rangeTo}
-            onChange={(e) => setRangeTo(e.target.value)}
-            className="h-10 w-[110px] shrink-0 appearance-none rounded-xl border border-[#dfe3e8] bg-white px-2 text-sm outline-none focus:border-[#1d9e75]"
-          />
-          <button
-            onClick={handleRangeSearch}
-            disabled={rangeLoading}
-            className="h-10 shrink-0 rounded-xl bg-[#1d9e75] px-3 text-sm font-medium text-white transition hover:-translate-y-0.5 hover:bg-emerald-700 active:scale-95 disabled:opacity-50"
-          >
-            {rangeLoading ? "검색 중..." : "기간 검색"}
-          </button>
-          {rangeResults !== null && (
-            <button
-              onClick={() => { setRangeResults(null); setRangeError(""); }}
-              className="h-10 shrink-0 rounded-xl border border-[#dfe3e8] bg-white px-3 text-sm text-gray-600 transition hover:bg-gray-50 active:scale-95"
-            >
-              초기화
-            </button>
-          )}
-        </div>
-        {rangeError && <div className="mt-1 text-xs text-red-500">{rangeError}</div>}
-        {rangeResults !== null && (
-          <div className="mt-1 text-xs text-gray-500">
-            기간 검색 결과: <span className="font-semibold text-emerald-700">{rangeResults.length}건</span>
-            {" "}({rangeFrom} ~ {rangeTo})
-          </div>
-        )}
 
         <div className="mt-2 flex items-center gap-2">
           <button
@@ -727,16 +651,6 @@ export default function ReservationsPage() {
         전체 {reservations.length}건 / 표시 {filteredReservations.length}건
       </div>
 
-      {/* 기간 검색 활성 배너 */}
-      {rangeResults !== null && (
-        <div className="mb-2 flex items-center justify-between rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2">
-          <span className="text-sm font-semibold text-emerald-800">
-            기간 검색 결과: {rangeFrom} ~ {rangeTo} ({rangeResults.length}건)
-          </span>
-          <button onClick={() => { setRangeResults(null); setRangeError(""); }} className="text-xs text-gray-400 hover:text-gray-700">✕ 닫기</button>
-        </div>
-      )}
-
       {/* 환자 전체 이력 모달 */}
       {historyPatientId && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setHistoryPatientId(null)}>
@@ -753,36 +667,46 @@ export default function ReservationsPage() {
             ) : (
               <div className="max-h-[60vh] divide-y divide-gray-100 overflow-y-auto rounded-xl border border-gray-100">
                 {historyList.map((r) => (
-                  <div key={r.id} className="flex items-center gap-3 px-4 py-2.5 text-sm">
-                    <span className="w-24 shrink-0 text-gray-400">{r.reservationDate}</span>
-                    <span className="text-gray-700">{r.hospital}</span>
-                    <span className="text-gray-500">{r.appointmentType}</span>
-                    <span className="text-xs text-gray-400">
-                      {r.completed ? "완료" : (r.operationStatus && r.operationStatus !== "내원전" ? r.operationStatus : "")}
-                    </span>
-                    <div className="ml-auto flex gap-1.5">
-                      <button
-                        onClick={() => setHistoryEditTarget(r)}
-                        className="rounded border border-blue-200 px-2 py-0.5 text-xs text-blue-600 hover:bg-blue-50"
-                      >수정</button>
-                      <button
-                        onClick={() => handleHistoryDelete(r)}
-                        className="rounded border border-red-200 px-2 py-0.5 text-xs text-red-500 hover:bg-red-50"
-                      >삭제</button>
+                  <div key={r.id} className="flex flex-col gap-0.5 px-4 py-2.5 text-sm">
+                    <div className="flex items-center gap-2">
+                      <span className="w-24 shrink-0 text-xs text-gray-400">{r.reservationDate}</span>
+                      {r.reservationTime && <span className="text-xs text-gray-400">{r.reservationTime}</span>}
+                      <span className="text-gray-700">{r.appointmentType}</span>
+                      {r.consultArea && <span className="text-xs text-gray-500">{r.consultArea}</span>}
+                      <span className="ml-auto text-xs text-gray-400">
+                        {r.completed ? "완료" : (r.operationStatus && r.operationStatus !== "내원전" ? r.operationStatus : "")}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1.5 pl-24">
+                      <span className="text-xs text-gray-400">{r.hospital}</span>
+                      <div className="ml-auto flex gap-1.5">
+                        <button
+                          onClick={() => setHistoryEditTarget(r)}
+                          className="rounded border border-blue-200 px-2 py-0.5 text-xs text-blue-600 hover:bg-blue-50"
+                        >수정</button>
+                        <button
+                          onClick={() => handleHistoryDelete(r)}
+                          className="rounded border border-red-200 px-2 py-0.5 text-xs text-red-500 hover:bg-red-50"
+                        >삭제</button>
+                      </div>
                     </div>
                   </div>
                 ))}
               </div>
             )}
-            {historyHasMore && (
+            <div className="mt-3 flex items-center justify-between gap-2">
               <button
-                onClick={loadMoreHistory}
-                disabled={historyLoading}
-                className="mt-3 w-full rounded-xl border border-[#dfe3e8] py-2 text-sm text-gray-600 transition hover:bg-gray-50 disabled:opacity-50"
-              >
-                {historyLoading ? "로딩 중..." : "다음 페이지 →"}
-              </button>
-            )}
+                onClick={loadPrevHistory}
+                disabled={historyPage <= 1 || historyLoading}
+                className="rounded-xl border border-[#dfe3e8] px-3 py-1.5 text-sm text-gray-600 transition hover:bg-gray-50 disabled:opacity-30"
+              >← 이전</button>
+              <span className="text-xs text-gray-400">{historyPage}페이지</span>
+              <button
+                onClick={loadNextHistory}
+                disabled={!historyHasMore || historyLoading}
+                className="rounded-xl border border-[#dfe3e8] px-3 py-1.5 text-sm text-gray-600 transition hover:bg-gray-50 disabled:opacity-30"
+              >{historyLoading ? "로딩 중..." : "다음 →"}</button>
+            </div>
           </div>
         </div>
       )}
@@ -801,7 +725,7 @@ export default function ReservationsPage() {
       )}
 
       <ReservationsTable
-        patientGroups={activeGroups}
+        patientGroups={pagedGroups}
         loading={loading}
         inlineEditId={inlineEditId}
         inlineForm={inlineForm}
@@ -825,12 +749,28 @@ export default function ReservationsPage() {
         onSaveAmount={handleSaveAmount}
       />
 
+      {totalPages > 1 && (
+        <div className="flex items-center justify-center gap-3 py-4 text-sm">
+          <button
+            onClick={() => setGroupPage((p) => Math.max(1, p - 1))}
+            disabled={groupPage === 1}
+            className="rounded-xl border border-[#dfe3e8] bg-white px-4 py-2 text-gray-600 transition hover:bg-gray-50 disabled:opacity-30"
+          >← 이전</button>
+          <span className="text-gray-400">{groupPage} / {totalPages}</span>
+          <button
+            onClick={() => setGroupPage((p) => Math.min(totalPages, p + 1))}
+            disabled={groupPage === totalPages}
+            className="rounded-xl border border-[#dfe3e8] bg-white px-4 py-2 text-gray-600 transition hover:bg-gray-50 disabled:opacity-30"
+          >다음 →</button>
+        </div>
+      )}
+
       {currentUser && (
         <CreateDrawer
           open={drawerOpen}
           onClose={() => { setDrawerOpen(false); setAddPatient(undefined); }}
           currentUser={currentUser}
-          initialDate={filterDate || undefined}
+          initialDate={undefined}
           initialPatient={addPatient}
           onCreated={refresh}
         />
