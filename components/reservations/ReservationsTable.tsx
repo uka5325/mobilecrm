@@ -437,13 +437,17 @@ function PatientInvoiceModal({ patientId, patientName, reservations, onClose, on
                       <div className="text-xs font-medium text-gray-700">{res.reservationDate} {res.reservationTime}</div>
                       <div className="text-xs text-gray-500">{res.hospital || "병원명 없음"} · {res.appointmentType}</div>
                     </div>
-                    <button
-                      onClick={() => handleCreate(res.id)}
-                      disabled={creating === res.id}
-                      className="rounded-lg bg-black px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50"
-                    >
-                      {creating === res.id ? "생성 중..." : "인보이스 생성"}
-                    </button>
+                    {res.appointmentType === "수술" ? (
+                      <button
+                        onClick={() => handleCreate(res.id)}
+                        disabled={creating === res.id}
+                        className="rounded-lg bg-black px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50"
+                      >
+                        {creating === res.id ? "생성 중..." : "인보이스 생성"}
+                      </button>
+                    ) : (
+                      <span className="text-xs text-gray-400">수술 건만 생성 가능</span>
+                    )}
                   </div>
                 );
               })}
