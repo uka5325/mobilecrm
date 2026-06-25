@@ -285,16 +285,20 @@ export async function POST(req: NextRequest) {
         isDeleted: false,
       };
 
-      await invoiceRef.update(patch);
-
-      await adminDb.collection("reservations").doc(cleanText(current.reservationDocId)).update({
-        invoiceId: current.invoiceId,
-        invoiceDocId: cleanText(invoiceDocId),
-        invoiceStatus: patch.status,
-        invoiceUpdatedAt: FieldValue.serverTimestamp(),
-        updatedAt: FieldValue.serverTimestamp(),
-        updatedBy: staffName,
-        updatedByUid: staffUid,
+      await adminDb.runTransaction(async (tx) => {
+        tx.update(invoiceRef, patch);
+        tx.update(
+          adminDb.collection("reservations").doc(cleanText(current.reservationDocId)),
+          {
+            invoiceId: current.invoiceId,
+            invoiceDocId: cleanText(invoiceDocId),
+            invoiceStatus: patch.status,
+            invoiceUpdatedAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
+            updatedBy: staffName,
+            updatedByUid: staffUid,
+          }
+        );
       });
 
       await writeLog({

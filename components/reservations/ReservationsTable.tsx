@@ -358,7 +358,7 @@ function PatientInvoiceModal({ patientId, patientName, reservations, onClose, on
 
   const invoiceByReservation = new Map<string, InvoiceRecord>(invoices.map((inv) => [inv.reservationDocId, inv]));
   const surgeryReservationsWithoutInvoice = reservations.filter(
-    (r) => r.appointmentType === "수술" && !invoiceByReservation.has(r.id)
+    (r) => (r.appointmentType === "수술" || r.appointmentType === "시술") && !invoiceByReservation.has(r.id)
   );
 
   return (
