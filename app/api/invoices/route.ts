@@ -379,8 +379,8 @@ export async function POST(req: NextRequest) {
         (payload || {}) as Record<string, string>;
 
       const PAGE_SIZE = 50;
+      // isDeleted Firestore 필터는 invoices:isDeleted+createdAt 복합 인덱스 배포 후 재적용 가능
       let q = adminDb.collection("invoices")
-        .where("isDeleted", "==", false)
         .orderBy("createdAt", "desc")
         .limit(PAGE_SIZE);
       if (cursor) {
@@ -393,7 +393,7 @@ export async function POST(req: NextRequest) {
       const nextCursor = hasMore ? snap.docs[snap.docs.length - 1].id : null;
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      let records = snap.docs.map(docToObj).filter((r: any) => isCoordinatorOf(r));
+      let records = snap.docs.map(docToObj).filter((r: any) => !r.isDeleted && isCoordinatorOf(r));
 
       // 날짜 필터: surgeryDate 있으면 surgeryDate 기준, 없으면 createdAt 기준
       if (startDate || endDate) {
