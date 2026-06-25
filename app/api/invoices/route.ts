@@ -364,7 +364,10 @@ export async function POST(req: NextRequest) {
         (payload || {}) as Record<string, string>;
 
       const PAGE_SIZE = 50;
-      let q = adminDb.collection("invoices").orderBy("createdAt", "desc").limit(PAGE_SIZE);
+      let q = adminDb.collection("invoices")
+        .where("isDeleted", "==", false)
+        .orderBy("createdAt", "desc")
+        .limit(PAGE_SIZE);
       if (cursor) {
         const cursorDoc = await adminDb.collection("invoices").doc(cursor).get();
         if (cursorDoc.exists) q = q.startAfter(cursorDoc) as typeof q;
@@ -375,7 +378,7 @@ export async function POST(req: NextRequest) {
       const nextCursor = hasMore ? snap.docs[snap.docs.length - 1].id : null;
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      let records = snap.docs.map(docToObj).filter((r: any) => !r.isDeleted && isCoordinatorOf(r));
+      let records = snap.docs.map(docToObj).filter((r: any) => isCoordinatorOf(r));
 
       // 날짜 필터: surgeryDate 있으면 surgeryDate 기준, 없으면 createdAt 기준
       if (startDate || endDate) {
