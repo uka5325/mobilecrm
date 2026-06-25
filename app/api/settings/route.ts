@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { adminAuth, adminDb, FieldValue } from "@/lib/firebaseAdmin";
 import { docToObj, toSerializable } from "@/lib/adminUtils";
 
+const STAFF_LIST_LIMIT = 200;
+
 async function getStaffRole(uid: string): Promise<string> {
   const snap = await adminDb.collection("staff").where("uid", "==", uid).limit(1).get();
   if (snap.empty) {
@@ -43,7 +45,7 @@ export async function POST(req: NextRequest) {
 
     // ── READ: staff list ──────────────────────────────────────────────────
     if (action === "get_staff_list") {
-      const snap = await adminDb.collection("staff").orderBy("displayName").limit(200).get();
+      const snap = await adminDb.collection("staff").orderBy("displayName").limit(STAFF_LIST_LIMIT).get();
       return NextResponse.json({ success: true, staff: snap.docs.map(docToObj) });
     }
 

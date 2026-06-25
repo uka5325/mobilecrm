@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { adminAuth, adminDb, FieldValue } from "@/lib/firebaseAdmin";
 import { docToObj } from "@/lib/adminUtils";
 
+const RESERVATION_LIST_LIMIT = 500;  // 45일치 예약 상한
+const DUPLICATE_CHECK_LIMIT = 50;
+
 // 의사 목록은 거의 변경되지 않으므로 서버 메모리에 10분 캐싱
 let _doctorsCache: Record<string, unknown>[] | null = null;
 let _doctorsCacheAt = 0;
@@ -56,7 +59,7 @@ export async function POST(req: NextRequest) {
           .collection("reservations")
           .where("reservationDate", ">=", fromDate)
           .orderBy("reservationDate", "desc")
-          .limit(500)
+          .limit(RESERVATION_LIST_LIMIT)
           .get(),
         getCachedDoctors(),
       ]);
@@ -134,7 +137,7 @@ export async function POST(req: NextRequest) {
           .collection("reservations")
           .where("reservationDate", "==", dupDate)
           .where("isDeleted", "==", false)
-          .limit(50)
+          .limit(DUPLICATE_CHECK_LIMIT)
           .get();
 
         const inKey = normDupKey(reservation);

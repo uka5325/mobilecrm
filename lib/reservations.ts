@@ -31,6 +31,8 @@ export type AppointmentType = "상담" | "수술" | "치료" | "경과" | "진�
 
 export const APPOINTMENT_TYPES: AppointmentType[] = ["상담", "수술", "치료", "경과", "진료", "검진"];
 
+const RESERVATION_LIST_LIMIT = 500;  // 45일치 예약 상한
+
 export const APPOINTMENT_TYPE_COLORS: Record<AppointmentType, string> = {
   상담: "#2563eb",
   수술: "#ef4444",
@@ -289,7 +291,7 @@ function makeDoctorOptionsFromReservations(
   );
 
   return names.map((name, index) => ({
-    uid: `fallback-doctor-${index}-${name}`,
+    uid: `fallback-doctor-${name}`,
     displayName: name,
     email: "",
     orderNo: index + 1,
@@ -502,7 +504,7 @@ export function subscribeAllReservations(
     getClientDoctors().then((d) => { latestDoctors = d; }).catch((e) => console.warn("[subscribeAllReservations] doctors failed:", e));
 
     unsubscribeSnapshot = onSnapshot(
-      query(collection(db, "reservations"), where("reservationDate", ">=", fromDate), limit(500)),
+      query(collection(db, "reservations"), where("reservationDate", ">=", fromDate), limit(RESERVATION_LIST_LIMIT)),
       (snap) => {
         // skip empty cache snapshots — they would wipe the API seed data
         if (snap.metadata.fromCache && snap.empty) return;

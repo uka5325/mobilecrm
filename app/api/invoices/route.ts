@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { adminAuth, adminDb, FieldValue } from "@/lib/firebaseAdmin";
 import { docToObj, cleanText } from "@/lib/adminUtils";
 
+const PATIENT_INVOICES_LIMIT = 50;
+const INVOICE_LIST_LIMIT = 200;
+
 function toNumber(value: unknown) {
   if (typeof value === "number") return value;
   const cleaned = String(value || "").replace(/[^0-9.-]/g, "");
@@ -117,7 +120,7 @@ export async function POST(req: NextRequest) {
       const snap = await adminDb.collection("invoices")
         .where("patientId", "==", patientId)
         .orderBy("createdAt", "desc")
-        .limit(50)
+        .limit(PATIENT_INVOICES_LIMIT)
         .get();
       const invoices = snap.docs.map(docToObj)
         .filter((r) => !r.isDeleted && isCoordinatorOf(r));
@@ -355,7 +358,7 @@ export async function POST(req: NextRequest) {
       if (!isAdmin && callerName) {
         baseQuery = baseQuery.where("coordinators", "array-contains", callerName);
       }
-      const snap = await baseQuery.limit(200).get();
+      const snap = await baseQuery.limit(INVOICE_LIST_LIMIT).get();
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       let records = snap.docs.map(docToObj).filter((r: any) => !r.isDeleted);
 
