@@ -127,25 +127,26 @@ export function InfoTab({
         </div>
       </div>
 
-      <div className="mt-3">
-        <label className="text-xs text-gray-500">예약 유형</label>
-        <select
-          value={detailForm.appointmentType}
-          onChange={(e) => onFormChange({ appointmentType: e.target.value as AppointmentType })}
-          className="mt-1 w-full rounded-xl border border-[#dfe3e8] px-3 py-2 text-sm transition focus:border-[#1d9e75] focus:outline-none"
-        >
-          {APPOINTMENT_TYPES.map((type) => (
-            <option key={type} value={type}>{type}</option>
-          ))}
-        </select>
-      </div>
-
-      <div className="mt-3">
-        <EditField
-          label={detailForm.appointmentType === "상담" ? "상담부위" : "수술항목"}
-          value={detailForm.consultArea}
-          onChange={(value) => onFormChange({ consultArea: value })}
-        />
+      <div className="mt-3 grid grid-cols-2 gap-3">
+        <div>
+          <label className="text-xs text-gray-500">예약 유형</label>
+          <select
+            value={detailForm.appointmentType}
+            onChange={(e) => onFormChange({ appointmentType: e.target.value as AppointmentType })}
+            className="mt-1 w-full rounded-xl border border-[#dfe3e8] px-3 py-2 text-sm transition focus:border-[#1d9e75] focus:outline-none"
+          >
+            {APPOINTMENT_TYPES.map((type) => (
+              <option key={type} value={type}>{type}</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <EditField
+            label={detailForm.appointmentType === "상담" ? "상담부위" : "수술항목"}
+            value={detailForm.consultArea}
+            onChange={(value) => onFormChange({ consultArea: value })}
+          />
+        </div>
       </div>
 
       <div className="mt-3 grid grid-cols-2 gap-3">
