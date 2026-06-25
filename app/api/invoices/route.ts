@@ -372,12 +372,13 @@ export async function POST(req: NextRequest) {
       const { startDate, endDate, status, patientName, commissionStaffUid } =
         (payload || {}) as Record<string, string>;
 
-      const snap = await adminDb.collection("invoices")
-        .orderBy("createdAt", "desc")
-        .limit(200)
-        .get();
+      let baseQuery = adminDb.collection("invoices").orderBy("createdAt", "desc") as FirebaseFirestore.Query;
+      if (!isAdmin && callerName) {
+        baseQuery = baseQuery.where("coordinators", "array-contains", callerName);
+      }
+      const snap = await baseQuery.limit(200).get();
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      let records = snap.docs.map(docToObj).filter((r: any) => !r.isDeleted && isCoordinatorOf(r));
+      let records = snap.docs.map(docToObj).filter((r: any) => !r.isDeleted);
 
       // 날짜 필터: surgeryDate 있으면 surgeryDate 기준, 없으면 createdAt 기준
       if (startDate || endDate) {
