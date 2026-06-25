@@ -91,33 +91,33 @@ async function writeLog(params: {
 
 export async function POST(req: NextRequest) {
   try {
-    const { idToken, action, payload, callerRole: clientRole, callerName: clientName } = await req.json();
+    const { idToken, action, payload } = await req.json();
     if (!idToken) return NextResponse.json({ success: false, message: "인증 토큰 없음" }, { status: 401 });
 
     const decoded = await adminAuth.verifyIdToken(idToken);
     const uid = decoded.uid;
 
-    // ── Caller identity & role ────────────────────────────────────────────────
-    // 클라이언트가 캐싱한 role/name을 우선 사용. 없으면 DB 조회 fallback.
-    let callerRole = String(clientRole || "");
-    let callerName = String(clientName || "");
-    if (!callerRole) {
-      const snap = await adminDb.collection("staff").where("uid", "==", uid).limit(1).get();
-      if (!snap.empty) {
-        callerRole = String(snap.docs[0].data().role || "");
-        callerName = String(snap.docs[0].data().displayName || "");
-      } else {
-        const doc = await adminDb.collection("staff").doc(uid).get();
-        if (doc.exists) {
-          callerRole = String(doc.data()?.role || "");
-          callerName = String(doc.data()?.displayName || "");
-        }
+    // ── Caller identity & role — 항상 DB에서 검증, 클라이언트 전송 값 사용 안 함 ──
+    let callerRole = "";
+    let callerName = "";
+    const staffSnap = await adminDb.collection("staff").where("uid", "==", uid).limit(1).get();
+    if (!staffSnap.empty) {
+      callerRole = String(staffSnap.docs[0].data().role || "");
+      callerName = String(staffSnap.docs[0].data().displayName || "");
+    } else {
+      const staffDoc = await adminDb.collection("staff").doc(uid).get();
+      if (staffDoc.exists) {
+        callerRole = String(staffDoc.data()?.role || "");
+        callerName = String(staffDoc.data()?.displayName || "");
       }
     }
 
     // admin은 모든 접근 허용. coordinator 이하는 본인 담당 인보이스만 접근.
     const isAdmin = callerRole === "admin";
 
+    // NOTE(tech-debt): coordinators[]는 displayName 문자열 배열 (UID 아님).
+    // callerName은 위에서 서버 DB로 검증되므로 스푸핑은 차단됨.
+    // 향후: coordinatorUids[] 필드 추가 후 uid 비교로 전환 필요.
     function isCoordinatorOf(inv: Record<string, unknown>): boolean {
       if (isAdmin) return true;
       const coords = Array.isArray(inv.coordinators) ? inv.coordinators as string[] : [];

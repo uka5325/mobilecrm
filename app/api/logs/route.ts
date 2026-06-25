@@ -19,10 +19,24 @@ export async function POST(req: NextRequest) {
   try {
     const { idToken, action, payload } = await req.json();
     if (!idToken) return NextResponse.json({ success: false, message: "인증 토큰 없음" }, { status: 401 });
-    await adminAuth.verifyIdToken(idToken);
+    const decoded = await adminAuth.verifyIdToken(idToken);
+    const uid = decoded.uid;
 
     // ── CREATE ──────────────────────────────────────────────────────────────
     if (action === "create") {
+      // 활성 직원만 로그 생성 허용
+      let isActiveStaff = false;
+      const sSnap = await adminDb.collection("staff").where("uid", "==", uid).limit(1).get();
+      if (!sSnap.empty) {
+        isActiveStaff = sSnap.docs[0].data().active === true;
+      } else {
+        const sDoc = await adminDb.collection("staff").doc(uid).get();
+        if (sDoc.exists) isActiveStaff = sDoc.data()?.active === true;
+      }
+      if (!isActiveStaff) {
+        return NextResponse.json({ success: false, message: "권한이 없습니다." }, { status: 403 });
+      }
+
       const {
         action: logAction, targetType, targetId = "", staffUid, staffName, staffEmail, staffRole, staffCode = "",
         patientId = "", reservationId = "", invoiceId = "", message, before = null, after = null,

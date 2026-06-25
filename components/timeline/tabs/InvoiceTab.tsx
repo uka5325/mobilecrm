@@ -9,7 +9,6 @@ import {
   getInvoicesByPatientId,
   type InvoiceRecord,
   type InvoiceUpdatePayload,
-  setInvoicesCallerCache,
 } from "@/lib/invoices";
 import { getStaffListForSettings, type SettingsStaffRecord } from "@/lib/settings";
 import { calcCommissionBase, calcCommission, paymentMethodLabel } from "@/lib/commissionUtils";
@@ -307,7 +306,6 @@ export function InvoiceTab({ reservationDocId, patientId, currentUser, appointme
   const [staffList, setStaffList] = useState<SettingsStaffRecord[]>([]);
 
   useEffect(() => {
-    setInvoicesCallerCache(currentUser.role, currentUser.displayName);
     getStaffListForSettings()
       .then((list) => setStaffList(list.filter((s) => s.active && (s.role === "admin" || s.role === "coordinator"))))
       .catch(() => {});
