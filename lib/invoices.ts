@@ -103,6 +103,7 @@ async function callInvoicesApi(action: string, payload: Record<string, unknown>)
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ idToken, action, payload, callerRole: _callerCache?.role, callerName: _callerCache?.name }),
   });
+  if (!res.ok) return { success: false as const, message: `서버 오류 (${res.status})` };
   return res.json() as Promise<Record<string, unknown> & { success: boolean; message?: string }>;
 }
 

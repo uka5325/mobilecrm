@@ -16,6 +16,7 @@ async function callReservationsApi(action: string, payload: Record<string, unkno
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ idToken, action, payload }),
   });
+  if (!res.ok) return { success: false as const, message: `서버 오류 (${res.status})` };
   return res.json() as Promise<Record<string, unknown> & { success: boolean; message?: string }>;
 }
 
@@ -495,10 +496,10 @@ export function subscribeAllReservations(
             callback({ reservations, doctors: doctors.length ? doctors : makeDoctorOptionsFromReservations(reservations) });
           }
         })
-        .catch(() => {});
+        .catch((e) => console.warn("[subscribeAllReservations] seed failed:", e));
     }
 
-    getClientDoctors().then((d) => { latestDoctors = d; }).catch(() => {});
+    getClientDoctors().then((d) => { latestDoctors = d; }).catch((e) => console.warn("[subscribeAllReservations] doctors failed:", e));
 
     unsubscribeSnapshot = onSnapshot(
       query(collection(db, "reservations"), where("reservationDate", ">=", fromDate), limit(500)),
@@ -580,10 +581,10 @@ export function subscribeTimelineReservations(
             callback({ reservations, doctors: doctors.length ? doctors : makeDoctorOptionsFromReservations(reservations) });
           }
         })
-        .catch(() => {});
+        .catch((e) => console.warn("[subscribeTimelineReservations] seed failed:", e));
     }
 
-    getClientDoctors().then((d) => { latestDoctors = d; }).catch(() => {});
+    getClientDoctors().then((d) => { latestDoctors = d; }).catch((e) => console.warn("[subscribeTimelineReservations] doctors failed:", e));
 
     unsubscribeSnapshot = onSnapshot(
       query(collection(db, "reservations"), where("reservationDate", "==", date)),
