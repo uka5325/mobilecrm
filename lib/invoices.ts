@@ -69,19 +69,14 @@ let _callerCache: { role: string; name: string } | null = null;
 // 환자별 인보이스 결과 캐시 (pre-fetch 결과를 모달에서 즉시 재사용)
 const _invoicesByPatientCache = new Map<string, InvoiceRecord[]>();
 
-const INVOICE_CACHE_TTL = 45 * 60 * 1000; // 45분
-
 export function getInvoicesByPatientCache(patientId: string): InvoiceRecord[] | undefined {
   if (_invoicesByPatientCache.has(patientId)) return _invoicesByPatientCache.get(patientId);
   try {
     const raw = sessionStorage.getItem(`inv_${patientId}`);
     if (raw) {
-      const parsed = JSON.parse(raw) as { cachedAt?: number; data: InvoiceRecord[] };
-      if (parsed.cachedAt && Date.now() - parsed.cachedAt < INVOICE_CACHE_TTL) {
-        _invoicesByPatientCache.set(patientId, parsed.data);
-        return parsed.data;
-      }
-      sessionStorage.removeItem(`inv_${patientId}`);
+      const d = JSON.parse(raw) as InvoiceRecord[];
+      _invoicesByPatientCache.set(patientId, d);
+      return d;
     }
   } catch {}
   return undefined;
@@ -97,14 +92,23 @@ async function callInvoicesApi(action: string, payload: Record<string, unknown>)
   if (!firebaseUser) {
     return { success: false as const, message: "로그인 상태를 확인할 수 없습니다. 페이지를 새로고침 후 다시 시도해주세요." };
   }
-  const idToken = await firebaseUser.getIdToken();
-  const res = await fetch("/api/invoices", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ idToken, action, payload, callerRole: _callerCache?.role, callerName: _callerCache?.name }),
-  });
-  if (!res.ok) return { success: false as const, message: `서버 오류 (${res.status})` };
-  return res.json() as Promise<Record<string, unknown> & { success: boolean; message?: string }>;
+  if (!navigator.onLine) {
+    return { success: false as const, message: "인터넷 연결을 확인해주세요." };
+  }
+  try {
+    const idToken = await firebaseUser.getIdToken();
+    const res = await fetch("/api/invoices", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ idToken, action, payload, callerRole: _callerCache?.role, callerName: _callerCache?.name }),
+    });
+    if (!res.ok) {
+      return { success: false as const, message: `서버 오류가 발생했습니다. (${res.status})` };
+    }
+    return res.json() as Promise<Record<string, unknown> & { success: boolean; message?: string }>;
+  } catch {
+    return { success: false as const, message: "네트워크 오류가 발생했습니다. 연결 상태를 확인해주세요." };
+  }
 }
 
 export function setInvoicesCallerCache(role: string, name: string) {
@@ -174,13 +178,8 @@ export async function getInvoicesByPatientId(patientId: string): Promise<Invoice
   if (!result.success || !Array.isArray(result.invoices)) return [];
   const records = (result.invoices as Record<string, unknown>[]).map(mapInvoiceDoc);
   _invoicesByPatientCache.set(patientId, records);
-  try { sessionStorage.setItem(`inv_${patientId}`, JSON.stringify({ cachedAt: Date.now(), data: records })); } catch {}
+  try { sessionStorage.setItem(`inv_${patientId}`, JSON.stringify(records)); } catch {}
   return records;
-}
-
-export async function getInvoiceCountByPatientId(patientId: string): Promise<number> {
-  const result = await callInvoicesApi("count_by_patient", { patientId });
-  return result.success ? (result.count as number) : 0;
 }
 
 export async function getInvoiceByReservationDocId(reservationDocId: string) {
@@ -266,16 +265,26 @@ export type InvoiceListFilter = {
   status?: "draft" | "confirmed" | "void" | "";
   patientName?: string;
   commissionStaffUid?: string;
+  cursor?: string;
 };
 
-export async function getInvoices(filters?: InvoiceListFilter): Promise<InvoiceRecord[]> {
+export async function getInvoices(
+  filters?: InvoiceListFilter
+): Promise<{ invoices: InvoiceRecord[]; nextCursor: string | null; hasMore: boolean }> {
   const result = await callInvoicesApi("list", {
     startDate: filters?.startDate || "",
     endDate: filters?.endDate || "",
     status: filters?.status || "",
     patientName: filters?.patientName || "",
     commissionStaffUid: filters?.commissionStaffUid || "",
+    cursor: filters?.cursor || "",
   });
-  if (!result.success || !Array.isArray(result.invoices)) return [];
-  return (result.invoices as Record<string, unknown>[]).map(mapInvoiceDoc);
+  if (!result.success || !Array.isArray(result.invoices)) {
+    return { invoices: [], nextCursor: null, hasMore: false };
+  }
+  return {
+    invoices: (result.invoices as Record<string, unknown>[]).map(mapInvoiceDoc),
+    nextCursor: (result.nextCursor as string | null) ?? null,
+    hasMore: Boolean(result.hasMore),
+  };
 }

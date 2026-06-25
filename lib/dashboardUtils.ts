@@ -185,7 +185,7 @@ export function getHospital(item: ReservationDoc) {
 
 export function getAppointmentType(item: ReservationDoc) {
   const v = cleanText(item.appointmentType || "");
-  if (v === "상담" || v === "수술" || v === "치료" || v === "경과" || v === "진료" || v === "검진") return v;
+  if (v === "상담" || v === "수술" || v === "시술" || v === "치료" || v === "경과" || v === "진료" || v === "검진") return v;
   return "상담";
 }
 
@@ -296,8 +296,8 @@ export function finalizeCounter(counter: Counter, shareBase?: number): KpiRow {
     ...counter,
     visitRate: rate(counter.visited, counter.total),
     noShowRate: rate(counter.noShow, counter.total),
-    surgeryRate: rate(counter.surgery, counter.visited || counter.total),
-    shareRate: shareBase ? rate(counter.total, shareBase) : 0,
+    surgeryRate: rate(counter.surgery, counter.consultCount || counter.total),
+    shareRate: shareBase ? rate(counter.consultCount, shareBase) : 0,
   };
 }
 

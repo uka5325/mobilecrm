@@ -1,11 +1,15 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { DetailDrawer } from "@/components/timeline/DetailDrawer";
 import {
   deleteReservation,
   updateReservationFull,
+  getPatientReservationHistory,
+  listPatients,
   type ReservationRecord,
   type AppointmentType,
+  type PatientRecord,
 } from "@/lib/reservations";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useReservationData } from "@/hooks/useReservationData";
@@ -19,20 +23,56 @@ import { getReservationNotes, addReservationNote, updateReservationNote, deleteR
 import { toDate } from "@/lib/settingsUtils";
 
 
+const HISTORY_CACHE_PREFIX = "crm_history_";
+const HISTORY_CACHE_TTL = 3 * 60 * 1000;
+
+type HistoryCacheEntry = {
+  reservations: ReservationRecord[];
+  nextCursor: string | null;
+  hasMore: boolean;
+  cachedAt: number;
+};
+
+function getHistoryCache(patientId: string): HistoryCacheEntry | null {
+  try {
+    const raw = localStorage.getItem(HISTORY_CACHE_PREFIX + patientId);
+    if (!raw) return null;
+    const parsed: HistoryCacheEntry = JSON.parse(raw);
+    if (Date.now() - parsed.cachedAt > HISTORY_CACHE_TTL) return null;
+    return parsed;
+  } catch { return null; }
+}
+
+function setHistoryCache(patientId: string, entry: Omit<HistoryCacheEntry, "cachedAt">) {
+  try {
+    localStorage.setItem(
+      HISTORY_CACHE_PREFIX + patientId,
+      JSON.stringify({ ...entry, cachedAt: Date.now() })
+    );
+  } catch {}
+}
+
+function invalidateHistoryCache(patientId: string) {
+  try { localStorage.removeItem(HISTORY_CACHE_PREFIX + patientId); } catch {}
+}
+
 export default function ReservationsPage() {
-  const { currentUser, authReady } = useCurrentUser();
+  const { currentUser, authReady, firebaseReady } = useCurrentUser();
   const { reservations, loading, refresh } = useReservationData(
     currentUser,
-    authReady
+    authReady,
+    firebaseReady
   );
 
   const [search, setSearch] = useState("");
-  const [filterDate, setFilterDate] = useState("");
+  const [groupPage, setGroupPage] = useState(1);
+  const PAGE_SIZE = 20;
+  const [patients, setPatients] = useState<PatientRecord[]>([]);
 
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [importDrawerOpen, setImportDrawerOpen] = useState(false);
 
-  const [addPatient, setAddPatient] = useState<{ name: string; birthInput: string; phone: string; nationality: string; patientId: string; hospital?: string; consultArea?: string; appointmentType?: import("@/lib/reservations").AppointmentType; coordinators?: string; doctors?: string; depositAmount?: string; surgeryCost?: string } | undefined>();
+  const [addPatient, setAddPatient] = useState<{ name: string; birthInput: string; phone: string; nationality: string; patientId: string } | undefined>();
 
   const [inlineEditId, setInlineEditId] = useState<string | null>(null);
   const [inlineForm, setInlineForm] = useState<{
@@ -58,12 +98,104 @@ export default function ReservationsPage() {
   const [downloading, setDownloading] = useState(false);
   const [pageError, setPageError] = useState("");
 
+  // 환자 전체 이력
+  const [historyPatientId, setHistoryPatientId] = useState<string | null>(null);
+  const [historyPatientName, setHistoryPatientName] = useState("");
+  const [historyList, setHistoryList] = useState<ReservationRecord[]>([]);
+  const [historyNextCursor, setHistoryNextCursor] = useState<string | null>(null);
+  const [historyHasMore, setHistoryHasMore] = useState(false);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState("");
+  const [historyEditTarget, setHistoryEditTarget] = useState<ReservationRecord | null>(null);
+  const [historyPage, setHistoryPage] = useState(1);
+  const [historyCursorStack, setHistoryCursorStack] = useState<(string | null)[]>([]);
+
+  async function handleHistoryDelete(r: ReservationRecord) {
+    if (!currentUser) return;
+    if (!confirm(`${r.reservationDate} 예약을 삭제할까요?`)) return;
+    const result = await deleteReservation(r.id, r.reservationId, currentUser);
+    if (result.success) {
+      setHistoryList((prev) => prev.filter((x) => x.id !== r.id));
+      if (historyPatientId) invalidateHistoryCache(historyPatientId);
+    } else {
+      alert(result.message || "삭제 실패");
+    }
+  }
+
+
+  async function openPatientHistory(patientId: string, name: string) {
+    setHistoryPatientId(patientId);
+    setHistoryPatientName(name);
+    setHistoryPage(1);
+    setHistoryCursorStack([]);
+    setHistoryError("");
+
+    const cached = getHistoryCache(patientId);
+    if (cached) {
+      setHistoryList(cached.reservations);
+      setHistoryNextCursor(cached.nextCursor);
+      setHistoryHasMore(cached.hasMore);
+      setHistoryLoading(false);
+      return;
+    }
+
+    setHistoryList([]);
+    setHistoryNextCursor(null);
+    setHistoryHasMore(false);
+    setHistoryLoading(true);
+    try {
+      const result = await getPatientReservationHistory(patientId);
+      setHistoryList(result.reservations);
+      setHistoryNextCursor(result.nextCursor);
+      setHistoryHasMore(result.hasMore);
+      setHistoryCache(patientId, result);
+    } catch (e) {
+      setHistoryError(e instanceof Error ? e.message : "이력 조회 중 오류가 발생했습니다.");
+    } finally {
+      setHistoryLoading(false);
+    }
+  }
+
+  async function loadNextHistory() {
+    if (!historyPatientId || !historyNextCursor) return;
+    setHistoryLoading(true);
+    try {
+      const result = await getPatientReservationHistory(historyPatientId, historyNextCursor);
+      setHistoryCursorStack((prev) => [...prev, historyNextCursor]);
+      setHistoryList(result.reservations);
+      setHistoryNextCursor(result.nextCursor);
+      setHistoryHasMore(result.hasMore);
+      setHistoryPage((p) => p + 1);
+    } catch (e) {
+      setHistoryError(e instanceof Error ? e.message : "추가 로드 중 오류가 발생했습니다.");
+    } finally {
+      setHistoryLoading(false);
+    }
+  }
+
+  async function loadPrevHistory() {
+    if (!historyPatientId || historyPage <= 1) return;
+    const stack = [...historyCursorStack];
+    const prevCursor = stack.pop() ?? null;
+    setHistoryCursorStack(stack);
+    setHistoryLoading(true);
+    try {
+      const result = await getPatientReservationHistory(historyPatientId, prevCursor ?? undefined);
+      setHistoryList(result.reservations);
+      setHistoryNextCursor(result.nextCursor);
+      setHistoryHasMore(result.hasMore);
+      setHistoryPage((p) => p - 1);
+    } catch (e) {
+      setHistoryError(e instanceof Error ? e.message : "이전 페이지 로드 중 오류가 발생했습니다.");
+    } finally {
+      setHistoryLoading(false);
+    }
+  }
+
   const filteredReservations = useMemo(() => {
     const keyword = search.trim().toLowerCase();
 
     return reservations.filter((item) => {
-      if (filterDate && item.reservationDate !== filterDate) return false;
-
       if (!keyword) return true;
 
       const birthInfo = getReservationBirthInfo(item);
@@ -90,11 +222,38 @@ export default function ReservationsPage() {
 
       return target.includes(keyword);
     });
-  }, [reservations, search, filterDate]);
+  }, [reservations, search]);
 
+
+  const filteredPatients = useMemo(() => {
+    const keyword = search.trim().toLowerCase();
+    if (!keyword) return patients;
+    return patients.filter((p) =>
+      [p.name, p.phone, p.nationality, p.birth, p.birthInput]
+        .join(" ").toLowerCase().includes(keyword)
+    );
+  }, [patients, search]);
 
   const patientGroups = useMemo<PatientGroup[]>(() => {
     const map = new Map<string, PatientGroup>();
+
+    // 1. patients 컬렉션을 단일 소스로 먼저 등록
+    for (const p of filteredPatients) {
+      if (!p.patientId) continue;
+      map.set(p.patientId, {
+        patientKey: p.patientId,
+        patientId: p.patientId,
+        name: p.name,
+        birth: p.birth || "",
+        birthInput: p.birthInput || p.birth || "",
+        gender: p.gender || "",
+        phone: p.phone || "",
+        nationality: p.nationality || "",
+        reservations: [],
+      });
+    }
+
+    // 2. reservations를 환자 그룹에 결합 (patients에 없는 레거시 데이터는 fallback 그룹 생성)
     for (const r of filteredReservations) {
       const key = r.patientId || `${r.name}_${r.birth}`;
       if (!map.has(key)) {
@@ -112,6 +271,8 @@ export default function ReservationsPage() {
       }
       map.get(key)!.reservations.push(r);
     }
+
+    // 3. 각 그룹 내 예약 날짜순 정렬
     for (const g of map.values()) {
       g.reservations.sort((a, b) =>
         (a.reservationDate + a.reservationTime).localeCompare(
@@ -119,12 +280,28 @@ export default function ReservationsPage() {
         )
       );
     }
+
+    // 4. 최신 예약날짜 기준 내림차순 (예약 없는 환자는 하단)
     return [...map.values()].sort((a, b) => {
       const latestA = a.reservations[a.reservations.length - 1]?.reservationDate || "";
       const latestB = b.reservations[b.reservations.length - 1]?.reservationDate || "";
       return latestB.localeCompare(latestA);
     });
-  }, [filteredReservations]);
+  }, [filteredPatients, filteredReservations]);
+
+  useEffect(() => { setGroupPage(1); }, [search]);
+
+  useEffect(() => {
+    if (!authReady) return;
+    listPatients().then(setPatients);
+  }, [authReady]);
+
+  const pagedGroups = useMemo(() => {
+    const start = (groupPage - 1) * PAGE_SIZE;
+    return patientGroups.slice(start, start + PAGE_SIZE);
+  }, [patientGroups, groupPage, PAGE_SIZE]);
+
+  const totalPages = Math.max(1, Math.ceil(patientGroups.length / PAGE_SIZE));
 
   function startInlineEdit(item: ReservationRecord) {
     setInlineEditId(item.id);
@@ -179,7 +356,7 @@ export default function ReservationsPage() {
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       setPageError(`수정 오류: ${msg}`);
-      console.error("[ReservationsPage] inline save error:", err);
+      console.error("[ReservationsPage] inline save error:", (err as Error)?.message ?? "");
     } finally {
       setInlineSaving(false);
     }
@@ -437,20 +614,13 @@ export default function ReservationsPage() {
     await refresh();
   }
 
-  function handleAddReservation(item: ReservationRecord) {
+  function handleAddReservation(group: PatientGroup) {
     setAddPatient({
-      name: item.name,
-      birthInput: item.birthInput || item.birth || "",
-      phone: item.phone || "",
-      nationality: item.nationality || "",
-      patientId: item.patientId,
-      hospital: item.hospital || "",
-      consultArea: item.consultArea || "",
-      appointmentType: item.appointmentType,
-      coordinators: (item.coordinators || []).join(", "),
-      doctors: (item.doctors || []).join(", "),
-      depositAmount: item.depositAmount || "",
-      surgeryCost: item.surgeryCost || "",
+      name: group.name,
+      birthInput: group.birthInput || group.birth || "",
+      phone: group.phone || "",
+      nationality: group.nationality || "",
+      patientId: group.patientId,
     });
     setDrawerOpen(true);
   }
@@ -485,20 +655,6 @@ export default function ReservationsPage() {
             placeholder="이름, 상담부위, 원장 검색..."
             className="h-10 min-w-0 flex-1 rounded-xl border border-[#dfe3e8] bg-white px-4 text-sm outline-none focus:border-[#1d9e75]"
           />
-
-          <input
-            type="date"
-            value={filterDate}
-            onChange={(e) => setFilterDate(e.target.value)}
-            className="h-10 w-[100px] shrink-0 appearance-none rounded-xl border border-[#dfe3e8] bg-white px-2 text-sm outline-none focus:border-[#1d9e75]"
-          />
-
-          <button
-            onClick={() => setFilterDate("")}
-            className="h-10 shrink-0 whitespace-nowrap rounded-xl border border-[#dfe3e8] bg-white px-3 text-sm text-gray-700 transition hover:-translate-y-0.5 hover:bg-gray-50 active:scale-95"
-          >
-            날짜 초기화
-          </button>
         </div>
 
         <div className="mt-2 flex items-center gap-2">
@@ -573,8 +729,80 @@ export default function ReservationsPage() {
         전체 {reservations.length}건 / 표시 {filteredReservations.length}건
       </div>
 
+      {/* 환자 전체 이력 모달 */}
+      {historyPatientId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setHistoryPatientId(null)}>
+          <div className="mx-4 w-full max-w-xl rounded-2xl bg-white p-5 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="mb-3 flex items-center justify-between">
+              <span className="text-base font-bold text-gray-800">{historyPatientName} — 전체 예약 이력</span>
+              <button onClick={() => setHistoryPatientId(null)} className="text-2xl leading-none text-gray-400 hover:text-gray-700">×</button>
+            </div>
+            {historyError && <div className="mb-2 text-sm text-red-500">{historyError}</div>}
+            {historyLoading && historyList.length === 0 ? (
+              <div className="py-8 text-center text-sm text-gray-400">로딩 중...</div>
+            ) : historyList.length === 0 ? (
+              <div className="py-8 text-center text-sm text-gray-400">예약 이력이 없습니다.</div>
+            ) : (
+              <div className="max-h-[60vh] divide-y divide-gray-100 overflow-y-auto rounded-xl border border-gray-100">
+                {historyList.map((r) => (
+                  <div key={r.id} className="flex items-center gap-2 px-4 py-2.5 text-sm">
+                    <span className="w-20 shrink-0 text-xs text-gray-400">{r.reservationDate}</span>
+                    {r.reservationTime && <span className="shrink-0 text-xs text-gray-400">{r.reservationTime}</span>}
+                    <span className="shrink-0 text-gray-700">{r.appointmentType}</span>
+                    {r.consultArea && <span className="shrink-0 text-xs text-gray-500">{r.consultArea}</span>}
+                    <span className="shrink-0 text-xs text-gray-400">{r.hospital}</span>
+                    <span className="shrink-0 text-xs text-gray-400">
+                      {r.completed ? "완료" : (r.operationStatus && r.operationStatus !== "내원전" ? r.operationStatus : "")}
+                    </span>
+                    <div className="ml-auto flex shrink-0 gap-1.5">
+                      <button
+                        onClick={() => setHistoryEditTarget(r)}
+                        className="rounded border border-blue-200 px-2 py-0.5 text-xs text-blue-600 hover:bg-blue-50"
+                      >수정</button>
+                      <button
+                        onClick={() => handleHistoryDelete(r)}
+                        className="rounded border border-red-200 px-2 py-0.5 text-xs text-red-500 hover:bg-red-50"
+                      >삭제</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            <div className="mt-3 flex items-center justify-between gap-2">
+              <button
+                onClick={loadPrevHistory}
+                disabled={historyPage <= 1 || historyLoading}
+                className="rounded-xl border border-[#dfe3e8] px-3 py-1.5 text-sm text-gray-600 transition hover:bg-gray-50 disabled:opacity-30"
+              >← 이전</button>
+              <span className="text-xs text-gray-400">{historyPage}페이지</span>
+              <button
+                onClick={loadNextHistory}
+                disabled={!historyHasMore || historyLoading}
+                className="rounded-xl border border-[#dfe3e8] px-3 py-1.5 text-sm text-gray-600 transition hover:bg-gray-50 disabled:opacity-30"
+              >{historyLoading ? "로딩 중..." : "다음 →"}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {currentUser && (
+        <DetailDrawer
+          open={!!historyEditTarget}
+          reservation={historyEditTarget}
+          currentUser={currentUser}
+          onClose={() => setHistoryEditTarget(null)}
+          onRefreshLatestLog={async () => {}}
+          onRefresh={() => {
+            if (historyPatientId) {
+              invalidateHistoryCache(historyPatientId);
+              openPatientHistory(historyPatientId, historyPatientName);
+            }
+          }}
+        />
+      )}
+
       <ReservationsTable
-        patientGroups={patientGroups}
+        patientGroups={pagedGroups}
         loading={loading}
         inlineEditId={inlineEditId}
         inlineForm={inlineForm}
@@ -594,17 +822,38 @@ export default function ReservationsPage() {
         onCancelPatientEdit={() => { setPatientEditId(null); setPatientEditForm(null); }}
         onDeletePatient={handleDeletePatient}
         onOpenPatientMemo={openPatientMemoPopover}
+        onOpenPatientHistory={openPatientHistory}
         onSaveAmount={handleSaveAmount}
       />
+
+      {totalPages > 1 && (
+        <div className="flex items-center justify-center gap-3 py-4 text-sm">
+          <button
+            onClick={() => setGroupPage((p) => Math.max(1, p - 1))}
+            disabled={groupPage === 1}
+            className="rounded-xl border border-[#dfe3e8] bg-white px-4 py-2 text-gray-600 transition hover:bg-gray-50 disabled:opacity-30"
+          >← 이전</button>
+          <span className="text-gray-400">{groupPage} / {totalPages}</span>
+          <button
+            onClick={() => setGroupPage((p) => Math.min(totalPages, p + 1))}
+            disabled={groupPage === totalPages}
+            className="rounded-xl border border-[#dfe3e8] bg-white px-4 py-2 text-gray-600 transition hover:bg-gray-50 disabled:opacity-30"
+          >다음 →</button>
+        </div>
+      )}
 
       {currentUser && (
         <CreateDrawer
           open={drawerOpen}
           onClose={() => { setDrawerOpen(false); setAddPatient(undefined); }}
           currentUser={currentUser}
-          initialDate={filterDate || undefined}
+          initialDate={undefined}
           initialPatient={addPatient}
-          onCreated={refresh}
+          mode={addPatient ? "reservation" : "register"}
+          onCreated={addPatient
+            ? () => { refresh(); listPatients().then(setPatients); }
+            : () => { listPatients().then(setPatients); }
+          }
         />
       )}
 

@@ -18,6 +18,7 @@ type Props = {
   reservationDocId: string;
   patientId?: string;
   currentUser: StaffUser;
+  appointmentType?: string;
 };
 
 function formatMoney(v: number | undefined) {
@@ -296,7 +297,7 @@ function InvoiceDetailView({
   );
 }
 
-export function InvoiceTab({ reservationDocId, patientId, currentUser }: Props) {
+export function InvoiceTab({ reservationDocId, patientId, currentUser, appointmentType }: Props) {
   const [allInvoices, setAllInvoices] = useState<InvoiceRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
@@ -332,7 +333,7 @@ export function InvoiceTab({ reservationDocId, patientId, currentUser }: Props) 
       }
       setAllInvoices(invoices);
     } catch (e) {
-      console.error("[InvoiceTab] load error:", e);
+      console.error("[InvoiceTab] load error:", (e as Error)?.message ?? "");
       setError("인보이스를 불러오지 못했습니다.");
     } finally {
       setLoading(false);
@@ -361,7 +362,7 @@ export function InvoiceTab({ reservationDocId, patientId, currentUser }: Props) 
       await loadInvoices();
       setEditingInvoice(result.invoice);
     } catch (e) {
-      console.error("[InvoiceTab] create error:", e);
+      console.error("[InvoiceTab] create error:", (e as Error)?.message ?? "");
       setError("인보이스 생성 중 오류가 발생했습니다.");
     } finally {
       setCreating(false);
@@ -411,14 +412,20 @@ export function InvoiceTab({ reservationDocId, patientId, currentUser }: Props) 
       {/* 이 예약 인보이스 없으면 생성 버튼 */}
       {!thisReservationInvoice && (
         <div className="rounded-2xl border-2 border-dashed border-[#dfe3e8] p-4 text-center">
-          <div className="text-sm text-gray-400">이 예약에 대한 인보이스가 없습니다.</div>
-          <button
-            onClick={handleCreate}
-            disabled={creating}
-            className="mt-3 w-full rounded-xl bg-black px-5 py-2.5 text-sm font-medium text-white transition hover:-translate-y-0.5 hover:shadow-md active:scale-95 disabled:opacity-50"
-          >
-            {creating ? "생성 중..." : "이 예약으로 인보이스 생성"}
-          </button>
+          {appointmentType === "수술" ? (
+            <>
+              <div className="text-sm text-gray-400">이 예약에 대한 인보이스가 없습니다.</div>
+              <button
+                onClick={handleCreate}
+                disabled={creating}
+                className="mt-3 w-full rounded-xl bg-black px-5 py-2.5 text-sm font-medium text-white transition hover:-translate-y-0.5 hover:shadow-md active:scale-95 disabled:opacity-50"
+              >
+                {creating ? "생성 중..." : "이 예약으로 인보이스 생성"}
+              </button>
+            </>
+          ) : (
+            <div className="text-sm text-gray-400">수술 예약 건만 인보이스를 생성할 수 있습니다.</div>
+          )}
         </div>
       )}
 

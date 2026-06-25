@@ -117,14 +117,14 @@ export default function DashboardPage() {
       .map((item) => finalizeCounter(item))
       .sort((a, b) => b.total - a.total || cleanText(a.name).localeCompare(cleanText(b.name)));
 
-    const apptTypeRows = (["상담", "수술", "치료", "경과", "진료", "검진"] as const).map((type) => {
+    const apptTypeRows = (["상담", "수술", "시술", "치료", "경과", "진료", "검진"] as const).map((type) => {
       const counter = apptTypeMap[type] || emptyCounter(type);
       return finalizeCounter(counter, summary.total);
     });
 
     const areaRows = Object.values(areaMap)
       .filter((item) => item.total > 0)
-      .map((item) => finalizeCounter(item, summary.total))
+      .map((item) => finalizeCounter(item, summary.consultCount))
       .sort((a, b) => b.total - a.total || cleanText(a.name).localeCompare(cleanText(b.name)));
 
     return { summary: finalizedSummary, hospitalRows, apptTypeRows, areaRows };
@@ -168,6 +168,7 @@ export default function DashboardPage() {
   const APPT_TYPE_COLORS: Record<string, string> = {
     상담: "#2563eb",
     수술: "#ef4444",
+    시술: "#db2777",
     치료: "#16a34a",
     경과: "#f59e0b",
     진료: "#7c3aed",
@@ -248,7 +249,7 @@ export default function DashboardPage() {
 
       {/* 유형별 현황 + 취소 */}
       <section className="grid grid-cols-2 gap-3 md:grid-cols-3">
-        {(["상담", "수술", "치료", "경과", "진료", "검진"] as const).map((type) => {
+        {(["상담", "수술", "시술", "치료", "경과", "진료", "검진"] as const).map((type) => {
           const row = dashboard.apptTypeRows.find((r) => r.name === type);
           const count = row?.total || 0;
           const completed = row?.completedCount || 0;
@@ -279,7 +280,7 @@ export default function DashboardPage() {
           headers={["병원명", "상담", "내원", "수술예약", "완료", "전환율", "예약금"]}
           rows={dashboard.hospitalRows.map((row) => [
             row.name || "미지정",
-            row.total.toLocaleString("ko-KR"),
+            row.consultCount.toLocaleString("ko-KR"),
             row.visited.toLocaleString("ko-KR"),
             row.surgery.toLocaleString("ko-KR"),
             row.completedCount.toLocaleString("ko-KR"),
@@ -294,7 +295,7 @@ export default function DashboardPage() {
           headers={["상담부위", "상담", "수술예약", "전환율", "비중", "예약금"]}
           rows={dashboard.areaRows.map((row) => [
             row.name || "미지정",
-            row.total.toLocaleString("ko-KR"),
+            row.consultCount.toLocaleString("ko-KR"),
             row.surgery.toLocaleString("ko-KR"),
             pctText(row.surgeryRate),
             pctText(row.shareRate || 0),

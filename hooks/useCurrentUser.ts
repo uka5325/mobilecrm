@@ -12,9 +12,11 @@ export function useCurrentUser() {
   const router = useRouter();
   const [currentUser, setCurrentUser] = useState<StaffUser | null>(null);
   const [authReady, setAuthReady] = useState(false);
+  const [firebaseReady, setFirebaseReady] = useState(false);
 
   useEffect(() => {
     const unsubscribe = listenCurrentUser(async (user: User | null) => {
+      setFirebaseReady(true); // Firebase auth state 확인 즉시 set
       if (!user) {
         setCurrentUser(null);
         setAuthReady(true);
@@ -62,5 +64,5 @@ export function useCurrentUser() {
     return () => unsubscribe();
   }, [router]);
 
-  return { currentUser, authReady };
+  return { currentUser, authReady, firebaseReady };
 }

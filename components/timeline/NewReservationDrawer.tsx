@@ -93,7 +93,7 @@ export function NewReservationDrawer({ open, onClose, currentUser, initialDate, 
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       setErrorMessage(`저장 오류: ${msg}`);
-      console.error("[NewReservationDrawer] save error:", err);
+      console.error("[NewReservationDrawer] save error:", (err as Error)?.message ?? "");
     } finally {
       setSaving(false);
     }
@@ -187,41 +187,27 @@ export function NewReservationDrawer({ open, onClose, currentUser, initialDate, 
             </div>
           </div>
 
-          <div>
-            <label className="text-xs text-gray-500">예약 유형 *</label>
-            <div className="mt-2 flex gap-2 flex-wrap">
-              {APPOINTMENT_TYPES.map((type) => {
-                const colors: Record<string, string> = {
-                  상담: "#2563eb", 수술: "#ef4444", 치료: "#16a34a", 경과: "#f59e0b", 진료: "#7c3aed", 검진: "#0891b2",
-                };
-                const active = form.appointmentType === type;
-                return (
-                  <button
-                    key={type}
-                    onClick={() => setForm((p) => ({ ...p, appointmentType: type }))}
-                    className="rounded-xl border px-3 py-1.5 text-sm font-semibold transition hover:-translate-y-0.5 active:scale-95"
-                    style={{
-                      backgroundColor: active ? colors[type] : "#f9fafb",
-                      color: active ? "#fff" : "#374151",
-                      borderColor: active ? colors[type] : "#dfe3e8",
-                    }}
-                  >
-                    {type}
-                  </button>
-                );
-              })}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs text-gray-500">예약 유형 *</label>
+              <select
+                value={form.appointmentType}
+                onChange={(e) => setForm((p) => ({ ...p, appointmentType: e.target.value as AppointmentType }))}
+                className="mt-1 w-full rounded-xl border border-[#dfe3e8] px-3 py-2 text-sm transition focus:border-[#1d9e75] focus:outline-none"
+              >
+                {APPOINTMENT_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+              </select>
             </div>
-          </div>
-
-          <div>
-            <label className="text-xs text-gray-500">
-              {form.appointmentType === "상담" ? "상담부위" : "수술항목"}
-            </label>
-            <input
-              value={form.consultArea}
-              onChange={(e) => setForm((p) => ({ ...p, consultArea: e.target.value }))}
-              className="mt-1 w-full rounded-xl border border-[#dfe3e8] px-3 py-2 text-sm transition focus:border-[#1d9e75] focus:outline-none"
-            />
+            <div>
+              <label className="text-xs text-gray-500">
+                {form.appointmentType === "상담" ? "상담부위" : "수술항목"}
+              </label>
+              <input
+                value={form.consultArea}
+                onChange={(e) => setForm((p) => ({ ...p, consultArea: e.target.value }))}
+                className="mt-1 w-full rounded-xl border border-[#dfe3e8] px-3 py-2 text-sm transition focus:border-[#1d9e75] focus:outline-none"
+              />
+            </div>
           </div>
 
           <div className="grid grid-cols-2 gap-3">

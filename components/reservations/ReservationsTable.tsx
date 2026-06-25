@@ -31,6 +31,7 @@ export type PatientEditForm = {
 const APPT_TYPE_COLORS: Record<AppointmentType, string> = {
   상담: "#2563eb",
   수술: "#ef4444",
+  시술: "#db2777",
   치료: "#16a34a",
   경과: "#f59e0b",
   진료: "#7c3aed",
@@ -56,7 +57,7 @@ type Props = {
   onSaveEdit: (item: ReservationRecord) => void;
   onCancelEdit: () => void;
   onDelete: (item: ReservationRecord) => void;
-  onAddReservation: (item: ReservationRecord) => void;
+  onAddReservation: (group: PatientGroup) => void;
   // 환자 헤더 편집
   patientEditId: string | null;
   patientEditForm: PatientEditForm | null;
@@ -67,6 +68,7 @@ type Props = {
   onCancelPatientEdit: () => void;
   onDeletePatient: (group: PatientGroup) => void;
   onOpenPatientMemo: (group: PatientGroup) => void;
+  onOpenPatientHistory?: (patientId: string, name: string) => void;
   onSaveAmount: (reservationId: string, field: "depositAmount" | "surgeryCost", value: string) => Promise<void>;
 };
 
@@ -207,6 +209,7 @@ function PatientInvoiceModal({ patientId, patientName, reservations, onClose, on
   const [editingInvoice, setEditingInvoice] = useState<InvoiceRecord | null>(null);
   const [viewingInvoice, setViewingInvoice] = useState<InvoiceRecord | null>(null);
   const [error, setError] = useState("");
+  const [showCreatePanel, setShowCreatePanel] = useState(false);
 
   const load = useCallback(async () => {
     if (!getInvoicesByPatientCache(patientId)) setLoading(true);
@@ -354,6 +357,9 @@ function PatientInvoiceModal({ patientId, patientName, reservations, onClose, on
   }
 
   const invoiceByReservation = new Map<string, InvoiceRecord>(invoices.map((inv) => [inv.reservationDocId, inv]));
+  const surgeryReservationsWithoutInvoice = reservations.filter(
+    (r) => r.appointmentType === "수술" && !invoiceByReservation.has(r.id)
+  );
 
   return (
     <div className="fixed inset-0 z-[1100] flex items-center justify-center bg-black/40" onClick={onClose}>
@@ -430,21 +436,7 @@ function PatientInvoiceModal({ patientId, patientName, reservations, onClose, on
                     </div>
                   );
                 }
-                return (
-                  <div key={res.id} className="rounded-xl border-2 border-dashed border-[#dfe3e8] p-3 flex items-center justify-between">
-                    <div>
-                      <div className="text-xs font-medium text-gray-700">{res.reservationDate} {res.reservationTime}</div>
-                      <div className="text-xs text-gray-500">{res.hospital || "병원명 없음"} · {res.appointmentType}</div>
-                    </div>
-                    <button
-                      onClick={() => handleCreate(res.id)}
-                      disabled={creating === res.id}
-                      className="rounded-lg bg-black px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50"
-                    >
-                      {creating === res.id ? "생성 중..." : "인보이스 생성"}
-                    </button>
-                  </div>
-                );
+                return null;
               })}
               {invoices.filter((inv) => !reservations.find((r) => r.id === inv.reservationDocId)).map((inv) => (
                 <div key={inv.id} className="rounded-xl border border-[#edf0f3] bg-white p-3">
@@ -474,6 +466,35 @@ function PatientInvoiceModal({ patientId, patientName, reservations, onClose, on
                   </div>
                 </div>
               ))}
+              {surgeryReservationsWithoutInvoice.length > 0 && (
+                <div className="mt-1">
+                  <button
+                    onClick={() => setShowCreatePanel((v) => !v)}
+                    className="w-full rounded-xl border border-[#1d9e75] px-3 py-2 text-sm font-medium text-[#1d9e75] hover:bg-emerald-50"
+                  >
+                    {showCreatePanel ? "닫기" : "+ 인보이스 생성"}
+                  </button>
+                  {showCreatePanel && (
+                    <div className="mt-2 space-y-2">
+                      {surgeryReservationsWithoutInvoice.map((res) => (
+                        <div key={res.id} className="flex items-center justify-between rounded-xl border border-dashed border-[#dfe3e8] p-3">
+                          <div>
+                            <div className="text-xs font-medium text-gray-700">{res.reservationDate} {res.reservationTime}</div>
+                            <div className="text-xs text-gray-500">{res.hospital || "병원명 없음"} · 수술</div>
+                          </div>
+                          <button
+                            onClick={() => { handleCreate(res.id); setShowCreatePanel(false); }}
+                            disabled={creating === res.id}
+                            className="rounded-lg bg-black px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50"
+                          >
+                            {creating === res.id ? "생성 중..." : "생성"}
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
             </>
           )}
         </div>
@@ -736,6 +757,7 @@ export function ReservationsTable({
   onCancelPatientEdit,
   onDeletePatient,
   onOpenPatientMemo,
+  onOpenPatientHistory,
   onSaveAmount,
 }: Props) {
   const cellCls = "border-b border-gray-100 px-2 py-2";
@@ -1058,6 +1080,14 @@ export function ReservationsTable({
             })()}
 
             <div className="ml-auto flex items-center gap-1.5">
+              {onOpenPatientHistory && (
+                <button
+                  onClick={() => onOpenPatientHistory(group.patientId, group.name)}
+                  className="rounded-md border border-purple-200 bg-white px-2 py-0.5 text-xs text-purple-600 hover:bg-purple-50"
+                >
+                  전체 이력
+                </button>
+              )}
               <button
                 onClick={() => onOpenPatientMemo(group)}
                 className="rounded-md border border-gray-200 bg-white px-2 py-0.5 text-xs text-gray-600 hover:bg-gray-50"
@@ -1071,7 +1101,7 @@ export function ReservationsTable({
                 수정
               </button>
               <button
-                onClick={() => onAddReservation(group.reservations[group.reservations.length - 1])}
+                onClick={() => onAddReservation(group)}
                 className="rounded-md border border-gray-200 bg-white px-2 py-0.5 text-xs text-emerald-600 hover:bg-emerald-50"
               >
                 추가
@@ -1112,9 +1142,6 @@ export function ReservationsTable({
 
     patientGroups.forEach((group) => {
       rows.push(renderPatientHeader(group));
-      group.reservations.forEach((item) => {
-        rows.push(renderReservationRow(item));
-      });
     });
 
     return rows;
@@ -1144,16 +1171,6 @@ export function ReservationsTable({
             <col className="w-[90px]" />
             <col className="w-[120px]" />
           </colgroup>
-
-          <thead className="bg-gray-50">
-            <tr>
-              {["예약일", "시간", "병원명", "담당 원장", "유형", "상담/수술항목", "담당자", "관리"].map((head) => (
-                <th key={head} className="border-b border-gray-200 px-4 py-3 text-left text-xs font-semibold text-gray-500">
-                  {head}
-                </th>
-              ))}
-            </tr>
-          </thead>
 
           <tbody>{renderBody()}</tbody>
         </table>

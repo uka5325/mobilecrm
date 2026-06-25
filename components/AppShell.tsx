@@ -125,6 +125,7 @@ export default function AppShell({ children }: AppShellProps) {
   const [firebaseUser, setFirebaseUser] = useState<User | null>(null);
   const [staffUser, setStaffUser] = useState<StaffUser | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isOnline, setIsOnline] = useState(true);
 
   const currentPage = useMemo(() => {
     if (pathname === "/") return pageInfo["/"];
@@ -143,6 +144,15 @@ export default function AppShell({ children }: AppShellProps) {
 
   useEffect(() => {
     setMounted(true);
+    setIsOnline(navigator.onLine);
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+    return () => {
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+    };
   }, []);
 
   const refreshStaff = useCallback(
@@ -184,7 +194,7 @@ export default function AppShell({ children }: AppShellProps) {
 
         setLoading(false);
       } catch (error) {
-        console.error("Staff refresh error:", error);
+        console.error("Staff refresh error:", (error as Error)?.message ?? "");
 
         clearCachedStaff();
         setStaffUser(null);
@@ -247,7 +257,7 @@ export default function AppShell({ children }: AppShellProps) {
 
         setLoading(false);
       } catch (error) {
-        console.error("Auth check error:", error);
+        console.error("Auth check error:", (error as Error)?.message ?? "");
 
         if (!alive) return;
 
@@ -314,6 +324,11 @@ export default function AppShell({ children }: AppShellProps) {
 
   return (
     <div className="min-h-screen bg-white lg:flex">
+      {!isOnline && (
+        <div className="fixed left-0 right-0 top-0 z-50 bg-red-600 px-4 py-2 text-center text-sm text-white">
+          오프라인 상태입니다. 인터넷 연결을 확인해주세요.
+        </div>
+      )}
       <aside className="hidden w-[260px] shrink-0 flex-col justify-between bg-[#0f1923] px-6 py-8 lg:flex">
         <div>
           <div className="mb-4 flex h-[38px] w-[38px] items-center justify-center rounded-lg bg-[#1d9e75] text-xl text-white">

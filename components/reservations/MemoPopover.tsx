@@ -25,6 +25,8 @@ type Props = {
   onAdd: (text: string) => Promise<void>;
 };
 
+const PAGE_SIZE = 10;
+
 export function MemoPopover({
   memoPopover,
   editingNoteId,
@@ -39,8 +41,13 @@ export function MemoPopover({
 }: Props) {
   const [newText, setNewText] = useState("");
   const [adding, setAdding] = useState(false);
+  const [page, setPage] = useState(1);
 
   if (!memoPopover) return null;
+
+  const totalNotes = memoPopover.notes.length;
+  const totalPages = Math.ceil(totalNotes / PAGE_SIZE);
+  const pagedNotes = memoPopover.notes.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   async function handleAdd() {
     if (!newText.trim()) return;
@@ -61,7 +68,7 @@ export function MemoPopover({
           <div>
             <div className="font-bold text-gray-800">{memoPopover.item.name} 메모</div>
             <div className="text-xs text-gray-400">
-              {memoPopover.item.reservationDate} · {memoPopover.item.reservationTime}
+              전체 {totalNotes}건
             </div>
           </div>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600">✕</button>
@@ -91,7 +98,7 @@ export function MemoPopover({
             <div className="py-8 text-center text-sm text-gray-400">등록된 메모가 없습니다.</div>
           ) : (
             <div className="space-y-3">
-              {memoPopover.notes.map((note) => (
+              {pagedNotes.map((note) => (
                 <div key={note.id} className="rounded-xl border border-[#edf0f3] bg-[#f8fafc] p-3">
                   <div className="mb-1.5 flex items-start gap-2">
                     <span className="mt-0.5 shrink-0 rounded-lg bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-700">
@@ -143,6 +150,25 @@ export function MemoPopover({
                   </div>
                 </div>
               ))}
+            </div>
+          )}
+          {totalPages > 1 && (
+            <div className="mt-4 flex items-center justify-center gap-3">
+              <button
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                disabled={page === 1}
+                className="rounded-lg border border-[#dfe3e8] px-3 py-1 text-xs text-gray-600 disabled:opacity-40"
+              >
+                이전
+              </button>
+              <span className="text-xs text-gray-500">{page} / {totalPages}</span>
+              <button
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                disabled={page === totalPages}
+                className="rounded-lg border border-[#dfe3e8] px-3 py-1 text-xs text-gray-600 disabled:opacity-40"
+              >
+                다음
+              </button>
             </div>
           )}
         </div>

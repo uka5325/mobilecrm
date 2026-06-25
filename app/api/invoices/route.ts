@@ -1,9 +1,28 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminAuth, adminDb, FieldValue } from "@/lib/firebaseAdmin";
-import { docToObj, cleanText } from "@/lib/adminUtils";
 
-const PATIENT_INVOICES_LIMIT = 50;
-const INVOICE_LIST_LIMIT = 200;
+function toSer(val: unknown): unknown {
+  if (val === null || val === undefined) return val;
+  if (typeof val === "object" && typeof (val as Record<string, unknown>).toMillis === "function") {
+    return (val as { toMillis: () => number }).toMillis();
+  }
+  if (Array.isArray(val)) return val.map(toSer);
+  if (typeof val === "object") {
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(val as Record<string, unknown>)) out[k] = toSer(v);
+    return out;
+  }
+  return val;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function docToObj(d: any): Record<string, unknown> {
+  return toSer({ id: d.id, ...d.data() }) as Record<string, unknown>;
+}
+
+function cleanText(v: unknown): string {
+  return String(v ?? "").trim();
+}
 
 function toNumber(value: unknown) {
   if (typeof value === "number") return value;
@@ -21,7 +40,8 @@ function makeInvoiceId(reservation: Record<string, unknown>) {
     .replace(/[\\/#?[\]*.]/g, " ")
     .replace(/\s+/g, "")
     .slice(0, 20);
-  return `INV-${yy}${mm}${dd}-${namePart}`;
+  const suffix = Date.now().toString(36);
+  return `INV-${yy}${mm}${dd}-${namePart}-${suffix}`;
 }
 
 function parseBirthInfo(rawValue: string, rawGender?: string) {
@@ -104,23 +124,13 @@ export async function POST(req: NextRequest) {
       return callerName ? coords.includes(callerName) : false;
     }
 
-    // ── COUNT_BY_PATIENT ─────────────────────────────────────────────────────
-    if (action === "count_by_patient") {
-      const { patientId } = payload as { patientId: string };
-      const countSnap = await adminDb.collection("invoices")
-        .where("patientId", "==", patientId)
-        .count()
-        .get();
-      return NextResponse.json({ success: true, count: countSnap.data().count });
-    }
-
     // ── GET_BY_PATIENT ───────────────────────────────────────────────────────
     if (action === "get_by_patient") {
       const { patientId } = payload as { patientId: string };
       const snap = await adminDb.collection("invoices")
         .where("patientId", "==", patientId)
         .orderBy("createdAt", "desc")
-        .limit(PATIENT_INVOICES_LIMIT)
+        .limit(50)
         .get();
       const invoices = snap.docs.map(docToObj)
         .filter((r) => !r.isDeleted && isCoordinatorOf(r));
@@ -211,20 +221,17 @@ export async function POST(req: NextRequest) {
         isDeleted: false,
       };
 
-      const invoiceRef = adminDb.collection("invoices").doc();
+      const invoiceRef = await adminDb.collection("invoices").add(invoicePayload);
       const invoiceDocId = invoiceRef.id;
 
-      await adminDb.runTransaction(async (tx) => {
-        tx.set(invoiceRef, invoicePayload);
-        tx.update(adminDb.collection("reservations").doc(reservationDocId), {
-          invoiceId,
-          invoiceDocId,
-          invoiceStatus: "draft",
-          invoiceUpdatedAt: FieldValue.serverTimestamp(),
-          updatedAt: FieldValue.serverTimestamp(),
-          updatedBy: staffName,
-          updatedByUid: staffUid,
-        });
+      await adminDb.collection("reservations").doc(reservationDocId).update({
+        invoiceId,
+        invoiceDocId,
+        invoiceStatus: "draft",
+        invoiceUpdatedAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+        updatedBy: staffName,
+        updatedByUid: staffUid,
       });
 
       await writeLog({
@@ -319,22 +326,21 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ success: false, message: "접근 권한이 없습니다." }, { status: 403 });
       }
 
-      await adminDb.runTransaction(async (tx) => {
-        tx.update(invoiceRef, {
-          isDeleted: true,
-          updatedAt: FieldValue.serverTimestamp(),
-          updatedBy: staffName,
-          updatedByUid: staffUid,
-        });
-        tx.update(adminDb.collection("reservations").doc(cleanText(current.reservationDocId)), {
-          invoiceId: "",
-          invoiceDocId: "",
-          invoiceStatus: "",
-          invoiceUpdatedAt: FieldValue.serverTimestamp(),
-          updatedAt: FieldValue.serverTimestamp(),
-          updatedBy: staffName,
-          updatedByUid: staffUid,
-        });
+      await invoiceRef.update({
+        isDeleted: true,
+        updatedAt: FieldValue.serverTimestamp(),
+        updatedBy: staffName,
+        updatedByUid: staffUid,
+      });
+
+      await adminDb.collection("reservations").doc(cleanText(current.reservationDocId)).update({
+        invoiceId: "",
+        invoiceDocId: "",
+        invoiceStatus: "",
+        invoiceUpdatedAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+        updatedBy: staffName,
+        updatedByUid: staffUid,
       });
 
       await writeLog({
@@ -350,17 +356,22 @@ export async function POST(req: NextRequest) {
 
     // ── LIST ─────────────────────────────────────────────────────────────────
     if (action === "list") {
-      const { startDate, endDate, status, patientName, commissionStaffUid } =
+      const { startDate, endDate, status, patientName, commissionStaffUid, cursor } =
         (payload || {}) as Record<string, string>;
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      let baseQuery: any = adminDb.collection("invoices").orderBy("createdAt", "desc");
-      if (!isAdmin && callerName) {
-        baseQuery = baseQuery.where("coordinators", "array-contains", callerName);
+      const PAGE_SIZE = 50;
+      let q = adminDb.collection("invoices").orderBy("createdAt", "desc").limit(PAGE_SIZE);
+      if (cursor) {
+        const cursorDoc = await adminDb.collection("invoices").doc(cursor).get();
+        if (cursorDoc.exists) q = q.startAfter(cursorDoc) as typeof q;
       }
-      const snap = await baseQuery.limit(INVOICE_LIST_LIMIT).get();
+
+      const snap = await q.get();
+      const hasMore = snap.docs.length === PAGE_SIZE;
+      const nextCursor = hasMore ? snap.docs[snap.docs.length - 1].id : null;
+
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      let records = snap.docs.map(docToObj).filter((r: any) => !r.isDeleted);
+      let records = snap.docs.map(docToObj).filter((r: any) => !r.isDeleted && isCoordinatorOf(r));
 
       // 날짜 필터: surgeryDate 있으면 surgeryDate 기준, 없으면 createdAt 기준
       if (startDate || endDate) {
@@ -384,7 +395,7 @@ export async function POST(req: NextRequest) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       if (commissionStaffUid) records = records.filter((r: any) => r.commissionStaffUid === commissionStaffUid);
 
-      return NextResponse.json({ success: true, invoices: records });
+      return NextResponse.json({ success: true, invoices: records, nextCursor, hasMore });
     }
 
     return NextResponse.json({ success: false, message: "알 수 없는 action" }, { status: 400 });

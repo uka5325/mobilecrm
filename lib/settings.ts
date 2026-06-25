@@ -3,9 +3,13 @@ import {
   doc,
   getDoc,
   getDocs,
+  limit,
   query,
   serverTimestamp,
   setDoc,
+  startAfter,
+  type QueryConstraint,
+  type QueryDocumentSnapshot,
   updateDoc,
   where,
   writeBatch,
@@ -548,16 +552,28 @@ export async function updateStaffFromSettings(
 
   const newDisplayName = typeof updatePayload.displayName === "string" ? updatePayload.displayName : "";
   if (oldDisplayName && newDisplayName && oldDisplayName !== newDisplayName) {
-    const resSnap = await getDocs(
-      query(collection(db, "reservations"), where("doctors", "array-contains", oldDisplayName))
-    );
-    for (let i = 0; i < resSnap.docs.length; i += 400) {
+    const CHUNK = 400;
+    let lastDoc: QueryDocumentSnapshot | null = null;
+    let hasMore = true;
+
+    while (hasMore) {
+      const constraints: QueryConstraint[] = [
+        where("doctors", "array-contains", oldDisplayName),
+        limit(CHUNK),
+        ...(lastDoc ? [startAfter(lastDoc)] : []),
+      ];
+      const snap = await getDocs(query(collection(db, "reservations"), ...constraints));
+      if (snap.empty) break;
+
       const batch = writeBatch(db);
-      resSnap.docs.slice(i, i + 400).forEach((d) => {
+      snap.docs.forEach((d) => {
         const doctors = (d.data().doctors as string[] | undefined) || [];
         batch.update(d.ref, { doctors: doctors.map((n) => (n === oldDisplayName ? newDisplayName : n)) });
       });
       await batch.commit();
+
+      lastDoc = snap.docs[snap.docs.length - 1];
+      hasMore = snap.docs.length === CHUNK;
     }
   }
 
@@ -668,6 +684,7 @@ export async function changeMyPassword(
 export type AppointmentTypeColorMap = {
   상담: string;
   수술: string;
+  시술: string;
   치료: string;
   경과: string;
   진료: string;
@@ -677,6 +694,7 @@ export type AppointmentTypeColorMap = {
 export const DEFAULT_APPOINTMENT_TYPE_COLORS: AppointmentTypeColorMap = {
   상담: "#2563eb",
   수술: "#ef4444",
+  시술: "#db2777",
   치료: "#16a34a",
   경과: "#f59e0b",
   진료: "#7c3aed",
@@ -693,6 +711,7 @@ function normalizeAppointmentTypeColors(
   return {
     상담: normalizeHexColor(colors?.상담, DEFAULT_APPOINTMENT_TYPE_COLORS.상담),
     수술: normalizeHexColor(colors?.수술, DEFAULT_APPOINTMENT_TYPE_COLORS.수술),
+    시술: normalizeHexColor(colors?.시술, DEFAULT_APPOINTMENT_TYPE_COLORS.시술),
     치료: normalizeHexColor(colors?.치료, DEFAULT_APPOINTMENT_TYPE_COLORS.치료),
     경과: normalizeHexColor(colors?.경과, DEFAULT_APPOINTMENT_TYPE_COLORS.경과),
     진료: normalizeHexColor(colors?.진료, DEFAULT_APPOINTMENT_TYPE_COLORS.진료),

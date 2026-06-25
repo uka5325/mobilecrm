@@ -108,6 +108,9 @@ function timeToMinutes(time: string) {
   return h * 60 + (m || 0);
 }
 
+function minutesToPx(minutes: number) {
+  return ((minutes - START_HOUR * 60) / 60) * HOUR_HEIGHT;
+}
 
 function getAppointmentColor(type: AppointmentType | string) {
   return APPOINTMENT_TYPE_COLORS[type as AppointmentType] || "#6b7280";
@@ -149,7 +152,7 @@ function useScheduleData(startDate: string, endDate: string, authReady: boolean)
 }
 
 // ─── DayCard ─────────────────────────────────────────────────────────────────
-function DayCard({ item, top, onClick }: { item: ReservationRecord; top: number; onClick: () => void }) {
+function DayCard({ item, top, col, totalCols, onClick }: { item: ReservationRecord; top: number; col: number; totalCols: number; onClick: () => void }) {
   const cancelled = item.cancelled === true;
   const color = cancelled ? "#fef08a" : item.completed ? "#9ca3af" : getAppointmentColor(item.appointmentType);
   const textColor = cancelled ? "#78350f" : "white";
@@ -160,8 +163,16 @@ function DayCard({ item, top, onClick }: { item: ReservationRecord; top: number;
   return (
     <button
       onClick={onClick}
-      className="absolute left-1 right-1 flex flex-col overflow-hidden rounded-md px-2 py-1 text-left shadow-sm transition hover:brightness-110 active:scale-[0.99]"
-      style={{ top, height: CARD_HEIGHT, backgroundColor: color, opacity: item.completed ? 0.75 : 1, color: textColor }}
+      className="absolute flex flex-col overflow-hidden rounded-md px-2 py-1 text-left shadow-sm transition hover:brightness-110 active:scale-[0.99]"
+      style={{
+        top,
+        height: CARD_HEIGHT,
+        backgroundColor: color,
+        opacity: item.completed ? 0.75 : 1,
+        color: textColor,
+        left: `calc(${(col / totalCols) * 100}% + 2px)`,
+        width: `calc(${(1 / totalCols) * 100}% - 4px)`,
+      }}
     >
       <div className={`truncate text-[11px] font-bold leading-tight ${cancelled ? "line-through" : ""}`}>{item.name}</div>
       <div className={`truncate text-[10px] opacity-85 leading-tight ${cancelled ? "line-through" : ""}`}>
@@ -179,94 +190,42 @@ function DayCard({ item, top, onClick }: { item: ReservationRecord; top: number;
   );
 }
 
-// ─── Hour-aware layout ────────────────────────────────────────────────────────
-type HourLayout = {
-  hourHeights: Record<number, number>;
-  hourOffsets: Record<number, number>;
-  totalHeight: number;
-};
+// ─── buildColumnPositions ─────────────────────────────────────────────────────
+// Places overlapping cards side-by-side in columns instead of stacking vertically.
+function buildColumnPositions(items: ReservationRecord[], cardH = CARD_HEIGHT) {
+  const sorted = [...items].sort((a, b) =>
+    timeToMinutes(a.reservationTime || "00:00") - timeToMinutes(b.reservationTime || "00:00")
+  );
+  const placed: { item: ReservationRecord; top: number; bottom: number; col: number }[] = [];
+  const columns: number[] = [];
 
-function sortByTimeAndType(items: ReservationRecord[]): ReservationRecord[] {
-  return [...items].sort((a, b) => {
-    const ta = timeToMinutes(a.reservationTime || "00:00");
-    const tb = timeToMinutes(b.reservationTime || "00:00");
-    if (ta !== tb) return ta - tb;
-    // Same time: 상담 always first
-    const ra = a.appointmentType === "상담" ? 0 : 1;
-    const rb = b.appointmentType === "상담" ? 0 : 1;
-    return ra - rb;
+  for (const item of sorted) {
+    const top = minutesToPx(timeToMinutes(item.reservationTime || `${START_HOUR}:00`));
+    const bottom = top + cardH;
+    let col = columns.findIndex((colBottom) => colBottom <= top + 1);
+    if (col === -1) { col = columns.length; columns.push(bottom + 2); }
+    else columns[col] = bottom + 2;
+    placed.push({ item, top, bottom, col });
+  }
+
+  return placed.map(({ item, top, bottom, col }) => {
+    const overlapping = placed.filter((p) => p.top < bottom && p.bottom > top);
+    const totalCols = Math.max(...overlapping.map((p) => p.col + 1));
+    return { item, top, col, totalCols };
   });
 }
 
-function groupByHour(items: ReservationRecord[]): Map<number, ReservationRecord[]> {
-  const map = new Map<number, ReservationRecord[]>();
-  for (const item of items) {
-    const mins = timeToMinutes(item.reservationTime || `${START_HOUR}:00`);
-    const h = Math.max(START_HOUR, Math.min(Math.floor(mins / 60), END_HOUR - 1));
-    if (!map.has(h)) map.set(h, []);
-    map.get(h)!.push(item);
-  }
-  return map;
-}
-
-// Build shared hour layout from multiple columns so grid lines stay aligned.
-function buildHourLayout(columnItems: ReservationRecord[][], cardH: number): HourLayout {
-  const maxCountByHour: Record<number, number> = {};
-  for (let h = START_HOUR; h < END_HOUR; h++) maxCountByHour[h] = 0;
-
-  for (const items of columnItems) {
-    for (const [h, group] of groupByHour(items)) {
-      if (h >= START_HOUR && h < END_HOUR)
-        maxCountByHour[h] = Math.max(maxCountByHour[h] ?? 0, group.length);
-    }
-  }
-
-  const hourHeights: Record<number, number> = {};
-  for (let h = START_HOUR; h < END_HOUR; h++) {
-    const n = maxCountByHour[h] ?? 0;
-    hourHeights[h] = n > 1 ? n * (cardH + 2) + 4 : HOUR_HEIGHT;
-  }
-
-  const hourOffsets: Record<number, number> = {};
-  let offset = 0;
-  for (let h = START_HOUR; h < END_HOUR; h++) {
-    hourOffsets[h] = offset;
-    offset += hourHeights[h];
-  }
-
-  return { hourHeights, hourOffsets, totalHeight: offset };
-}
-
-function positionItems(
-  items: ReservationRecord[],
-  layout: HourLayout,
-  cardH: number
-): { item: ReservationRecord; top: number }[] {
-  const sorted = sortByTimeAndType(items);
-  const result: { item: ReservationRecord; top: number }[] = [];
-  for (const [h, group] of groupByHour(sorted)) {
-    const base = layout.hourOffsets[h] ?? 0;
-    group.forEach((item, idx) => {
-      result.push({ item, top: base + 2 + idx * (cardH + 2) });
-    });
-  }
-  return result;
-}
-
-// ─── Hour grid lines (variable height) ────────────────────────────────────────
-function HourGrid({ layout }: { layout: HourLayout }) {
+// ─── Hour grid lines (absolute, reusable) ─────────────────────────────────────
+function HourGrid({ rows }: { rows: number }) {
   return (
     <>
-      {Array.from({ length: END_HOUR - START_HOUR }, (_, i) => {
-        const h = START_HOUR + i;
-        return (
-          <div
-            key={h}
-            className="absolute left-0 right-0 border-b border-[#f1f3f5]"
-            style={{ top: layout.hourOffsets[h], height: layout.hourHeights[h] }}
-          />
-        );
-      })}
+      {Array.from({ length: rows }, (_, i) => (
+        <div
+          key={i}
+          className="absolute left-0 right-0 border-b border-[#f1f3f5]"
+          style={{ top: i * HOUR_HEIGHT, height: HOUR_HEIGHT }}
+        />
+      ))}
     </>
   );
 }
@@ -286,30 +245,32 @@ function DayView({
     return Array.from(s).sort();
   }, [reservations]);
 
-  const { layout, columnData } = useMemo(() => {
-    const cols = hospitals.map((hospital) => ({
-      hospital,
-      items: reservations.filter((r) => (r.hospital || "미지정") === hospital),
-    }));
-    const layout = buildHourLayout(cols.map((c) => c.items), CARD_HEIGHT);
-    const columnData = cols.map(({ hospital, items }) => ({
-      hospital,
-      items,
-      positioned: positionItems(items, layout, CARD_HEIGHT),
-    }));
-    return { layout, columnData };
+  const columnData = useMemo(() => {
+    return hospitals.map((hospital) => {
+      const items = reservations.filter((r) => (r.hospital || "미지정") === hospital);
+      const positioned = buildColumnPositions(items);
+      const contentH = positioned.length > 0
+        ? Math.max(...positioned.map((p) => p.top + CARD_HEIGHT + 4))
+        : 0;
+      return { hospital, items, positioned, contentH };
+    });
   }, [hospitals, reservations]);
+
+  const baseH = TOTAL_HOURS * HOUR_HEIGHT;
+  const maxH = Math.max(baseH, ...columnData.map((c) => c.contentH));
+  const gridRows = Math.ceil(maxH / HOUR_HEIGHT);
+  const hours = Array.from({ length: gridRows }, (_, i) => START_HOUR + i);
 
   const HEADER_H = 48;
 
   if (hospitals.length === 0) {
-    const emptyLayout = buildHourLayout([[]], CARD_HEIGHT);
     return (
       <div className="flex min-h-0 flex-1 overflow-auto">
+        {/* Time column */}
         <div className="sticky left-0 z-10 flex shrink-0 flex-col border-r border-[#edf0f3] bg-white" style={{ width: TIME_COL_W }}>
           <div className="shrink-0 border-b border-[#edf0f3]" style={{ height: HEADER_H }} />
           {Array.from({ length: TOTAL_HOURS }, (_, i) => (
-            <div key={i} className="flex items-start justify-center border-b border-[#f1f3f5] pt-1 text-[10px] text-gray-400" style={{ height: emptyLayout.hourHeights[START_HOUR + i] }}>
+            <div key={i} className="flex items-start justify-center border-b border-[#f1f3f5] pt-1 text-[10px] text-gray-400" style={{ height: HOUR_HEIGHT }}>
               {String(START_HOUR + i).padStart(2, "0")}:00
             </div>
           ))}
@@ -322,6 +283,7 @@ function DayView({
   }
 
   return (
+    /* Single overflow-auto container — everything scrolls together */
     <div className="min-h-0 flex-1 overflow-auto">
       <div className="flex" style={{ minWidth: TIME_COL_W + hospitals.length * 200 }}>
 
@@ -330,19 +292,17 @@ function DayView({
           className="sticky left-0 z-10 flex shrink-0 flex-col border-r border-[#edf0f3] bg-white"
           style={{ width: TIME_COL_W }}
         >
+          {/* corner spacer matches hospital header height */}
           <div className="shrink-0 border-b border-[#edf0f3]" style={{ height: HEADER_H }} />
-          {Array.from({ length: TOTAL_HOURS }, (_, i) => {
-            const h = START_HOUR + i;
-            return (
-              <div
-                key={h}
-                className="flex items-start justify-center border-b border-[#f1f3f5] pt-1 text-[10px] text-gray-400"
-                style={{ height: layout.hourHeights[h] }}
-              >
-                {`${String(h).padStart(2, "0")}:00`}
-              </div>
-            );
-          })}
+          {hours.map((h) => (
+            <div
+              key={h}
+              className="flex items-start justify-center border-b border-[#f1f3f5] pt-1 text-[10px] text-gray-400"
+              style={{ height: HOUR_HEIGHT }}
+            >
+              {h < 24 ? `${String(h).padStart(2, "0")}:00` : ""}
+            </div>
+          ))}
         </div>
 
         {/* ── Hospital columns ── */}
@@ -352,6 +312,7 @@ function DayView({
             className="flex flex-col border-r border-[#edf0f3]"
             style={{ minWidth: 200, maxWidth: 320, flex: 1 }}
           >
+            {/* column header */}
             <div
               className="sticky top-0 z-10 flex shrink-0 items-center justify-center gap-2 border-b border-[#edf0f3] bg-white px-3"
               style={{ height: HEADER_H }}
@@ -359,10 +320,11 @@ function DayView({
               <span className="truncate text-sm font-semibold">{hospital}</span>
               <span className="shrink-0 text-xs text-gray-400">{items.length}건</span>
             </div>
-            <div className="relative" style={{ height: layout.totalHeight }}>
-              <HourGrid layout={layout} />
-              {positioned.map(({ item, top }) => (
-                <DayCard key={item.id} item={item} top={top} onClick={() => onCardClick(item)} />
+            {/* card + grid area */}
+            <div className="relative" style={{ height: maxH }}>
+              <HourGrid rows={gridRows} />
+              {positioned.map(({ item, top, col, totalCols }) => (
+                <DayCard key={item.id} item={item} top={top} col={col} totalCols={totalCols} onClick={() => onCardClick(item)} />
               ))}
             </div>
           </div>
@@ -373,7 +335,7 @@ function DayView({
 }
 
 // ─── WeekDayCard (compact for week view) ─────────────────────────────────────
-function WeekDayCard({ item, top, onClick }: { item: ReservationRecord; top: number; onClick: () => void }) {
+function WeekDayCard({ item, top, col, totalCols, onClick }: { item: ReservationRecord; top: number; col: number; totalCols: number; onClick: () => void }) {
   const cancelled = item.cancelled === true;
   const color = cancelled ? "#fef08a" : item.completed ? "#9ca3af" : getAppointmentColor(item.appointmentType);
   const textColor = cancelled ? "#78350f" : "white";
@@ -381,8 +343,16 @@ function WeekDayCard({ item, top, onClick }: { item: ReservationRecord; top: num
   return (
     <button
       onClick={onClick}
-      className="absolute left-0.5 right-0.5 overflow-hidden rounded px-1 text-left shadow-sm transition hover:brightness-110 active:scale-[0.99]"
-      style={{ top, height: WEEK_CARD_H, backgroundColor: color, opacity: item.completed ? 0.75 : 1, color: textColor }}
+      className="absolute overflow-hidden rounded px-1 text-left shadow-sm transition hover:brightness-110 active:scale-[0.99]"
+      style={{
+        top,
+        height: WEEK_CARD_H,
+        backgroundColor: color,
+        opacity: item.completed ? 0.75 : 1,
+        color: textColor,
+        left: `calc(${(col / totalCols) * 100}% + 1px)`,
+        width: `calc(${(1 / totalCols) * 100}% - 2px)`,
+      }}
       title={[item.name, time, item.hospital, item.consultArea].filter(Boolean).join(" · ")}
     >
       <div className={`truncate text-[10px] font-semibold leading-tight ${cancelled ? "line-through" : ""}`}>
@@ -405,20 +375,22 @@ function WeekView({
 }) {
   const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
 
-  const { layout, dayData } = useMemo(() => {
-    const cols = days.map((day) => ({
-      day,
-      items: reservations.filter((r) => r.reservationDate === day),
-    }));
-    const layout = buildHourLayout(cols.map((c) => c.items), WEEK_CARD_H);
-    const dayData = cols.map(({ day, items }) => ({
-      day,
-      dayItems: items,
-      positioned: positionItems(items, layout, WEEK_CARD_H),
-    }));
-    return { layout, dayData };
+  const dayData = useMemo(() => {
+    return days.map((day) => {
+      const dayItems = reservations.filter((r) => r.reservationDate === day);
+      const positioned = buildColumnPositions(dayItems, WEEK_CARD_H);
+      const contentH = positioned.length > 0
+        ? Math.max(...positioned.map((p) => p.top + WEEK_CARD_H + 4))
+        : 0;
+      return { day, dayItems, positioned, contentH };
+    });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [weekStart, reservations]);
+
+  const baseH = TOTAL_HOURS * HOUR_HEIGHT;
+  const maxH = Math.max(baseH, ...dayData.map((d) => d.contentH));
+  const gridRows = Math.ceil(maxH / HOUR_HEIGHT);
+  const hours = Array.from({ length: gridRows }, (_, i) => START_HOUR + i);
 
   const HEADER_H = 52;
 
@@ -432,18 +404,15 @@ function WeekView({
           style={{ width: TIME_COL_W }}
         >
           <div className="shrink-0 border-b border-[#edf0f3]" style={{ height: HEADER_H }} />
-          {Array.from({ length: TOTAL_HOURS }, (_, i) => {
-            const h = START_HOUR + i;
-            return (
-              <div
-                key={h}
-                className="flex items-start justify-center border-b border-[#f1f3f5] pt-1 text-[10px] text-gray-400"
-                style={{ height: layout.hourHeights[h] }}
-              >
-                {String(h).padStart(2, "0")}
-              </div>
-            );
-          })}
+          {hours.map((h) => (
+            <div
+              key={h}
+              className="flex items-start justify-center border-b border-[#f1f3f5] pt-1 text-[10px] text-gray-400"
+              style={{ height: HOUR_HEIGHT }}
+            >
+              {h < 24 ? `${String(h).padStart(2, "0")}` : ""}
+            </div>
+          ))}
         </div>
 
         {/* Day columns */}
@@ -464,10 +433,10 @@ function WeekView({
                 </span>
                 <span className={`text-[10px] ${today ? "text-emerald-500" : "text-gray-400"}`}>{dayItems.length}건</span>
               </div>
-              <div className="relative" style={{ height: layout.totalHeight }}>
-                <HourGrid layout={layout} />
-                {positioned.map(({ item, top }) => (
-                  <WeekDayCard key={item.id} item={item} top={top} onClick={() => onCardClick(item)} />
+              <div className="relative" style={{ height: maxH }}>
+                <HourGrid rows={gridRows} />
+                {positioned.map(({ item, top, col, totalCols }) => (
+                  <WeekDayCard key={item.id} item={item} top={top} col={col} totalCols={totalCols} onClick={() => onCardClick(item)} />
                 ))}
               </div>
             </div>
@@ -590,7 +559,7 @@ export default function SchedulePage() {
   const { reservations, loading, refresh } = useScheduleData(startDate, endDate, authReady);
 
   const kpi = useMemo(() => {
-    const counts: Record<string, number> = { 상담: 0, 수술: 0, 치료: 0, 경과: 0, 진료: 0, 검진: 0 };
+    const counts: Record<string, number> = { 상담: 0, 수술: 0, 시술: 0, 치료: 0, 경과: 0, 진료: 0, 검진: 0 };
     reservations.forEach((r) => { counts[r.appointmentType || "상담"] = (counts[r.appointmentType || "상담"] || 0) + 1; });
     return counts;
   }, [reservations]);
@@ -655,7 +624,7 @@ export default function SchedulePage() {
         {/* KPI 바 (가로 스크롤) */}
         <div className="flex items-center gap-3 overflow-x-auto px-4 pb-3 [&::-webkit-scrollbar]:hidden">
           <span className="shrink-0 text-xs text-gray-500">전체 {reservations.length}건</span>
-          {(["상담", "수술", "치료", "경과", "진료", "검진"] as AppointmentType[]).map((type) => (
+          {(["상담", "수술", "시술", "치료", "경과", "진료", "검진"] as AppointmentType[]).map((type) => (
             <div key={type} className="flex shrink-0 items-center gap-1.5">
               <div className="h-2.5 w-2.5 rounded-sm" style={{ backgroundColor: APPOINTMENT_TYPE_COLORS[type] }} />
               <span className="text-xs text-gray-600">{type} {kpi[type] || 0}</span>

@@ -1,5 +1,5 @@
 import { auth, db } from "./firebase";
-import { collection, onSnapshot, query, where, getDocs, limit } from "firebase/firestore";
+import { collection, onSnapshot, query, where, getDocs } from "firebase/firestore";
 import type { StaffUser } from "./auth";
 import { cleanText } from "./stringUtils";
 import { createLog } from "./logs";
@@ -10,14 +10,23 @@ async function callReservationsApi(action: string, payload: Record<string, unkno
   if (!firebaseUser) {
     return { success: false as const, message: "로그인 상태를 확인할 수 없습니다. 페이지를 새로고침 후 다시 시도해주세요." };
   }
-  const idToken = await firebaseUser.getIdToken();
-  const res = await fetch("/api/reservations", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ idToken, action, payload }),
-  });
-  if (!res.ok) return { success: false as const, message: `서버 오류 (${res.status})` };
-  return res.json() as Promise<Record<string, unknown> & { success: boolean; message?: string }>;
+  if (!navigator.onLine) {
+    return { success: false as const, message: "인터넷 연결을 확인해주세요." };
+  }
+  try {
+    const idToken = await firebaseUser.getIdToken();
+    const res = await fetch("/api/reservations", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ idToken, action, payload }),
+    });
+    if (!res.ok) {
+      return { success: false as const, message: `서버 오류가 발생했습니다. (${res.status})` };
+    }
+    return res.json() as Promise<Record<string, unknown> & { success: boolean; message?: string }>;
+  } catch {
+    return { success: false as const, message: "네트워크 오류가 발생했습니다. 연결 상태를 확인해주세요." };
+  }
 }
 
 export type DoctorOption = {
@@ -27,15 +36,14 @@ export type DoctorOption = {
   orderNo: number;
 };
 
-export type AppointmentType = "상담" | "수술" | "치료" | "경과" | "진료" | "검진";
+export type AppointmentType = "상담" | "수술" | "시술" | "치료" | "경과" | "진료" | "검진";
 
-export const APPOINTMENT_TYPES: AppointmentType[] = ["상담", "수술", "치료", "경과", "진료", "검진"];
-
-const RESERVATION_LIST_LIMIT = 500;  // 45일치 예약 상한
+export const APPOINTMENT_TYPES: AppointmentType[] = ["상담", "수술", "시술", "치료", "경과", "진료", "검진"];
 
 export const APPOINTMENT_TYPE_COLORS: Record<AppointmentType, string> = {
   상담: "#2563eb",
   수술: "#ef4444",
+  시술: "#db2777",
   치료: "#16a34a",
   경과: "#f59e0b",
   진료: "#7c3aed",
@@ -182,7 +190,7 @@ function normalizeDuplicateKey(params: CreateReservationParams) {
 
 function normalizeAppointmentType(value: unknown): AppointmentType {
   const v = cleanText(value);
-  if (v === "상담" || v === "수술" || v === "치료" || v === "경과" || v === "진료" || v === "검진") return v;
+  if (v === "상담" || v === "수술" || v === "시술" || v === "치료" || v === "경과" || v === "진료" || v === "검진") return v;
   return "상담";
 }
 
@@ -291,7 +299,7 @@ function makeDoctorOptionsFromReservations(
   );
 
   return names.map((name, index) => ({
-    uid: `fallback-doctor-${name}`,
+    uid: `fallback-doctor-${index}-${name}`,
     displayName: name,
     email: "",
     orderNo: index + 1,
@@ -307,27 +315,22 @@ export async function getDoctors(): Promise<DoctorOption[]> {
 
   _doctorsCachedAt = Date.now();
   _doctorsPromise = (async () => {
-    try {
-      const result = await callReservationsApi("read_doctors", {});
-      const rawDoctors = (result.doctors as Record<string, unknown>[] | undefined) || [];
+    const result = await callReservationsApi("read_doctors", {});
+    const rawDoctors = (result.doctors as Record<string, unknown>[] | undefined) || [];
 
-      const doctors = rawDoctors
-        .map((d) => ({
-          uid: String(d.id || ""),
-          displayName: cleanText(d.displayName || d["display_name"] || d.name),
-          email: cleanText(d.email),
-          orderNo: cleanNumber(d.orderNo ?? d["order_no"]),
-          role: String(d.role || ""),
-          active: d.active,
-        }))
-        .filter((d) => d.displayName && d.role === "doctor" && d.active !== false);
+    const doctors = rawDoctors
+      .map((d) => ({
+        uid: String(d.id || ""),
+        displayName: cleanText(d.displayName || d["display_name"] || d.name),
+        email: cleanText(d.email),
+        orderNo: cleanNumber(d.orderNo ?? d["order_no"]),
+        role: String(d.role || ""),
+        active: d.active,
+      }))
+      .filter((d) => d.displayName && d.role === "doctor" && d.active !== false);
 
-      setCachedDoctors(sortDoctors(doctors));
-      return sortDoctors(doctors);
-    } catch (e) {
-      _doctorsPromise = null;
-      throw e;
-    }
+    setCachedDoctors(sortDoctors(doctors));
+    return sortDoctors(doctors);
   })();
 
   return _doctorsPromise;
@@ -466,49 +469,42 @@ export function subscribeAllReservations(
       return d.toISOString().slice(0, 10);
     })();
 
-    const hasLoadedBefore = (() => {
-      try { return localStorage.getItem("crm_loaded_once_v1") === "true"; } catch { return false; }
-    })();
+    // Immediately seed with API data so UI shows content even if onSnapshot is slow/fails
+    callReservationsApi("read_all", { from: fromDate })
+      .then((result) => {
+        if (!seedDelivered && result.success) {
+          const rawReservations = (result.reservations as Record<string, unknown>[] | undefined) || [];
+          const rawDoctors = (result.doctors as Record<string, unknown>[] | undefined) || [];
+          const reservations = rawReservations
+            .map((r) => mapReservationDoc(String(r.id || ""), r))
+            .filter((item) => !item.isDeleted)
+            .sort((a, b) => {
+              const aa = `${a.reservationDate} ${a.reservationTime} ${a.name}`;
+              const bb = `${b.reservationDate} ${b.reservationTime} ${b.name}`;
+              return aa.localeCompare(bb);
+            });
+          const doctors: DoctorOption[] = rawDoctors
+            .map((d) => ({
+              uid: String(d.id || ""),
+              displayName: cleanText(d.displayName || d["display_name"] || d.name),
+              email: cleanText(d.email),
+              orderNo: cleanNumber(d.orderNo ?? d["order_no"]),
+            }))
+            .filter((d) => d.displayName)
+            .sort((a, b) => a.orderNo - b.orderNo || a.displayName.localeCompare(b.displayName));
+          if (doctors.length) latestDoctors = doctors;
+          callback({ reservations, doctors: doctors.length ? doctors : makeDoctorOptionsFromReservations(reservations) });
+        }
+      })
+      .catch(() => {});
 
-    // Seed with API data only on first visit (no IndexedDB cache yet)
-    if (!hasLoadedBefore) {
-      callReservationsApi("read_all", { from: fromDate })
-        .then((result) => {
-          if (!seedDelivered && result.success) {
-            const rawReservations = (result.reservations as Record<string, unknown>[] | undefined) || [];
-            const rawDoctors = (result.doctors as Record<string, unknown>[] | undefined) || [];
-            const reservations = rawReservations
-              .map((r) => mapReservationDoc(String(r.id || ""), r))
-              .filter((item) => !item.isDeleted)
-              .sort((a, b) => {
-                const aa = `${a.reservationDate} ${a.reservationTime} ${a.name}`;
-                const bb = `${b.reservationDate} ${b.reservationTime} ${b.name}`;
-                return aa.localeCompare(bb);
-              });
-            const doctors: DoctorOption[] = rawDoctors
-              .map((d) => ({
-                uid: String(d.id || ""),
-                displayName: cleanText(d.displayName || d["display_name"] || d.name),
-                email: cleanText(d.email),
-                orderNo: cleanNumber(d.orderNo ?? d["order_no"]),
-              }))
-              .filter((d) => d.displayName)
-              .sort((a, b) => a.orderNo - b.orderNo || a.displayName.localeCompare(b.displayName));
-            if (doctors.length) latestDoctors = doctors;
-            callback({ reservations, doctors: doctors.length ? doctors : makeDoctorOptionsFromReservations(reservations) });
-          }
-        })
-        .catch((e) => console.warn("[subscribeAllReservations] seed failed:", e));
-    }
-
-    getClientDoctors().then((d) => { latestDoctors = d; }).catch((e) => console.warn("[subscribeAllReservations] doctors failed:", e));
+    getClientDoctors().then((d) => { latestDoctors = d; }).catch(() => {});
 
     unsubscribeSnapshot = onSnapshot(
-      query(collection(db, "reservations"), where("reservationDate", ">=", fromDate), limit(RESERVATION_LIST_LIMIT)),
+      query(collection(db, "reservations"), where("reservationDate", ">=", fromDate)),
       (snap) => {
         // skip empty cache snapshots — they would wipe the API seed data
         if (snap.metadata.fromCache && snap.empty) return;
-        try { localStorage.setItem("crm_loaded_once_v1", "true"); } catch {}
         seedDelivered = true;
         const reservations = snap.docs
           .map((d) => mapReservationDoc(d.id, d.data() as Record<string, unknown>))
@@ -522,7 +518,7 @@ export function subscribeAllReservations(
         callback({ reservations, doctors: latestDoctors.length ? latestDoctors : fallback });
       },
       (error) => {
-        console.error("[subscribeAllReservations error]", error);
+        console.error("[subscribeAllReservations error]", (error as Error)?.message ?? "");
         onError?.(error);
       }
     );
@@ -551,49 +547,42 @@ export function subscribeTimelineReservations(
     if (unsubscribeSnapshot) { unsubscribeSnapshot(); unsubscribeSnapshot = null; }
     if (!user) return;
 
-    const hasLoadedBefore = (() => {
-      try { return localStorage.getItem("crm_loaded_once_v1") === "true"; } catch { return false; }
-    })();
+    // Immediately seed with API data so UI shows content even if onSnapshot is slow/fails
+    callReservationsApi("read_by_date", { date })
+      .then((result) => {
+        if (!seedDelivered && result.success) {
+          const rawReservations = (result.reservations as Record<string, unknown>[] | undefined) || [];
+          const rawDoctors = (result.doctors as Record<string, unknown>[] | undefined) || [];
+          const reservations = rawReservations
+            .map((r) => mapReservationDoc(String(r.id || ""), r))
+            .filter((item) => !item.isDeleted)
+            .sort((a, b) => {
+              const aa = `${a.reservationTime} ${a.name}`;
+              const bb = `${b.reservationTime} ${b.name}`;
+              return aa.localeCompare(bb);
+            });
+          const doctors: DoctorOption[] = rawDoctors
+            .map((d) => ({
+              uid: String(d.id || ""),
+              displayName: cleanText(d.displayName || d["display_name"] || d.name),
+              email: cleanText(d.email),
+              orderNo: cleanNumber(d.orderNo ?? d["order_no"]),
+            }))
+            .filter((d) => d.displayName)
+            .sort((a, b) => a.orderNo - b.orderNo || a.displayName.localeCompare(b.displayName));
+          if (doctors.length) latestDoctors = doctors;
+          callback({ reservations, doctors: doctors.length ? doctors : makeDoctorOptionsFromReservations(reservations) });
+        }
+      })
+      .catch(() => {});
 
-    // Seed with API data only on first visit (no IndexedDB cache yet)
-    if (!hasLoadedBefore) {
-      callReservationsApi("read_by_date", { date })
-        .then((result) => {
-          if (!seedDelivered && result.success) {
-            const rawReservations = (result.reservations as Record<string, unknown>[] | undefined) || [];
-            const rawDoctors = (result.doctors as Record<string, unknown>[] | undefined) || [];
-            const reservations = rawReservations
-              .map((r) => mapReservationDoc(String(r.id || ""), r))
-              .filter((item) => !item.isDeleted)
-              .sort((a, b) => {
-                const aa = `${a.reservationTime} ${a.name}`;
-                const bb = `${b.reservationTime} ${b.name}`;
-                return aa.localeCompare(bb);
-              });
-            const doctors: DoctorOption[] = rawDoctors
-              .map((d) => ({
-                uid: String(d.id || ""),
-                displayName: cleanText(d.displayName || d["display_name"] || d.name),
-                email: cleanText(d.email),
-                orderNo: cleanNumber(d.orderNo ?? d["order_no"]),
-              }))
-              .filter((d) => d.displayName)
-              .sort((a, b) => a.orderNo - b.orderNo || a.displayName.localeCompare(b.displayName));
-            if (doctors.length) latestDoctors = doctors;
-            callback({ reservations, doctors: doctors.length ? doctors : makeDoctorOptionsFromReservations(reservations) });
-          }
-        })
-        .catch((e) => console.warn("[subscribeTimelineReservations] seed failed:", e));
-    }
-
-    getClientDoctors().then((d) => { latestDoctors = d; }).catch((e) => console.warn("[subscribeTimelineReservations] doctors failed:", e));
+    getClientDoctors().then((d) => { latestDoctors = d; }).catch(() => {});
 
     unsubscribeSnapshot = onSnapshot(
       query(collection(db, "reservations"), where("reservationDate", "==", date)),
       (snap) => {
         // skip empty cache snapshots — they would wipe the API seed data
         if (snap.metadata.fromCache && snap.empty) return;
-        try { localStorage.setItem("crm_loaded_once_v1", "true"); } catch {}
         seedDelivered = true;
         const reservations = snap.docs
           .map((d) => mapReservationDoc(d.id, d.data() as Record<string, unknown>))
@@ -607,7 +596,7 @@ export function subscribeTimelineReservations(
         callback({ reservations, doctors: latestDoctors.length ? latestDoctors : fallback });
       },
       (error) => {
-        console.error("[subscribeTimelineReservations error]", error);
+        console.error("[subscribeTimelineReservations error]", (error as Error)?.message ?? "");
         onError?.(error);
       }
     );
@@ -779,6 +768,62 @@ export async function createReservation(
     success: true,
     reservation: mapReservationDoc(savedReservationId, { ...reservationData, createdAt: null, updatedAt: null }),
   };
+}
+
+export type PatientRecord = {
+  id: string;
+  patientId: string;
+  name: string;
+  birth?: string;
+  birthInput?: string;
+  gender?: string;
+  phone?: string;
+  nationality?: string;
+};
+
+export async function createPatientOnly(
+  params: { name: string; birthInput: string; phone: string; nationality: string; patientId?: string },
+  currentUser: StaffUser
+): Promise<{ success: boolean; message?: string; patientDocId?: string }> {
+  const name = cleanText(params.name);
+  if (!name) return { success: false, message: "이름을 입력하세요." };
+
+  const patientId = cleanText(params.patientId) || makeDateBasedId("P");
+  const parsed = parseBirthInfo(params.birthInput || "", "");
+
+  const patient = {
+    patientId,
+    name,
+    birth: parsed.birth,
+    birthInput: parsed.birthInput,
+    gender: parsed.gender,
+    phone: cleanText(params.phone),
+    nationality: cleanText(params.nationality),
+    createdBy: currentUser.displayName,
+    createdByUid: currentUser.uid,
+    updatedBy: currentUser.displayName,
+    updatedByUid: currentUser.uid,
+  };
+
+  const result = await callReservationsApi("create_patient", { patient });
+  return result.success
+    ? { success: true, patientDocId: String(result.patientDocId || "") }
+    : { success: false, message: cleanText(result.message) || "등록 실패" };
+}
+
+export async function listPatients(): Promise<PatientRecord[]> {
+  const result = await callReservationsApi("list_patients", {});
+  if (!result.success || !Array.isArray(result.patients)) return [];
+  return (result.patients as Record<string, unknown>[]).map((p) => ({
+    id: cleanText(p.id),
+    patientId: cleanText(p.patientId),
+    name: cleanText(p.name),
+    birth: cleanText(p.birth),
+    birthInput: cleanText(p.birthInput),
+    gender: cleanText(p.gender),
+    phone: cleanText(p.phone),
+    nationality: cleanText(p.nationality),
+  }));
 }
 
 export async function createReservationsBatch(
@@ -956,7 +1001,6 @@ export type UpdateReservationParams = {
   surgeryCost?: string;
   currentDoctorStatusMap?: Record<string, string>;
   currentDoctorStatusMetaMap?: ReservationRecord["doctorStatusMetaMap"];
-  clientUpdatedAt?: number;
 };
 
 export async function updateReservationFull(
@@ -1051,7 +1095,6 @@ export async function updateReservationFull(
     patientId,
     reservationPatch,
     patientPatch,
-    clientUpdatedAt: params.clientUpdatedAt,
   });
 
   if (!apiResult.success) {
@@ -1084,6 +1127,33 @@ export async function updateReservationFull(
   }).catch((e) => console.warn("[updateReservationFull] log write failed:", e));
 
   return { success: true };
+}
+
+export async function searchReservationsByDateRange(
+  from: string,
+  to: string
+): Promise<ReservationRecord[]> {
+  const result = await callReservationsApi("read_all", { from, to });
+  if (!result.success) throw new Error(String(result.message || "검색 실패"));
+  const raw = (result.reservations as Record<string, unknown>[] | undefined) || [];
+  return raw
+    .map((r) => mapReservationDoc(String(r.id || ""), r))
+    .filter((item) => !item.isDeleted)
+    .sort((a, b) => `${b.reservationDate} ${b.reservationTime}`.localeCompare(`${a.reservationDate} ${a.reservationTime}`));
+}
+
+export async function getPatientReservationHistory(
+  patientId: string,
+  cursor?: string
+): Promise<{ reservations: ReservationRecord[]; nextCursor: string | null; hasMore: boolean }> {
+  const result = await callReservationsApi("patient_history", { patientId, cursor });
+  if (!result.success) throw new Error(String(result.message || "이력 조회 실패"));
+  const raw = (result.reservations as Record<string, unknown>[] | undefined) || [];
+  return {
+    reservations: raw.map((r) => mapReservationDoc(String(r.id || ""), r)),
+    nextCursor: (result.nextCursor as string | null) ?? null,
+    hasMore: Boolean(result.hasMore),
+  };
 }
 
 export async function deleteReservation(

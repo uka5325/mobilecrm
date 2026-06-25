@@ -147,7 +147,7 @@ export default function CommissionPage() {
         patientName: patientSearch || undefined,
       });
 
-      setRecords(results);
+      setRecords(results.invoices);
       setSearched(true);
     } finally {
       setLoading(false);

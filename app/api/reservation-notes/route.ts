@@ -42,7 +42,7 @@ export async function POST(req: NextRequest) {
         });
       };
 
-      // 환자의 전체 메모를 보여주기 위해 patientId 우선 쿼리
+      // patientId 우선: 동일 환자의 모든 예약 메모를 한번에 조회
       const primaryField = patientId ? "patientId"
         : reservationDocId ? "reservationDocId"
         : "reservationId";
