@@ -16,6 +16,7 @@ async function callReservationsApi(action: string, payload: Record<string, unkno
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ idToken, action, payload }),
   });
+  if (!res.ok) return { success: false as const, message: `서버 오류 (${res.status})` };
   return res.json() as Promise<Record<string, unknown> & { success: boolean; message?: string }>;
 }
 
@@ -29,6 +30,8 @@ export type DoctorOption = {
 export type AppointmentType = "상담" | "수술" | "치료" | "경과" | "진료" | "검진";
 
 export const APPOINTMENT_TYPES: AppointmentType[] = ["상담", "수술", "치료", "경과", "진료", "검진"];
+
+const RESERVATION_LIST_LIMIT = 500;  // 45일치 예약 상한
 
 export const APPOINTMENT_TYPE_COLORS: Record<AppointmentType, string> = {
   상담: "#2563eb",
@@ -288,7 +291,7 @@ function makeDoctorOptionsFromReservations(
   );
 
   return names.map((name, index) => ({
-    uid: `fallback-doctor-${index}-${name}`,
+    uid: `fallback-doctor-${name}`,
     displayName: name,
     email: "",
     orderNo: index + 1,
@@ -304,22 +307,27 @@ export async function getDoctors(): Promise<DoctorOption[]> {
 
   _doctorsCachedAt = Date.now();
   _doctorsPromise = (async () => {
-    const result = await callReservationsApi("read_doctors", {});
-    const rawDoctors = (result.doctors as Record<string, unknown>[] | undefined) || [];
+    try {
+      const result = await callReservationsApi("read_doctors", {});
+      const rawDoctors = (result.doctors as Record<string, unknown>[] | undefined) || [];
 
-    const doctors = rawDoctors
-      .map((d) => ({
-        uid: String(d.id || ""),
-        displayName: cleanText(d.displayName || d["display_name"] || d.name),
-        email: cleanText(d.email),
-        orderNo: cleanNumber(d.orderNo ?? d["order_no"]),
-        role: String(d.role || ""),
-        active: d.active,
-      }))
-      .filter((d) => d.displayName && d.role === "doctor" && d.active !== false);
+      const doctors = rawDoctors
+        .map((d) => ({
+          uid: String(d.id || ""),
+          displayName: cleanText(d.displayName || d["display_name"] || d.name),
+          email: cleanText(d.email),
+          orderNo: cleanNumber(d.orderNo ?? d["order_no"]),
+          role: String(d.role || ""),
+          active: d.active,
+        }))
+        .filter((d) => d.displayName && d.role === "doctor" && d.active !== false);
 
-    setCachedDoctors(sortDoctors(doctors));
-    return sortDoctors(doctors);
+      setCachedDoctors(sortDoctors(doctors));
+      return sortDoctors(doctors);
+    } catch (e) {
+      _doctorsPromise = null;
+      throw e;
+    }
   })();
 
   return _doctorsPromise;
@@ -490,13 +498,13 @@ export function subscribeAllReservations(
             callback({ reservations, doctors: doctors.length ? doctors : makeDoctorOptionsFromReservations(reservations) });
           }
         })
-        .catch(() => {});
+        .catch((e) => console.warn("[subscribeAllReservations] seed failed:", e));
     }
 
-    getClientDoctors().then((d) => { latestDoctors = d; }).catch(() => {});
+    getClientDoctors().then((d) => { latestDoctors = d; }).catch((e) => console.warn("[subscribeAllReservations] doctors failed:", e));
 
     unsubscribeSnapshot = onSnapshot(
-      query(collection(db, "reservations"), where("reservationDate", ">=", fromDate), limit(500)),
+      query(collection(db, "reservations"), where("reservationDate", ">=", fromDate), limit(RESERVATION_LIST_LIMIT)),
       (snap) => {
         // skip empty cache snapshots — they would wipe the API seed data
         if (snap.metadata.fromCache && snap.empty) return;
@@ -575,10 +583,10 @@ export function subscribeTimelineReservations(
             callback({ reservations, doctors: doctors.length ? doctors : makeDoctorOptionsFromReservations(reservations) });
           }
         })
-        .catch(() => {});
+        .catch((e) => console.warn("[subscribeTimelineReservations] seed failed:", e));
     }
 
-    getClientDoctors().then((d) => { latestDoctors = d; }).catch(() => {});
+    getClientDoctors().then((d) => { latestDoctors = d; }).catch((e) => console.warn("[subscribeTimelineReservations] doctors failed:", e));
 
     unsubscribeSnapshot = onSnapshot(
       query(collection(db, "reservations"), where("reservationDate", "==", date)),

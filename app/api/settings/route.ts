@@ -1,23 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminAuth, adminDb, FieldValue } from "@/lib/firebaseAdmin";
+import { docToObj, toSerializable } from "@/lib/adminUtils";
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function toSerializable(val: any): unknown {
-  if (val === null || val === undefined) return val;
-  if (typeof val === "object" && typeof val.toMillis === "function") return val.toMillis();
-  if (Array.isArray(val)) return val.map(toSerializable);
-  if (typeof val === "object") {
-    const out: Record<string, unknown> = {};
-    for (const [k, v] of Object.entries(val)) out[k] = toSerializable(v);
-    return out;
-  }
-  return val;
-}
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function docToObj(d: any): Record<string, unknown> {
-  return toSerializable({ id: d.id, ...d.data() }) as Record<string, unknown>;
-}
+const STAFF_LIST_LIMIT = 200;
 
 async function getStaffRole(uid: string): Promise<string> {
   const snap = await adminDb.collection("staff").where("uid", "==", uid).limit(1).get();
@@ -60,7 +45,7 @@ export async function POST(req: NextRequest) {
 
     // ── READ: staff list ──────────────────────────────────────────────────
     if (action === "get_staff_list") {
-      const snap = await adminDb.collection("staff").orderBy("displayName").limit(200).get();
+      const snap = await adminDb.collection("staff").orderBy("displayName").limit(STAFF_LIST_LIMIT).get();
       return NextResponse.json({ success: true, staff: snap.docs.map(docToObj) });
     }
 

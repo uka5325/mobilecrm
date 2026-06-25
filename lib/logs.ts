@@ -71,6 +71,7 @@ async function callLogsApi(action: string, payload: Record<string, unknown>) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ idToken, action, payload }),
   });
+  if (!res.ok) return { success: false as const };
   return res.json() as Promise<Record<string, unknown> & { success: boolean }>;
 }
 

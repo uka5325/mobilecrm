@@ -1,31 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminAuth, adminDb, FieldValue } from "@/lib/firebaseAdmin";
+import { docToObj } from "@/lib/adminUtils";
 
-function toSerializable(val: unknown): unknown {
-  if (val === null || val === undefined) return val;
-  if (
-    typeof val === "object" &&
-    typeof (val as Record<string, unknown>).toMillis === "function"
-  ) {
-    return (val as { toMillis: () => number }).toMillis();
-  }
-  if (Array.isArray(val)) {
-    return val.map(toSerializable);
-  }
-  if (typeof val === "object") {
-    const out: Record<string, unknown> = {};
-    for (const [k, v] of Object.entries(val as Record<string, unknown>)) {
-      out[k] = toSerializable(v);
-    }
-    return out;
-  }
-  return val;
-}
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function docToObj(d: any): Record<string, unknown> {
-  return toSerializable({ id: d.id, ...d.data() }) as Record<string, unknown>;
-}
+const RESERVATION_LIST_LIMIT = 500;  // 45일치 예약 상한
+const DUPLICATE_CHECK_LIMIT = 50;
 
 // 의사 목록은 거의 변경되지 않으므로 서버 메모리에 10분 캐싱
 let _doctorsCache: Record<string, unknown>[] | null = null;
@@ -81,7 +59,7 @@ export async function POST(req: NextRequest) {
           .collection("reservations")
           .where("reservationDate", ">=", fromDate)
           .orderBy("reservationDate", "desc")
-          .limit(500)
+          .limit(RESERVATION_LIST_LIMIT)
           .get(),
         getCachedDoctors(),
       ]);
@@ -159,7 +137,7 @@ export async function POST(req: NextRequest) {
           .collection("reservations")
           .where("reservationDate", "==", dupDate)
           .where("isDeleted", "==", false)
-          .limit(50)
+          .limit(DUPLICATE_CHECK_LIMIT)
           .get();
 
         const inKey = normDupKey(reservation);
@@ -276,12 +254,28 @@ export async function POST(req: NextRequest) {
         staffUid: string;
       };
 
-      await adminDb.collection("reservations").doc(reservationDocId).update({
+      const deletedAt = FieldValue.serverTimestamp();
+      const batch = adminDb.batch();
+
+      batch.update(adminDb.collection("reservations").doc(reservationDocId), {
         isDeleted: true,
-        updatedAt: FieldValue.serverTimestamp(),
+        updatedAt: deletedAt,
         updatedBy: staffDisplay,
         updatedByUid: staffUid,
       });
+
+      const [invoicesSnap, photosSnap, chartsSnap, notesSnap] = await Promise.all([
+        adminDb.collection("invoices").where("reservationDocId", "==", reservationDocId).where("isDeleted", "==", false).get(),
+        adminDb.collection("reservationPhotos").where("reservationDocId", "==", reservationDocId).where("isDeleted", "==", false).get(),
+        adminDb.collection("reservationCharts").where("reservationDocId", "==", reservationDocId).where("isDeleted", "==", false).get(),
+        adminDb.collection("reservationNotes").where("reservationDocId", "==", reservationDocId).where("isDeleted", "==", false).get(),
+      ]);
+
+      for (const d of [...invoicesSnap.docs, ...photosSnap.docs, ...chartsSnap.docs, ...notesSnap.docs]) {
+        batch.update(d.ref, { isDeleted: true, updatedAt: deletedAt });
+      }
+
+      await batch.commit();
 
       return NextResponse.json({ success: true });
     }

@@ -35,7 +35,7 @@ export async function POST(req: NextRequest) {
         .where("email", "==", email.toLowerCase())
         .limit(1)
         .get();
-      if (!emailSnap.empty && emailSnap.docs[0].data()?.active === true) {
+      if (!emailSnap.empty && emailSnap.docs[0].data()?.active === true && emailSnap.docs[0].id === uid) {
         const d = emailSnap.docs[0];
         const data = d.data();
         return NextResponse.json({

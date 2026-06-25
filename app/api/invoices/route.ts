@@ -1,28 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminAuth, adminDb, FieldValue } from "@/lib/firebaseAdmin";
+import { docToObj, cleanText } from "@/lib/adminUtils";
 
-function toSer(val: unknown): unknown {
-  if (val === null || val === undefined) return val;
-  if (typeof val === "object" && typeof (val as Record<string, unknown>).toMillis === "function") {
-    return (val as { toMillis: () => number }).toMillis();
-  }
-  if (Array.isArray(val)) return val.map(toSer);
-  if (typeof val === "object") {
-    const out: Record<string, unknown> = {};
-    for (const [k, v] of Object.entries(val as Record<string, unknown>)) out[k] = toSer(v);
-    return out;
-  }
-  return val;
-}
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function docToObj(d: any): Record<string, unknown> {
-  return toSer({ id: d.id, ...d.data() }) as Record<string, unknown>;
-}
-
-function cleanText(v: unknown): string {
-  return String(v ?? "").trim();
-}
+const PATIENT_INVOICES_LIMIT = 50;
+const INVOICE_LIST_LIMIT = 200;
 
 function toNumber(value: unknown) {
   if (typeof value === "number") return value;
@@ -139,7 +120,7 @@ export async function POST(req: NextRequest) {
       const snap = await adminDb.collection("invoices")
         .where("patientId", "==", patientId)
         .orderBy("createdAt", "desc")
-        .limit(50)
+        .limit(PATIENT_INVOICES_LIMIT)
         .get();
       const invoices = snap.docs.map(docToObj)
         .filter((r) => !r.isDeleted && isCoordinatorOf(r));
@@ -372,12 +353,14 @@ export async function POST(req: NextRequest) {
       const { startDate, endDate, status, patientName, commissionStaffUid } =
         (payload || {}) as Record<string, string>;
 
-      const snap = await adminDb.collection("invoices")
-        .orderBy("createdAt", "desc")
-        .limit(200)
-        .get();
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      let records = snap.docs.map(docToObj).filter((r: any) => !r.isDeleted && isCoordinatorOf(r));
+      let baseQuery: any = adminDb.collection("invoices").orderBy("createdAt", "desc");
+      if (!isAdmin && callerName) {
+        baseQuery = baseQuery.where("coordinators", "array-contains", callerName);
+      }
+      const snap = await baseQuery.limit(INVOICE_LIST_LIMIT).get();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let records = snap.docs.map(docToObj).filter((r: any) => !r.isDeleted);
 
       // 날짜 필터: surgeryDate 있으면 surgeryDate 기준, 없으면 createdAt 기준
       if (startDate || endDate) {
