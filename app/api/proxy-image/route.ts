@@ -1,6 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
+import { requireActiveStaff, toAuthErrorResponse } from "@/lib/apiAuth";
 
 export async function GET(req: NextRequest) {
+  // 활성 직원만 프록시 허용 (오픈 프록시 방지)
+  const authHeader = req.headers.get("authorization");
+  try {
+    await requireActiveStaff(authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : undefined);
+  } catch (authErr) {
+    const res = toAuthErrorResponse(authErr);
+    if (res) return res;
+    throw authErr;
+  }
+
   const url = req.nextUrl.searchParams.get("url");
   if (!url) return NextResponse.json({ error: "missing url" }, { status: 400 });
 

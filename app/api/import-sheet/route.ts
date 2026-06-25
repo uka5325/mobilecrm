@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { adminAuth } from "@/lib/firebaseAdmin";
+import { requireActiveStaff, toAuthErrorResponse } from "@/lib/apiAuth";
 import { todayString } from "@/lib/dateUtils";
 import { cleanText } from "@/lib/stringUtils";
 
@@ -155,13 +155,12 @@ function getCell(row: string[], index: number) {
 
 export async function POST(req: NextRequest) {
   const authHeader = req.headers.get("authorization");
-  if (!authHeader?.startsWith("Bearer ")) {
-    return NextResponse.json({ success: false, message: "인증이 필요합니다." }, { status: 401 });
-  }
   try {
-    await adminAuth.verifyIdToken(authHeader.slice(7));
-  } catch {
-    return NextResponse.json({ success: false, message: "인증이 유효하지 않습니다." }, { status: 401 });
+    await requireActiveStaff(authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : undefined);
+  } catch (authErr) {
+    const res = toAuthErrorResponse(authErr);
+    if (res) return res;
+    throw authErr;
   }
 
   try {
