@@ -192,11 +192,15 @@ export async function POST(req: NextRequest) {
       }
       const reservation = resSnap.data() as Record<string, unknown>;
 
-      // coordinator 이하: 해당 예약의 담당자인지 확인
+      // coordinator 또는 admin만 인보이스 생성 가능
+      if (!isAdmin && callerRole !== "coordinator") {
+        return NextResponse.json({ success: false, message: "코디네이터만 인보이스를 생성할 수 있습니다." }, { status: 403 });
+      }
+      // coordinator: 해당 예약의 담당자인지 확인
       if (!isAdmin) {
         const resCoords = Array.isArray(reservation.coordinators) ? reservation.coordinators as string[] : [];
         if (!callerName || !resCoords.includes(callerName)) {
-          return NextResponse.json({ success: false, message: "담당자만 인보이스를 생성할 수 있습니다." }, { status: 403 });
+          return NextResponse.json({ success: false, message: "담당 코디네이터만 인보이스를 생성할 수 있습니다." }, { status: 403 });
         }
       }
 

@@ -261,6 +261,10 @@ function PatientInvoiceModal({ patientId, patientName, reservations, onClose, on
       if (!firebaseUser) { setError("로그인 정보를 확인할 수 없습니다."); return; }
       const staff = await getStaffByUid(firebaseUser.uid);
       if (!staff) { setError("직원 정보를 찾을 수 없습니다."); return; }
+      const reservation = reservations.find((r) => r.id === reservationDocId);
+      const isCoordinator = staff.role === "admin" ||
+        (Array.isArray(reservation?.coordinators) && (reservation.coordinators as string[]).includes(staff.displayName));
+      if (!isCoordinator) { setError("담당 코디네이터만 인보이스를 생성할 수 있습니다."); return; }
       const result = await getOrCreateInvoiceDraft(reservationDocId, staff);
       if (!result.success || !result.invoice) { setError(result.message || "생성 실패"); return; }
       await load();
