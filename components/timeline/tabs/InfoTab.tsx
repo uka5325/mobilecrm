@@ -129,25 +129,20 @@ export function InfoTab({
 
       <div className="mt-3">
         <label className="text-xs text-gray-500">예약 유형</label>
-        <div className="mt-2 flex gap-2 flex-wrap">
-          {APPOINTMENT_TYPES.map((type) => {
-            const active = detailForm.appointmentType === type;
-            return (
-              <button
-                key={type}
-                onClick={() => onFormChange({ appointmentType: type })}
-                className="rounded-xl border px-3 py-1.5 text-sm font-semibold transition hover:-translate-y-0.5 active:scale-95"
-                style={{
-                  backgroundColor: active ? TYPE_COLORS[type] : "#f9fafb",
-                  color: active ? "#fff" : "#374151",
-                  borderColor: active ? TYPE_COLORS[type] : "#dfe3e8",
-                }}
-              >
-                {type}
-              </button>
-            );
-          })}
-        </div>
+        <select
+          value={detailForm.appointmentType}
+          onChange={(e) => onFormChange({ appointmentType: e.target.value as AppointmentType })}
+          className="mt-1 w-full rounded-xl border px-3 py-2 text-sm font-semibold transition focus:outline-none"
+          style={{
+            backgroundColor: TYPE_COLORS[detailForm.appointmentType] ?? "#f9fafb",
+            color: TYPE_COLORS[detailForm.appointmentType] ? "#fff" : "#374151",
+            borderColor: TYPE_COLORS[detailForm.appointmentType] ?? "#dfe3e8",
+          }}
+        >
+          {APPOINTMENT_TYPES.map((type) => (
+            <option key={type} value={type}>{type}</option>
+          ))}
+        </select>
       </div>
 
       <div className="mt-3">

@@ -299,6 +299,7 @@ export default function SettingsPage() {
 
         <div className="flex gap-2 overflow-x-auto lg:flex-col lg:overflow-visible">
           {TAB_ITEMS.map((item) => {
+            if (item.key === "staff" && !canManageSettings) return null;
             const active = activeTab === item.key;
             return (
               <button
