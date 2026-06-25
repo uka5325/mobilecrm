@@ -1,28 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminAuth, adminDb, FieldValue } from "@/lib/firebaseAdmin";
-
-function toSer(val: unknown): unknown {
-  if (val === null || val === undefined) return val;
-  if (typeof val === "object" && typeof (val as Record<string, unknown>).toMillis === "function") {
-    return (val as { toMillis: () => number }).toMillis();
-  }
-  if (Array.isArray(val)) return val.map(toSer);
-  if (typeof val === "object") {
-    const out: Record<string, unknown> = {};
-    for (const [k, v] of Object.entries(val as Record<string, unknown>)) out[k] = toSer(v);
-    return out;
-  }
-  return val;
-}
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function docToObj(d: any): Record<string, unknown> {
-  return toSer({ id: d.id, ...d.data() }) as Record<string, unknown>;
-}
-
-function cleanText(v: unknown): string {
-  return String(v ?? "").trim();
-}
+import { docToObj, cleanText } from "@/lib/adminUtils";
 
 function toNumber(value: unknown) {
   if (typeof value === "number") return value;
@@ -372,7 +350,8 @@ export async function POST(req: NextRequest) {
       const { startDate, endDate, status, patientName, commissionStaffUid } =
         (payload || {}) as Record<string, string>;
 
-      let baseQuery = adminDb.collection("invoices").orderBy("createdAt", "desc") as FirebaseFirestore.Query;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let baseQuery: any = adminDb.collection("invoices").orderBy("createdAt", "desc");
       if (!isAdmin && callerName) {
         baseQuery = baseQuery.where("coordinators", "array-contains", callerName);
       }
