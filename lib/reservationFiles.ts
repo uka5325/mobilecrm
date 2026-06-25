@@ -1,7 +1,6 @@
 import {
   addDoc,
   collection,
-  deleteDoc,
   doc,
   getDocs,
   query,
@@ -212,11 +211,14 @@ export async function deleteReservationPhoto(
   patientId: string,
   staff: StaffUser
 ): Promise<void> {
-  await deleteDoc(doc(db, "reservationPhotos", photoId));
+  await updateDoc(doc(db, "reservationPhotos", photoId), {
+    isDeleted: true,
+    deletedAt: serverTimestamp(),
+  });
   try {
     await deleteObject(ref(storage, storagePath));
   } catch {
-    // Storage 삭제 실패해도 Firestore는 이미 삭제됨
+    // Storage 삭제 실패해도 Firestore는 이미 처리됨
   }
   await createLog({
     action: "file_delete",
@@ -354,7 +356,10 @@ export async function deleteReservationChart(
   patientId: string,
   staff: StaffUser
 ): Promise<void> {
-  await deleteDoc(doc(db, "reservationCharts", chartId));
+  await updateDoc(doc(db, "reservationCharts", chartId), {
+    isDeleted: true,
+    deletedAt: serverTimestamp(),
+  });
   try { await deleteObject(ref(storage, storagePath)); } catch {}
   await createLog({
     action: "file_delete",
