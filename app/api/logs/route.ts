@@ -15,6 +15,10 @@ function toSer(val: unknown): unknown {
   return val;
 }
 
+// uid별 active 여부 서버 메모리 캐시 (5분 TTL)
+const _staffActiveCache = new Map<string, { active: boolean; at: number }>();
+const STAFF_ACTIVE_TTL = 5 * 60 * 1000;
+
 export async function POST(req: NextRequest) {
   try {
     const { idToken, action, payload } = await req.json();
@@ -24,14 +28,20 @@ export async function POST(req: NextRequest) {
 
     // ── CREATE ──────────────────────────────────────────────────────────────
     if (action === "create") {
-      // 활성 직원만 로그 생성 허용
-      let isActiveStaff = false;
-      const sSnap = await adminDb.collection("staff").where("uid", "==", uid).limit(1).get();
-      if (!sSnap.empty) {
-        isActiveStaff = sSnap.docs[0].data().active === true;
-      } else {
-        const sDoc = await adminDb.collection("staff").doc(uid).get();
-        if (sDoc.exists) isActiveStaff = sDoc.data()?.active === true;
+      // 활성 직원만 로그 생성 허용 (5분 캐시로 반복 조회 최소화)
+      const activeCache = _staffActiveCache.get(uid);
+      let isActiveStaff = activeCache && Date.now() - activeCache.at < STAFF_ACTIVE_TTL
+        ? activeCache.active
+        : null;
+      if (isActiveStaff === null) {
+        const sSnap = await adminDb.collection("staff").where("uid", "==", uid).limit(1).get();
+        if (!sSnap.empty) {
+          isActiveStaff = sSnap.docs[0].data().active === true;
+        } else {
+          const sDoc = await adminDb.collection("staff").doc(uid).get();
+          isActiveStaff = sDoc.exists ? sDoc.data()?.active === true : false;
+        }
+        _staffActiveCache.set(uid, { active: isActiveStaff, at: Date.now() });
       }
       if (!isActiveStaff) {
         return NextResponse.json({ success: false, message: "권한이 없습니다." }, { status: 403 });

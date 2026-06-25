@@ -24,6 +24,33 @@ function cleanText(v: unknown): string {
   return String(v ?? "").trim();
 }
 
+// uid별 role/displayName 서버 메모리 캐시 (5분 TTL)
+// 보안: 클라이언트 전송 값이 아닌 서버에서 검증한 값을 캐싱
+const _staffCache = new Map<string, { role: string; name: string; at: number }>();
+const STAFF_CACHE_TTL = 5 * 60 * 1000;
+
+async function getCachedStaff(uid: string): Promise<{ role: string; name: string }> {
+  const cached = _staffCache.get(uid);
+  if (cached && Date.now() - cached.at < STAFF_CACHE_TTL) {
+    return { role: cached.role, name: cached.name };
+  }
+  let role = "";
+  let name = "";
+  const snap = await adminDb.collection("staff").where("uid", "==", uid).limit(1).get();
+  if (!snap.empty) {
+    role = String(snap.docs[0].data().role || "");
+    name = String(snap.docs[0].data().displayName || "");
+  } else {
+    const doc = await adminDb.collection("staff").doc(uid).get();
+    if (doc.exists) {
+      role = String(doc.data()?.role || "");
+      name = String(doc.data()?.displayName || "");
+    }
+  }
+  _staffCache.set(uid, { role, name, at: Date.now() });
+  return { role, name };
+}
+
 function toNumber(value: unknown) {
   if (typeof value === "number") return value;
   const cleaned = String(value || "").replace(/[^0-9.-]/g, "");
@@ -97,20 +124,8 @@ export async function POST(req: NextRequest) {
     const decoded = await adminAuth.verifyIdToken(idToken);
     const uid = decoded.uid;
 
-    // ── Caller identity & role — 항상 DB에서 검증, 클라이언트 전송 값 사용 안 함 ──
-    let callerRole = "";
-    let callerName = "";
-    const staffSnap = await adminDb.collection("staff").where("uid", "==", uid).limit(1).get();
-    if (!staffSnap.empty) {
-      callerRole = String(staffSnap.docs[0].data().role || "");
-      callerName = String(staffSnap.docs[0].data().displayName || "");
-    } else {
-      const staffDoc = await adminDb.collection("staff").doc(uid).get();
-      if (staffDoc.exists) {
-        callerRole = String(staffDoc.data()?.role || "");
-        callerName = String(staffDoc.data()?.displayName || "");
-      }
-    }
+    // ── Caller identity & role — 서버 캐시(5분 TTL) 경유, 클라이언트 전송 값 사용 안 함 ──
+    const { role: callerRole, name: callerName } = await getCachedStaff(uid);
 
     // admin은 모든 접근 허용. coordinator 이하는 본인 담당 인보이스만 접근.
     const isAdmin = callerRole === "admin";
