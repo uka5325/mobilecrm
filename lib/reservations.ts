@@ -304,22 +304,27 @@ export async function getDoctors(): Promise<DoctorOption[]> {
 
   _doctorsCachedAt = Date.now();
   _doctorsPromise = (async () => {
-    const result = await callReservationsApi("read_doctors", {});
-    const rawDoctors = (result.doctors as Record<string, unknown>[] | undefined) || [];
+    try {
+      const result = await callReservationsApi("read_doctors", {});
+      const rawDoctors = (result.doctors as Record<string, unknown>[] | undefined) || [];
 
-    const doctors = rawDoctors
-      .map((d) => ({
-        uid: String(d.id || ""),
-        displayName: cleanText(d.displayName || d["display_name"] || d.name),
-        email: cleanText(d.email),
-        orderNo: cleanNumber(d.orderNo ?? d["order_no"]),
-        role: String(d.role || ""),
-        active: d.active,
-      }))
-      .filter((d) => d.displayName && d.role === "doctor" && d.active !== false);
+      const doctors = rawDoctors
+        .map((d) => ({
+          uid: String(d.id || ""),
+          displayName: cleanText(d.displayName || d["display_name"] || d.name),
+          email: cleanText(d.email),
+          orderNo: cleanNumber(d.orderNo ?? d["order_no"]),
+          role: String(d.role || ""),
+          active: d.active,
+        }))
+        .filter((d) => d.displayName && d.role === "doctor" && d.active !== false);
 
-    setCachedDoctors(sortDoctors(doctors));
-    return sortDoctors(doctors);
+      setCachedDoctors(sortDoctors(doctors));
+      return sortDoctors(doctors);
+    } catch (e) {
+      _doctorsPromise = null;
+      throw e;
+    }
   })();
 
   return _doctorsPromise;
