@@ -132,12 +132,7 @@ export function InfoTab({
         <select
           value={detailForm.appointmentType}
           onChange={(e) => onFormChange({ appointmentType: e.target.value as AppointmentType })}
-          className="mt-1 w-full rounded-xl border px-3 py-2 text-sm font-semibold transition focus:outline-none"
-          style={{
-            backgroundColor: TYPE_COLORS[detailForm.appointmentType] ?? "#f9fafb",
-            color: TYPE_COLORS[detailForm.appointmentType] ? "#fff" : "#374151",
-            borderColor: TYPE_COLORS[detailForm.appointmentType] ?? "#dfe3e8",
-          }}
+          className="mt-1 w-full rounded-xl border border-[#dfe3e8] px-3 py-2 text-sm transition focus:border-[#1d9e75] focus:outline-none"
         >
           {APPOINTMENT_TYPES.map((type) => (
             <option key={type} value={type}>{type}</option>
