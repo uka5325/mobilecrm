@@ -135,17 +135,25 @@ export async function getLatestLogsByReservationIds(reservationIds: string[]) {
   const ids = Array.from(new Set(reservationIds.map(cleanText).filter(Boolean)));
   if (!ids.length) return {};
 
+  // 30개 단위 배치 (Firestore in 쿼리 제한)
+  const BATCH = 30;
+  const allLogs: LogRecord[] = [];
+  for (let i = 0; i < ids.length; i += BATCH) {
+    const batch = ids.slice(i, i + BATCH);
+    const res = await callLogsApi("read_batch", { reservationIds: batch });
+    if (res.success && Array.isArray(res.logs)) {
+      allLogs.push(...(res.logs as Record<string, unknown>[]).map(mapLogDoc));
+    }
+  }
+
+  // reservationId별 최신 로그 1개 추출
   const result: Record<string, LogRecord> = {};
-
-  await Promise.all(
-    ids.map(async (id) => {
-      const res = await callLogsApi("read", { reservationId: id, targetId: id });
-      if (!res.success || !Array.isArray(res.logs)) return;
-      const logs = (res.logs as Record<string, unknown>[]).map(mapLogDoc);
-      const latest = logs.sort((a, b) => toMillis(b.createdAt) - toMillis(a.createdAt))[0];
-      if (latest) result[id] = latest;
-    })
-  );
-
+  for (const log of allLogs) {
+    const rid = log.reservationId;
+    if (!rid) continue;
+    if (!result[rid] || toMillis(log.createdAt) > toMillis(result[rid].createdAt)) {
+      result[rid] = log;
+    }
+  }
   return result;
 }

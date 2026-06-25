@@ -123,6 +123,16 @@ export async function POST(req: NextRequest) {
       return callerName ? coords.includes(callerName) : false;
     }
 
+    // ── COUNT_BY_PATIENT ─────────────────────────────────────────────────────
+    if (action === "count_by_patient") {
+      const { patientId } = payload as { patientId: string };
+      const countSnap = await adminDb.collection("invoices")
+        .where("patientId", "==", patientId)
+        .count()
+        .get();
+      return NextResponse.json({ success: true, count: countSnap.data().count });
+    }
+
     // ── GET_BY_PATIENT ───────────────────────────────────────────────────────
     if (action === "get_by_patient") {
       const { patientId } = payload as { patientId: string };
@@ -220,17 +230,20 @@ export async function POST(req: NextRequest) {
         isDeleted: false,
       };
 
-      const invoiceRef = await adminDb.collection("invoices").add(invoicePayload);
+      const invoiceRef = adminDb.collection("invoices").doc();
       const invoiceDocId = invoiceRef.id;
 
-      await adminDb.collection("reservations").doc(reservationDocId).update({
-        invoiceId,
-        invoiceDocId,
-        invoiceStatus: "draft",
-        invoiceUpdatedAt: FieldValue.serverTimestamp(),
-        updatedAt: FieldValue.serverTimestamp(),
-        updatedBy: staffName,
-        updatedByUid: staffUid,
+      await adminDb.runTransaction(async (tx) => {
+        tx.set(invoiceRef, invoicePayload);
+        tx.update(adminDb.collection("reservations").doc(reservationDocId), {
+          invoiceId,
+          invoiceDocId,
+          invoiceStatus: "draft",
+          invoiceUpdatedAt: FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp(),
+          updatedBy: staffName,
+          updatedByUid: staffUid,
+        });
       });
 
       await writeLog({
@@ -325,21 +338,22 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ success: false, message: "접근 권한이 없습니다." }, { status: 403 });
       }
 
-      await invoiceRef.update({
-        isDeleted: true,
-        updatedAt: FieldValue.serverTimestamp(),
-        updatedBy: staffName,
-        updatedByUid: staffUid,
-      });
-
-      await adminDb.collection("reservations").doc(cleanText(current.reservationDocId)).update({
-        invoiceId: "",
-        invoiceDocId: "",
-        invoiceStatus: "",
-        invoiceUpdatedAt: FieldValue.serverTimestamp(),
-        updatedAt: FieldValue.serverTimestamp(),
-        updatedBy: staffName,
-        updatedByUid: staffUid,
+      await adminDb.runTransaction(async (tx) => {
+        tx.update(invoiceRef, {
+          isDeleted: true,
+          updatedAt: FieldValue.serverTimestamp(),
+          updatedBy: staffName,
+          updatedByUid: staffUid,
+        });
+        tx.update(adminDb.collection("reservations").doc(cleanText(current.reservationDocId)), {
+          invoiceId: "",
+          invoiceDocId: "",
+          invoiceStatus: "",
+          invoiceUpdatedAt: FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp(),
+          updatedBy: staffName,
+          updatedByUid: staffUid,
+        });
       });
 
       await writeLog({

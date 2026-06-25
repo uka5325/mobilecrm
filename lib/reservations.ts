@@ -1,5 +1,5 @@
 import { auth, db } from "./firebase";
-import { collection, onSnapshot, query, where, getDocs } from "firebase/firestore";
+import { collection, onSnapshot, query, where, getDocs, limit } from "firebase/firestore";
 import type { StaffUser } from "./auth";
 import { cleanText } from "./stringUtils";
 import { createLog } from "./logs";
@@ -458,42 +458,49 @@ export function subscribeAllReservations(
       return d.toISOString().slice(0, 10);
     })();
 
-    // Immediately seed with API data so UI shows content even if onSnapshot is slow/fails
-    callReservationsApi("read_all", { from: fromDate })
-      .then((result) => {
-        if (!seedDelivered && result.success) {
-          const rawReservations = (result.reservations as Record<string, unknown>[] | undefined) || [];
-          const rawDoctors = (result.doctors as Record<string, unknown>[] | undefined) || [];
-          const reservations = rawReservations
-            .map((r) => mapReservationDoc(String(r.id || ""), r))
-            .filter((item) => !item.isDeleted)
-            .sort((a, b) => {
-              const aa = `${a.reservationDate} ${a.reservationTime} ${a.name}`;
-              const bb = `${b.reservationDate} ${b.reservationTime} ${b.name}`;
-              return aa.localeCompare(bb);
-            });
-          const doctors: DoctorOption[] = rawDoctors
-            .map((d) => ({
-              uid: String(d.id || ""),
-              displayName: cleanText(d.displayName || d["display_name"] || d.name),
-              email: cleanText(d.email),
-              orderNo: cleanNumber(d.orderNo ?? d["order_no"]),
-            }))
-            .filter((d) => d.displayName)
-            .sort((a, b) => a.orderNo - b.orderNo || a.displayName.localeCompare(b.displayName));
-          if (doctors.length) latestDoctors = doctors;
-          callback({ reservations, doctors: doctors.length ? doctors : makeDoctorOptionsFromReservations(reservations) });
-        }
-      })
-      .catch(() => {});
+    const hasLoadedBefore = (() => {
+      try { return localStorage.getItem("crm_loaded_once_v1") === "true"; } catch { return false; }
+    })();
+
+    // Seed with API data only on first visit (no IndexedDB cache yet)
+    if (!hasLoadedBefore) {
+      callReservationsApi("read_all", { from: fromDate })
+        .then((result) => {
+          if (!seedDelivered && result.success) {
+            const rawReservations = (result.reservations as Record<string, unknown>[] | undefined) || [];
+            const rawDoctors = (result.doctors as Record<string, unknown>[] | undefined) || [];
+            const reservations = rawReservations
+              .map((r) => mapReservationDoc(String(r.id || ""), r))
+              .filter((item) => !item.isDeleted)
+              .sort((a, b) => {
+                const aa = `${a.reservationDate} ${a.reservationTime} ${a.name}`;
+                const bb = `${b.reservationDate} ${b.reservationTime} ${b.name}`;
+                return aa.localeCompare(bb);
+              });
+            const doctors: DoctorOption[] = rawDoctors
+              .map((d) => ({
+                uid: String(d.id || ""),
+                displayName: cleanText(d.displayName || d["display_name"] || d.name),
+                email: cleanText(d.email),
+                orderNo: cleanNumber(d.orderNo ?? d["order_no"]),
+              }))
+              .filter((d) => d.displayName)
+              .sort((a, b) => a.orderNo - b.orderNo || a.displayName.localeCompare(b.displayName));
+            if (doctors.length) latestDoctors = doctors;
+            callback({ reservations, doctors: doctors.length ? doctors : makeDoctorOptionsFromReservations(reservations) });
+          }
+        })
+        .catch(() => {});
+    }
 
     getClientDoctors().then((d) => { latestDoctors = d; }).catch(() => {});
 
     unsubscribeSnapshot = onSnapshot(
-      query(collection(db, "reservations"), where("reservationDate", ">=", fromDate)),
+      query(collection(db, "reservations"), where("reservationDate", ">=", fromDate), limit(500)),
       (snap) => {
         // skip empty cache snapshots — they would wipe the API seed data
         if (snap.metadata.fromCache && snap.empty) return;
+        try { localStorage.setItem("crm_loaded_once_v1", "true"); } catch {}
         seedDelivered = true;
         const reservations = snap.docs
           .map((d) => mapReservationDoc(d.id, d.data() as Record<string, unknown>))
@@ -536,34 +543,40 @@ export function subscribeTimelineReservations(
     if (unsubscribeSnapshot) { unsubscribeSnapshot(); unsubscribeSnapshot = null; }
     if (!user) return;
 
-    // Immediately seed with API data so UI shows content even if onSnapshot is slow/fails
-    callReservationsApi("read_by_date", { date })
-      .then((result) => {
-        if (!seedDelivered && result.success) {
-          const rawReservations = (result.reservations as Record<string, unknown>[] | undefined) || [];
-          const rawDoctors = (result.doctors as Record<string, unknown>[] | undefined) || [];
-          const reservations = rawReservations
-            .map((r) => mapReservationDoc(String(r.id || ""), r))
-            .filter((item) => !item.isDeleted)
-            .sort((a, b) => {
-              const aa = `${a.reservationTime} ${a.name}`;
-              const bb = `${b.reservationTime} ${b.name}`;
-              return aa.localeCompare(bb);
-            });
-          const doctors: DoctorOption[] = rawDoctors
-            .map((d) => ({
-              uid: String(d.id || ""),
-              displayName: cleanText(d.displayName || d["display_name"] || d.name),
-              email: cleanText(d.email),
-              orderNo: cleanNumber(d.orderNo ?? d["order_no"]),
-            }))
-            .filter((d) => d.displayName)
-            .sort((a, b) => a.orderNo - b.orderNo || a.displayName.localeCompare(b.displayName));
-          if (doctors.length) latestDoctors = doctors;
-          callback({ reservations, doctors: doctors.length ? doctors : makeDoctorOptionsFromReservations(reservations) });
-        }
-      })
-      .catch(() => {});
+    const hasLoadedBefore = (() => {
+      try { return localStorage.getItem("crm_loaded_once_v1") === "true"; } catch { return false; }
+    })();
+
+    // Seed with API data only on first visit (no IndexedDB cache yet)
+    if (!hasLoadedBefore) {
+      callReservationsApi("read_by_date", { date })
+        .then((result) => {
+          if (!seedDelivered && result.success) {
+            const rawReservations = (result.reservations as Record<string, unknown>[] | undefined) || [];
+            const rawDoctors = (result.doctors as Record<string, unknown>[] | undefined) || [];
+            const reservations = rawReservations
+              .map((r) => mapReservationDoc(String(r.id || ""), r))
+              .filter((item) => !item.isDeleted)
+              .sort((a, b) => {
+                const aa = `${a.reservationTime} ${a.name}`;
+                const bb = `${b.reservationTime} ${b.name}`;
+                return aa.localeCompare(bb);
+              });
+            const doctors: DoctorOption[] = rawDoctors
+              .map((d) => ({
+                uid: String(d.id || ""),
+                displayName: cleanText(d.displayName || d["display_name"] || d.name),
+                email: cleanText(d.email),
+                orderNo: cleanNumber(d.orderNo ?? d["order_no"]),
+              }))
+              .filter((d) => d.displayName)
+              .sort((a, b) => a.orderNo - b.orderNo || a.displayName.localeCompare(b.displayName));
+            if (doctors.length) latestDoctors = doctors;
+            callback({ reservations, doctors: doctors.length ? doctors : makeDoctorOptionsFromReservations(reservations) });
+          }
+        })
+        .catch(() => {});
+    }
 
     getClientDoctors().then((d) => { latestDoctors = d; }).catch(() => {});
 
@@ -572,6 +585,7 @@ export function subscribeTimelineReservations(
       (snap) => {
         // skip empty cache snapshots — they would wipe the API seed data
         if (snap.metadata.fromCache && snap.empty) return;
+        try { localStorage.setItem("crm_loaded_once_v1", "true"); } catch {}
         seedDelivered = true;
         const reservations = snap.docs
           .map((d) => mapReservationDoc(d.id, d.data() as Record<string, unknown>))
@@ -934,6 +948,7 @@ export type UpdateReservationParams = {
   surgeryCost?: string;
   currentDoctorStatusMap?: Record<string, string>;
   currentDoctorStatusMetaMap?: ReservationRecord["doctorStatusMetaMap"];
+  clientUpdatedAt?: number;
 };
 
 export async function updateReservationFull(
@@ -1028,6 +1043,7 @@ export async function updateReservationFull(
     patientId,
     reservationPatch,
     patientPatch,
+    clientUpdatedAt: params.clientUpdatedAt,
   });
 
   if (!apiResult.success) {
