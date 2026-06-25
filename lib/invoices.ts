@@ -182,6 +182,11 @@ export async function getInvoicesByPatientId(patientId: string): Promise<Invoice
   return records;
 }
 
+export async function getInvoiceCountByPatientId(patientId: string): Promise<number> {
+  const invoices = await getInvoicesByPatientId(patientId);
+  return invoices.length;
+}
+
 export async function getInvoiceByReservationDocId(reservationDocId: string) {
   const result = await callInvoicesApi("get_by_reservation", { reservationDocId });
   if (!result.success || !result.invoice) return null;
