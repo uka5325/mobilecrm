@@ -64,8 +64,6 @@ export type InvoiceUpdatePayload = {
   status?: "draft" | "confirmed" | "void";
 };
 
-let _callerCache: { role: string; name: string } | null = null;
-
 // 환자별 인보이스 결과 캐시 (pre-fetch 결과를 모달에서 즉시 재사용)
 const _invoicesByPatientCache = new Map<string, InvoiceRecord[]>();
 
@@ -100,7 +98,7 @@ async function callInvoicesApi(action: string, payload: Record<string, unknown>)
     const res = await fetch("/api/invoices", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ idToken, action, payload, callerRole: _callerCache?.role, callerName: _callerCache?.name }),
+      body: JSON.stringify({ idToken, action, payload }),
     });
     if (!res.ok) {
       return { success: false as const, message: `서버 오류가 발생했습니다. (${res.status})` };
@@ -109,10 +107,6 @@ async function callInvoicesApi(action: string, payload: Record<string, unknown>)
   } catch {
     return { success: false as const, message: "네트워크 오류가 발생했습니다. 연결 상태를 확인해주세요." };
   }
-}
-
-export function setInvoicesCallerCache(role: string, name: string) {
-  _callerCache = { role, name };
 }
 
 function toNumber(value: unknown) {

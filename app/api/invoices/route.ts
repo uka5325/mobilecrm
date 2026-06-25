@@ -24,6 +24,33 @@ function cleanText(v: unknown): string {
   return String(v ?? "").trim();
 }
 
+// uid별 role/displayName 서버 메모리 캐시 (5분 TTL)
+// 보안: 클라이언트 전송 값이 아닌 서버에서 검증한 값을 캐싱
+const _staffCache = new Map<string, { role: string; name: string; at: number }>();
+const STAFF_CACHE_TTL = 5 * 60 * 1000;
+
+async function getCachedStaff(uid: string): Promise<{ role: string; name: string }> {
+  const cached = _staffCache.get(uid);
+  if (cached && Date.now() - cached.at < STAFF_CACHE_TTL) {
+    return { role: cached.role, name: cached.name };
+  }
+  let role = "";
+  let name = "";
+  const snap = await adminDb.collection("staff").where("uid", "==", uid).limit(1).get();
+  if (!snap.empty) {
+    role = String(snap.docs[0].data().role || "");
+    name = String(snap.docs[0].data().displayName || "");
+  } else {
+    const doc = await adminDb.collection("staff").doc(uid).get();
+    if (doc.exists) {
+      role = String(doc.data()?.role || "");
+      name = String(doc.data()?.displayName || "");
+    }
+  }
+  _staffCache.set(uid, { role, name, at: Date.now() });
+  return { role, name };
+}
+
 function toNumber(value: unknown) {
   if (typeof value === "number") return value;
   const cleaned = String(value || "").replace(/[^0-9.-]/g, "");
@@ -91,33 +118,21 @@ async function writeLog(params: {
 
 export async function POST(req: NextRequest) {
   try {
-    const { idToken, action, payload, callerRole: clientRole, callerName: clientName } = await req.json();
+    const { idToken, action, payload } = await req.json();
     if (!idToken) return NextResponse.json({ success: false, message: "인증 토큰 없음" }, { status: 401 });
 
     const decoded = await adminAuth.verifyIdToken(idToken);
     const uid = decoded.uid;
 
-    // ── Caller identity & role ────────────────────────────────────────────────
-    // 클라이언트가 캐싱한 role/name을 우선 사용. 없으면 DB 조회 fallback.
-    let callerRole = String(clientRole || "");
-    let callerName = String(clientName || "");
-    if (!callerRole) {
-      const snap = await adminDb.collection("staff").where("uid", "==", uid).limit(1).get();
-      if (!snap.empty) {
-        callerRole = String(snap.docs[0].data().role || "");
-        callerName = String(snap.docs[0].data().displayName || "");
-      } else {
-        const doc = await adminDb.collection("staff").doc(uid).get();
-        if (doc.exists) {
-          callerRole = String(doc.data()?.role || "");
-          callerName = String(doc.data()?.displayName || "");
-        }
-      }
-    }
+    // ── Caller identity & role — 서버 캐시(5분 TTL) 경유, 클라이언트 전송 값 사용 안 함 ──
+    const { role: callerRole, name: callerName } = await getCachedStaff(uid);
 
     // admin은 모든 접근 허용. coordinator 이하는 본인 담당 인보이스만 접근.
     const isAdmin = callerRole === "admin";
 
+    // NOTE(tech-debt): coordinators[]는 displayName 문자열 배열 (UID 아님).
+    // callerName은 위에서 서버 DB로 검증되므로 스푸핑은 차단됨.
+    // 향후: coordinatorUids[] 필드 추가 후 uid 비교로 전환 필요.
     function isCoordinatorOf(inv: Record<string, unknown>): boolean {
       if (isAdmin) return true;
       const coords = Array.isArray(inv.coordinators) ? inv.coordinators as string[] : [];
@@ -177,11 +192,15 @@ export async function POST(req: NextRequest) {
       }
       const reservation = resSnap.data() as Record<string, unknown>;
 
-      // coordinator 이하: 해당 예약의 담당자인지 확인
+      // coordinator 또는 admin만 인보이스 생성 가능
+      if (!isAdmin && callerRole !== "coordinator") {
+        return NextResponse.json({ success: false, message: "코디네이터만 인보이스를 생성할 수 있습니다." }, { status: 403 });
+      }
+      // coordinator: 해당 예약의 담당자인지 확인
       if (!isAdmin) {
         const resCoords = Array.isArray(reservation.coordinators) ? reservation.coordinators as string[] : [];
         if (!callerName || !resCoords.includes(callerName)) {
-          return NextResponse.json({ success: false, message: "담당자만 인보이스를 생성할 수 있습니다." }, { status: 403 });
+          return NextResponse.json({ success: false, message: "담당 코디네이터만 인보이스를 생성할 수 있습니다." }, { status: 403 });
         }
       }
 
@@ -364,7 +383,10 @@ export async function POST(req: NextRequest) {
         (payload || {}) as Record<string, string>;
 
       const PAGE_SIZE = 50;
-      let q = adminDb.collection("invoices").orderBy("createdAt", "desc").limit(PAGE_SIZE);
+      // isDeleted Firestore 필터는 invoices:isDeleted+createdAt 복합 인덱스 배포 후 재적용 가능
+      let q = adminDb.collection("invoices")
+        .orderBy("createdAt", "desc")
+        .limit(PAGE_SIZE);
       if (cursor) {
         const cursorDoc = await adminDb.collection("invoices").doc(cursor).get();
         if (cursorDoc.exists) q = q.startAfter(cursorDoc) as typeof q;

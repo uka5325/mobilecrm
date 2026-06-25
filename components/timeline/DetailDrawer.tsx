@@ -530,6 +530,7 @@ export function DetailDrawer({ open, reservation, currentUser, onClose, onRefres
               patientId={selectedReservation.patientId}
               currentUser={currentUser}
               appointmentType={selectedReservation.appointmentType}
+              coordinators={selectedReservation.coordinators}
             />
           )}
         </div>

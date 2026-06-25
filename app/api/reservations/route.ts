@@ -78,6 +78,7 @@ export async function POST(req: NextRequest) {
 
       let resQ = adminDb
         .collection("reservations")
+        .where("isDeleted", "==", false)
         .where("reservationDate", ">=", fromDate)
         .orderBy("reservationDate", "desc")
         .limit(500);
@@ -128,6 +129,7 @@ export async function POST(req: NextRequest) {
       const [rSnap, doctors] = await Promise.all([
         adminDb
           .collection("reservations")
+          .where("isDeleted", "==", false)
           .where("reservationDate", "==", date)
           .get(),
         getCachedDoctors(),
