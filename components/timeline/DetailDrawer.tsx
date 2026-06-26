@@ -24,7 +24,6 @@ import { FilesTab } from "@/components/timeline/tabs/FilesTab";
 import { NotesTab } from "@/components/timeline/tabs/NotesTab";
 import { LogsTab } from "@/components/timeline/tabs/LogsTab";
 import { InvoiceTab } from "@/components/timeline/tabs/InvoiceTab";
-import { NewReservationDrawer } from "@/components/timeline/NewReservationDrawer";
 import { CreateDrawer } from "@/components/reservations/CreateDrawer";
 
 type DetailTab = "info" | "files" | "notes" | "logs" | "invoice";
@@ -76,6 +75,7 @@ export function DetailDrawer({ open, reservation, currentUser, onClose, onRefres
   const [logs, setLogs] = useState<LogRecord[]>([]);
   const [logsLoading, setLogsLoading] = useState(false);
   const [logsError, setLogsError] = useState("");
+  const [logsRecentOnly, setLogsRecentOnly] = useState(true);
 
   const [memoText, setMemoText] = useState("");
   const [memoError, setMemoError] = useState("");
@@ -123,20 +123,27 @@ export function DetailDrawer({ open, reservation, currentUser, onClose, onRefres
   const detailBirthPreview = useMemo(() => parseBirthInfo(detailForm.birthInput), [detailForm.birthInput]);
   const recentNotes = notes.slice(0, 3);
 
-  async function loadLogs(item: ReservationRecord, mounted?: { current: boolean }) {
+  // sinceDays>0이면 최근 N일만(상세 오픈 기본 3일), 0이면 전체("이전 로그 보기").
+  async function loadLogs(item: ReservationRecord, mounted?: { current: boolean }, sinceDays: number = 3) {
     setLogsLoading(true);
     setLogsError("");
     setLogs([]);
     try {
-      const list = await getLogsByReservationId(item.reservationId, item.id, item.patientId);
+      const list = await getLogsByReservationId(item.reservationId, item.id, item.patientId, { sinceDays });
       if (mounted && !mounted.current) return;
       setLogs(list);
+      setLogsRecentOnly(sinceDays > 0);
     } catch {
       if (mounted && !mounted.current) return;
       setLogsError("로그를 불러오지 못했습니다.");
     } finally {
       if (!mounted || mounted.current) setLogsLoading(false);
     }
+  }
+
+  async function loadOlderLogs() {
+    if (!selectedReservation) return;
+    await loadLogs(selectedReservation, undefined, 0);
   }
 
   async function loadNotes(item: ReservationRecord, mounted?: { current: boolean }) {
@@ -521,7 +528,13 @@ export function DetailDrawer({ open, reservation, currentUser, onClose, onRefres
           )}
 
           {activeTab === "logs" && (
-            <LogsTab logs={logs} loading={logsLoading} error={logsError} />
+            <LogsTab
+              logs={logs}
+              loading={logsLoading}
+              error={logsError}
+              canLoadOlder={logsRecentOnly}
+              onLoadOlder={loadOlderLogs}
+            />
           )}
 
           {activeTab === "invoice" && selectedReservation && (
@@ -540,6 +553,7 @@ export function DetailDrawer({ open, reservation, currentUser, onClose, onRefres
         open={addReservationOpen}
         onClose={() => setAddReservationOpen(false)}
         currentUser={currentUser}
+        mode="reservation"
         initialDate={selectedReservation.reservationDate}
         initialPatient={addReservationPatient}
         onCreated={() => {

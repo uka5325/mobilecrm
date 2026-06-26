@@ -7,9 +7,11 @@ type Props = {
   logs: LogRecord[];
   loading: boolean;
   error: string;
+  canLoadOlder?: boolean;
+  onLoadOlder?: () => void;
 };
 
-export function LogsTab({ logs, loading, error }: Props) {
+export function LogsTab({ logs, loading, error, canLoadOlder, onLoadOlder }: Props) {
   if (loading) {
     return (
       <div className="rounded-xl border border-[#edf0f3] bg-white p-4 text-sm text-gray-400">
@@ -28,8 +30,18 @@ export function LogsTab({ logs, loading, error }: Props) {
 
   if (logs.length === 0) {
     return (
-      <div className="rounded-xl border border-[#edf0f3] bg-white p-4 text-sm text-gray-400">
-        등록된 로그가 없습니다.
+      <div className="space-y-2">
+        <div className="rounded-xl border border-[#edf0f3] bg-white p-4 text-sm text-gray-400">
+          최근 3일간 로그가 없습니다.
+        </div>
+        {canLoadOlder && onLoadOlder && (
+          <button
+            onClick={onLoadOlder}
+            className="w-full rounded-xl border border-[#dfe3e8] py-2 text-xs text-gray-500 transition hover:bg-gray-50 active:scale-[0.99]"
+          >
+            이전 로그 보기
+          </button>
+        )}
       </div>
     );
   }
@@ -50,6 +62,14 @@ export function LogsTab({ logs, loading, error }: Props) {
           )}
         </div>
       ))}
+      {canLoadOlder && onLoadOlder && (
+        <button
+          onClick={onLoadOlder}
+          className="w-full rounded-xl border border-[#dfe3e8] py-2 text-xs text-gray-500 transition hover:bg-gray-50 active:scale-[0.99]"
+        >
+          이전 로그 보기
+        </button>
+      )}
     </div>
   );
 }

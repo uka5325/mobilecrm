@@ -14,7 +14,9 @@
 import * as admin from "firebase-admin";
 
 const DRY_RUN = process.argv.includes("--dry-run");
-const COLLECTIONS = ["invoices", "reservations", "reservationNotes", "reservationPhotos"];
+// patients 포함: list_patients의 서버측 where("isDeleted","==",false) 전환 전,
+// isDeleted 필드가 없는 레거시 patient 문서에 false를 채워 누락을 방지한다.
+const COLLECTIONS = ["invoices", "reservations", "reservationNotes", "reservationPhotos", "patients"];
 
 function init() {
   if (admin.apps.length) return;

@@ -8,8 +8,9 @@ export async function POST(req: NextRequest) {
     const { idToken, action, payload } = await req.json();
 
     // 활성 직원 인가 (공통 가드가 5분 캐시 포함)
+    let ctx;
     try {
-      await requireActiveStaff(idToken);
+      ctx = await requireActiveStaff(idToken);
     } catch (authErr) {
       const res = toAuthErrorResponse(authErr);
       if (res) return res;
@@ -19,19 +20,20 @@ export async function POST(req: NextRequest) {
     // ── CREATE ──────────────────────────────────────────────────────────────
     if (action === "create") {
       const {
-        action: logAction, targetType, targetId = "", staffUid, staffName, staffEmail, staffRole, staffCode = "",
+        action: logAction, targetType, targetId = "",
         patientId = "", reservationId = "", invoiceId = "", message, before = null, after = null,
       } = payload as Record<string, unknown>;
 
+      // 감사로그 신원은 클라이언트 payload가 아닌 검증된 토큰(ctx) 값만 사용 → 위조 차단
       await adminDb.collection("logs").add({
         action: logAction,
         targetType,
         targetId,
-        staffUid,
-        staffName,
-        staffEmail,
-        staffRole,
-        staffCode,
+        staffUid: ctx.uid,
+        staffName: ctx.name,
+        staffEmail: ctx.email,
+        staffRole: ctx.role,
+        staffCode: ctx.staffCode,
         patientId,
         reservationId,
         invoiceId,
@@ -46,7 +48,7 @@ export async function POST(req: NextRequest) {
 
     // ── READ ─────────────────────────────────────────────────────────────────
     if (action === "read") {
-      const { reservationId, targetId, patientId } = payload as { reservationId?: string; targetId?: string; patientId?: string };
+      const { reservationId, targetId, patientId, sinceDays } = payload as { reservationId?: string; targetId?: string; patientId?: string; sinceDays?: number };
       const LOG_LIMIT = 50;
 
       // 우선순위 단일 쿼리: reservationId > targetId > patientId
@@ -61,11 +63,17 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ success: true, logs: [] });
       }
 
-      const snap = await adminDb.collection("logs")
+      // sinceDays>0이면 최근 N일만 (상세 오픈 시 기본 3일). 0/미지정이면 전체(최대 50, "이전 로그 보기").
+      // 색인: logs(primaryField, createdAt) 기존재.
+      let q = adminDb.collection("logs")
         .where(primaryField, "==", primaryValue)
-        .orderBy("createdAt", "desc")
-        .limit(LOG_LIMIT)
-        .get();
+        .orderBy("createdAt", "desc") as FirebaseFirestore.Query;
+      if (typeof sinceDays === "number" && sinceDays > 0) {
+        const cutoff = new Date(Date.now() - sinceDays * 24 * 60 * 60 * 1000);
+        q = q.where("createdAt", ">=", cutoff);
+      }
+
+      const snap = await q.limit(LOG_LIMIT).get();
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const list = snap.docs.map((d: any) => toSer({ id: d.id, ...d.data() }));
