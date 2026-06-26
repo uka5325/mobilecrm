@@ -8,8 +8,9 @@ export async function POST(req: NextRequest) {
     const { idToken, action, payload } = await req.json();
 
     // 활성 직원 인가 — 메모 생성/수정/삭제는 토큰 폐기 검사
+    let ctx;
     try {
-      await requireActiveStaff(idToken, { checkRevoked: action !== "read" });
+      ctx = await requireActiveStaff(idToken, { checkRevoked: action !== "read" });
     } catch (authErr) {
       const res = toAuthErrorResponse(authErr);
       if (res) return res;
@@ -55,8 +56,12 @@ export async function POST(req: NextRequest) {
 
     // ── CREATE ─────────────────────────────────────────────────────────────
     if (action === "create") {
-      const { reservationId, reservationDocId, patientId, memoText, staffName, staffUid } = payload as Record<string, string>;
+      const { reservationId, reservationDocId, patientId, memoText } = payload as Record<string, string>;
       if (!memoText?.trim()) return NextResponse.json({ success: false, message: "메모 내용을 입력하세요." });
+
+      // 작성자/감사로그 신원은 검증된 토큰(ctx)만 사용 → 위조 차단
+      const staffName = ctx.name;
+      const staffUid = ctx.uid;
 
       const ref = await adminDb.collection("reservationNotes").add({
         reservationId,
@@ -79,9 +84,9 @@ export async function POST(req: NextRequest) {
         targetId: reservationId,
         staffUid,
         staffName,
-        staffEmail: "",
-        staffRole: "",
-        staffCode: "",
+        staffEmail: ctx.email,
+        staffRole: ctx.role,
+        staffCode: ctx.staffCode,
         patientId,
         reservationId,
         invoiceId: "",
@@ -96,8 +101,11 @@ export async function POST(req: NextRequest) {
 
     // ── UPDATE ─────────────────────────────────────────────────────────────
     if (action === "update") {
-      const { noteId, memoText, staffName, staffUid, reservationId = "", patientId = "" } = payload as Record<string, string>;
+      const { noteId, memoText, reservationId = "", patientId = "" } = payload as Record<string, string>;
       if (!memoText?.trim()) return NextResponse.json({ success: false, message: "메모 내용을 입력하세요." });
+
+      const staffName = ctx.name;
+      const staffUid = ctx.uid;
 
       await adminDb.collection("reservationNotes").doc(noteId).update({
         memoText: memoText.trim(),
@@ -112,9 +120,9 @@ export async function POST(req: NextRequest) {
         targetId: noteId,
         staffUid,
         staffName,
-        staffEmail: "",
-        staffRole: "",
-        staffCode: "",
+        staffEmail: ctx.email,
+        staffRole: ctx.role,
+        staffCode: ctx.staffCode,
         patientId,
         reservationId,
         invoiceId: "",
@@ -129,7 +137,10 @@ export async function POST(req: NextRequest) {
 
     // ── DELETE (soft) ──────────────────────────────────────────────────────
     if (action === "delete") {
-      const { noteId, staffName, staffUid, reservationId = "", patientId = "" } = payload as Record<string, string>;
+      const { noteId, reservationId = "", patientId = "" } = payload as Record<string, string>;
+
+      const staffName = ctx.name;
+      const staffUid = ctx.uid;
 
       await adminDb.collection("reservationNotes").doc(noteId).update({
         isDeleted: true,
@@ -144,9 +155,9 @@ export async function POST(req: NextRequest) {
         targetId: noteId,
         staffUid,
         staffName,
-        staffEmail: "",
-        staffRole: "",
-        staffCode: "",
+        staffEmail: ctx.email,
+        staffRole: ctx.role,
+        staffCode: ctx.staffCode,
         patientId,
         reservationId,
         invoiceId: "",

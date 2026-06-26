@@ -8,8 +8,9 @@ export async function POST(req: NextRequest) {
     const { idToken, action, payload } = await req.json();
 
     // 활성 직원 인가 (공통 가드가 5분 캐시 포함)
+    let ctx;
     try {
-      await requireActiveStaff(idToken);
+      ctx = await requireActiveStaff(idToken);
     } catch (authErr) {
       const res = toAuthErrorResponse(authErr);
       if (res) return res;
@@ -19,19 +20,20 @@ export async function POST(req: NextRequest) {
     // ── CREATE ──────────────────────────────────────────────────────────────
     if (action === "create") {
       const {
-        action: logAction, targetType, targetId = "", staffUid, staffName, staffEmail, staffRole, staffCode = "",
+        action: logAction, targetType, targetId = "",
         patientId = "", reservationId = "", invoiceId = "", message, before = null, after = null,
       } = payload as Record<string, unknown>;
 
+      // 감사로그 신원은 클라이언트 payload가 아닌 검증된 토큰(ctx) 값만 사용 → 위조 차단
       await adminDb.collection("logs").add({
         action: logAction,
         targetType,
         targetId,
-        staffUid,
-        staffName,
-        staffEmail,
-        staffRole,
-        staffCode,
+        staffUid: ctx.uid,
+        staffName: ctx.name,
+        staffEmail: ctx.email,
+        staffRole: ctx.role,
+        staffCode: ctx.staffCode,
         patientId,
         reservationId,
         invoiceId,

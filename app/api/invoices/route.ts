@@ -103,8 +103,9 @@ export async function POST(req: NextRequest) {
 
     // ── CREATE ───────────────────────────────────────────────────────────────
     if (action === "create") {
-      const { reservationDocId, staffUid, staffName, staffEmail, staffRole, staffCode } =
-        payload as Record<string, string>;
+      const { reservationDocId } = payload as Record<string, string>;
+      // 작성자/감사로그 신원은 검증된 토큰(ctx)만 사용 → 위조 차단
+      const staffUid = ctx.uid, staffName = ctx.name, staffEmail = ctx.email, staffRole = ctx.role, staffCode = ctx.staffCode;
 
       // 기존 인보이스 확인
       const existing = await adminDb.collection("invoices")
@@ -209,8 +210,9 @@ export async function POST(req: NextRequest) {
 
     // ── UPDATE ───────────────────────────────────────────────────────────────
     if (action === "update") {
-      const { invoiceDocId, staffUid, staffName, staffEmail, staffRole, staffCode, ...fields } =
-        payload as Record<string, unknown>;
+      const { invoiceDocId, ...fields } = payload as Record<string, unknown>;
+      // 수정자/감사로그 신원은 검증된 토큰(ctx)만 사용 → 위조 차단
+      const staffUid = ctx.uid, staffName = ctx.name, staffEmail = ctx.email, staffRole = ctx.role, staffCode = ctx.staffCode;
 
       const invoiceRef = adminDb.collection("invoices").doc(cleanText(invoiceDocId));
       const invoiceSnap = await invoiceRef.get();
@@ -276,8 +278,9 @@ export async function POST(req: NextRequest) {
 
     // ── DELETE ───────────────────────────────────────────────────────────────
     if (action === "delete") {
-      const { invoiceDocId, staffUid, staffName, staffEmail, staffRole, staffCode } =
-        payload as Record<string, string>;
+      const { invoiceDocId } = payload as Record<string, string>;
+      // 삭제자/감사로그 신원은 검증된 토큰(ctx)만 사용 → 위조 차단
+      const staffUid = ctx.uid, staffName = ctx.name, staffEmail = ctx.email, staffRole = ctx.role, staffCode = ctx.staffCode;
 
       const invoiceRef = adminDb.collection("invoices").doc(invoiceDocId);
       const invoiceSnap = await invoiceRef.get();

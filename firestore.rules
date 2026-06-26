@@ -1,0 +1,96 @@
+rules_version = '2';
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MobileCRM Firestore 보안 규칙
+//
+// 설계 원칙:
+//  1. 데이터 변경 API(/api/*)는 firebase-admin SDK를 쓰므로 "규칙을 우회"한다.
+//     따라서 클라이언트 SDK가 실제로 직접 접근하는 컬렉션만 개방하고,
+//     서버(admin)만 다루는 컬렉션은 클라이언트 직접 접근을 전면 차단한다.
+//  2. 인증된 직원에 대한 실제 마지막 방어선은 이 규칙이다.
+//     (NEXT_PUBLIC_* 설정이 공개되어 직원이 client SDK로 직접 붙을 수 있음)
+//
+// 클라이언트 SDK 직접 접근 컬렉션 (이 파일에서 개방):
+//   - reservations         : 실시간 onSnapshot 읽기 + 의사명 일괄변경(admin) 쓰기
+//   - staff                : 의사목록/이메일/설정 읽기, 직원관리 쓰기(admin)
+//   - reservationPhotos     : 사진 CRUD
+//   - reservationCharts     : 상담차트 CRUD
+// 그 외 컬렉션은 모두 admin API 경유 → 클라이언트 직접 접근 차단.
+// ─────────────────────────────────────────────────────────────────────────────
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function staffDoc() {
+      return get(/databases/$(database)/documents/staff/$(request.auth.uid));
+    }
+
+    function isActiveStaff() {
+      return request.auth != null
+        && exists(/databases/$(database)/documents/staff/$(request.auth.uid))
+        && staffDoc().data.active == true;
+    }
+
+    // active 검사를 포함 → 비활성화된 admin은 권한을 잃는다.
+    function isAdmin() {
+      return isActiveStaff() && staffDoc().data.role == "admin";
+    }
+
+    // ── 직원 정보 ──────────────────────────────────────────────────────────
+    match /staff/{userId} {
+      allow read: if isActiveStaff();
+      allow create, update: if isAdmin();
+      allow delete: if false;
+    }
+
+    // ── 예약 (실시간 읽기 + 의사명 일괄변경 쓰기) ───────────────────────────
+    // 생성은 admin API 전용. 클라 직접 update는 settings의 의사명 일괄변경(admin)뿐.
+    // 삭제 플래그/작성자 위조를 차단(소프트삭제는 admin API 경유).
+    match /reservations/{id} {
+      allow read: if isActiveStaff();
+      allow create: if false;
+      allow update: if isActiveStaff()
+        && request.resource.data.isDeleted == resource.data.isDeleted
+        && request.resource.data.createdByUid == resource.data.createdByUid;
+      allow delete: if false;
+    }
+
+    // ── 예약 사진 ──────────────────────────────────────────────────────────
+    match /reservationPhotos/{id} {
+      allow read: if isActiveStaff();
+      allow create: if isActiveStaff()
+        && request.resource.data.uploadedByUid == request.auth.uid;
+      allow update: if isActiveStaff();   // 소프트삭제(isDeleted=true) 포함
+      allow delete: if false;
+    }
+
+    // ── 상담차트 ───────────────────────────────────────────────────────────
+    match /reservationCharts/{id} {
+      allow read: if isActiveStaff();
+      allow create: if isActiveStaff()
+        && request.resource.data.createdByUid == request.auth.uid;
+      allow update: if isActiveStaff();   // 소프트삭제(isDeleted=true) 포함
+      allow delete: if false;
+    }
+
+    // ── 서버(admin SDK) 전용 — 클라이언트 직접 접근 전면 차단 ───────────────
+    // admin SDK는 규칙을 우회하므로 아래 차단이 API 동작에 영향을 주지 않는다.
+    match /invoices/{id}                  { allow read, write: if false; }
+    match /logs/{id}                      { allow read, write: if false; }
+    match /patients/{id}                  { allow read, write: if false; }
+    match /reservationNotes/{id}          { allow read, write: if false; }
+    match /notes/{id}                     { allow read, write: if false; }
+    match /conferenceMemos/{id}           { allow read, write: if false; }
+    match /invoiceTemplates/{id}          { allow read, write: if false; }
+    match /invoiceTemplateSections/{id}   { allow read, write: if false; }
+    match /invoiceItems/{id}              { allow read, write: if false; }
+    match /invoiceCategories/{id}         { allow read, write: if false; }
+    match /appSettings/{id}/{document=**} { allow read, write: if false; }
+    match /settings/{id}/{document=**}    { allow read, write: if false; }
+
+    // ── 기본 거부 ──────────────────────────────────────────────────────────
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

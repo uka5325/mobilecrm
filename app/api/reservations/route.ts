@@ -46,8 +46,9 @@ export async function POST(req: NextRequest) {
     const { idToken, action, payload } = await req.json();
 
     // 활성 직원 인가 — 쓰기 action은 토큰 폐기 검사까지 수행
+    let ctx;
     try {
-      await requireActiveStaff(idToken, { checkRevoked: WRITE_ACTIONS.has(action) });
+      ctx = await requireActiveStaff(idToken, { checkRevoked: WRITE_ACTIONS.has(action) });
     } catch (authErr) {
       const res = toAuthErrorResponse(authErr);
       if (res) return res;
@@ -151,7 +152,14 @@ export async function POST(req: NextRequest) {
       const { patient } = payload as { patient: Record<string, unknown> };
       const now = FieldValue.serverTimestamp();
       const ref = adminDb.collection("patients").doc();
-      await ref.set({ ...patient, createdAt: now, updatedAt: now });
+      // 작성자 신원은 검증된 토큰(ctx)으로 강제 → 위조 차단
+      await ref.set({
+        ...patient,
+        isDeleted: false,
+        createdBy: ctx.name, createdByUid: ctx.uid,
+        updatedBy: ctx.name, updatedByUid: ctx.uid,
+        createdAt: now, updatedAt: now,
+      });
       return NextResponse.json({ success: true, patientDocId: ref.id });
     }
 
@@ -160,6 +168,11 @@ export async function POST(req: NextRequest) {
       // 무제한 스캔 방지를 위한 안전 상한. 클라이언트가 전체 목록으로 검색하므로
       // 최신 환자 우선으로 상한까지만 반환. (향후 서버사이드 검색으로 대체 권장)
       const LIST_PATIENTS_CAP = 2000;
+      // NOTE(P3): 서버측 where("isDeleted","==",false) 필터는 기존/신규 patient 문서에
+      // isDeleted 필드가 채워진 뒤에만 안전하다(미존재 문서가 쿼리에서 누락됨).
+      // 신규 문서는 아래 create 경로에서 isDeleted=false로 채우며, 전수 backfill 후
+      // patients (isDeleted, createdAt desc) 인덱스를 사용해 쿼리 필터로 전환 가능.
+      // 그 전까지는 호환을 위해 메모리 필터를 유지한다.
       const snap = await adminDb.collection("patients")
         .orderBy("createdAt", "desc")
         .limit(LIST_PATIENTS_CAP)
@@ -223,9 +236,15 @@ export async function POST(req: NextRequest) {
       const patientRef = adminDb.collection("patients").doc();
       const reservationRef = adminDb.collection("reservations").doc();
 
+      // 작성자 신원은 검증된 토큰(ctx)으로 강제 → 위조 차단
+      const authorFields = {
+        createdBy: ctx.name, createdByUid: ctx.uid,
+        updatedBy: ctx.name, updatedByUid: ctx.uid,
+      };
+
       const batch = adminDb.batch();
-      batch.set(patientRef, { ...patient, createdAt: now, updatedAt: now });
-      batch.set(reservationRef, { ...reservation, createdAt: now, updatedAt: now });
+      batch.set(patientRef, { ...patient, isDeleted: false, ...authorFields, createdAt: now, updatedAt: now });
+      batch.set(reservationRef, { ...reservation, ...authorFields, createdAt: now, updatedAt: now });
       await batch.commit();
 
       return NextResponse.json({
@@ -253,8 +272,11 @@ export async function POST(req: NextRequest) {
 
       const now = FieldValue.serverTimestamp();
 
+      // 수정자 신원은 검증된 토큰(ctx)으로 강제 → 위조 차단
       await adminDb.collection("reservations").doc(reservationDocId).update({
         ...reservationPatch,
+        updatedBy: ctx.name,
+        updatedByUid: ctx.uid,
         updatedAt: now,
       });
 
@@ -271,6 +293,8 @@ export async function POST(req: NextRequest) {
       if (resolvedPatientDocId && patientPatch) {
         await adminDb.collection("patients").doc(resolvedPatientDocId).update({
           ...patientPatch,
+          updatedBy: ctx.name,
+          updatedByUid: ctx.uid,
           updatedAt: now,
         });
       }
@@ -280,19 +304,17 @@ export async function POST(req: NextRequest) {
 
     // ── TOGGLE SURGERY ────────────────────────────────────────────────────
     if (action === "toggleSurgery") {
-      const { reservationDocId, surgeryReserved, staffDisplay, staffUid } = payload as {
+      const { reservationDocId, surgeryReserved } = payload as {
         reservationDocId: string;
         surgeryReserved: boolean;
-        staffDisplay: string;
-        staffUid: string;
       };
 
       await adminDb.collection("reservations").doc(reservationDocId).update({
         surgeryReserved,
         surgeryReservedAt: surgeryReserved ? new Date().toISOString() : "",
         updatedAt: FieldValue.serverTimestamp(),
-        updatedBy: staffDisplay,
-        updatedByUid: staffUid,
+        updatedBy: ctx.name,
+        updatedByUid: ctx.uid,
       });
 
       return NextResponse.json({ success: true });
@@ -300,17 +322,19 @@ export async function POST(req: NextRequest) {
 
     // ── DELETE ────────────────────────────────────────────────────────────
     if (action === "delete") {
-      const { reservationDocId, staffDisplay, staffUid } = payload as {
+      // 예약 삭제는 admin만 허용 (lib에서도 막지만 서버에서 재확인)
+      if (ctx.role !== "admin") {
+        return NextResponse.json({ success: false, message: "예약 삭제 권한이 없습니다." }, { status: 403 });
+      }
+      const { reservationDocId } = payload as {
         reservationDocId: string;
-        staffDisplay: string;
-        staffUid: string;
       };
 
       await adminDb.collection("reservations").doc(reservationDocId).update({
         isDeleted: true,
         updatedAt: FieldValue.serverTimestamp(),
-        updatedBy: staffDisplay,
-        updatedByUid: staffUid,
+        updatedBy: ctx.name,
+        updatedByUid: ctx.uid,
       });
 
       return NextResponse.json({ success: true });
