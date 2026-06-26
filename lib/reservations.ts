@@ -173,21 +173,6 @@ function normalizeReservationStatus(value: unknown): ReservationStatus {
   return "내원전";
 }
 
-function normalizeDuplicateKey(params: CreateReservationParams) {
-  const doctors = Array.isArray(params.doctors)
-    ? params.doctors.map(cleanText).filter(Boolean).sort().join("|")
-    : "";
-
-  return [
-    cleanText(params.name).toLowerCase(),
-    cleanText(params.reservationDate),
-    cleanText(params.reservationTime),
-    cleanText(params.phone).replace(/[^0-9+]/g, ""),
-    cleanText(params.hospital),
-    doctors,
-  ].join("__");
-}
-
 function normalizeAppointmentType(value: unknown): AppointmentType {
   const v = cleanText(value);
   if (v === "상담" || v === "수술" || v === "시술" || v === "치료" || v === "경과" || v === "진료" || v === "검진") return v;
@@ -260,14 +245,6 @@ export function mapReservationDoc(id: string, data: Record<string, unknown>): Re
 
 
 const DOCTORS_CACHE_KEY = "crm_doctors_v1";
-
-function getCachedDoctors(): DoctorOption[] | null {
-  if (typeof window === "undefined") return null;
-  try {
-    const raw = localStorage.getItem(DOCTORS_CACHE_KEY);
-    return raw ? JSON.parse(raw) : null;
-  } catch { return null; }
-}
 
 function setCachedDoctors(doctors: DoctorOption[]) {
   if (typeof window === "undefined") return;

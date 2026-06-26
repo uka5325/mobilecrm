@@ -11,7 +11,7 @@ import {
   type InvoiceUpdatePayload,
 } from "@/lib/invoices";
 import { getStaffListForSettings, type SettingsStaffRecord } from "@/lib/settings";
-import { calcCommissionBase, calcCommission, paymentMethodLabel } from "@/lib/commissionUtils";
+import { calcCommissionBase, calcCommission } from "@/lib/commissionUtils";
 
 type Props = {
   reservationDocId: string;
@@ -32,8 +32,6 @@ const STATUS_CLS: Record<string, string> = {
   confirmed: "bg-emerald-50 text-emerald-700",
   void: "bg-red-50 text-red-500",
 };
-
-type EditForm = InvoiceUpdatePayload & { _computedBase?: number; _computedCommission?: number };
 
 function InvoiceEditPanel({
   invoice,

@@ -9,21 +9,40 @@
  *   - 각 문서의 coordinators[] 이름을 맵으로 변환해 coordinatorUids[]를 채운다.
  *   - displayName이 유일하게 매칭되는 경우만 채운다(동명이인/미등록 이름은 스킵 → 이름 폴백 유지).
  *
- * 실행:
- *   FIREBASE_SERVICE_ACCOUNT_KEY='{...}' npx tsx scripts/backfill-coordinator-uids.ts [--dry-run]
+ * 실행 (둘 중 편한 방법):
+ *   1) 키 파일 경로 지정 (권장 — 셸 따옴표 불필요):
+ *        npx tsx scripts/backfill-coordinator-uids.ts --key ./serviceAccount.json --dry-run
+ *   2) 환경변수에 JSON 문자열 (CI 등):
+ *        FIREBASE_SERVICE_ACCOUNT_KEY='{...}' npx tsx scripts/backfill-coordinator-uids.ts --dry-run
  *
  * 안전:
  *   - --dry-run 으로 먼저 변경 건수를 확인하세요.
  *   - 코드(uid 우선, 이름 폴백)는 백필 전후 모두 동작하므로 무중단 배포 가능.
  */
 import * as admin from "firebase-admin";
+import { readFileSync } from "node:fs";
 
 const DRY_RUN = process.argv.includes("--dry-run");
 
+// 서비스 계정 키를 가져온다. --key <경로>(파일) 우선, 없으면 환경변수(JSON 문자열).
+function getServiceAccountJson(): string {
+  const idx = process.argv.indexOf("--key");
+  if (idx !== -1) {
+    const path = process.argv[idx + 1];
+    if (!path) throw new Error("--key 다음에 serviceAccount.json 파일 경로를 지정하세요.");
+    return readFileSync(path, "utf8");
+  }
+  const env = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
+  if (env) return env;
+  throw new Error(
+    "서비스 계정 키가 필요합니다. '--key <serviceAccount.json 경로>' 또는 " +
+      "FIREBASE_SERVICE_ACCOUNT_KEY 환경변수를 지정하세요."
+  );
+}
+
 function init() {
   if (admin.apps.length) return;
-  const key = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
-  if (!key) throw new Error("FIREBASE_SERVICE_ACCOUNT_KEY 환경변수가 필요합니다.");
+  const key = getServiceAccountJson();
   admin.initializeApp({ credential: admin.credential.cert(JSON.parse(key) as admin.ServiceAccount) });
 }
 

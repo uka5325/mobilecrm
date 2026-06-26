@@ -38,7 +38,7 @@ export function useCurrentUser() {
 
       let staff = null;
       try {
-        staff = await getStaffByUid(user.uid);
+        staff = await getStaffByUid();
       } catch {
         setCurrentUser(null);
         setAuthReady(true);

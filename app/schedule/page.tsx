@@ -12,7 +12,6 @@ import {
 import { todayString } from "@/lib/dateUtils";
 import { DetailDrawer } from "@/components/timeline/DetailDrawer";
 import { NewReservationDrawer } from "@/components/timeline/NewReservationDrawer";
-import { getBirthGenderText } from "@/lib/timelineUtils";
 import { getConferenceMemos, type ConferenceMemo } from "@/lib/settings";
 
 type ViewMode = "day" | "week" | "month";

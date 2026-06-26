@@ -6,22 +6,41 @@
  *       또한 reservations onSnapshot도 where("isDeleted","==",false)를 사용한다.
  *       → isDeleted가 없는 문서에 false를 채워 누락을 방지한다.
  *
- * 실행:
- *   FIREBASE_SERVICE_ACCOUNT_KEY='{...}' npx tsx scripts/backfill-isdeleted.ts [--dry-run]
+ * 실행 (둘 중 편한 방법):
+ *   1) 키 파일 경로 지정 (권장 — 셸 따옴표 불필요):
+ *        npx tsx scripts/backfill-isdeleted.ts --key ./serviceAccount.json --dry-run
+ *   2) 환경변수에 JSON 문자열 (CI 등):
+ *        FIREBASE_SERVICE_ACCOUNT_KEY='{...}' npx tsx scripts/backfill-isdeleted.ts --dry-run
  *
  * 권장: invoices isDeleted+createdAt 복합 인덱스 배포 및 서버 필터 복원 배포 "전에" 실행.
  */
 import * as admin from "firebase-admin";
+import { readFileSync } from "node:fs";
 
 const DRY_RUN = process.argv.includes("--dry-run");
 // patients 포함: list_patients의 서버측 where("isDeleted","==",false) 전환 전,
 // isDeleted 필드가 없는 레거시 patient 문서에 false를 채워 누락을 방지한다.
 const COLLECTIONS = ["invoices", "reservations", "reservationNotes", "reservationPhotos", "patients"];
 
+// 서비스 계정 키를 가져온다. --key <경로>(파일) 우선, 없으면 환경변수(JSON 문자열).
+function getServiceAccountJson(): string {
+  const idx = process.argv.indexOf("--key");
+  if (idx !== -1) {
+    const path = process.argv[idx + 1];
+    if (!path) throw new Error("--key 다음에 serviceAccount.json 파일 경로를 지정하세요.");
+    return readFileSync(path, "utf8");
+  }
+  const env = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
+  if (env) return env;
+  throw new Error(
+    "서비스 계정 키가 필요합니다. '--key <serviceAccount.json 경로>' 또는 " +
+      "FIREBASE_SERVICE_ACCOUNT_KEY 환경변수를 지정하세요."
+  );
+}
+
 function init() {
   if (admin.apps.length) return;
-  const key = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
-  if (!key) throw new Error("FIREBASE_SERVICE_ACCOUNT_KEY 환경변수가 필요합니다.");
+  const key = getServiceAccountJson();
   admin.initializeApp({ credential: admin.credential.cert(JSON.parse(key) as admin.ServiceAccount) });
 }
 

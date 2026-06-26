@@ -104,7 +104,7 @@ export async function loginWithGoogle() {
     const user = credential.user;
 
     // UID로 먼저 찾고, 없으면 이메일로 fallback
-    let staff = await getStaffByUid(user.uid);
+    let staff = await getStaffByUid();
     if (!staff && user.email) {
       staff = await getStaffByEmail(user.email);
     }
@@ -142,7 +142,7 @@ export async function logout() {
   return { success: true };
 }
 
-export async function getStaffByUid(uid: string): Promise<StaffUser | null> {
+export async function getStaffByUid(): Promise<StaffUser | null> {
   try {
     const currentUser = auth.currentUser;
     if (!currentUser) return null;

@@ -323,28 +323,50 @@ export async function POST(req: NextRequest) {
 
     // ── LIST ─────────────────────────────────────────────────────────────────
     if (action === "list") {
-      const { startDate, endDate, status, patientName, commissionStaffUid, cursor } =
+      const { startDate, endDate, status, patientName, commissionStaffUid } =
         (payload || {}) as Record<string, string>;
 
-      const PAGE_SIZE = 50;
-      // isDeleted 서버 필터 복원 — invoices: isDeleted+createdAt 복합 인덱스 사용.
-      // (firestore.indexes.json에 정의되어 있어야 하며, 미배포 시 firebase deploy 필요)
-      let q = adminDb.collection("invoices")
-        .where("isDeleted", "==", false)
-        .orderBy("createdAt", "desc")
-        .limit(PAGE_SIZE);
-      if (cursor) {
-        const cursorDoc = await adminDb.collection("invoices").doc(cursor).get();
-        if (cursorDoc.exists) q = q.startAfter(cursorDoc) as typeof q;
+      // 권한 스코프를 Firestore 쿼리로 내림 → 빈 페이지/누락/합계 오류 제거.
+      //  - admin           : 전체(isDeleted=false) 최신순.
+      //  - coordinator 이하 : 본인이 담당인 인보이스만. UID(coordinatorUids) 우선,
+      //                       이름(coordinators) 병합으로 백필 전 데이터까지 포함.
+      // 합계/필터를 정확히 계산하기 위해 페이지 단위가 아닌 "상한까지 전체"를 반환한다.
+      // 인덱스: invoices (isDeleted, createdAt) / (coordinatorUids⊃, isDeleted, createdAt)
+      //        / (coordinators⊃, isDeleted, createdAt) — firestore.indexes.json 참고.
+      const HARD_CAP = 1000;
+      const base = adminDb.collection("invoices").where("isDeleted", "==", false);
+
+      const docsMap = new Map<string, FirebaseFirestore.DocumentData>();
+      let rawCount = 0;
+      const collect = (snap: FirebaseFirestore.QuerySnapshot) => {
+        rawCount += snap.docs.length;
+        for (const d of snap.docs) if (!docsMap.has(d.id)) docsMap.set(d.id, docToObj(d));
+      };
+
+      if (isAdmin) {
+        collect(await base.orderBy("createdAt", "desc").limit(HARD_CAP).get());
+      } else {
+        const queries: Promise<FirebaseFirestore.QuerySnapshot>[] = [
+          base.where("coordinatorUids", "array-contains", callerUid)
+            .orderBy("createdAt", "desc").limit(HARD_CAP).get(),
+        ];
+        if (callerName) {
+          queries.push(
+            base.where("coordinators", "array-contains", callerName)
+              .orderBy("createdAt", "desc").limit(HARD_CAP).get()
+          );
+        }
+        (await Promise.all(queries)).forEach(collect);
       }
 
-      const snap = await q.get();
-      const hasMore = snap.docs.length === PAGE_SIZE;
-      const nextCursor = hasMore ? snap.docs[snap.docs.length - 1].id : null;
+      // 단일 쿼리가 상한에 닿으면 일부 누락 가능 → UI 경고용 플래그.
+      const capped = rawCount >= HARD_CAP;
 
-      // isDeleted는 서버에서 필터됨. 권한(coordinator)만 메모리 필터.
+      // 병합 후 createdAt 최신순 재정렬(서버 필터로 isDeleted/권한은 이미 보장).
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      let records = snap.docs.map(docToObj).filter((r: any) => isCoordinatorOf(r));
+      let records = Array.from(docsMap.values()).sort((a: any, b: any) =>
+        Number(b.createdAt || 0) - Number(a.createdAt || 0)
+      );
 
       // 날짜 필터: surgeryDate 있으면 surgeryDate 기준, 없으면 createdAt 기준
       if (startDate || endDate) {
@@ -368,7 +390,15 @@ export async function POST(req: NextRequest) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       if (commissionStaffUid) records = records.filter((r: any) => r.commissionStaffUid === commissionStaffUid);
 
-      return NextResponse.json({ success: true, invoices: records, nextCursor, hasMore });
+      // nextCursor/hasMore는 하위호환을 위해 유지(항상 전체 반환이므로 null/false).
+      return NextResponse.json({
+        success: true,
+        invoices: records,
+        total: records.length,
+        capped,
+        nextCursor: null,
+        hasMore: false,
+      });
     }
 
     return NextResponse.json({ success: false, message: "알 수 없는 action" }, { status: 400 });

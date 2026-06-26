@@ -111,6 +111,7 @@ export default function CommissionPage() {
   const [statusFilter, setStatusFilter] = useState<"" | "confirmed" | "draft">("");
 
   const [records, setRecords] = useState<InvoiceRecord[]>([]);
+  const [capped, setCapped] = useState(false);
   const [loading, setLoading] = useState(false);
   const [searched, setSearched] = useState(false);
   const [selectedInvoice, setSelectedInvoice] = useState<InvoiceRecord | null>(null);
@@ -118,7 +119,7 @@ export default function CommissionPage() {
   useEffect(() => {
     const unsub = listenCurrentUser(async (user: User | null) => {
       if (!user) return;
-      const staff = await getStaffByUid(user.uid);
+      const staff = await getStaffByUid();
       setCurrentUser(staff);
     });
     return () => unsub();
@@ -148,6 +149,7 @@ export default function CommissionPage() {
       });
 
       setRecords(results.invoices);
+      setCapped(results.capped);
       setSearched(true);
     } finally {
       setLoading(false);
@@ -258,6 +260,11 @@ export default function CommissionPage() {
       {/* 결과 */}
       {searched && (
         <>
+          {capped && (
+            <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
+              결과가 많아 일부만 집계되었습니다. 기간을 좁혀 다시 조회하면 정확한 합계를 볼 수 있습니다.
+            </div>
+          )}
           {/* 합계 카드 */}
           <div className="grid gap-3 sm:grid-cols-3">
             <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-gray-700">

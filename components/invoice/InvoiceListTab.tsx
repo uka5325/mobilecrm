@@ -107,19 +107,14 @@ export function InvoiceListTab() {
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState("");
   const [selectedInvoice, setSelectedInvoice] = useState<InvoiceRecord | null>(null);
-  const [cursor, setCursor] = useState<string | null>(null);
-  const [cursorStack, setCursorStack] = useState<(string | null)[]>([]);
-  const [hasMore, setHasMore] = useState(false);
-  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [capped, setCapped] = useState(false);
 
   useEffect(() => {
-    setCursor(null);
-    setCursorStack([]);
-    load(null);
+    load();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [startDate, endDate, statusFilter]);
 
-  async function load(activeCursor: string | null) {
+  async function load() {
     setLoading(true);
     setLoadError("");
     try {
@@ -127,33 +122,17 @@ export function InvoiceListTab() {
         startDate,
         endDate,
         status: statusFilter || undefined,
-        cursor: activeCursor || undefined,
       };
+      // 서버가 권한 스코프 + 상한까지 전체를 반환 → 합계/건수가 정확.
       const result = await getInvoices(filters);
       setInvoices(result.invoices);
-      setHasMore(result.hasMore);
-      setNextCursor(result.nextCursor);
+      setCapped(result.capped);
     } catch (e) {
       console.error("[InvoiceListTab] load error:", (e as Error)?.message ?? "");
       setLoadError("인보이스 목록을 불러오지 못했습니다. F12 콘솔에서 오류를 확인하세요.");
     } finally {
       setLoading(false);
     }
-  }
-
-  function handleNextPage() {
-    if (!nextCursor) return;
-    setCursorStack((prev) => [...prev, cursor]);
-    setCursor(nextCursor);
-    load(nextCursor);
-  }
-
-  function handlePrevPage() {
-    const stack = [...cursorStack];
-    const prev = stack.pop() ?? null;
-    setCursorStack(stack);
-    setCursor(prev);
-    load(prev);
   }
 
   const filtered = useMemo(() => {
@@ -181,7 +160,7 @@ export function InvoiceListTab() {
       const firebaseUser = auth.currentUser;
       if (!firebaseUser) { alert("로그인 정보를 확인할 수 없습니다."); return; }
       const { getStaffByUid } = await import("@/lib/auth");
-      const staff = await getStaffByUid(firebaseUser.uid);
+      const staff = await getStaffByUid();
       if (!staff) { alert("직원 정보를 찾을 수 없습니다."); return; }
       const result = await deleteInvoice(inv.id, staff);
       if (result.success) setInvoices((prev) => prev.filter((i) => i.id !== inv.id));
@@ -231,7 +210,7 @@ export function InvoiceListTab() {
             className="h-10 min-w-0 flex-1 rounded-xl border border-[#dfe3e8] bg-white px-3 text-sm outline-none transition focus:border-[#1d9e75] focus:ring-4 focus:ring-emerald-100"
           />
           <button
-            onClick={() => load(cursor)}
+            onClick={() => load()}
             className="h-10 shrink-0 rounded-xl border border-[#dfe3e8] bg-white px-4 text-sm font-medium text-gray-600 transition hover:-translate-y-0.5 hover:shadow-sm active:scale-95"
           >
             새로고침
@@ -338,25 +317,14 @@ export function InvoiceListTab() {
         )}
       </div>
 
-      {/* 페이지네이션 */}
-      <div className="flex items-center justify-between border-t border-[#edf0f3] pt-3">
-        <button
-          onClick={handlePrevPage}
-          disabled={cursorStack.length === 0 || loading}
-          className="rounded-xl border border-[#dfe3e8] bg-white px-4 py-2 text-sm text-gray-700 transition hover:-translate-y-0.5 hover:bg-gray-50 active:scale-95 disabled:cursor-not-allowed disabled:opacity-40"
-        >
-          ← 이전 페이지
-        </button>
-        <span className="text-xs text-gray-400">
-          {cursorStack.length > 0 ? `${cursorStack.length + 1}페이지` : "1페이지"} · {invoices.length}건
-        </span>
-        <button
-          onClick={handleNextPage}
-          disabled={!hasMore || loading}
-          className="rounded-xl border border-[#dfe3e8] bg-white px-4 py-2 text-sm text-gray-700 transition hover:-translate-y-0.5 hover:bg-gray-50 active:scale-95 disabled:cursor-not-allowed disabled:opacity-40"
-        >
-          다음 페이지 →
-        </button>
+      {/* 건수 / 상한 경고 */}
+      <div className="flex items-center justify-center gap-2 border-t border-[#edf0f3] pt-3 text-xs text-gray-400">
+        <span>총 {filtered.length}건</span>
+        {capped && (
+          <span className="text-amber-600">
+            · 결과가 많아 일부만 표시됩니다. 기간을 좁혀 다시 조회하세요.
+          </span>
+        )}
       </div>
     </div>
     </>

@@ -278,26 +278,28 @@ export type InvoiceListFilter = {
   status?: "draft" | "confirmed" | "void" | "";
   patientName?: string;
   commissionStaffUid?: string;
-  cursor?: string;
 };
 
+// 서버가 권한 스코프를 쿼리로 적용하고 상한(HARD_CAP)까지 전체를 반환한다.
+// 따라서 합계/KPI를 결과 전체로 정확히 계산할 수 있다(이전: 50건 페이지 한정으로 오류).
+// capped=true면 상한 초과로 일부가 누락됐을 수 있다(기간을 좁혀 재조회 권장).
 export async function getInvoices(
   filters?: InvoiceListFilter
-): Promise<{ invoices: InvoiceRecord[]; nextCursor: string | null; hasMore: boolean }> {
+): Promise<{ invoices: InvoiceRecord[]; total: number; capped: boolean }> {
   const result = await callInvoicesApi("list", {
     startDate: filters?.startDate || "",
     endDate: filters?.endDate || "",
     status: filters?.status || "",
     patientName: filters?.patientName || "",
     commissionStaffUid: filters?.commissionStaffUid || "",
-    cursor: filters?.cursor || "",
   });
   if (!result.success || !Array.isArray(result.invoices)) {
-    return { invoices: [], nextCursor: null, hasMore: false };
+    return { invoices: [], total: 0, capped: false };
   }
+  const invoices = (result.invoices as Record<string, unknown>[]).map(mapInvoiceDoc);
   return {
-    invoices: (result.invoices as Record<string, unknown>[]).map(mapInvoiceDoc),
-    nextCursor: (result.nextCursor as string | null) ?? null,
-    hasMore: Boolean(result.hasMore),
+    invoices,
+    total: typeof result.total === "number" ? (result.total as number) : invoices.length,
+    capped: Boolean(result.capped),
   };
 }

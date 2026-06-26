@@ -43,7 +43,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: false, message: "권한이 없습니다." }, { status: 403 });
   }
 
-  const validRoles = ["admin", "doctor", "coordinator", "staff", "interpreter"];
+  // 로그인 사용자 역할만 허용. "doctor"는 로그인 계정으로 쓰지 않으므로 제외
+  // (StaffRole 타입/권한레벨과 일치). 의사명은 예약의 doctors 배열에서 관리.
+  const validRoles = ["admin", "coordinator", "staff", "interpreter"];
   if (!validRoles.includes(role)) {
     return NextResponse.json({ success: false, message: "올바르지 않은 역할입니다." }, { status: 400 });
   }
