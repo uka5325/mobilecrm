@@ -67,6 +67,16 @@ export type InvoiceUpdatePayload = {
 // 환자별 인보이스 결과 캐시 (pre-fetch 결과를 모달에서 즉시 재사용)
 const _invoicesByPatientCache = new Map<string, InvoiceRecord[]>();
 
+// 환자별 인보이스 건수 캐시 (고객관리 행 뱃지) — 재진입 시 환자별 N개 재조회 방지.
+// 변경 반영: TTL 만료 시 재조회 + 내 생성/삭제 시 무효화.
+const _invoiceCountCache = new Map<string, { at: number; count: number }>();
+const INVOICE_COUNT_TTL = 3 * 60 * 1000;
+
+export function getCachedInvoiceCount(patientId: string): number | undefined {
+  const e = _invoiceCountCache.get(patientId);
+  return e && Date.now() - e.at < INVOICE_COUNT_TTL ? e.count : undefined;
+}
+
 export function getInvoicesByPatientCache(patientId: string): InvoiceRecord[] | undefined {
   if (_invoicesByPatientCache.has(patientId)) return _invoicesByPatientCache.get(patientId);
   try {
@@ -82,6 +92,7 @@ export function getInvoicesByPatientCache(patientId: string): InvoiceRecord[] | 
 
 export function invalidateInvoicesByPatientCache(patientId: string) {
   _invoicesByPatientCache.delete(patientId);
+  _invoiceCountCache.delete(patientId);
   try { sessionStorage.removeItem(`inv_${patientId}`); } catch {}
 }
 
@@ -172,11 +183,14 @@ export async function getInvoicesByPatientId(patientId: string): Promise<Invoice
   if (!result.success || !Array.isArray(result.invoices)) return [];
   const records = (result.invoices as Record<string, unknown>[]).map(mapInvoiceDoc);
   _invoicesByPatientCache.set(patientId, records);
+  _invoiceCountCache.set(patientId, { at: Date.now(), count: records.length });
   try { sessionStorage.setItem(`inv_${patientId}`, JSON.stringify(records)); } catch {}
   return records;
 }
 
 export async function getInvoiceCountByPatientId(patientId: string): Promise<number> {
+  const cached = getCachedInvoiceCount(patientId);
+  if (cached !== undefined) return cached;
   const invoices = await getInvoicesByPatientId(patientId);
   return invoices.length;
 }

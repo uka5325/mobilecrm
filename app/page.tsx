@@ -1,15 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import type { User } from "firebase/auth";
 import {
   getTimelineReservations,
   type ReservationRecord,
 } from "@/lib/reservations";
-import { getStaffByUid, listenCurrentUser } from "@/lib/auth";
-import type { StaffUser } from "@/lib/auth";
-import { getConferenceMemos, type ConferenceMemo } from "@/lib/settings";
+import { useCurrentUser } from "@/hooks/useCurrentUser";
+import { getCachedConferenceMemos, getConferenceMemos, type ConferenceMemo } from "@/lib/settings";
 import { todayString } from "@/lib/dateUtils";
 import { toDate } from "@/lib/settingsUtils";
 
@@ -72,70 +70,81 @@ function formatMemoTime(value: unknown) {
 
 const ROLE_LIST = ["admin", "coordinator", "staff", "interpreter"];
 
+// 오늘 예약 캐시 (재진입 시 즉시 표시) — 날짜가 바뀌면 무효.
+const HOME_RES_CACHE = "crm_home_today_res";
+function readHomeResCache(date: string): ReservationRecord[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = sessionStorage.getItem(HOME_RES_CACHE);
+    if (!raw) return [];
+    const o = JSON.parse(raw) as { date: string; list: ReservationRecord[] };
+    return o.date === date ? (o.list || []) : [];
+  } catch {
+    return [];
+  }
+}
+function writeHomeResCache(date: string, list: ReservationRecord[]) {
+  if (typeof window === "undefined") return;
+  try {
+    sessionStorage.setItem(HOME_RES_CACHE, JSON.stringify({ date, list }));
+  } catch {}
+}
+
 export default function HomePage() {
   const router = useRouter();
+  const { currentUser, firebaseReady } = useCurrentUser();
+  const today = todayString();
 
-  const [currentUser, setCurrentUser] = useState<StaffUser | null>(null);
-  const [reservations, setReservations] = useState<ReservationRecord[]>([]);
-  const [todayMemos, setTodayMemos] = useState<ConferenceMemo[]>([]);
-
-  const [loading, setLoading] = useState(true);
-  const [memoLoading, setMemoLoading] = useState(true);
+  // 캐시 시드 → 재진입 시 로딩 없이 즉시 표시
+  const [reservations, setReservations] = useState<ReservationRecord[]>(() => readHomeResCache(today));
+  const [todayMemos, setTodayMemos] = useState<ConferenceMemo[]>(() => getCachedConferenceMemos(today) ?? []);
+  const [loading, setLoading] = useState(reservations.length === 0);
+  const [memoLoading, setMemoLoading] = useState(todayMemos.length === 0);
   const [loadError, setLoadError] = useState("");
 
-  useEffect(() => {
-    const unsubscribe = listenCurrentUser(async (user: User | null) => {
-      if (!user) return;
-
-      const staff = await getStaffByUid(user.uid);
-      if (staff) setCurrentUser(staff);
-      await refreshHome();
-    });
-
-    return () => unsubscribe();
-  }, []);
-
-  async function loadData() {
-    setLoading(true);
-
+  // 오늘 예약: 캐시 즉시 표시 + 백그라운드 갱신(변경 반영)
+  const loadData = useCallback(async () => {
     try {
-      const data = await getTimelineReservations(todayString());
-      setReservations(data.reservations || []);
+      const data = await getTimelineReservations(today);
+      const list = data.reservations || [];
+      setReservations(list);
+      writeHomeResCache(today, list);
+      setLoadError("");
     } catch (error) {
       console.error("홈 데이터 로드 실패:", (error as Error)?.message ?? "");
-      setLoadError("홈 데이터를 불러오지 못했습니다.");
+      // 캐시가 없을 때만 에러 노출(있으면 캐시 유지)
+      setReservations((prev) => {
+        if (prev.length === 0) setLoadError("홈 데이터를 불러오지 못했습니다.");
+        return prev;
+      });
     } finally {
       setLoading(false);
     }
-  }
+  }, [today]);
 
-  async function loadTodayMemos() {
+  // 오늘 메모: 캐시 즉시 표시 + force 재조회로 변경 반영
+  const loadTodayMemos = useCallback(async () => {
     setMemoLoading(true);
-
     try {
-      const list = await getConferenceMemos(todayString(), 10);
+      const list = await getConferenceMemos(today, 10, true);
       setTodayMemos(list);
     } catch (error) {
       console.error("오늘의 메모를 불러오지 못했습니다.", (error as Error)?.message ?? "");
-      setTodayMemos([]);
+      // 실패 시 캐시 유지
     } finally {
       setMemoLoading(false);
     }
-  }
+  }, [today]);
 
-  async function refreshHome() {
-    await Promise.all([loadData(), loadTodayMemos()]);
-  }
+  useEffect(() => {
+    if (!firebaseReady) return;
+    loadData();
+    loadTodayMemos();
+  }, [firebaseReady, loadData, loadTodayMemos]);
 
   const todayReservations = useMemo(() => {
     return reservations.filter(isTodayReservation);
   }, [reservations]);
-
-  const todayVisitors = useMemo(() => {
-    return todayReservations.filter(
-      (r) => r.operationStatus && r.operationStatus !== "내원전" && r.operationStatus !== "부도"
-    ).length;
-  }, [todayReservations]);
 
   return (
     <div className="space-y-[18px]">
@@ -191,7 +200,7 @@ export default function HomePage() {
               </div>
 
               <div className="flex flex-col gap-[9px]">
-                {memoLoading ? (
+                {memoLoading && todayMemos.length === 0 ? (
                   <div className="rounded-[8px] border border-black/10 bg-[#f9fafb] p-3 text-xs leading-6 text-[#6b7280]">
                     메모를 불러오는 중...
                   </div>
