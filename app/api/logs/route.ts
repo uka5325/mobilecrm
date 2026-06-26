@@ -48,7 +48,7 @@ export async function POST(req: NextRequest) {
 
     // ── READ ─────────────────────────────────────────────────────────────────
     if (action === "read") {
-      const { reservationId, targetId, patientId } = payload as { reservationId?: string; targetId?: string; patientId?: string };
+      const { reservationId, targetId, patientId, sinceDays } = payload as { reservationId?: string; targetId?: string; patientId?: string; sinceDays?: number };
       const LOG_LIMIT = 50;
 
       // 우선순위 단일 쿼리: reservationId > targetId > patientId
@@ -63,11 +63,17 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ success: true, logs: [] });
       }
 
-      const snap = await adminDb.collection("logs")
+      // sinceDays>0이면 최근 N일만 (상세 오픈 시 기본 3일). 0/미지정이면 전체(최대 50, "이전 로그 보기").
+      // 색인: logs(primaryField, createdAt) 기존재.
+      let q = adminDb.collection("logs")
         .where(primaryField, "==", primaryValue)
-        .orderBy("createdAt", "desc")
-        .limit(LOG_LIMIT)
-        .get();
+        .orderBy("createdAt", "desc") as FirebaseFirestore.Query;
+      if (typeof sinceDays === "number" && sinceDays > 0) {
+        const cutoff = new Date(Date.now() - sinceDays * 24 * 60 * 60 * 1000);
+        q = q.where("createdAt", ">=", cutoff);
+      }
+
+      const snap = await q.limit(LOG_LIMIT).get();
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const list = snap.docs.map((d: any) => toSer({ id: d.id, ...d.data() }));

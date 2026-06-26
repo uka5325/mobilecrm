@@ -691,6 +691,7 @@ export async function createReservation(
     return { success: false, message: apiResult.message || "예약 등록에 실패했습니다." };
   }
 
+  invalidatePatientsCache();
   const savedReservationId = String(apiResult.reservationDocId || "");
 
   createLog({
@@ -753,15 +754,28 @@ export async function createPatientOnly(
   };
 
   const result = await callReservationsApi("create_patient", { patient });
+  if (result.success) invalidatePatientsCache();
   return result.success
     ? { success: true, patientDocId: String(result.patientDocId || "") }
     : { success: false, message: cleanText(result.message) || "등록 실패" };
 }
 
-export async function listPatients(): Promise<PatientRecord[]> {
+// 환자 목록 인메모리 캐시 (반복 500건 스캔 억제). 생성 시 무효화.
+// 누락 방지: 서버는 isDeleted!==true만 반환하므로 캐시는 그 결과를 그대로 보관.
+let _patientsCache: { at: number; data: PatientRecord[] } | null = null;
+const PATIENTS_CACHE_TTL = 2 * 60 * 1000;
+
+export function invalidatePatientsCache() {
+  _patientsCache = null;
+}
+
+export async function listPatients(force = false): Promise<PatientRecord[]> {
+  if (!force && _patientsCache && Date.now() - _patientsCache.at < PATIENTS_CACHE_TTL) {
+    return _patientsCache.data;
+  }
   const result = await callReservationsApi("list_patients", {});
-  if (!result.success || !Array.isArray(result.patients)) return [];
-  return (result.patients as Record<string, unknown>[]).map((p) => ({
+  if (!result.success || !Array.isArray(result.patients)) return _patientsCache?.data ?? [];
+  const data = (result.patients as Record<string, unknown>[]).map((p) => ({
     id: cleanText(p.id),
     patientId: cleanText(p.patientId),
     name: cleanText(p.name),
@@ -771,6 +785,8 @@ export async function listPatients(): Promise<PatientRecord[]> {
     phone: cleanText(p.phone),
     nationality: cleanText(p.nationality),
   }));
+  _patientsCache = { at: Date.now(), data };
+  return data;
 }
 
 export async function createReservationsBatch(

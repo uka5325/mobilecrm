@@ -119,14 +119,16 @@ export async function createLog(params: CreateLogParams) {
 export async function getLogsByReservationId(
   reservationId: string,
   targetId?: string,
-  patientId?: string
+  patientId?: string,
+  opts?: { sinceDays?: number }
 ): Promise<LogRecord[]> {
   const id = cleanText(reservationId);
   const tid = cleanText(targetId);
   const pid = cleanText(patientId);
   if (!id && !tid && !pid) return [];
 
-  const result = await callLogsApi("read", { reservationId: id, targetId: tid, patientId: pid });
+  // sinceDays>0이면 최근 N일만 조회(상세 오픈 기본 3일), 미지정/0이면 전체(최대 50).
+  const result = await callLogsApi("read", { reservationId: id, targetId: tid, patientId: pid, sinceDays: opts?.sinceDays });
   if (!result.success || !Array.isArray(result.logs)) return [];
 
   return (result.logs as Record<string, unknown>[]).map(mapLogDoc);
