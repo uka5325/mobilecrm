@@ -370,14 +370,27 @@ function invalidateMemoCache(memoDate: string) {
   } catch {}
 }
 
+// 동기 캐시 getter — 즉시 페인트용(로딩 깜빡임 제거)
+export function getCachedConferenceMemos(memoDate: string): ConferenceMemo[] | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = sessionStorage.getItem(MEMO_CACHE_PREFIX + normalizeDateOnly(memoDate));
+    return raw ? (JSON.parse(raw) as ConferenceMemo[]) : null;
+  } catch {
+    return null;
+  }
+}
+
 export async function getConferenceMemos(
   memoDate: string,
-  limit = 50
+  limit = 50,
+  force = false
 ): Promise<ConferenceMemo[]> {
   const targetDate = normalizeDateOnly(memoDate);
   const cacheKey = MEMO_CACHE_PREFIX + targetDate;
 
-  if (typeof window !== "undefined") {
+  // force=false면 캐시 우선(네트워크 생략). force=true면 변경 반영 위해 재조회.
+  if (!force && typeof window !== "undefined") {
     try {
       const raw = sessionStorage.getItem(cacheKey);
       if (raw) return JSON.parse(raw) as ConferenceMemo[];

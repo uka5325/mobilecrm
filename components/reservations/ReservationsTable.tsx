@@ -6,7 +6,7 @@ import { APPOINTMENT_TYPES } from "@/lib/reservations";
 import { calcCommissionBase, calcCommission } from "@/lib/commissionUtils";
 import { getReservationBirthInfo } from "@/lib/reservationUtils";
 import type { InvoiceRecord } from "@/lib/invoices";
-import { getInvoicesByPatientId, getInvoicesByPatientCache, invalidateInvoicesByPatientCache, getInvoiceCountByPatientId } from "@/lib/invoices";
+import { getInvoicesByPatientId, getInvoicesByPatientCache, invalidateInvoicesByPatientCache, getInvoiceCountByPatientId, getCachedInvoiceCount } from "@/lib/invoices";
 
 export type PatientGroup = {
   patientKey: string;
@@ -783,6 +783,12 @@ export function ReservationsTable({
     patientGroups.forEach((g) => {
       const pid = g.patientId || g.patientKey;
       if (!pid || pid in invoiceCountsRef.current) return;
+      // 캐시 있으면 즉시 반영(재진입 시 재조회 없음), 없으면 1회 조회
+      const cached = getCachedInvoiceCount(pid);
+      if (cached !== undefined) {
+        setInvoiceCounts((prev) => ({ ...prev, [pid]: cached }));
+        return;
+      }
       getInvoiceCountByPatientId(pid)
         .then((count) => setInvoiceCounts((prev) => ({ ...prev, [pid]: count })))
         .catch(() => {});
