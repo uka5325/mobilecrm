@@ -1,29 +1,33 @@
 import { NextRequest, NextResponse } from "next/server";
-import { adminAuth, adminDb, FieldValue } from "@/lib/firebaseAdmin";
+import { adminDb, FieldValue } from "@/lib/firebaseAdmin";
 import { docToObj, toSerializable } from "@/lib/adminUtils";
+import { requireActiveStaff, toAuthErrorResponse } from "@/lib/apiAuth";
 
 const STAFF_LIST_LIMIT = 200;
 
-async function getStaffRole(uid: string): Promise<string> {
-  const snap = await adminDb.collection("staff").where("uid", "==", uid).limit(1).get();
-  if (snap.empty) {
-    const byId = await adminDb.collection("staff").doc(uid).get();
-    if (!byId.exists) return "";
-    return String(byId.data()?.role || "");
-  }
-  return String(snap.docs[0].data().role || "");
-}
+// 데이터/설정 변경 action — 토큰 폐기 검사 적용
+const WRITE_ACTIONS = new Set([
+  "save_appointment_colors",
+  "save_general_settings",
+  "save_visit_status_colors",
+  "add_memo",
+  "update_memo",
+  "delete_memo",
+]);
 
 export async function POST(req: NextRequest) {
   try {
     const { idToken, action, payload = {} } = await req.json();
 
-    if (!idToken) {
-      return NextResponse.json({ success: false, message: "인증 토큰이 없습니다." }, { status: 401 });
+    let ctx;
+    try {
+      ctx = await requireActiveStaff(idToken, { checkRevoked: WRITE_ACTIONS.has(action) });
+    } catch (authErr) {
+      const res = toAuthErrorResponse(authErr);
+      if (res) return res;
+      throw authErr;
     }
-
-    const decoded = await adminAuth.verifyIdToken(idToken);
-    const uid = decoded.uid;
+    const uid = ctx.uid;
 
     // ── READ: appointment type colors ─────────────────────────────────────
     if (action === "get_appointment_colors") {
@@ -51,7 +55,7 @@ export async function POST(req: NextRequest) {
 
     // ── WRITE: save appointment type colors ───────────────────────────────
     if (action === "save_appointment_colors") {
-      const role = await getStaffRole(uid);
+      const role = ctx.role;
       if (role !== "admin") {
         return NextResponse.json({ success: false, message: "설정 변경 권한이 없습니다." }, { status: 403 });
       }
@@ -65,7 +69,7 @@ export async function POST(req: NextRequest) {
 
     // ── WRITE: save general settings ──────────────────────────────────────
     if (action === "save_general_settings") {
-      const role = await getStaffRole(uid);
+      const role = ctx.role;
       if (role !== "admin") {
         return NextResponse.json({ success: false, message: "설정 변경 권한이 없습니다." }, { status: 403 });
       }
@@ -79,7 +83,7 @@ export async function POST(req: NextRequest) {
 
     // ── WRITE: save visit status colors ───────────────────────────────────
     if (action === "save_visit_status_colors") {
-      const role = await getStaffRole(uid);
+      const role = ctx.role;
       if (role !== "admin") {
         return NextResponse.json({ success: false, message: "설정 변경 권한이 없습니다." }, { status: 403 });
       }
@@ -94,9 +98,11 @@ export async function POST(req: NextRequest) {
     // ── READ: get memos by date ───────────────────────────────────────────
     if (action === "get_memos") {
       const p = payload as { memoDate: string; limit?: number };
+      // 무제한 스캔 방지 안전 상한. 같은 날짜 메모는 소수이나 상한으로 보호.
       const snap = await adminDb
         .collection("conferenceMemos")
         .where("memoDate", "==", p.memoDate)
+        .limit(300)
         .get();
       const memos = snap.docs
         .map(docToObj)

@@ -1,55 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { adminAuth, adminDb, FieldValue } from "@/lib/firebaseAdmin";
+import { adminDb, FieldValue } from "@/lib/firebaseAdmin";
+import { requireActiveStaff, toAuthErrorResponse } from "@/lib/apiAuth";
+import { docToObj, cleanText } from "@/lib/adminUtils";
+import { parseBirthInfo } from "@/lib/invoiceUtils";
 
-function toSer(val: unknown): unknown {
-  if (val === null || val === undefined) return val;
-  if (typeof val === "object" && typeof (val as Record<string, unknown>).toMillis === "function") {
-    return (val as { toMillis: () => number }).toMillis();
-  }
-  if (Array.isArray(val)) return val.map(toSer);
-  if (typeof val === "object") {
-    const out: Record<string, unknown> = {};
-    for (const [k, v] of Object.entries(val as Record<string, unknown>)) out[k] = toSer(v);
-    return out;
-  }
-  return val;
-}
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function docToObj(d: any): Record<string, unknown> {
-  return toSer({ id: d.id, ...d.data() }) as Record<string, unknown>;
-}
-
-function cleanText(v: unknown): string {
-  return String(v ?? "").trim();
-}
-
-// uid별 role/displayName 서버 메모리 캐시 (5분 TTL)
-// 보안: 클라이언트 전송 값이 아닌 서버에서 검증한 값을 캐싱
-const _staffCache = new Map<string, { role: string; name: string; at: number }>();
-const STAFF_CACHE_TTL = 5 * 60 * 1000;
-
-async function getCachedStaff(uid: string): Promise<{ role: string; name: string }> {
-  const cached = _staffCache.get(uid);
-  if (cached && Date.now() - cached.at < STAFF_CACHE_TTL) {
-    return { role: cached.role, name: cached.name };
-  }
-  let role = "";
-  let name = "";
-  const snap = await adminDb.collection("staff").where("uid", "==", uid).limit(1).get();
-  if (!snap.empty) {
-    role = String(snap.docs[0].data().role || "");
-    name = String(snap.docs[0].data().displayName || "");
-  } else {
-    const doc = await adminDb.collection("staff").doc(uid).get();
-    if (doc.exists) {
-      role = String(doc.data()?.role || "");
-      name = String(doc.data()?.displayName || "");
-    }
-  }
-  _staffCache.set(uid, { role, name, at: Date.now() });
-  return { role, name };
-}
+// 데이터 변경 action — 토큰 폐기 검사 적용
+const WRITE_ACTIONS = new Set(["create", "update", "delete"]);
 
 function toNumber(value: unknown) {
   if (typeof value === "number") return value;
@@ -71,36 +27,6 @@ function makeInvoiceId(reservation: Record<string, unknown>) {
   return `INV-${yy}${mm}${dd}-${namePart}-${suffix}`;
 }
 
-function parseBirthInfo(rawValue: string, rawGender?: string) {
-  const raw = String(rawValue || "").trim();
-  const digits = raw.replace(/[^0-9]/g, "");
-  let year = "", mm2 = "", dd2 = "", gender = "";
-
-  if (/^\d{6}-[1-4]$/.test(raw)) {
-    year = (raw[7] === "1" || raw[7] === "2") ? "19" + raw.slice(0, 2) : "20" + raw.slice(0, 2);
-    mm2 = raw.slice(2, 4);
-    dd2 = raw.slice(4, 6);
-    gender = (raw[7] === "1" || raw[7] === "3") ? "남" : "여";
-  } else if (/^\d{7}$/.test(digits)) {
-    year = (digits[6] === "1" || digits[6] === "2") ? "19" + digits.slice(0, 2) : "20" + digits.slice(0, 2);
-    mm2 = digits.slice(2, 4);
-    dd2 = digits.slice(4, 6);
-    gender = (digits[6] === "1" || digits[6] === "3") ? "남" : "여";
-  } else if (digits.length >= 8) {
-    year = digits.slice(0, 4);
-    mm2 = digits.slice(4, 6);
-    dd2 = digits.slice(6, 8);
-    const code = digits.length >= 9 ? digits[8] : "";
-    if (code === "1" || code === "3") gender = "남";
-    if (code === "2" || code === "4") gender = "여";
-  }
-
-  if (!gender && rawGender) gender = rawGender;
-  const birth = year && mm2 && dd2 ? `${year}-${mm2}-${dd2}` : "";
-  const birthDisplay = year && mm2 && dd2 ? `${year.slice(2)}${mm2}${dd2}` : "";
-  return { birth, birthDisplay, gender };
-}
-
 async function writeLog(params: {
   action: string; targetType: string; targetId: string;
   staffUid: string; staffName: string; staffEmail: string; staffRole: string; staffCode: string;
@@ -119,22 +45,31 @@ async function writeLog(params: {
 export async function POST(req: NextRequest) {
   try {
     const { idToken, action, payload } = await req.json();
-    if (!idToken) return NextResponse.json({ success: false, message: "인증 토큰 없음" }, { status: 401 });
 
-    const decoded = await adminAuth.verifyIdToken(idToken);
-    const uid = decoded.uid;
-
-    // ── Caller identity & role — 서버 캐시(5분 TTL) 경유, 클라이언트 전송 값 사용 안 함 ──
-    const { role: callerRole, name: callerName } = await getCachedStaff(uid);
+    // 활성 직원 인가 — 서버 검증값(role/name)만 사용, 클라이언트 전송 값 신뢰 안 함.
+    // 쓰기 action은 토큰 폐기 검사까지 수행.
+    let ctx;
+    try {
+      ctx = await requireActiveStaff(idToken, { checkRevoked: WRITE_ACTIONS.has(action) });
+    } catch (authErr) {
+      const res = toAuthErrorResponse(authErr);
+      if (res) return res;
+      throw authErr;
+    }
+    const callerRole = ctx.role;
+    const callerName = ctx.name;
+    const callerUid = ctx.uid;
 
     // admin은 모든 접근 허용. coordinator 이하는 본인 담당 인보이스만 접근.
     const isAdmin = callerRole === "admin";
 
-    // NOTE(tech-debt): coordinators[]는 displayName 문자열 배열 (UID 아님).
-    // callerName은 위에서 서버 DB로 검증되므로 스푸핑은 차단됨.
-    // 향후: coordinatorUids[] 필드 추가 후 uid 비교로 전환 필요.
+    // 권한 판정: coordinatorUids[](UID) 우선 — 동명이인/개명에 안전.
+    // 미배포 데이터를 위해 coordinators[](displayName) 폴백 유지(하위호환).
+    // 백필: scripts/backfill-coordinator-uids.ts 참고.
     function isCoordinatorOf(inv: Record<string, unknown>): boolean {
       if (isAdmin) return true;
+      const uids = Array.isArray(inv.coordinatorUids) ? inv.coordinatorUids as string[] : [];
+      if (uids.length) return uids.includes(callerUid);
       const coords = Array.isArray(inv.coordinators) ? inv.coordinators as string[] : [];
       return callerName ? coords.includes(callerName) : false;
     }
@@ -196,10 +131,14 @@ export async function POST(req: NextRequest) {
       if (!isAdmin && callerRole !== "coordinator") {
         return NextResponse.json({ success: false, message: "코디네이터만 인보이스를 생성할 수 있습니다." }, { status: 403 });
       }
-      // coordinator: 해당 예약의 담당자인지 확인
+      // coordinator: 해당 예약의 담당자인지 확인 (uid 우선, 이름 폴백)
       if (!isAdmin) {
+        const resCoordUids = Array.isArray(reservation.coordinatorUids) ? reservation.coordinatorUids as string[] : [];
         const resCoords = Array.isArray(reservation.coordinators) ? reservation.coordinators as string[] : [];
-        if (!callerName || !resCoords.includes(callerName)) {
+        const allowed = resCoordUids.length
+          ? resCoordUids.includes(callerUid)
+          : (!!callerName && resCoords.includes(callerName));
+        if (!allowed) {
           return NextResponse.json({ success: false, message: "담당 코디네이터만 인보이스를 생성할 수 있습니다." }, { status: 403 });
         }
       }
@@ -221,6 +160,8 @@ export async function POST(req: NextRequest) {
         phone: cleanText(reservation.phone),
         doctors: Array.isArray(reservation.doctors) ? reservation.doctors : [],
         coordinators: Array.isArray(reservation.coordinators) ? reservation.coordinators : [],
+        // UID 기반 권한(있으면 예약에서 승계). 백필 전에는 빈 배열 → 이름 폴백 사용.
+        coordinatorUids: Array.isArray(reservation.coordinatorUids) ? reservation.coordinatorUids : [],
         hospitalName: cleanText(reservation.hospital),
         surgeryItems: cleanText(reservation.consultArea) || "",
         surgeryDate: cleanText(reservation.reservationDate) || "",
@@ -383,8 +324,10 @@ export async function POST(req: NextRequest) {
         (payload || {}) as Record<string, string>;
 
       const PAGE_SIZE = 50;
-      // isDeleted Firestore 필터는 invoices:isDeleted+createdAt 복합 인덱스 배포 후 재적용 가능
+      // isDeleted 서버 필터 복원 — invoices: isDeleted+createdAt 복합 인덱스 사용.
+      // (firestore.indexes.json에 정의되어 있어야 하며, 미배포 시 firebase deploy 필요)
       let q = adminDb.collection("invoices")
+        .where("isDeleted", "==", false)
         .orderBy("createdAt", "desc")
         .limit(PAGE_SIZE);
       if (cursor) {
@@ -396,8 +339,9 @@ export async function POST(req: NextRequest) {
       const hasMore = snap.docs.length === PAGE_SIZE;
       const nextCursor = hasMore ? snap.docs[snap.docs.length - 1].id : null;
 
+      // isDeleted는 서버에서 필터됨. 권한(coordinator)만 메모리 필터.
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      let records = snap.docs.map(docToObj).filter((r: any) => !r.isDeleted && isCoordinatorOf(r));
+      let records = snap.docs.map(docToObj).filter((r: any) => isCoordinatorOf(r));
 
       // 날짜 필터: surgeryDate 있으면 surgeryDate 기준, 없으면 createdAt 기준
       if (startDate || endDate) {

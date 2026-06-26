@@ -1,8 +1,17 @@
 "use client";
 
 import { type PointerEvent, useEffect, useRef, useState } from "react";
+import { auth } from "@/lib/firebase";
 
 type Tool = "pen" | "eraser";
+
+// proxy-image는 활성 직원 인증을 요구하므로 Firebase ID 토큰을 동봉해 호출.
+async function fetchProxyImage(rawUrl: string): Promise<Response> {
+  const token = (await auth.currentUser?.getIdToken()) || "";
+  return fetch(`/api/proxy-image?url=${encodeURIComponent(rawUrl)}`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+}
 
 type Props = {
   open: boolean;
@@ -46,7 +55,7 @@ export function ChartCanvas({ open, existingUrl, onSave, onClose, saving, onErro
       let isBlobUrl = false;
 
       try {
-        const res = await fetch(`/api/proxy-image?url=${encodeURIComponent(existingUrl)}`);
+        const res = await fetchProxyImage(existingUrl);
         if (res.ok) {
           src = URL.createObjectURL(await res.blob());
           isBlobUrl = true;
@@ -154,7 +163,7 @@ export function ChartCanvas({ open, existingUrl, onSave, onClose, saving, onErro
       let src = existingUrl;
       let isBlobUrl = false;
       try {
-        const res = await fetch(`/api/proxy-image?url=${encodeURIComponent(existingUrl)}`);
+        const res = await fetchProxyImage(existingUrl);
         if (res.ok) { src = URL.createObjectURL(await res.blob()); isBlobUrl = true; }
       } catch { /* fallback */ }
 

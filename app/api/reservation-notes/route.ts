@@ -1,25 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
-import { adminAuth, adminDb, FieldValue } from "@/lib/firebaseAdmin";
-
-function toSer(val: unknown): unknown {
-  if (val === null || val === undefined) return val;
-  if (typeof val === "object" && typeof (val as Record<string, unknown>).toMillis === "function") {
-    return (val as { toMillis: () => number }).toMillis();
-  }
-  if (Array.isArray(val)) return val.map(toSer);
-  if (typeof val === "object") {
-    const out: Record<string, unknown> = {};
-    for (const [k, v] of Object.entries(val as Record<string, unknown>)) out[k] = toSer(v);
-    return out;
-  }
-  return val;
-}
+import { adminDb, FieldValue } from "@/lib/firebaseAdmin";
+import { requireActiveStaff, toAuthErrorResponse } from "@/lib/apiAuth";
+import { toSerializable as toSer } from "@/lib/adminUtils";
 
 export async function POST(req: NextRequest) {
   try {
     const { idToken, action, payload } = await req.json();
-    if (!idToken) return NextResponse.json({ success: false, message: "인증 토큰 없음" }, { status: 401 });
-    await adminAuth.verifyIdToken(idToken);
+
+    // 활성 직원 인가 — 메모 생성/수정/삭제는 토큰 폐기 검사
+    try {
+      await requireActiveStaff(idToken, { checkRevoked: action !== "read" });
+    } catch (authErr) {
+      const res = toAuthErrorResponse(authErr);
+      if (res) return res;
+      throw authErr;
+    }
 
     // ── READ ──────────────────────────────────────────────────────────────
     if (action === "read") {

@@ -457,7 +457,6 @@ export function subscribeAllReservations(
 ) {
   let unsubscribeSnapshot: (() => void) | null = null;
   let latestDoctors: DoctorOption[] = [];
-  let seedDelivered = false;
 
   const unsubscribeAuth = auth.onAuthStateChanged((user) => {
     if (unsubscribeSnapshot) { unsubscribeSnapshot(); unsubscribeSnapshot = null; }
@@ -469,43 +468,19 @@ export function subscribeAllReservations(
       return d.toISOString().slice(0, 10);
     })();
 
-    // Immediately seed with API data so UI shows content even if onSnapshot is slow/fails
-    callReservationsApi("read_all", { from: fromDate })
-      .then((result) => {
-        if (!seedDelivered && result.success) {
-          const rawReservations = (result.reservations as Record<string, unknown>[] | undefined) || [];
-          const rawDoctors = (result.doctors as Record<string, unknown>[] | undefined) || [];
-          const reservations = rawReservations
-            .map((r) => mapReservationDoc(String(r.id || ""), r))
-            .filter((item) => !item.isDeleted)
-            .sort((a, b) => {
-              const aa = `${a.reservationDate} ${a.reservationTime} ${a.name}`;
-              const bb = `${b.reservationDate} ${b.reservationTime} ${b.name}`;
-              return aa.localeCompare(bb);
-            });
-          const doctors: DoctorOption[] = rawDoctors
-            .map((d) => ({
-              uid: String(d.id || ""),
-              displayName: cleanText(d.displayName || d["display_name"] || d.name),
-              email: cleanText(d.email),
-              orderNo: cleanNumber(d.orderNo ?? d["order_no"]),
-            }))
-            .filter((d) => d.displayName)
-            .sort((a, b) => a.orderNo - b.orderNo || a.displayName.localeCompare(b.displayName));
-          if (doctors.length) latestDoctors = doctors;
-          callback({ reservations, doctors: doctors.length ? doctors : makeDoctorOptionsFromReservations(reservations) });
-        }
-      })
-      .catch(() => {});
-
+    // 실시간 단일 경로: onSnapshot이 데이터를 공급. (이중 읽기 방지로 API seed 제거)
+    // 의사 목록만 별도 조회.
     getClientDoctors().then((d) => { latestDoctors = d; }).catch(() => {});
 
     unsubscribeSnapshot = onSnapshot(
-      query(collection(db, "reservations"), where("reservationDate", ">=", fromDate)),
+      query(
+        collection(db, "reservations"),
+        where("isDeleted", "==", false),
+        where("reservationDate", ">=", fromDate)
+      ),
       (snap) => {
-        // skip empty cache snapshots — they would wipe the API seed data
+        // 캐시 기반 빈 스냅샷은 무시 (초기 깜빡임 방지)
         if (snap.metadata.fromCache && snap.empty) return;
-        seedDelivered = true;
         const reservations = snap.docs
           .map((d) => mapReservationDoc(d.id, d.data() as Record<string, unknown>))
           .filter((item) => !item.isDeleted)
@@ -525,7 +500,6 @@ export function subscribeAllReservations(
   });
 
   return () => {
-    seedDelivered = true;
     unsubscribeAuth();
     unsubscribeSnapshot?.();
   };
@@ -541,49 +515,23 @@ export function subscribeTimelineReservations(
 ) {
   let unsubscribeSnapshot: (() => void) | null = null;
   let latestDoctors: DoctorOption[] = [];
-  let seedDelivered = false;
 
   const unsubscribeAuth = auth.onAuthStateChanged((user) => {
     if (unsubscribeSnapshot) { unsubscribeSnapshot(); unsubscribeSnapshot = null; }
     if (!user) return;
 
-    // Immediately seed with API data so UI shows content even if onSnapshot is slow/fails
-    callReservationsApi("read_by_date", { date })
-      .then((result) => {
-        if (!seedDelivered && result.success) {
-          const rawReservations = (result.reservations as Record<string, unknown>[] | undefined) || [];
-          const rawDoctors = (result.doctors as Record<string, unknown>[] | undefined) || [];
-          const reservations = rawReservations
-            .map((r) => mapReservationDoc(String(r.id || ""), r))
-            .filter((item) => !item.isDeleted)
-            .sort((a, b) => {
-              const aa = `${a.reservationTime} ${a.name}`;
-              const bb = `${b.reservationTime} ${b.name}`;
-              return aa.localeCompare(bb);
-            });
-          const doctors: DoctorOption[] = rawDoctors
-            .map((d) => ({
-              uid: String(d.id || ""),
-              displayName: cleanText(d.displayName || d["display_name"] || d.name),
-              email: cleanText(d.email),
-              orderNo: cleanNumber(d.orderNo ?? d["order_no"]),
-            }))
-            .filter((d) => d.displayName)
-            .sort((a, b) => a.orderNo - b.orderNo || a.displayName.localeCompare(b.displayName));
-          if (doctors.length) latestDoctors = doctors;
-          callback({ reservations, doctors: doctors.length ? doctors : makeDoctorOptionsFromReservations(reservations) });
-        }
-      })
-      .catch(() => {});
-
+    // 실시간 단일 경로: onSnapshot이 데이터를 공급. (이중 읽기 방지로 API seed 제거)
     getClientDoctors().then((d) => { latestDoctors = d; }).catch(() => {});
 
     unsubscribeSnapshot = onSnapshot(
-      query(collection(db, "reservations"), where("reservationDate", "==", date)),
+      query(
+        collection(db, "reservations"),
+        where("isDeleted", "==", false),
+        where("reservationDate", "==", date)
+      ),
       (snap) => {
-        // skip empty cache snapshots — they would wipe the API seed data
+        // 캐시 기반 빈 스냅샷은 무시 (초기 깜빡임 방지)
         if (snap.metadata.fromCache && snap.empty) return;
-        seedDelivered = true;
         const reservations = snap.docs
           .map((d) => mapReservationDoc(d.id, d.data() as Record<string, unknown>))
           .filter((item) => !item.isDeleted)
@@ -603,7 +551,6 @@ export function subscribeTimelineReservations(
   });
 
   return () => {
-    seedDelivered = true;
     unsubscribeAuth();
     unsubscribeSnapshot?.();
   };

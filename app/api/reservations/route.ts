@@ -1,31 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
-import { adminAuth, adminDb, FieldValue } from "@/lib/firebaseAdmin";
+import { adminDb, FieldValue } from "@/lib/firebaseAdmin";
+import { requireActiveStaff, toAuthErrorResponse } from "@/lib/apiAuth";
+import { toSerializable, docToObj } from "@/lib/adminUtils";
 
-function toSerializable(val: unknown): unknown {
-  if (val === null || val === undefined) return val;
-  if (
-    typeof val === "object" &&
-    typeof (val as Record<string, unknown>).toMillis === "function"
-  ) {
-    return (val as { toMillis: () => number }).toMillis();
-  }
-  if (Array.isArray(val)) {
-    return val.map(toSerializable);
-  }
-  if (typeof val === "object") {
-    const out: Record<string, unknown> = {};
-    for (const [k, v] of Object.entries(val as Record<string, unknown>)) {
-      out[k] = toSerializable(v);
-    }
-    return out;
-  }
-  return val;
-}
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function docToObj(d: any): Record<string, unknown> {
-  return toSerializable({ id: d.id, ...d.data() }) as Record<string, unknown>;
-}
+// 데이터 변경 action — 토큰 폐기 검사 적용
+const WRITE_ACTIONS = new Set([
+  "create",
+  "create_patient",
+  "update",
+  "toggleSurgery",
+  "delete",
+]);
 
 // 의사 목록은 거의 변경되지 않으므로 서버 메모리에 10분 캐싱
 let _doctorsCache: Record<string, unknown>[] | null = null;
@@ -60,11 +45,14 @@ export async function POST(req: NextRequest) {
   try {
     const { idToken, action, payload } = await req.json();
 
-    if (!idToken) {
-      return NextResponse.json({ success: false, message: "인증 토큰이 없습니다." }, { status: 401 });
+    // 활성 직원 인가 — 쓰기 action은 토큰 폐기 검사까지 수행
+    try {
+      await requireActiveStaff(idToken, { checkRevoked: WRITE_ACTIONS.has(action) });
+    } catch (authErr) {
+      const res = toAuthErrorResponse(authErr);
+      if (res) return res;
+      throw authErr;
     }
-
-    await adminAuth.verifyIdToken(idToken);
 
     // ── READ: all reservations (last N months) + doctors ──────────────────
     if (action === "read_all") {
@@ -169,8 +157,12 @@ export async function POST(req: NextRequest) {
 
     // ── LIST PATIENTS ─────────────────────────────────────────────────────
     if (action === "list_patients") {
+      // 무제한 스캔 방지를 위한 안전 상한. 클라이언트가 전체 목록으로 검색하므로
+      // 최신 환자 우선으로 상한까지만 반환. (향후 서버사이드 검색으로 대체 권장)
+      const LIST_PATIENTS_CAP = 2000;
       const snap = await adminDb.collection("patients")
         .orderBy("createdAt", "desc")
+        .limit(LIST_PATIENTS_CAP)
         .get();
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const patients = snap.docs.flatMap((d: any) => {
