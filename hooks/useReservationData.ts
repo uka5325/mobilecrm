@@ -92,9 +92,12 @@ export function useReservationData(
   const refresh = useCallback(async () => {
     try {
       const data = await fetchAllReservationsOnce();
-      setReservations(data.reservations);
-      setDoctors(data.doctors);
-      setCachedData(data.reservations, data.doctors);
+      // 빈/실패 결과로 실시간 구독이 채운 목록을 덮어쓰지 않음 (read_all 실패 시 전체가 비는 문제 방지)
+      if (data.reservations.length > 0) {
+        setReservations(data.reservations);
+        setDoctors(data.doctors);
+        setCachedData(data.reservations, data.doctors);
+      }
     } catch (e) {
       console.error("[useReservationData] refresh error:", e);
     }

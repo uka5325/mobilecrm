@@ -137,7 +137,9 @@ function useScheduleData(startDate: string, endDate: string, authReady: boolean)
   const refresh = useCallback(async () => {
     try {
       const data = await fetchAllReservationsOnce();
-      setAllReservations(data.reservations);
+      // 빈/실패 결과로 실시간 구독이 채운 그리드를 덮어쓰지 않음.
+      // (read_all 실패 시 빈 배열이 전체 카드를 지워버리는 문제 방지 — 실시간 구독이 진실원)
+      if (data.reservations.length > 0) setAllReservations(data.reservations);
     } catch (e) {
       console.error("[useScheduleData] refresh error:", e);
     }
