@@ -79,20 +79,6 @@ function getConsultAreas(reservations: ReservationRecord[], type: AppointmentTyp
   return [...new Set(areas)].join(", ") || "—";
 }
 
-function sumAmounts(amounts: string[]): string {
-  let total = 0;
-  const nonNumeric: string[] = [];
-  for (const a of amounts) {
-    const n = parseFloat(a.replace(/[^0-9.]/g, ""));
-    if (a.trim() && !isNaN(n) && n > 0) total += n;
-    else if (a.trim()) nonNumeric.push(a.trim());
-  }
-  const parts: string[] = [];
-  if (total > 0) parts.push(total.toLocaleString());
-  parts.push(...nonNumeric);
-  return parts.join(" + ") || "—";
-}
-
 type AmountPopoverProps = {
   label: string;
   rows: { id: string; date: string; hospital: string; amount: string }[];
@@ -233,7 +219,7 @@ function PatientInvoiceModal({ patientId, patientName, reservations, onClose, on
       const { getStaffByUid } = await import("@/lib/auth");
       const firebaseUser = auth.currentUser;
       if (!firebaseUser) { setError("로그인 정보를 확인할 수 없습니다."); return; }
-      const staff = await getStaffByUid(firebaseUser.uid);
+      const staff = await getStaffByUid();
       if (!staff) { setError("직원 정보를 찾을 수 없습니다."); return; }
       const result = await deleteInvoice(inv.id, staff);
       if (result.success) {
@@ -259,7 +245,7 @@ function PatientInvoiceModal({ patientId, patientName, reservations, onClose, on
       const { getStaffByUid } = await import("@/lib/auth");
       const firebaseUser = auth.currentUser;
       if (!firebaseUser) { setError("로그인 정보를 확인할 수 없습니다."); return; }
-      const staff = await getStaffByUid(firebaseUser.uid);
+      const staff = await getStaffByUid();
       if (!staff) { setError("직원 정보를 찾을 수 없습니다."); return; }
       const reservation = reservations.find((r) => r.id === reservationDocId);
       const isCoordinator = staff.role === "admin" ||
@@ -576,7 +562,7 @@ function InvoiceEditPanelInModal({
       const { getStaffByUid } = await import("@/lib/auth");
       const firebaseUser = auth.currentUser;
       if (!firebaseUser) { setError("로그인 정보를 확인할 수 없습니다."); return; }
-      const staff = await getStaffByUid(firebaseUser.uid);
+      const staff = await getStaffByUid();
       if (!staff) { setError("직원 정보를 찾을 수 없습니다."); return; }
       const result = await updateInvoice(invoice.id, {
         ...form,
@@ -599,7 +585,7 @@ function InvoiceEditPanelInModal({
       const { getStaffByUid } = await import("@/lib/auth");
       const firebaseUser = auth.currentUser;
       if (!firebaseUser) { setError("로그인 정보를 확인할 수 없습니다."); return; }
-      const staff = await getStaffByUid(firebaseUser.uid);
+      const staff = await getStaffByUid();
       if (!staff) { setError("직원 정보를 찾을 수 없습니다."); return; }
       const result = await deleteInvoice(invoice.id, staff);
       if (!result.success) { setError(result.message || "삭제 실패"); return; }

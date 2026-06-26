@@ -30,7 +30,7 @@ import { KpiTable } from "@/components/dashboard/KpiTable";
 export default function DashboardPage() {
   const { authReady } = useCurrentUser();
   const [allReservations, setAllReservations] = useState<ReservationDoc[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [, setLoading] = useState(true);
   const [error, setError] = useState("");
 
   const [startDate, setStartDate] = useState(todayString());
@@ -162,8 +162,6 @@ export default function DashboardPage() {
     setApptTypeFilter("");
     setAreaFilter("");
   }
-
-  const rangeText = startDate === endDate ? `${startDate} 기준` : `${startDate} ~ ${endDate}`;
 
   const APPT_TYPE_COLORS: Record<string, string> = {
     상담: "#2563eb",

@@ -175,7 +175,7 @@ export default function AppShell({ children }: AppShellProps) {
       }
 
       try {
-        const staff = await getStaffByUid(user.uid);
+        const staff = await getStaffByUid();
 
         if (!staff || !staff.active) {
           clearCachedStaff();
@@ -236,7 +236,7 @@ export default function AppShell({ children }: AppShellProps) {
       }
 
       try {
-        const staff = await getStaffByUid(user.uid);
+        const staff = await getStaffByUid();
 
         if (!alive) return;
 

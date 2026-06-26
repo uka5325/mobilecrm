@@ -100,7 +100,7 @@ export default function SettingsPage() {
     const unsubscribe = listenCurrentUser(async (user: User | null) => {
       try {
         if (!user) { setCurrentUser(null); setAuthLoading(false); return; }
-        const staff = await getStaffByUid(user.uid);
+        const staff = await getStaffByUid();
         setCurrentUser(staff || null);
       } catch (err) {
         console.error((err as Error)?.message ?? "");
