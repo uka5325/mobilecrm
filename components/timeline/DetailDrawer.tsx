@@ -24,7 +24,6 @@ import { FilesTab } from "@/components/timeline/tabs/FilesTab";
 import { NotesTab } from "@/components/timeline/tabs/NotesTab";
 import { LogsTab } from "@/components/timeline/tabs/LogsTab";
 import { InvoiceTab } from "@/components/timeline/tabs/InvoiceTab";
-import { NewReservationDrawer } from "@/components/timeline/NewReservationDrawer";
 import { CreateDrawer } from "@/components/reservations/CreateDrawer";
 
 type DetailTab = "info" | "files" | "notes" | "logs" | "invoice";
@@ -540,6 +539,7 @@ export function DetailDrawer({ open, reservation, currentUser, onClose, onRefres
         open={addReservationOpen}
         onClose={() => setAddReservationOpen(false)}
         currentUser={currentUser}
+        mode="reservation"
         initialDate={selectedReservation.reservationDate}
         initialPatient={addReservationPatient}
         onCreated={() => {
