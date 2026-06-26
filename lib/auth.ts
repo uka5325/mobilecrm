@@ -7,7 +7,7 @@ import {
   onAuthStateChanged,
   User,
 } from "firebase/auth";
-import { collection, doc, getDocsFromServer, getDocFromServer, query, where } from "firebase/firestore";
+import { collection, getDocsFromServer, query, where } from "firebase/firestore";
 import { auth, db } from "./firebase";
 
 export type StaffRole =

@@ -6,7 +6,6 @@ import {
   limit,
   query,
   serverTimestamp,
-  setDoc,
   startAfter,
   type QueryConstraint,
   type QueryDocumentSnapshot,
@@ -38,7 +37,6 @@ import type { StaffUser } from "./auth";
 import { createLog } from "./logs";
 import { invalidateDoctorsCache } from "./reservations";
 import { cleanText } from "./stringUtils";
-import { toMillis } from "./settingsUtils";
 
 export type VisitStatus =
   | "내원전"
