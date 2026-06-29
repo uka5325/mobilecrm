@@ -1,6 +1,7 @@
 import { auth } from "./firebase";
 import { cleanText } from "./stringUtils";
 import type { StaffUser } from "./auth";
+import { INVOICE_LIST_CACHE_PREFIX } from "./clientCache";
 
 export type InvoiceRecord = {
   id: string;
@@ -283,7 +284,7 @@ export type InvoiceListFilter = {
   commissionStaffUid?: string;
 };
 
-const INVOICE_LIST_CACHE_PREFIX = "crm_invoices_v1_";
+// INVOICE_LIST_CACHE_PREFIX는 @/lib/clientCache에서 단일 관리(로그아웃 purge와 출처 공유).
 const INVOICE_LIST_CACHE_TTL = 2 * 60 * 1000; // 2분 (금액 데이터라 신선도 우선)
 
 type InvoiceListCacheEntry = {

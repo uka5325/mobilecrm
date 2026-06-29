@@ -7,6 +7,7 @@ import type { ReactNode } from "react";
 import type { User } from "firebase/auth";
 import { getStaffByUid, listenCurrentUser, logout } from "@/lib/auth";
 import type { StaffUser } from "@/lib/auth";
+import { clearAllClientCaches } from "@/lib/clientCache";
 
 type AppShellProps = {
   children: ReactNode;
@@ -221,7 +222,10 @@ export default function AppShell({ children }: AppShellProps) {
       setFirebaseUser(user);
 
       if (!user) {
+        // 세션 종료(로그아웃·토큰 폐기·만료)의 단일 권위 지점.
+        // 직원 세션 캐시 + 업무 데이터 캐시(스케줄/인보이스)를 함께 비운다.
         clearCachedStaff();
+        clearAllClientCaches();
         setStaffUser(null);
         setLoading(false);
         router.push("/login");

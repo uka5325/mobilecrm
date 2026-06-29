@@ -13,6 +13,7 @@ import { todayString } from "@/lib/dateUtils";
 import { DetailDrawer } from "@/components/timeline/DetailDrawer";
 import { NewReservationDrawer } from "@/components/timeline/NewReservationDrawer";
 import { getConferenceMemos, type ConferenceMemo } from "@/lib/settings";
+import { SCHEDULE_CACHE_KEY } from "@/lib/clientCache";
 
 type ViewMode = "day" | "week" | "month";
 
@@ -116,7 +117,7 @@ function getAppointmentColor(type: AppointmentType | string) {
 }
 
 // ─── useScheduleData ─────────────────────────────────────────────────────────
-const SCHEDULE_CACHE_KEY = "crm_schedule_v1";
+// 캐시 키는 @/lib/clientCache에서 단일 관리(로그아웃 purge와 출처 공유).
 const SCHEDULE_CACHE_TTL = 5 * 60 * 1000; // 5분
 
 function getScheduleCache(): ReservationRecord[] | null {
