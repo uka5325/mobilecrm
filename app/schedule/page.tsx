@@ -116,16 +116,42 @@ function getAppointmentColor(type: AppointmentType | string) {
 }
 
 // ─── useScheduleData ─────────────────────────────────────────────────────────
+const SCHEDULE_CACHE_KEY = "crm_schedule_v1";
+const SCHEDULE_CACHE_TTL = 5 * 60 * 1000; // 5분
+
+function getScheduleCache(): ReservationRecord[] | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = localStorage.getItem(SCHEDULE_CACHE_KEY);
+    if (!raw) return null;
+    const parsed: { reservations: ReservationRecord[]; cachedAt: number } = JSON.parse(raw);
+    if (Date.now() - parsed.cachedAt > SCHEDULE_CACHE_TTL) return null;
+    return parsed.reservations;
+  } catch { return null; }
+}
+
+function setScheduleCache(reservations: ReservationRecord[]) {
+  if (typeof window === "undefined") return;
+  setTimeout(() => {
+    try {
+      localStorage.setItem(SCHEDULE_CACHE_KEY, JSON.stringify({ reservations, cachedAt: Date.now() }));
+    } catch {}
+  }, 0);
+}
+
 function useScheduleData(startDate: string, endDate: string, authReady: boolean) {
-  const [allReservations, setAllReservations] = useState<ReservationRecord[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [allReservations, setAllReservations] = useState<ReservationRecord[]>(() => getScheduleCache() ?? []);
+  const [loading, setLoading] = useState(() => {
+    const cached = getScheduleCache();
+    return !cached || cached.length === 0;
+  });
 
   useEffect(() => {
     if (!authReady) return;
-    setLoading(true);
     const unsub = subscribeAllReservations(
       ({ reservations }) => {
         setAllReservations(reservations);
+        setScheduleCache(reservations);
         setLoading(false);
       },
       () => setLoading(false)

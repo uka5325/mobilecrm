@@ -216,6 +216,7 @@ export async function getOrCreateInvoiceDraft(
   if (!result.success || !result.invoice) {
     return { success: false as const, message: result.message || "인보이스 생성 실패" };
   }
+  invalidateInvoiceListCache();
   return {
     success: true as const,
     invoice: mapInvoiceDoc(result.invoice as Record<string, unknown>),
@@ -254,6 +255,7 @@ export async function updateInvoice(
   if (!result.success || !result.invoice) {
     return { success: false as const, message: result.message || "저장 실패" };
   }
+  invalidateInvoiceListCache();
   return {
     success: true as const,
     invoice: mapInvoiceDoc(result.invoice as Record<string, unknown>),
@@ -269,6 +271,7 @@ export async function deleteInvoice(invoiceDocId: string, staff: StaffUser) {
     staffRole: staff.role,
     staffCode: staff.staffCode || "",
   });
+  if (result.success) invalidateInvoiceListCache();
   return { success: result.success, message: result.message };
 }
 
@@ -280,12 +283,54 @@ export type InvoiceListFilter = {
   commissionStaffUid?: string;
 };
 
+const INVOICE_LIST_CACHE_PREFIX = "crm_invoices_v1_";
+const INVOICE_LIST_CACHE_TTL = 10 * 60 * 1000; // 10분
+
+type InvoiceListCacheEntry = {
+  invoices: InvoiceRecord[];
+  total: number;
+  capped: boolean;
+  cachedAt: number;
+};
+
+function getInvoiceListCache(key: string): InvoiceListCacheEntry | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return null;
+    const parsed: InvoiceListCacheEntry = JSON.parse(raw);
+    if (Date.now() - parsed.cachedAt > INVOICE_LIST_CACHE_TTL) return null;
+    return parsed;
+  } catch { return null; }
+}
+
+function setInvoiceListCache(key: string, data: Omit<InvoiceListCacheEntry, "cachedAt">) {
+  if (typeof window === "undefined") return;
+  setTimeout(() => {
+    try {
+      localStorage.setItem(key, JSON.stringify({ ...data, cachedAt: Date.now() }));
+    } catch {}
+  }, 0);
+}
+
+export function invalidateInvoiceListCache() {
+  if (typeof window === "undefined") return;
+  try {
+    const keys = Object.keys(localStorage).filter((k) => k.startsWith(INVOICE_LIST_CACHE_PREFIX));
+    keys.forEach((k) => localStorage.removeItem(k));
+  } catch {}
+}
+
 // 서버가 권한 스코프를 쿼리로 적용하고 상한(HARD_CAP)까지 전체를 반환한다.
 // 따라서 합계/KPI를 결과 전체로 정확히 계산할 수 있다(이전: 50건 페이지 한정으로 오류).
 // capped=true면 상한 초과로 일부가 누락됐을 수 있다(기간을 좁혀 재조회 권장).
 export async function getInvoices(
   filters?: InvoiceListFilter
 ): Promise<{ invoices: InvoiceRecord[]; total: number; capped: boolean }> {
+  const cacheKey = INVOICE_LIST_CACHE_PREFIX + JSON.stringify(filters ?? {});
+  const cached = getInvoiceListCache(cacheKey);
+  if (cached) return { invoices: cached.invoices, total: cached.total, capped: cached.capped };
+
   const result = await callInvoicesApi("list", {
     startDate: filters?.startDate || "",
     endDate: filters?.endDate || "",
@@ -297,9 +342,8 @@ export async function getInvoices(
     return { invoices: [], total: 0, capped: false };
   }
   const invoices = (result.invoices as Record<string, unknown>[]).map(mapInvoiceDoc);
-  return {
-    invoices,
-    total: typeof result.total === "number" ? (result.total as number) : invoices.length,
-    capped: Boolean(result.capped),
-  };
+  const total = typeof result.total === "number" ? (result.total as number) : invoices.length;
+  const capped = Boolean(result.capped);
+  setInvoiceListCache(cacheKey, { invoices, total, capped });
+  return { invoices, total, capped };
 }
