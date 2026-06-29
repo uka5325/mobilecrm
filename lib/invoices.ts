@@ -284,7 +284,7 @@ export type InvoiceListFilter = {
 };
 
 const INVOICE_LIST_CACHE_PREFIX = "crm_invoices_v1_";
-const INVOICE_LIST_CACHE_TTL = 10 * 60 * 1000; // 10분
+const INVOICE_LIST_CACHE_TTL = 2 * 60 * 1000; // 2분 (금액 데이터라 신선도 우선)
 
 type InvoiceListCacheEntry = {
   invoices: InvoiceRecord[];
@@ -327,9 +327,16 @@ export function invalidateInvoiceListCache() {
 export async function getInvoices(
   filters?: InvoiceListFilter
 ): Promise<{ invoices: InvoiceRecord[]; total: number; capped: boolean }> {
-  const cacheKey = INVOICE_LIST_CACHE_PREFIX + JSON.stringify(filters ?? {});
-  const cached = getInvoiceListCache(cacheKey);
-  if (cached) return { invoices: cached.invoices, total: cached.total, capped: cached.capped };
+  // 캐시 키에 로그인 uid를 포함해 사용자별로 분리한다(공용기기에서 권한 스코프가 다른
+  // 사용자끼리 캐시를 공유해 인보이스가 노출/누락되는 것을 차단). 신원 미확정 시 캐시 우회.
+  const uid = auth.currentUser?.uid;
+  const cacheKey = uid
+    ? INVOICE_LIST_CACHE_PREFIX + uid + "_" + JSON.stringify(filters ?? {})
+    : null;
+  if (cacheKey) {
+    const cached = getInvoiceListCache(cacheKey);
+    if (cached) return { invoices: cached.invoices, total: cached.total, capped: cached.capped };
+  }
 
   const result = await callInvoicesApi("list", {
     startDate: filters?.startDate || "",
@@ -344,6 +351,6 @@ export async function getInvoices(
   const invoices = (result.invoices as Record<string, unknown>[]).map(mapInvoiceDoc);
   const total = typeof result.total === "number" ? (result.total as number) : invoices.length;
   const capped = Boolean(result.capped);
-  setInvoiceListCache(cacheKey, { invoices, total, capped });
+  if (cacheKey) setInvoiceListCache(cacheKey, { invoices, total, capped });
   return { invoices, total, capped };
 }
