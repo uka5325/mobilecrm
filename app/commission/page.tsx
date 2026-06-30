@@ -121,7 +121,10 @@ export default function CommissionPage() {
     }).catch(() => {});
   }, []);
 
-  async function handleSearch() {
+  // 퀵버튼은 날짜 set 직후 즉시 조회하므로(state 비동기 반영 우회) 날짜 오버라이드를 허용.
+  async function handleSearch(override?: { start?: string; end?: string }) {
+    const s = override?.start ?? startDate;
+    const e = override?.end ?? endDate;
     setLoading(true);
     setSearched(false);
     try {
@@ -131,8 +134,8 @@ export default function CommissionPage() {
         : currentUser?.uid;
 
       const results = await getInvoices({
-        startDate,
-        endDate,
+        startDate: s,
+        endDate: e,
         status: statusFilter || undefined,
         commissionStaffUid: filterUid,
         patientName: patientSearch || undefined,
@@ -144,6 +147,14 @@ export default function CommissionPage() {
     } finally {
       setLoading(false);
     }
+  }
+
+  // 퀵버튼: 기간 set + 즉시 해당 기간 조회(인보이스·KPI와 동일 모델).
+  function quickRange(offset: number) {
+    const r = monthRange(offset);
+    setStartDate(r.start);
+    setEndDate(r.end);
+    handleSearch({ start: r.start, end: r.end });
   }
 
   const isAdmin = currentUser?.role === "admin";
@@ -233,7 +244,7 @@ export default function CommissionPage() {
             className="h-10 min-w-0 flex-1 rounded-xl border border-[#dfe3e8] bg-white px-3 text-sm outline-none transition focus:border-[#1d9e75] focus:ring-4 focus:ring-emerald-100"
           />
           <button
-            onClick={handleSearch}
+            onClick={() => handleSearch()}
             disabled={loading}
             className="h-10 shrink-0 rounded-xl bg-black px-5 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:shadow-md active:scale-95 disabled:opacity-50"
           >
@@ -242,8 +253,9 @@ export default function CommissionPage() {
         </div>
         {/* 퀵필터 */}
         <div className="mt-3 flex gap-2 overflow-x-auto [&::-webkit-scrollbar]:hidden">
-          <QuickButton onClick={() => { const r = monthRange(0); setStartDate(r.start); setEndDate(r.end); }}>이번 달</QuickButton>
-          <QuickButton onClick={() => { const r = monthRange(1); setStartDate(r.start); setEndDate(r.end); }}>다음 달</QuickButton>
+          <QuickButton onClick={() => quickRange(-1)}>전달</QuickButton>
+          <QuickButton onClick={() => quickRange(0)}>이번 달</QuickButton>
+          <QuickButton onClick={() => quickRange(1)}>다음 달</QuickButton>
         </div>
       </div>
 
