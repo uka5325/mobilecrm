@@ -1,17 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { getInvoices, type InvoiceRecord, type InvoiceListFilter } from "@/lib/invoices";
 import { QuickButton } from "@/components/dashboard/QuickButton";
-import { todayString } from "@/lib/dateUtils";
 import { toDate } from "@/lib/settingsUtils";
-
-function threeMonthsAgo() {
-  const d = new Date();
-  d.setMonth(d.getMonth() - 3);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
-}
 
 function pad(n: number) { return String(n).padStart(2, "0"); }
 function monthRange(offset: number) {
@@ -97,10 +90,9 @@ function formatDate(value: unknown): string {
 
 export function InvoiceListTab() {
   const router = useRouter();
-  const today = todayString();
 
-  const [startDate, setStartDate] = useState(threeMonthsAgo());
-  const [endDate, setEndDate] = useState(today);
+  const [startDate, setStartDate] = useState(() => monthRange(0).start);
+  const [endDate, setEndDate] = useState(() => monthRange(0).end);
   const [statusFilter, setStatusFilter] = useState<"" | "draft" | "confirmed" | "void">("");
   const [nameQuery, setNameQuery] = useState("");
   const [invoices, setInvoices] = useState<InvoiceRecord[]>([]);
@@ -108,31 +100,41 @@ export function InvoiceListTab() {
   const [loadError, setLoadError] = useState("");
   const [selectedInvoice, setSelectedInvoice] = useState<InvoiceRecord | null>(null);
   const [capped, setCapped] = useState(false);
+  // 온디맨드: 진입 시 자동 조회하지 않는다(읽기 비용 절감). 조회/퀵버튼을 눌러야 읽음.
+  const [searched, setSearched] = useState(false);
 
-  useEffect(() => {
-    load();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [startDate, endDate, statusFilter]);
-
-  async function load() {
+  // 인자로 받은 기간/상태로 조회(퀵버튼은 set 직후 호출 — state 비동기 반영을 우회).
+  async function load(opts?: { start?: string; end?: string; status?: typeof statusFilter }) {
+    const s = opts?.start ?? startDate;
+    const e = opts?.end ?? endDate;
+    const st = opts?.status ?? statusFilter;
     setLoading(true);
     setLoadError("");
     try {
       const filters: InvoiceListFilter = {
-        startDate,
-        endDate,
-        status: statusFilter || undefined,
+        startDate: s,
+        endDate: e,
+        status: st || undefined,
       };
-      // 서버가 권한 스코프 + 상한까지 전체를 반환 → 합계/건수가 정확.
+      // 서버가 surgeryDate 범위 + 권한 스코프로 해당 기간만 반환 → 합계/건수 정확, 읽기 절감.
       const result = await getInvoices(filters);
       setInvoices(result.invoices);
       setCapped(result.capped);
+      setSearched(true);
     } catch (e) {
       console.error("[InvoiceListTab] load error:", (e as Error)?.message ?? "");
       setLoadError("인보이스 목록을 불러오지 못했습니다. F12 콘솔에서 오류를 확인하세요.");
     } finally {
       setLoading(false);
     }
+  }
+
+  // 퀵버튼: 기간 set + 즉시 해당 기간 조회.
+  function quickRange(offset: number) {
+    const r = monthRange(offset);
+    setStartDate(r.start);
+    setEndDate(r.end);
+    load({ start: r.start, end: r.end });
   }
 
   const filtered = useMemo(() => {
@@ -211,15 +213,17 @@ export function InvoiceListTab() {
           />
           <button
             onClick={() => load()}
-            className="h-10 shrink-0 rounded-xl border border-[#dfe3e8] bg-white px-4 text-sm font-medium text-gray-600 transition hover:-translate-y-0.5 hover:shadow-sm active:scale-95"
+            disabled={loading}
+            className="h-10 shrink-0 rounded-xl bg-[#1d9e75] px-5 text-sm font-medium text-white transition hover:-translate-y-0.5 hover:shadow-md active:scale-95 disabled:opacity-60"
           >
-            새로고침
+            {loading ? "조회 중…" : "조회"}
           </button>
         </div>
         {/* 퀵필터 */}
         <div className="mt-3 flex gap-2 overflow-x-auto [&::-webkit-scrollbar]:hidden">
-          <QuickButton onClick={() => { const r = monthRange(0); setStartDate(r.start); setEndDate(r.end); }}>이번 달</QuickButton>
-          <QuickButton onClick={() => { const r = monthRange(1); setStartDate(r.start); setEndDate(r.end); }}>다음 달</QuickButton>
+          <QuickButton onClick={() => quickRange(-1)}>전달</QuickButton>
+          <QuickButton onClick={() => quickRange(0)}>이번 달</QuickButton>
+          <QuickButton onClick={() => quickRange(1)}>다음 달</QuickButton>
         </div>
       </div>
 
@@ -247,6 +251,10 @@ export function InvoiceListTab() {
         ) : loadError ? (
           <div className="flex items-center justify-center py-16 text-sm text-red-500">
             {loadError}
+          </div>
+        ) : !searched ? (
+          <div className="flex items-center justify-center py-16 text-sm text-gray-400">
+            기간을 선택하고 조회를 누르세요.
           </div>
         ) : filtered.length === 0 ? (
           <div className="flex items-center justify-center py-16 text-sm text-gray-400">
