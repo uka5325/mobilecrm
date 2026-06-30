@@ -1,9 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import type { User } from "firebase/auth";
-import { getStaffByUid, listenCurrentUser } from "@/lib/auth";
-import type { StaffUser } from "@/lib/auth";
+import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { getInvoices, type InvoiceRecord } from "@/lib/invoices";
 import { getStaffListForSettings, type SettingsStaffRecord } from "@/lib/settings";
 import { paymentMethodLabel } from "@/lib/commissionUtils";
@@ -101,7 +99,8 @@ function DetailModal({ invoice, onClose }: { invoice: InvoiceRecord; onClose: ()
 }
 
 export default function CommissionPage() {
-  const [currentUser, setCurrentUser] = useState<StaffUser | null>(null);
+  // 직원정보는 sessionStorage 캐시 기반 훅으로 즉시 렌더(진입 "로딩 중..." 깜빡임 제거 + verify-staff 읽기 절감).
+  const { currentUser } = useCurrentUser();
   const [staffList, setStaffList] = useState<SettingsStaffRecord[]>([]);
 
   const [startDate, setStartDate] = useState(getFirstDayOfMonth());
@@ -115,15 +114,6 @@ export default function CommissionPage() {
   const [loading, setLoading] = useState(false);
   const [searched, setSearched] = useState(false);
   const [selectedInvoice, setSelectedInvoice] = useState<InvoiceRecord | null>(null);
-
-  useEffect(() => {
-    const unsub = listenCurrentUser(async (user: User | null) => {
-      if (!user) return;
-      const staff = await getStaffByUid();
-      setCurrentUser(staff);
-    });
-    return () => unsub();
-  }, []);
 
   useEffect(() => {
     getStaffListForSettings().then((list) => {
