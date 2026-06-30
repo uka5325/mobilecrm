@@ -1,86 +1,25 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import {
-  fetchAllReservationsOnce,
-  subscribeAllReservations,
-  type DoctorOption,
-  type ReservationRecord,
-} from "@/lib/reservations";
+import { useEffect, useState } from "react";
 import {
   DEFAULT_VISIT_STATUS_COLORS,
   getCachedVisitStatusColors,
   getVisitStatusColors,
   type VisitStatusColorMap,
 } from "@/lib/settings";
-import type { StaffUser } from "@/lib/auth";
+import { useReservationsContext } from "@/components/ReservationsProvider";
 
-const CACHE_KEY = "crm_reservations_v2";
-const CACHE_TTL = 5 * 60 * 1000; // 5분
-
-type CacheEntry = { reservations: ReservationRecord[]; doctors: DoctorOption[]; cachedAt: number };
-
-function getCachedData(): CacheEntry | null {
-  if (typeof window === "undefined") return null;
-  try {
-    const raw = localStorage.getItem(CACHE_KEY);
-    if (!raw) return null;
-    const parsed: CacheEntry = JSON.parse(raw);
-    if (Date.now() - parsed.cachedAt > CACHE_TTL) return null;
-    return parsed;
-  } catch { return null; }
-}
-
-function setCachedData(reservations: ReservationRecord[], doctors: DoctorOption[]) {
-  if (typeof window === "undefined") return;
-  setTimeout(() => {
-    try {
-      localStorage.setItem(CACHE_KEY, JSON.stringify({ reservations, doctors, cachedAt: Date.now() }));
-    } catch {}
-  }, 0);
-}
-
-export function useReservationData(
-  currentUser: StaffUser | null,
-  authReady: boolean,
-  firebaseReady: boolean = false
-) {
-  const [reservations, setReservations] = useState<ReservationRecord[]>([]);
-  const [doctors, setDoctors] = useState<DoctorOption[]>([]);
+// 예약 데이터는 전역 단일 구독(ReservationsProvider)에서 공유받는다(#3).
+// 이 훅은 그 위에 방문상태 색상(statusColors)만 얹어 고객관리 페이지에 제공한다.
+// authReady가 true가 되면 색상 설정을 1회 동기화한다.
+export function useReservationData(authReady: boolean) {
+  const { reservations, doctors, loading, refresh } = useReservationsContext();
   const [statusColors, setStatusColors] = useState<VisitStatusColorMap>(DEFAULT_VISIT_STATUS_COLORS);
-  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const cached = getCachedVisitStatusColors();
     if (cached) setStatusColors(cached);
-
-    const cachedData = getCachedData();
-    if (cachedData && cachedData.reservations.length > 0) {
-      setReservations(cachedData.reservations);
-      setDoctors(cachedData.doctors);
-      setLoading(false);
-    }
   }, []);
-
-  // Firebase auth 확인 즉시 데이터 fetch 시작 (verify-staff 완료를 기다리지 않음)
-  useEffect(() => {
-    if (!firebaseReady) return;
-
-    const unsubscribe = subscribeAllReservations(
-      (data) => {
-        setReservations(data.reservations);
-        setDoctors(data.doctors);
-        setCachedData(data.reservations, data.doctors);
-        setLoading(false);
-      },
-      (error) => {
-        console.error("[subscribeAllReservations]", (error as Error)?.message ?? "");
-        setLoading(false);
-      }
-    );
-
-    return () => unsubscribe();
-  }, [firebaseReady]);
 
   useEffect(() => {
     if (!authReady) return;
@@ -88,20 +27,6 @@ export function useReservationData(
       .then(setStatusColors)
       .catch(() => setStatusColors(DEFAULT_VISIT_STATUS_COLORS));
   }, [authReady]);
-
-  const refresh = useCallback(async () => {
-    try {
-      const data = await fetchAllReservationsOnce();
-      // 빈/실패 결과로 실시간 구독이 채운 목록을 덮어쓰지 않음 (read_all 실패 시 전체가 비는 문제 방지)
-      if (data.reservations.length > 0) {
-        setReservations(data.reservations);
-        setDoctors(data.doctors);
-        setCachedData(data.reservations, data.doctors);
-      }
-    } catch (e) {
-      console.error("[useReservationData] refresh error:", e);
-    }
-  }, []);
 
   return { reservations, doctors, statusColors, loading, refresh };
 }

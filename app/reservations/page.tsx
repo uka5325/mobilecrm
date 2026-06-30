@@ -57,12 +57,8 @@ function invalidateHistoryCache(patientId: string) {
 }
 
 export default function ReservationsPage() {
-  const { currentUser, authReady, firebaseReady } = useCurrentUser();
-  const { reservations, loading, refresh } = useReservationData(
-    currentUser,
-    authReady,
-    firebaseReady
-  );
+  const { currentUser, authReady } = useCurrentUser();
+  const { reservations, loading, refresh } = useReservationData(authReady);
 
   const [search, setSearch] = useState("");
   const [groupPage, setGroupPage] = useState(1);

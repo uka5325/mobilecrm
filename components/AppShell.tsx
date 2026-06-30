@@ -7,7 +7,8 @@ import type { ReactNode } from "react";
 import type { User } from "firebase/auth";
 import { getStaffByUid, listenCurrentUser, logout } from "@/lib/auth";
 import type { StaffUser } from "@/lib/auth";
-import { clearAllClientCaches } from "@/lib/clientCache";
+import { clearAllClientCaches, clearFirestorePersistence } from "@/lib/clientCache";
+import { ReservationsProvider } from "@/components/ReservationsProvider";
 
 type AppShellProps = {
   children: ReactNode;
@@ -223,12 +224,15 @@ export default function AppShell({ children }: AppShellProps) {
 
       if (!user) {
         // 세션 종료(로그아웃·토큰 폐기·만료)의 단일 권위 지점.
-        // 직원 세션 캐시 + 업무 데이터 캐시(스케줄/인보이스)를 함께 비운다.
+        // 직원 세션 캐시 + 업무 데이터 캐시(localStorage) + Firestore 영속 캐시(IndexedDB)를 함께 비운다.
         clearCachedStaff();
         clearAllClientCaches();
         setStaffUser(null);
         setLoading(false);
-        router.push("/login");
+        // 영속 캐시(예약 PII)를 purge한 뒤에는 새 Firestore 인스턴스가 필요하므로
+        // 하드 리로드로 /login 이동(공용기기 잔존 차단 + 깨끗한 재초기화).
+        await clearFirestorePersistence();
+        window.location.replace("/login");
         return;
       }
 
@@ -310,8 +314,8 @@ export default function AppShell({ children }: AppShellProps) {
 
   async function handleLogout() {
     clearCachedStaff();
+    // signOut → listenCurrentUser(null) 단일 권위 지점이 캐시 purge + 하드 리로드(/login)를 수행.
     await logout();
-    router.push("/login");
   }
 
   if (isLoginPage) {
@@ -487,7 +491,8 @@ export default function AppShell({ children }: AppShellProps) {
           </p>
         </div>
 
-        {children}
+        {/* 전역 단일 예약 구독: AppShell이 라우트 전환에도 유지되므로 구독도 1회만 살아 있다. */}
+        <ReservationsProvider>{children}</ReservationsProvider>
       </main>
     </div>
   );

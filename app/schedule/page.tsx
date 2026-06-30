@@ -1,19 +1,17 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import {
   type ReservationRecord,
   type AppointmentType,
   APPOINTMENT_TYPE_COLORS,
-  subscribeAllReservations,
-  fetchAllReservationsOnce,
 } from "@/lib/reservations";
 import { todayString } from "@/lib/dateUtils";
 import { DetailDrawer } from "@/components/timeline/DetailDrawer";
 import { NewReservationDrawer } from "@/components/timeline/NewReservationDrawer";
 import { getConferenceMemos, type ConferenceMemo } from "@/lib/settings";
-import { SCHEDULE_CACHE_KEY } from "@/lib/clientCache";
+import { useReservationsContext } from "@/components/ReservationsProvider";
 
 type ViewMode = "day" | "week" | "month";
 
@@ -117,59 +115,10 @@ function getAppointmentColor(type: AppointmentType | string) {
 }
 
 // ─── useScheduleData ─────────────────────────────────────────────────────────
-// 캐시 키는 @/lib/clientCache에서 단일 관리(로그아웃 purge와 출처 공유).
-const SCHEDULE_CACHE_TTL = 5 * 60 * 1000; // 5분
-
-function getScheduleCache(): ReservationRecord[] | null {
-  if (typeof window === "undefined") return null;
-  try {
-    const raw = localStorage.getItem(SCHEDULE_CACHE_KEY);
-    if (!raw) return null;
-    const parsed: { reservations: ReservationRecord[]; cachedAt: number } = JSON.parse(raw);
-    if (Date.now() - parsed.cachedAt > SCHEDULE_CACHE_TTL) return null;
-    return parsed.reservations;
-  } catch { return null; }
-}
-
-function setScheduleCache(reservations: ReservationRecord[]) {
-  if (typeof window === "undefined") return;
-  setTimeout(() => {
-    try {
-      localStorage.setItem(SCHEDULE_CACHE_KEY, JSON.stringify({ reservations, cachedAt: Date.now() }));
-    } catch {}
-  }, 0);
-}
-
-function useScheduleData(startDate: string, endDate: string, authReady: boolean) {
-  const [allReservations, setAllReservations] = useState<ReservationRecord[]>(() => getScheduleCache() ?? []);
-  const [loading, setLoading] = useState(() => {
-    const cached = getScheduleCache();
-    return !cached || cached.length === 0;
-  });
-
-  useEffect(() => {
-    if (!authReady) return;
-    const unsub = subscribeAllReservations(
-      ({ reservations }) => {
-        setAllReservations(reservations);
-        setScheduleCache(reservations);
-        setLoading(false);
-      },
-      () => setLoading(false)
-    );
-    return () => unsub();
-  }, [authReady]);
-
-  const refresh = useCallback(async () => {
-    try {
-      const data = await fetchAllReservationsOnce();
-      // 빈/실패 결과로 실시간 구독이 채운 그리드를 덮어쓰지 않음.
-      // (read_all 실패 시 빈 배열이 전체 카드를 지워버리는 문제 방지 — 실시간 구독이 진실원)
-      if (data.reservations.length > 0) setAllReservations(data.reservations);
-    } catch (e) {
-      console.error("[useScheduleData] refresh error:", e);
-    }
-  }, []);
+// 예약 데이터는 전역 단일 구독(ReservationsProvider)에서 공유받고(#3),
+// 여기서는 보고 있는 날짜 범위로만 필터한다. 실시간 갱신은 그대로 유지된다.
+function useScheduleData(startDate: string, endDate: string) {
+  const { reservations: allReservations, loading, refresh } = useReservationsContext();
 
   const reservations = useMemo(
     () => allReservations.filter((r) => r.reservationDate >= startDate && r.reservationDate <= endDate),
@@ -584,7 +533,7 @@ export default function SchedulePage() {
     return { startDate: getMonthStart(baseDate), endDate: getMonthEnd(baseDate) };
   }, [viewMode, baseDate]);
 
-  const { reservations, loading, refresh } = useScheduleData(startDate, endDate, authReady);
+  const { reservations, loading, refresh } = useScheduleData(startDate, endDate);
 
   const kpi = useMemo(() => {
     const counts: Record<string, number> = { 상담: 0, 수술: 0, 시술: 0, 치료: 0, 경과: 0, 진료: 0, 검진: 0 };

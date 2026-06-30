@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
-import { subscribeAllReservations } from "@/lib/reservations";
+import { searchReservationsByDateRange } from "@/lib/reservations";
 import { todayString } from "@/lib/dateUtils";
 import {
   type ReservationDoc,
@@ -30,8 +30,9 @@ import { KpiTable } from "@/components/dashboard/KpiTable";
 export default function DashboardPage() {
   const { authReady } = useCurrentUser();
   const [allReservations, setAllReservations] = useState<ReservationDoc[]>([]);
-  const [, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [lastLoadedAt, setLastLoadedAt] = useState<Date | null>(null);
 
   const [startDate, setStartDate] = useState(todayString());
   const [endDate, setEndDate] = useState(todayString());
@@ -39,22 +40,30 @@ export default function DashboardPage() {
   const [apptTypeFilter, setApptTypeFilter] = useState("");
   const [areaFilter, setAreaFilter] = useState("");
 
+  // 온디맨드 조회(#5): 실시간 구독 대신 선택 기간을 1회 조회한다.
+  // KPI는 "조회 시점" 스냅샷이며, 45일 윈도우에 묶이지 않아 임의 기간(월·분기) 집계가 가능하다.
+  const load = useCallback(async (from: string, to: string) => {
+    const normFrom = from <= to ? from : to;
+    const normTo = from <= to ? to : from;
+    setLoading(true);
+    setError("");
+    try {
+      const list = await searchReservationsByDateRange(normFrom, normTo);
+      setAllReservations(list as unknown as ReservationDoc[]);
+      setLastLoadedAt(new Date());
+    } catch (e) {
+      console.error("[dashboard] load error:", e);
+      setError("대시보드 데이터를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  // 최초 진입 시 1회 조회(오늘 기준). 이후에는 사용자가 '조회'/빠른범위로 명시적으로 갱신.
   useEffect(() => {
     if (!authReady) return;
-    setLoading(true);
-    const unsub = subscribeAllReservations(
-      ({ reservations }) => {
-        setAllReservations(reservations as unknown as ReservationDoc[]);
-        setLoading(false);
-      },
-      (err) => {
-        console.error(err);
-        setError("대시보드 데이터를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.");
-        setLoading(false);
-      }
-    );
-    return () => unsub();
-  }, [authReady]);
+    load(todayString(), todayString());
+  }, [authReady, load]);
 
   const reservations = useMemo(() => {
     const normalizedStart = startDate <= endDate ? startDate : endDate;
@@ -155,6 +164,8 @@ export default function DashboardPage() {
     const range = setQuickRange(type);
     setStartDate(range.start);
     setEndDate(range.end);
+    // 빠른 범위 선택은 명시적 조회 의도 → 즉시 해당 기간을 조회.
+    load(range.start, range.end);
   }
 
   function resetFilters() {
@@ -226,6 +237,13 @@ export default function DashboardPage() {
             ))}
           </select>
           <button
+            onClick={() => load(startDate, endDate)}
+            disabled={loading}
+            className="h-10 shrink-0 rounded-xl bg-[#1d9e75] px-4 text-sm font-medium text-white transition hover:-translate-y-0.5 hover:shadow-md active:scale-95 disabled:opacity-60"
+          >
+            {loading ? "조회 중…" : "조회"}
+          </button>
+          <button
             onClick={resetFilters}
             className="h-10 shrink-0 rounded-xl bg-black px-4 text-sm font-medium text-white transition hover:-translate-y-0.5 hover:shadow-md active:scale-95"
           >
@@ -241,7 +259,15 @@ export default function DashboardPage() {
         </div>
 
         <div className="mt-3 text-xs text-gray-400">
-          {error ? error : `집계 모드 · 표시 ${filteredRows.length.toLocaleString("ko-KR")}건`}
+          {error
+            ? error
+            : `${
+                loading
+                  ? "조회 중…"
+                  : lastLoadedAt
+                  ? `${String(lastLoadedAt.getHours()).padStart(2, "0")}:${String(lastLoadedAt.getMinutes()).padStart(2, "0")} 조회 기준`
+                  : "조회 대기"
+              } · 표시 ${filteredRows.length.toLocaleString("ko-KR")}건`}
         </div>
       </section>
 

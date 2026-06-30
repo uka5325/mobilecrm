@@ -9,6 +9,9 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const SCHEDULE_CACHE_KEY = "crm_schedule_v1";
+// 전역 단일 구독(ReservationsProvider)의 즉시표시 캐시 키.
+// schedule(crm_schedule_v1)·고객관리(crm_reservations_v2)의 분리 캐시를 일원화.
+export const RESERVATIONS_CACHE_KEY = "crm_reservations_v3";
 export const INVOICE_LIST_CACHE_PREFIX = "crm_invoices_v1_";
 
 // 로그아웃/세션 종료 시 클라 캐시 일괄 삭제 (공용기기 PII/금액 잔존 차단).
@@ -16,10 +19,30 @@ export function clearAllClientCaches() {
   if (typeof window === "undefined") return;
   try {
     localStorage.removeItem(SCHEDULE_CACHE_KEY);
+    localStorage.removeItem(RESERVATIONS_CACHE_KEY);
     Object.keys(localStorage)
       .filter((k) => k.startsWith(INVOICE_LIST_CACHE_PREFIX))
       .forEach((k) => localStorage.removeItem(k));
   } catch {
     // ignore (Quota/SecurityError 등)
+  }
+}
+
+// Firestore 영속 캐시(IndexedDB) purge.
+// persistentLocalCache는 예약 PII를 기기 IndexedDB에 영구 저장하므로, 로그아웃/세션 종료 시
+// 비워야 공용기기에서 다음 사용자에게 잔존하지 않는다(#4 보안 동반 변경).
+// 주의: terminate → clearIndexedDbPersistence 후 db 인스턴스는 사용 불가가 되므로,
+//       호출 측은 직후 하드 리로드로 새 인스턴스를 생성해야 한다.
+// 동적 import로 leaf 모듈의 정적 순환 의존을 피한다.
+export async function clearFirestorePersistence(): Promise<void> {
+  if (typeof window === "undefined") return;
+  try {
+    const { db } = await import("./firebase");
+    if (!db) return;
+    const { terminate, clearIndexedDbPersistence } = await import("firebase/firestore");
+    await terminate(db);
+    await clearIndexedDbPersistence(db);
+  } catch {
+    // 다른 탭이 캐시 사용 중이거나 미지원 환경 — best-effort.
   }
 }
