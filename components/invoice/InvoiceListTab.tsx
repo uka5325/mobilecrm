@@ -227,20 +227,22 @@ export function InvoiceListTab() {
         </div>
       </div>
 
-      {/* KPI */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        {[
-          { label: "전체", value: kpi.total + "건", className: "bg-gray-50 border-gray-200 text-gray-700" },
-          { label: "확정", value: kpi.confirmed + "건", className: "bg-emerald-50 border-emerald-200 text-emerald-700" },
-          { label: "확정 수술비", value: `₩${formatMoney(kpi.totalAmount)}`, className: "bg-blue-50 border-blue-200 text-blue-700" },
-          { label: "확정 커미션", value: `₩${formatMoney(kpi.totalCommission)}`, className: "bg-orange-50 border-orange-200 text-orange-700" },
-        ].map((box) => (
-          <div key={box.label} className={`rounded-xl border px-4 py-3 ${box.className}`}>
-            <div className="text-xs font-semibold opacity-60">{box.label}</div>
-            <div className="mt-0.5 text-lg font-extrabold">{box.value}</div>
-          </div>
-        ))}
-      </div>
+      {/* KPI — 조회 후에만 표시(커미션·대시보드와 통일) */}
+      {searched && (
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          {[
+            { label: "전체", value: kpi.total + "건", className: "bg-gray-50 border-gray-200 text-gray-700" },
+            { label: "확정", value: kpi.confirmed + "건", className: "bg-emerald-50 border-emerald-200 text-emerald-700" },
+            { label: "확정 수술비", value: `₩${formatMoney(kpi.totalAmount)}`, className: "bg-blue-50 border-blue-200 text-blue-700" },
+            { label: "확정 커미션", value: `₩${formatMoney(kpi.totalCommission)}`, className: "bg-orange-50 border-orange-200 text-orange-700" },
+          ].map((box) => (
+            <div key={box.label} className={`rounded-xl border px-4 py-3 ${box.className}`}>
+              <div className="text-xs font-semibold opacity-60">{box.label}</div>
+              <div className="mt-0.5 text-lg font-extrabold">{box.value}</div>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* 테이블 */}
       <div className="-mx-6 overflow-hidden border-t border-[#edf0f3] bg-white lg:-mx-8">
