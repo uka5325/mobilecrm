@@ -161,7 +161,7 @@ export default function DashboardPage() {
       .sort((a, b) => b.total - a.total);
   }, [filteredRows]);
 
-  function handleQuickRange(type: "today" | "week" | "month" | "last7" | "last30") {
+  function handleQuickRange(type: "today" | "week" | "month" | "lastMonth" | "last7" | "last30") {
     const range = setQuickRange(type);
     setStartDate(range.start);
     setEndDate(range.end);
@@ -253,10 +253,9 @@ export default function DashboardPage() {
         </div>
 
         <div className="mt-3 flex gap-2 overflow-x-auto [&::-webkit-scrollbar]:hidden">
-          <QuickButton onClick={() => handleQuickRange("today")}>오늘</QuickButton>
           <QuickButton onClick={() => handleQuickRange("week")}>이번 주</QuickButton>
           <QuickButton onClick={() => handleQuickRange("month")}>이번 달</QuickButton>
-          <QuickButton onClick={() => handleQuickRange("last30")}>지난 30일</QuickButton>
+          <QuickButton onClick={() => handleQuickRange("lastMonth")}>전달</QuickButton>
         </div>
 
         <div className="mt-3 text-xs text-gray-400">

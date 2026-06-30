@@ -259,6 +259,13 @@ export default function CommissionPage() {
         </div>
       </div>
 
+      {/* 미조회 안내 */}
+      {!searched && (
+        <div className="flex items-center justify-center rounded-2xl border border-[#edf0f3] bg-white py-20 text-sm text-gray-400">
+          기간을 선택하고 조회를 누르세요.
+        </div>
+      )}
+
       {/* 결과 */}
       {searched && (
         <>
