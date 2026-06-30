@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { searchReservationsByDateRange } from "@/lib/reservations";
 import { todayString } from "@/lib/dateUtils";
@@ -28,11 +28,13 @@ import { Panel } from "@/components/dashboard/Panel";
 import { KpiTable } from "@/components/dashboard/KpiTable";
 
 export default function DashboardPage() {
-  const { authReady } = useCurrentUser();
+  useCurrentUser(); // 인증 가드/리다이렉트 일관성(반환값은 불필요).
   const [allReservations, setAllReservations] = useState<ReservationDoc[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [lastLoadedAt, setLastLoadedAt] = useState<Date | null>(null);
+  // 완전 온디맨드: 진입 시 자동 집계하지 않는다. 조회/퀵버튼을 눌러야 집계.
+  const [searched, setSearched] = useState(false);
 
   const [startDate, setStartDate] = useState(todayString());
   const [endDate, setEndDate] = useState(todayString());
@@ -51,6 +53,7 @@ export default function DashboardPage() {
       const list = await searchReservationsByDateRange(normFrom, normTo);
       setAllReservations(list as unknown as ReservationDoc[]);
       setLastLoadedAt(new Date());
+      setSearched(true);
     } catch (e) {
       console.error("[dashboard] load error:", e);
       setError("대시보드 데이터를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.");
@@ -58,12 +61,6 @@ export default function DashboardPage() {
       setLoading(false);
     }
   }, []);
-
-  // 최초 진입 시 1회 조회(오늘 기준). 이후에는 사용자가 '조회'/빠른범위로 명시적으로 갱신.
-  useEffect(() => {
-    if (!authReady) return;
-    load(todayString(), todayString());
-  }, [authReady, load]);
 
   const reservations = useMemo(() => {
     const normalizedStart = startDate <= endDate ? startDate : endDate;
@@ -275,6 +272,12 @@ export default function DashboardPage() {
         </div>
       </section>
 
+      {!searched ? (
+        <div className="flex items-center justify-center rounded-2xl border border-[#edf0f3] bg-white py-20 text-sm text-gray-400">
+          기간을 선택하고 조회를 누르세요.
+        </div>
+      ) : (
+      <>
       {/* 유형별 현황 + 취소 */}
       <section className="grid grid-cols-2 gap-3 md:grid-cols-3">
         {(["상담", "수술", "시술", "치료", "경과", "진료", "검진"] as const).map((type) => {
@@ -372,6 +375,8 @@ export default function DashboardPage() {
             ])}
         />
       </Panel>
+      </>
+      )}
     </div>
   );
 }
