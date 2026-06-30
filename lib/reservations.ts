@@ -735,6 +735,25 @@ export async function listPatients(force = false): Promise<PatientRecord[]> {
   return data;
 }
 
+// 검색토큰 기반 환자 검색(매칭만 읽음). 단어 단위 전체일치(한글 이름 전체/영문 단어).
+// 전체 스캔(listPatients)을 대체 — 검색 시 매칭된 환자만 읽어 비용 절감.
+export async function searchPatients(term: string): Promise<PatientRecord[]> {
+  const t = term.trim();
+  if (!t) return [];
+  const result = await callReservationsApi("search_patients", { term: t });
+  if (!result.success || !Array.isArray(result.patients)) return [];
+  return (result.patients as Record<string, unknown>[]).map((p) => ({
+    id: cleanText(p.id),
+    patientId: cleanText(p.patientId),
+    name: cleanText(p.name),
+    birth: cleanText(p.birth),
+    birthInput: cleanText(p.birthInput),
+    gender: cleanText(p.gender),
+    phone: cleanText(p.phone),
+    nationality: cleanText(p.nationality),
+  }));
+}
+
 export async function createReservationsBatch(
   payloads: CreateReservationParams[],
   staff: StaffUser

@@ -1,12 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { DetailDrawer } from "@/components/timeline/DetailDrawer";
 import {
   deleteReservation,
   updateReservationFull,
   getPatientReservationHistory,
-  listPatients,
+  searchPatients,
   type ReservationRecord,
   type AppointmentType,
   type PatientRecord,
@@ -64,8 +64,6 @@ export default function ReservationsPage() {
   const [groupPage, setGroupPage] = useState(1);
   const PAGE_SIZE = 10;
   const [patients, setPatients] = useState<PatientRecord[]>([]);
-  // 전체 환자 목록을 이미 로드했는지(지연 로드): 검색을 시작할 때 1회만 로드한다.
-  const patientsLoadedRef = useRef(false);
 
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [importDrawerOpen, setImportDrawerOpen] = useState(false);
@@ -289,14 +287,16 @@ export default function ReservationsPage() {
 
   useEffect(() => { setGroupPage(1); }, [search]);
 
-  // 지연 로드: 진입 시 환자 전체(최대 2,000)를 읽지 않는다. 기본 화면은 최근 예약 환자(구독 데이터)로 구성.
-  // 검색을 시작할 때만 전체 환자 목록을 1회 로드(이후 search 변경은 로컬 필터, 캐시 10분).
+  // 검색토큰 기반 서버 검색: 진입 시 환자 전체(최대 2,000)를 읽지 않는다. 기본 화면은 최근 예약 환자(구독 데이터).
+  // 검색어 입력 시(디바운스 300ms) 매칭된 환자만 서버에서 읽는다. 빈 검색이면 환자 목록 비움(예약 기반 유지).
   useEffect(() => {
     if (!authReady) return;
-    if (search.trim() && !patientsLoadedRef.current) {
-      patientsLoadedRef.current = true;
-      listPatients().then(setPatients);
-    }
+    const t = search.trim();
+    if (!t) { setPatients([]); return; }
+    const handle = setTimeout(() => {
+      searchPatients(t).then(setPatients).catch(() => {});
+    }, 300);
+    return () => clearTimeout(handle);
   }, [authReady, search]);
 
   const pagedGroups = useMemo(() => {
@@ -854,8 +854,8 @@ export default function ReservationsPage() {
           initialPatient={addPatient}
           mode={addPatient ? "reservation" : "register"}
           onCreated={addPatient
-            ? () => { refresh(); if (patientsLoadedRef.current) listPatients().then(setPatients); }
-            : () => { if (patientsLoadedRef.current) listPatients().then(setPatients); }
+            ? () => { refresh(); const t = search.trim(); if (t) searchPatients(t).then(setPatients).catch(() => {}); }
+            : () => { const t = search.trim(); if (t) searchPatients(t).then(setPatients).catch(() => {}); }
           }
         />
       )}

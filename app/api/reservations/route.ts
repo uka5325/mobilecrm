@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { adminDb, FieldValue } from "@/lib/firebaseAdmin";
 import { requireActiveStaff, toAuthErrorResponse } from "@/lib/apiAuth";
 import { toSerializable, docToObj } from "@/lib/adminUtils";
+import { makePatientSearchTokens } from "@/lib/searchTokens";
 
 // 데이터 변경 action — 토큰 폐기 검사 적용
 const WRITE_ACTIONS = new Set([
@@ -155,6 +156,7 @@ export async function POST(req: NextRequest) {
       // 작성자 신원은 검증된 토큰(ctx)으로 강제 → 위조 차단
       await ref.set({
         ...patient,
+        searchTokens: makePatientSearchTokens(String((patient as { name?: unknown }).name || "")),
         isDeleted: false,
         createdBy: ctx.name, createdByUid: ctx.uid,
         updatedBy: ctx.name, updatedByUid: ctx.uid,
@@ -176,6 +178,26 @@ export async function POST(req: NextRequest) {
       const snap = await adminDb.collection("patients")
         .orderBy("createdAt", "desc")
         .limit(LIST_PATIENTS_CAP)
+        .get();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const patients = snap.docs.flatMap((d: any) => {
+        const data = d.data();
+        if (data.isDeleted === true) return [];
+        return [toSerializable({ id: d.id, ...data })];
+      });
+      return NextResponse.json({ success: true, patients });
+    }
+
+    // ── SEARCH PATIENTS (검색토큰 array-contains — 매칭만 읽음) ─────────────
+    // 전체 스캔(list_patients) 대신, 단어 단위 토큰으로 매칭된 환자만 읽는다.
+    // 색인: searchTokens array-contains 단일 필드 → 자동(복합 불필요).
+    if (action === "search_patients") {
+      const { term } = (payload || {}) as { term?: string };
+      const t = String(term || "").trim().toLowerCase();
+      if (!t) return NextResponse.json({ success: true, patients: [] });
+      const snap = await adminDb.collection("patients")
+        .where("searchTokens", "array-contains", t)
+        .limit(50)
         .get();
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const patients = snap.docs.flatMap((d: any) => {
@@ -243,7 +265,7 @@ export async function POST(req: NextRequest) {
       };
 
       const batch = adminDb.batch();
-      batch.set(patientRef, { ...patient, isDeleted: false, ...authorFields, createdAt: now, updatedAt: now });
+      batch.set(patientRef, { ...patient, searchTokens: makePatientSearchTokens(String((patient as { name?: unknown }).name || "")), isDeleted: false, ...authorFields, createdAt: now, updatedAt: now });
       batch.set(reservationRef, { ...reservation, ...authorFields, createdAt: now, updatedAt: now });
       await batch.commit();
 
@@ -293,6 +315,10 @@ export async function POST(req: NextRequest) {
       if (resolvedPatientDocId && patientPatch) {
         await adminDb.collection("patients").doc(resolvedPatientDocId).update({
           ...patientPatch,
+          // 이름이 바뀌면 검색 토큰 재생성
+          ...(patientPatch.name !== undefined
+            ? { searchTokens: makePatientSearchTokens(String(patientPatch.name || "")) }
+            : {}),
           updatedBy: ctx.name,
           updatedByUid: ctx.uid,
           updatedAt: now,
