@@ -709,7 +709,7 @@ export async function createPatientOnly(
 // 환자 목록 인메모리 캐시 (반복 500건 스캔 억제). 생성 시 무효화.
 // 누락 방지: 서버는 isDeleted!==true만 반환하므로 캐시는 그 결과를 그대로 보관.
 let _patientsCache: { at: number; data: PatientRecord[] } | null = null;
-const PATIENTS_CACHE_TTL = 2 * 60 * 1000;
+const PATIENTS_CACHE_TTL = 10 * 60 * 1000;
 
 export function invalidatePatientsCache() {
   _patientsCache = null;
