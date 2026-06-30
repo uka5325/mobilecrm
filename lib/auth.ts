@@ -9,6 +9,7 @@ import {
 } from "firebase/auth";
 import { collection, getDocsFromServer, query, where } from "firebase/firestore";
 import { auth, db } from "./firebase";
+import { clearAllClientCaches } from "./clientCache";
 
 export type StaffRole =
   | "admin"
@@ -138,6 +139,8 @@ export async function loginWithGoogle() {
 }
 
 export async function logout() {
+  // 로그아웃 즉시 클라 캐시 비우기(공용기기 PII/금액 잔존 차단).
+  clearAllClientCaches();
   await signOut(auth);
   return { success: true };
 }

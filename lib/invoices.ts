@@ -1,6 +1,7 @@
 import { auth } from "./firebase";
 import { cleanText } from "./stringUtils";
 import type { StaffUser } from "./auth";
+import { INVOICE_LIST_CACHE_PREFIX } from "./clientCache";
 
 export type InvoiceRecord = {
   id: string;
@@ -216,6 +217,7 @@ export async function getOrCreateInvoiceDraft(
   if (!result.success || !result.invoice) {
     return { success: false as const, message: result.message || "인보이스 생성 실패" };
   }
+  invalidateInvoiceListCache();
   return {
     success: true as const,
     invoice: mapInvoiceDoc(result.invoice as Record<string, unknown>),
@@ -254,6 +256,7 @@ export async function updateInvoice(
   if (!result.success || !result.invoice) {
     return { success: false as const, message: result.message || "저장 실패" };
   }
+  invalidateInvoiceListCache();
   return {
     success: true as const,
     invoice: mapInvoiceDoc(result.invoice as Record<string, unknown>),
@@ -269,6 +272,7 @@ export async function deleteInvoice(invoiceDocId: string, staff: StaffUser) {
     staffRole: staff.role,
     staffCode: staff.staffCode || "",
   });
+  if (result.success) invalidateInvoiceListCache();
   return { success: result.success, message: result.message };
 }
 
@@ -280,12 +284,61 @@ export type InvoiceListFilter = {
   commissionStaffUid?: string;
 };
 
+// INVOICE_LIST_CACHE_PREFIX는 @/lib/clientCache에서 단일 관리(로그아웃 purge와 출처 공유).
+const INVOICE_LIST_CACHE_TTL = 2 * 60 * 1000; // 2분 (금액 데이터라 신선도 우선)
+
+type InvoiceListCacheEntry = {
+  invoices: InvoiceRecord[];
+  total: number;
+  capped: boolean;
+  cachedAt: number;
+};
+
+function getInvoiceListCache(key: string): InvoiceListCacheEntry | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return null;
+    const parsed: InvoiceListCacheEntry = JSON.parse(raw);
+    if (Date.now() - parsed.cachedAt > INVOICE_LIST_CACHE_TTL) return null;
+    return parsed;
+  } catch { return null; }
+}
+
+function setInvoiceListCache(key: string, data: Omit<InvoiceListCacheEntry, "cachedAt">) {
+  if (typeof window === "undefined") return;
+  setTimeout(() => {
+    try {
+      localStorage.setItem(key, JSON.stringify({ ...data, cachedAt: Date.now() }));
+    } catch {}
+  }, 0);
+}
+
+export function invalidateInvoiceListCache() {
+  if (typeof window === "undefined") return;
+  try {
+    const keys = Object.keys(localStorage).filter((k) => k.startsWith(INVOICE_LIST_CACHE_PREFIX));
+    keys.forEach((k) => localStorage.removeItem(k));
+  } catch {}
+}
+
 // 서버가 권한 스코프를 쿼리로 적용하고 상한(HARD_CAP)까지 전체를 반환한다.
 // 따라서 합계/KPI를 결과 전체로 정확히 계산할 수 있다(이전: 50건 페이지 한정으로 오류).
 // capped=true면 상한 초과로 일부가 누락됐을 수 있다(기간을 좁혀 재조회 권장).
 export async function getInvoices(
   filters?: InvoiceListFilter
 ): Promise<{ invoices: InvoiceRecord[]; total: number; capped: boolean }> {
+  // 캐시 키에 로그인 uid를 포함해 사용자별로 분리한다(공용기기에서 권한 스코프가 다른
+  // 사용자끼리 캐시를 공유해 인보이스가 노출/누락되는 것을 차단). 신원 미확정 시 캐시 우회.
+  const uid = auth.currentUser?.uid;
+  const cacheKey = uid
+    ? INVOICE_LIST_CACHE_PREFIX + uid + "_" + JSON.stringify(filters ?? {})
+    : null;
+  if (cacheKey) {
+    const cached = getInvoiceListCache(cacheKey);
+    if (cached) return { invoices: cached.invoices, total: cached.total, capped: cached.capped };
+  }
+
   const result = await callInvoicesApi("list", {
     startDate: filters?.startDate || "",
     endDate: filters?.endDate || "",
@@ -297,9 +350,8 @@ export async function getInvoices(
     return { invoices: [], total: 0, capped: false };
   }
   const invoices = (result.invoices as Record<string, unknown>[]).map(mapInvoiceDoc);
-  return {
-    invoices,
-    total: typeof result.total === "number" ? (result.total as number) : invoices.length,
-    capped: Boolean(result.capped),
-  };
+  const total = typeof result.total === "number" ? (result.total as number) : invoices.length;
+  const capped = Boolean(result.capped);
+  if (cacheKey) setInvoiceListCache(cacheKey, { invoices, total, capped });
+  return { invoices, total, capped };
 }
