@@ -114,9 +114,13 @@ export default function DashboardPage() {
       if (!apptTypeMap[apptType]) apptTypeMap[apptType] = emptyCounter(apptType);
       accumulate(apptTypeMap[apptType], item);
 
-      const area = getConsultArea(item);
-      if (!areaMap[area]) areaMap[area] = emptyCounter(area);
-      accumulate(areaMap[area], item);
+      // 상담부위별 KPI는 '상담' 예약만 집계 — consultArea 필드는 수술/시술에선 항목명으로
+      // 재사용되므로, 상담 없이 넣은 시술(예: 온다)이 부위 행으로 잡히는 것을 방지.
+      if (apptType === "상담") {
+        const area = getConsultArea(item);
+        if (!areaMap[area]) areaMap[area] = emptyCounter(area);
+        accumulate(areaMap[area], item);
+      }
     });
 
     const finalizedSummary = finalizeCounter(summary);
