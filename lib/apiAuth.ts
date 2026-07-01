@@ -25,6 +25,12 @@ type CacheEntry = StaffContext & { at: number };
 const _staffCache = new Map<string, CacheEntry>();
 const STAFF_CACHE_TTL = 5 * 60 * 1000;
 
+// 테스트 전용: 케이스 간 staff 캐시 오염을 막기 위한 리셋 헬퍼.
+// 프로덕션 코드 경로에서는 호출되지 않는다.
+export function __resetStaffCacheForTests() {
+  _staffCache.clear();
+}
+
 async function lookupStaff(uid: string, email: string): Promise<StaffContext> {
   // uid 필드 우선 → 문서 ID fallback (기존 라우트들과 동일한 조회 규칙 유지)
   let data: FirebaseFirestore.DocumentData | null = null;
