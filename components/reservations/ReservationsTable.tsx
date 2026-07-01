@@ -210,12 +210,19 @@ export function ReservationsTable({
 
   // 인보이스 개수 배지 — 보이는 환자 전원을 "1번의 배치 요청"으로 채운다
   // (환자마다 따로 조회하던 N+1 패턴 제거). 캐시에 이미 있는 환자는 즉시 반영.
+  // requestedInvoiceCountsRef: "요청을 이미 시작한 pid" 동기 추적 — invoiceCounts state는
+  // 비동기 응답 후에만 갱신되므로, 그 전에 patientGroups가 다시 바뀌면(라이브 구독 갱신 등)
+  // 같은 pid에 배치 요청이 중복 발사될 수 있다(admin 경로는 환자당 count() N개를 병렬 발사
+  // 하므로 중복될 때마다 읽기가 N배로 불어남). 응답을 기다리지 않고 즉시 "요청함"으로
+  // 표시해 재실행 시 중복 요청을 막는다.
+  const requestedInvoiceCountsRef = useRef<Set<string>>(new Set());
   useEffect(() => {
     if (!patientGroups.length) return;
     const pids = patientGroups
       .map((g) => g.patientId || g.patientKey)
-      .filter((pid) => pid && !(pid in invoiceCountsRef.current));
+      .filter((pid) => pid && !(pid in invoiceCountsRef.current) && !requestedInvoiceCountsRef.current.has(pid));
     if (!pids.length) return;
+    pids.forEach((pid) => requestedInvoiceCountsRef.current.add(pid));
 
     warmInvoiceCountCache(pids)
       .catch(() => {})
@@ -225,6 +232,8 @@ export function ReservationsTable({
           for (const pid of pids) {
             const cached = getCachedInvoiceCount(pid);
             if (cached !== undefined) next[pid] = cached;
+            // 실패해서 캐시가 안 채워졌으면 다음 기회에 재시도할 수 있도록 가드 해제.
+            else requestedInvoiceCountsRef.current.delete(pid);
           }
           return next;
         });
@@ -239,12 +248,16 @@ export function ReservationsTable({
   const fullHistoryRef = useRef<Record<string, ReservationRecord[]>>({});
   useEffect(() => { fullHistoryRef.current = fullHistory; }, [fullHistory]);
 
+  // requestedFullHistoryRef: invoiceCounts와 동일한 이유의 동기 가드 —
+  // fullHistory state 갱신 전에 patientGroups가 다시 바뀌어도 같은 pid로 재요청하지 않는다.
+  const requestedFullHistoryRef = useRef<Set<string>>(new Set());
   useEffect(() => {
     if (!patientGroups.length) return;
     const pids = patientGroups
       .map((g) => g.patientId || g.patientKey)
-      .filter((pid) => pid && !(pid in fullHistoryRef.current));
+      .filter((pid) => pid && !(pid in fullHistoryRef.current) && !requestedFullHistoryRef.current.has(pid));
     if (!pids.length) return;
+    pids.forEach((pid) => requestedFullHistoryRef.current.add(pid));
 
     const liveWindowByPatientId: Record<string, ReservationRecord[]> = {};
     for (const g of patientGroups) {
@@ -260,6 +273,7 @@ export function ReservationsTable({
           for (const pid of pids) {
             const cached = getCachedPatientFullHistory(pid);
             if (cached) next[pid] = cached.reservations;
+            else requestedFullHistoryRef.current.delete(pid);
           }
           return next;
         });
