@@ -44,14 +44,16 @@ service cloud.firestore {
     }
 
     // ── 예약 (실시간 읽기 + 의사명 일괄변경 쓰기) ───────────────────────────
-    // 생성은 admin API 전용. 클라 직접 update는 settings의 의사명 일괄변경(admin)뿐.
-    // 삭제 플래그/작성자 위조를 차단(소프트삭제는 admin API 경유).
+    // 생성/일반 수정(예약금·상태·담당 등)은 전부 /api/reservations(admin SDK) 경유.
+    // 클라 직접 update는 settings의 의사명 일괄변경(admin 전용) 단 하나의 흐름만 허용하고,
+    // 그마저도 doctors 필드만 바꿀 수 있게 화이트리스트로 좁힌다.
+    // (예전엔 isActiveStaff()만 검사해 모든 active 직원이 임의 필드를 감사로그 없이
+    //  바꿀 수 있었다 — admin + 필드 화이트리스트로 강화.)
     match /reservations/{id} {
       allow read: if isActiveStaff();
       allow create: if false;
-      allow update: if isActiveStaff()
-        && request.resource.data.isDeleted == resource.data.isDeleted
-        && request.resource.data.createdByUid == resource.data.createdByUid;
+      allow update: if isAdmin()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["doctors"]);
       allow delete: if false;
     }
 

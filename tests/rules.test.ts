@@ -108,12 +108,22 @@ test("reservationPhotos 생성: uploadedByUid가 타인이면 차단", async () 
   );
 });
 
-test("reservations 업데이트: doctors만 변경(불변필드 유지)은 허용", async () => {
-  await assertSucceeds(updateDoc(doc(activeStaff(), "reservations/r1"), { doctors: ["박"] }));
+test("reservations 업데이트: admin이 doctors만 변경하면 허용", async () => {
+  await assertSucceeds(updateDoc(doc(admin(), "reservations/r1"), { doctors: ["박"] }));
 });
 
-test("reservations 업데이트: isDeleted 위조는 차단", async () => {
-  await assertFails(updateDoc(doc(activeStaff(), "reservations/r1"), { isDeleted: true }));
+test("reservations 업데이트: 일반 직원은 doctors조차 직접 수정할 수 없다 (admin 전용)", async () => {
+  await assertFails(updateDoc(doc(activeStaff(), "reservations/r1"), { doctors: ["박"] }));
+});
+
+test("reservations 업데이트: admin이라도 doctors 외 필드(예약금 등)를 섞으면 차단", async () => {
+  await assertFails(
+    updateDoc(doc(admin(), "reservations/r1"), { doctors: ["박"], depositAmount: 999999 })
+  );
+});
+
+test("reservations 업데이트: admin이라도 isDeleted 위조는 차단 (화이트리스트 밖 필드)", async () => {
+  await assertFails(updateDoc(doc(admin(), "reservations/r1"), { isDeleted: true }));
 });
 
 // ── #4 비활성 admin 권한 박탈 ───────────────────────────────────────────────
