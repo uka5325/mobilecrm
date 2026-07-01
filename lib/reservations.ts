@@ -320,7 +320,7 @@ export function invalidateDoctorsCache() {
 
 // ── 공용 read 헬퍼 (목록/타임라인/구독에서 매핑·정렬·45일 계산을 단일화) ──────────
 // 기본 조회 범위: 45일 전(약 1.5개월) — 6개월 전체 스캔 방지.
-function get45DaysAgo(): string {
+export function get45DaysAgo(): string {
   const d = new Date();
   d.setDate(d.getDate() - 45);
   return d.toISOString().slice(0, 10);
@@ -1124,6 +1124,41 @@ export async function getPatientFullHistoryCached(
 
 export function invalidatePatientFullHistoryCache(patientId: string) {
   _patientFullHistoryCache.delete(patientId);
+}
+
+// 여러 환자의 전체 이력 캐시를 "1번의 배치 쿼리"로 데운다. 고객관리 카드 배지가
+// 환자마다 getPatientFullHistoryCached를 따로 부르면 서버 왕복이 N번 생기므로,
+// 아직 캐시가 없는 환자만 모아 patient_full_history_batch(45일보다 오래된 것만)로
+// 한 번에 받고, 라이브 구독이 이미 갖고 있는 45일치 데이터와 합쳐서 캐시에 채운다.
+// 이후 getPatientFullHistoryCached(pid) 호출은 이 캐시를 그대로 재사용한다.
+export async function warmPatientFullHistoryCache(
+  patientIds: string[],
+  liveWindowByPatientId: Record<string, ReservationRecord[]>
+): Promise<void> {
+  const stale = [...new Set(patientIds.filter(Boolean))].filter(
+    (pid) => !getCachedPatientFullHistory(pid)
+  );
+  if (!stale.length) return;
+
+  const CHUNK = 30; // Firestore where(...,"in",[...]) 최대 30개
+  const before = get45DaysAgo();
+
+  for (let i = 0; i < stale.length; i += CHUNK) {
+    const chunk = stale.slice(i, i + CHUNK);
+    const result = await callReservationsApi("patient_full_history_batch", { patientIds: chunk, before });
+    if (!result.success) continue;
+
+    const byPatient = (result.byPatient as Record<string, Record<string, unknown>[]> | undefined) || {};
+    for (const pid of chunk) {
+      const older = (byPatient[pid] || []).map((r) => mapReservationDoc(String(r.id || ""), r));
+      const live = liveWindowByPatientId[pid] || [];
+      const merged = [...live, ...older]
+        .filter((r, idx, arr) => arr.findIndex((x) => x.id === r.id) === idx)
+        .sort((a, b) => `${b.reservationDate} ${b.reservationTime}`.localeCompare(`${a.reservationDate} ${a.reservationTime}`))
+        .slice(0, 300);
+      _patientFullHistoryCache.set(pid, { at: Date.now(), reservations: merged, capped: merged.length >= 300 });
+    }
+  }
 }
 
 export async function deleteReservation(

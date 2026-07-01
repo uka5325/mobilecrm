@@ -138,6 +138,39 @@ export async function POST(req: NextRequest) {
       });
     }
 
+    // ── READ: 여러 환자의 "45일보다 오래된" 예약 이력을 한 번에 조회 ─────────
+    // 고객관리 카드 배지가 환자당 patient_full_history를 N번 부르던 걸 1번으로 묶는다.
+    // 라이브 구독(45일 윈도우)이 이미 최근 이력을 갖고 있으므로, 여기서는 그보다
+    // 오래된 것만 읽어 중복 읽기를 피한다. patientId는 Firestore in 제약(최대 30개)에 맞춰
+    // 호출부에서 청크 분할해서 보낸다.
+    if (action === "patient_full_history_batch") {
+      const { patientIds, before } = (payload || {}) as { patientIds?: string[]; before?: string };
+      const ids = Array.isArray(patientIds) ? patientIds.filter(Boolean).slice(0, 30) : [];
+      if (!ids.length || !before) {
+        return NextResponse.json({ success: false, message: "patientIds/before가 없습니다." }, { status: 400 });
+      }
+
+      const SAFETY_CAP = 1000;
+      const snap = await adminDb
+        .collection("reservations")
+        .where("patientId", "in", ids)
+        .where("isDeleted", "==", false)
+        .where("reservationDate", "<", before)
+        .orderBy("reservationDate", "desc")
+        .limit(SAFETY_CAP)
+        .get();
+
+      const byPatient: Record<string, Record<string, unknown>[]> = {};
+      for (const id of ids) byPatient[id] = [];
+      for (const doc of snap.docs) {
+        const obj = docToObj(doc);
+        const pid = String(obj.patientId || "");
+        if (byPatient[pid]) byPatient[pid].push(obj);
+      }
+
+      return NextResponse.json({ success: true, byPatient });
+    }
+
     // ── READ: reservations for a specific date + doctors ──────────────────
     if (action === "read_by_date") {
       const { date } = (payload || {}) as { date: string };

@@ -4,8 +4,8 @@ import { useState, useRef, useEffect, useCallback, type ReactNode } from "react"
 import type { ReservationRecord, AppointmentType } from "@/lib/reservations";
 import { APPOINTMENT_TYPES } from "@/lib/reservations";
 import { getReservationBirthInfo } from "@/lib/reservationUtils";
-import { getInvoiceCountByPatientId, getCachedInvoiceCount } from "@/lib/invoices";
-import { getPatientFullHistoryCached, getCachedPatientFullHistory } from "@/lib/reservations";
+import { getCachedInvoiceCount, warmInvoiceCountCache } from "@/lib/invoices";
+import { getCachedPatientFullHistory, warmPatientFullHistoryCache } from "@/lib/reservations";
 import { PatientInvoiceModal } from "./PatientInvoiceModal";
 
 export type PatientGroup = {
@@ -208,43 +208,62 @@ export function ReservationsTable({
     setInvoiceCounts((prev) => ({ ...prev, [pid]: count }));
   }, []);
 
+  // 인보이스 개수 배지 — 보이는 환자 전원을 "1번의 배치 요청"으로 채운다
+  // (환자마다 따로 조회하던 N+1 패턴 제거). 캐시에 이미 있는 환자는 즉시 반영.
   useEffect(() => {
     if (!patientGroups.length) return;
-    patientGroups.forEach((g) => {
-      const pid = g.patientId || g.patientKey;
-      if (!pid || pid in invoiceCountsRef.current) return;
-      // 캐시 있으면 즉시 반영(재진입 시 재조회 없음), 없으면 1회 조회
-      const cached = getCachedInvoiceCount(pid);
-      if (cached !== undefined) {
-        setInvoiceCounts((prev) => ({ ...prev, [pid]: cached }));
-        return;
-      }
-      getInvoiceCountByPatientId(pid)
-        .then((count) => setInvoiceCounts((prev) => ({ ...prev, [pid]: count })))
-        .catch(() => {});
-    });
+    const pids = patientGroups
+      .map((g) => g.patientId || g.patientKey)
+      .filter((pid) => pid && !(pid in invoiceCountsRef.current));
+    if (!pids.length) return;
+
+    warmInvoiceCountCache(pids)
+      .catch(() => {})
+      .finally(() => {
+        setInvoiceCounts((prev) => {
+          const next = { ...prev };
+          for (const pid of pids) {
+            const cached = getCachedInvoiceCount(pid);
+            if (cached !== undefined) next[pid] = cached;
+          }
+          return next;
+        });
+      });
   }, [patientGroups]);
 
   // 환자 카드 배지("총 건수"/예약금/수술비용/부위)를 라이브 윈도우(45일)와 무관하게
-  // 정확히 표시하기 위한 전체 이력 지연 로드 — invoiceCounts와 동일한 구조.
+  // 정확히 표시하기 위한 전체 이력 — 보이는 환자 전원을 "1번의 배치 요청"으로 채운다.
+  // 라이브 구독(group.reservations)이 이미 45일치를 갖고 있으므로, 그보다 오래된 것만
+  // 서버에서 받아 합친다(warmPatientFullHistoryCache 내부에서 처리).
   const [fullHistory, setFullHistory] = useState<Record<string, ReservationRecord[]>>({});
   const fullHistoryRef = useRef<Record<string, ReservationRecord[]>>({});
   useEffect(() => { fullHistoryRef.current = fullHistory; }, [fullHistory]);
 
   useEffect(() => {
     if (!patientGroups.length) return;
-    patientGroups.forEach((g) => {
+    const pids = patientGroups
+      .map((g) => g.patientId || g.patientKey)
+      .filter((pid) => pid && !(pid in fullHistoryRef.current));
+    if (!pids.length) return;
+
+    const liveWindowByPatientId: Record<string, ReservationRecord[]> = {};
+    for (const g of patientGroups) {
       const pid = g.patientId || g.patientKey;
-      if (!pid || pid in fullHistoryRef.current) return;
-      const cached = getCachedPatientFullHistory(pid);
-      if (cached) {
-        setFullHistory((prev) => ({ ...prev, [pid]: cached.reservations }));
-        return;
-      }
-      getPatientFullHistoryCached(pid)
-        .then((result) => setFullHistory((prev) => ({ ...prev, [pid]: result.reservations })))
-        .catch(() => {});
-    });
+      if (pid) liveWindowByPatientId[pid] = g.reservations;
+    }
+
+    warmPatientFullHistoryCache(pids, liveWindowByPatientId)
+      .catch(() => {})
+      .finally(() => {
+        setFullHistory((prev) => {
+          const next = { ...prev };
+          for (const pid of pids) {
+            const cached = getCachedPatientFullHistory(pid);
+            if (cached) next[pid] = cached.reservations;
+          }
+          return next;
+        });
+      });
   }, [patientGroups]);
 
   function toggleAmountPopover(groupKey: string, type: "deposit" | "surgery") {
