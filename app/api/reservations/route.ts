@@ -112,6 +112,32 @@ export async function POST(req: NextRequest) {
       });
     }
 
+    // ── READ: patient FULL reservation history (no pagination, safety-capped) ──
+    // 고객관리 환자 카드 배지(총 건수/예약금/수술비용/부위)와 "전체 이력" 모달을
+    // 라이브 구독 윈도우와 완전히 분리하기 위한 전용 액션. patient_history와 동일
+    // 쿼리/인덱스, cursor 없이 1회 반환(최대 300건).
+    if (action === "patient_full_history") {
+      const { patientId } = (payload || {}) as { patientId?: string };
+      if (!patientId) {
+        return NextResponse.json({ success: false, message: "patientId가 없습니다." }, { status: 400 });
+      }
+
+      const CAP = 300;
+      const snap = await adminDb
+        .collection("reservations")
+        .where("patientId", "==", patientId)
+        .where("isDeleted", "==", false)
+        .orderBy("reservationDate", "desc")
+        .limit(CAP)
+        .get();
+
+      return NextResponse.json({
+        success: true,
+        reservations: snap.docs.map(docToObj),
+        capped: snap.docs.length === CAP,
+      });
+    }
+
     // ── READ: reservations for a specific date + doctors ──────────────────
     if (action === "read_by_date") {
       const { date } = (payload || {}) as { date: string };
