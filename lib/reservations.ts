@@ -318,30 +318,42 @@ export function invalidateDoctorsCache() {
   _doctorsCachedAt = 0;
 }
 
-export async function getAllReservations(): Promise<{
-  reservations: ReservationRecord[];
-  doctors: DoctorOption[];
-}> {
-  const fromDate = (() => {
-    const d = new Date();
-    d.setDate(d.getDate() - 45);
-    return d.toISOString().slice(0, 10);
-  })();
+// ── 공용 read 헬퍼 (목록/타임라인/구독에서 매핑·정렬·45일 계산을 단일화) ──────────
+// 기본 조회 범위: 45일 전(약 1.5개월) — 6개월 전체 스캔 방지.
+function get45DaysAgo(): string {
+  const d = new Date();
+  d.setDate(d.getDate() - 45);
+  return d.toISOString().slice(0, 10);
+}
 
-  const result = await callReservationsApi("read_all", { from: fromDate });
-  const rawReservations = (result.reservations as Record<string, unknown>[] | undefined) || [];
-  const rawDoctors = (result.doctors as Record<string, unknown>[] | undefined) || [];
+// 예약 정렬: 목록(date)=날짜+시간+이름, 타임라인(time)=시간+이름. 정렬 키 차이를 보존.
+function sortReservations(
+  list: ReservationRecord[],
+  sortKey: "date" | "time"
+): ReservationRecord[] {
+  return [...list].sort((a, b) => {
+    const aa = sortKey === "date"
+      ? `${a.reservationDate} ${a.reservationTime} ${a.name}`
+      : `${a.reservationTime} ${a.name}`;
+    const bb = sortKey === "date"
+      ? `${b.reservationDate} ${b.reservationTime} ${b.name}`
+      : `${b.reservationTime} ${b.name}`;
+    return aa.localeCompare(bb);
+  });
+}
 
-  const reservations = rawReservations
+function mapReservationsFromApi(
+  raw: Record<string, unknown>[] | undefined,
+  sortKey: "date" | "time"
+): ReservationRecord[] {
+  const mapped = (raw || [])
     .map((r) => mapReservationDoc(String(r.id || ""), r))
-    .filter((item) => !item.isDeleted)
-    .sort((a, b) => {
-      const aa = `${a.reservationDate} ${a.reservationTime} ${a.name}`;
-      const bb = `${b.reservationDate} ${b.reservationTime} ${b.name}`;
-      return aa.localeCompare(bb);
-    });
+    .filter((item) => !item.isDeleted);
+  return sortReservations(mapped, sortKey);
+}
 
-  const doctors: DoctorOption[] = rawDoctors
+function mapDoctorsFromApi(raw: Record<string, unknown>[] | undefined): DoctorOption[] {
+  return (raw || [])
     .map((d) => ({
       uid: String(d.id || ""),
       displayName: cleanText(d.displayName || d["display_name"] || d.name),
@@ -350,11 +362,29 @@ export async function getAllReservations(): Promise<{
     }))
     .filter((d) => d.displayName)
     .sort((a, b) => a.orderNo - b.orderNo || a.displayName.localeCompare(b.displayName));
+}
 
-  return {
-    reservations,
-    doctors: doctors.length ? doctors : makeDoctorOptionsFromReservations(reservations),
-  };
+function withDoctorFallback(
+  doctors: DoctorOption[],
+  reservations: ReservationRecord[]
+): DoctorOption[] {
+  return doctors.length ? doctors : makeDoctorOptionsFromReservations(reservations);
+}
+
+export async function getAllReservations(): Promise<{
+  reservations: ReservationRecord[];
+  doctors: DoctorOption[];
+}> {
+  const result = await callReservationsApi("read_all", { from: get45DaysAgo() });
+  const reservations = mapReservationsFromApi(
+    result.reservations as Record<string, unknown>[] | undefined,
+    "date"
+  );
+  const doctors = withDoctorFallback(
+    mapDoctorsFromApi(result.doctors as Record<string, unknown>[] | undefined),
+    reservations
+  );
+  return { reservations, doctors };
 }
 
 // 클라이언트 SDK로 의사 목록 조회 (세션 내 캐싱)
@@ -386,44 +416,8 @@ async function getClientDoctors(): Promise<DoctorOption[]> {
   return doctors;
 }
 
-export async function fetchAllReservationsOnce(): Promise<{
-  reservations: ReservationRecord[];
-  doctors: DoctorOption[];
-}> {
-  const fromDate = (() => {
-    const d = new Date();
-    d.setDate(d.getDate() - 45);
-    return d.toISOString().slice(0, 10);
-  })();
-
-  const result = await callReservationsApi("read_all", { from: fromDate });
-  const rawReservations = (result.reservations as Record<string, unknown>[] | undefined) || [];
-  const rawDoctors = (result.doctors as Record<string, unknown>[] | undefined) || [];
-
-  const reservations = rawReservations
-    .map((r) => mapReservationDoc(String(r.id || ""), r))
-    .filter((item) => !item.isDeleted)
-    .sort((a, b) => {
-      const aa = `${a.reservationDate} ${a.reservationTime} ${a.name}`;
-      const bb = `${b.reservationDate} ${b.reservationTime} ${b.name}`;
-      return aa.localeCompare(bb);
-    });
-
-  const doctors: DoctorOption[] = rawDoctors
-    .map((d) => ({
-      uid: String(d.id || ""),
-      displayName: cleanText(d.displayName || d["display_name"] || d.name),
-      email: cleanText(d.email),
-      orderNo: cleanNumber(d.orderNo ?? d["order_no"]),
-    }))
-    .filter((d) => d.displayName)
-    .sort((a, b) => a.orderNo - b.orderNo || a.displayName.localeCompare(b.displayName));
-
-  return {
-    reservations,
-    doctors: doctors.length ? doctors : makeDoctorOptionsFromReservations(reservations),
-  };
-}
+// getAllReservations와 동일 동작(45일 1회 조회). 호출부 호환을 위해 별칭 유지.
+export const fetchAllReservationsOnce = getAllReservations;
 
 export function subscribeAllReservations(
   callback: (data: {
@@ -439,11 +433,7 @@ export function subscribeAllReservations(
     if (unsubscribeSnapshot) { unsubscribeSnapshot(); unsubscribeSnapshot = null; }
     if (!user) return;
 
-    const fromDate = (() => {
-      const d = new Date();
-      d.setDate(d.getDate() - 45);
-      return d.toISOString().slice(0, 10);
-    })();
+    const fromDate = get45DaysAgo();
 
     // 실시간 단일 경로: onSnapshot이 데이터를 공급. (이중 읽기 방지로 API seed 제거)
     // 의사 목록만 별도 조회.
@@ -458,14 +448,12 @@ export function subscribeAllReservations(
       (snap) => {
         // 캐시 기반 빈 스냅샷은 무시 (초기 깜빡임 방지)
         if (snap.metadata.fromCache && snap.empty) return;
-        const reservations = snap.docs
-          .map((d) => mapReservationDoc(d.id, d.data() as Record<string, unknown>))
-          .filter((item) => !item.isDeleted)
-          .sort((a, b) => {
-            const aa = `${a.reservationDate} ${a.reservationTime} ${a.name}`;
-            const bb = `${b.reservationDate} ${b.reservationTime} ${b.name}`;
-            return aa.localeCompare(bb);
-          });
+        const reservations = sortReservations(
+          snap.docs
+            .map((d) => mapReservationDoc(d.id, d.data() as Record<string, unknown>))
+            .filter((item) => !item.isDeleted),
+          "date"
+        );
         const fallback = makeDoctorOptionsFromReservations(reservations);
         callback({ reservations, doctors: latestDoctors.length ? latestDoctors : fallback });
       },
@@ -509,14 +497,12 @@ export function subscribeTimelineReservations(
       (snap) => {
         // 캐시 기반 빈 스냅샷은 무시 (초기 깜빡임 방지)
         if (snap.metadata.fromCache && snap.empty) return;
-        const reservations = snap.docs
-          .map((d) => mapReservationDoc(d.id, d.data() as Record<string, unknown>))
-          .filter((item) => !item.isDeleted)
-          .sort((a, b) => {
-            const aa = `${a.reservationTime} ${a.name}`;
-            const bb = `${b.reservationTime} ${b.name}`;
-            return aa.localeCompare(bb);
-          });
+        const reservations = sortReservations(
+          snap.docs
+            .map((d) => mapReservationDoc(d.id, d.data() as Record<string, unknown>))
+            .filter((item) => !item.isDeleted),
+          "time"
+        );
         const fallback = makeDoctorOptionsFromReservations(reservations);
         callback({ reservations, doctors: latestDoctors.length ? latestDoctors : fallback });
       },
@@ -538,32 +524,15 @@ export async function getTimelineReservations(date: string): Promise<{
   doctors: DoctorOption[];
 }> {
   const result = await callReservationsApi("read_by_date", { date });
-  const rawReservations = (result.reservations as Record<string, unknown>[] | undefined) || [];
-  const rawDoctors = (result.doctors as Record<string, unknown>[] | undefined) || [];
-
-  const reservations = rawReservations
-    .map((r) => mapReservationDoc(String(r.id || ""), r))
-    .filter((item) => !item.isDeleted)
-    .sort((a, b) => {
-      const aa = `${a.reservationTime} ${a.name}`;
-      const bb = `${b.reservationTime} ${b.name}`;
-      return aa.localeCompare(bb);
-    });
-
-  const doctors: DoctorOption[] = rawDoctors
-    .map((d) => ({
-      uid: String(d.id || ""),
-      displayName: cleanText(d.displayName || d["display_name"] || d.name),
-      email: cleanText(d.email),
-      orderNo: cleanNumber(d.orderNo ?? d["order_no"]),
-    }))
-    .filter((d) => d.displayName)
-    .sort((a, b) => a.orderNo - b.orderNo || a.displayName.localeCompare(b.displayName));
-
-  return {
-    reservations,
-    doctors: doctors.length ? doctors : makeDoctorOptionsFromReservations(reservations),
-  };
+  const reservations = mapReservationsFromApi(
+    result.reservations as Record<string, unknown>[] | undefined,
+    "time"
+  );
+  const doctors = withDoctorFallback(
+    mapDoctorsFromApi(result.doctors as Record<string, unknown>[] | undefined),
+    reservations
+  );
+  return { reservations, doctors };
 }
 
 export async function createReservation(
@@ -740,7 +709,7 @@ export async function createPatientOnly(
 // 환자 목록 인메모리 캐시 (반복 500건 스캔 억제). 생성 시 무효화.
 // 누락 방지: 서버는 isDeleted!==true만 반환하므로 캐시는 그 결과를 그대로 보관.
 let _patientsCache: { at: number; data: PatientRecord[] } | null = null;
-const PATIENTS_CACHE_TTL = 2 * 60 * 1000;
+const PATIENTS_CACHE_TTL = 10 * 60 * 1000;
 
 export function invalidatePatientsCache() {
   _patientsCache = null;

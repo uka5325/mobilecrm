@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
-import { subscribeAllReservations } from "@/lib/reservations";
+import { searchReservationsByDateRange } from "@/lib/reservations";
 import { todayString } from "@/lib/dateUtils";
 import {
   type ReservationDoc,
@@ -28,10 +28,13 @@ import { Panel } from "@/components/dashboard/Panel";
 import { KpiTable } from "@/components/dashboard/KpiTable";
 
 export default function DashboardPage() {
-  const { authReady } = useCurrentUser();
+  useCurrentUser(); // 인증 가드/리다이렉트 일관성(반환값은 불필요).
   const [allReservations, setAllReservations] = useState<ReservationDoc[]>([]);
-  const [, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [lastLoadedAt, setLastLoadedAt] = useState<Date | null>(null);
+  // 완전 온디맨드: 진입 시 자동 집계하지 않는다. 조회/퀵버튼을 눌러야 집계.
+  const [searched, setSearched] = useState(false);
 
   const [startDate, setStartDate] = useState(todayString());
   const [endDate, setEndDate] = useState(todayString());
@@ -39,22 +42,25 @@ export default function DashboardPage() {
   const [apptTypeFilter, setApptTypeFilter] = useState("");
   const [areaFilter, setAreaFilter] = useState("");
 
-  useEffect(() => {
-    if (!authReady) return;
+  // 온디맨드 조회(#5): 실시간 구독 대신 선택 기간을 1회 조회한다.
+  // KPI는 "조회 시점" 스냅샷이며, 45일 윈도우에 묶이지 않아 임의 기간(월·분기) 집계가 가능하다.
+  const load = useCallback(async (from: string, to: string) => {
+    const normFrom = from <= to ? from : to;
+    const normTo = from <= to ? to : from;
     setLoading(true);
-    const unsub = subscribeAllReservations(
-      ({ reservations }) => {
-        setAllReservations(reservations as unknown as ReservationDoc[]);
-        setLoading(false);
-      },
-      (err) => {
-        console.error(err);
-        setError("대시보드 데이터를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.");
-        setLoading(false);
-      }
-    );
-    return () => unsub();
-  }, [authReady]);
+    setError("");
+    try {
+      const list = await searchReservationsByDateRange(normFrom, normTo);
+      setAllReservations(list as unknown as ReservationDoc[]);
+      setLastLoadedAt(new Date());
+      setSearched(true);
+    } catch (e) {
+      console.error("[dashboard] load error:", e);
+      setError("대시보드 데이터를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   const reservations = useMemo(() => {
     const normalizedStart = startDate <= endDate ? startDate : endDate;
@@ -105,9 +111,13 @@ export default function DashboardPage() {
       if (!apptTypeMap[apptType]) apptTypeMap[apptType] = emptyCounter(apptType);
       accumulate(apptTypeMap[apptType], item);
 
-      const area = getConsultArea(item);
-      if (!areaMap[area]) areaMap[area] = emptyCounter(area);
-      accumulate(areaMap[area], item);
+      // 상담부위별 KPI는 '상담' 예약만 집계 — consultArea 필드는 수술/시술에선 항목명으로
+      // 재사용되므로, 상담 없이 넣은 시술(예: 온다)이 부위 행으로 잡히는 것을 방지.
+      if (apptType === "상담") {
+        const area = getConsultArea(item);
+        if (!areaMap[area]) areaMap[area] = emptyCounter(area);
+        accumulate(areaMap[area], item);
+      }
     });
 
     const finalizedSummary = finalizeCounter(summary);
@@ -151,10 +161,12 @@ export default function DashboardPage() {
       .sort((a, b) => b.total - a.total);
   }, [filteredRows]);
 
-  function handleQuickRange(type: "today" | "week" | "month" | "last7" | "last30") {
+  function handleQuickRange(type: "today" | "week" | "month" | "lastMonth" | "last7" | "last30") {
     const range = setQuickRange(type);
     setStartDate(range.start);
     setEndDate(range.end);
+    // 빠른 범위 선택은 명시적 조회 의도 → 즉시 해당 기간을 조회.
+    load(range.start, range.end);
   }
 
   function resetFilters() {
@@ -226,6 +238,13 @@ export default function DashboardPage() {
             ))}
           </select>
           <button
+            onClick={() => load(startDate, endDate)}
+            disabled={loading}
+            className="h-10 shrink-0 rounded-xl bg-[#1d9e75] px-4 text-sm font-medium text-white transition hover:-translate-y-0.5 hover:shadow-md active:scale-95 disabled:opacity-60"
+          >
+            {loading ? "조회 중…" : "조회"}
+          </button>
+          <button
             onClick={resetFilters}
             className="h-10 shrink-0 rounded-xl bg-black px-4 text-sm font-medium text-white transition hover:-translate-y-0.5 hover:shadow-md active:scale-95"
           >
@@ -234,17 +253,30 @@ export default function DashboardPage() {
         </div>
 
         <div className="mt-3 flex gap-2 overflow-x-auto [&::-webkit-scrollbar]:hidden">
-          <QuickButton onClick={() => handleQuickRange("today")}>오늘</QuickButton>
           <QuickButton onClick={() => handleQuickRange("week")}>이번 주</QuickButton>
           <QuickButton onClick={() => handleQuickRange("month")}>이번 달</QuickButton>
-          <QuickButton onClick={() => handleQuickRange("last30")}>지난 30일</QuickButton>
+          <QuickButton onClick={() => handleQuickRange("lastMonth")}>전달</QuickButton>
         </div>
 
         <div className="mt-3 text-xs text-gray-400">
-          {error ? error : `집계 모드 · 표시 ${filteredRows.length.toLocaleString("ko-KR")}건`}
+          {error
+            ? error
+            : `${
+                loading
+                  ? "조회 중…"
+                  : lastLoadedAt
+                  ? `${String(lastLoadedAt.getHours()).padStart(2, "0")}:${String(lastLoadedAt.getMinutes()).padStart(2, "0")} 조회 기준`
+                  : "조회 대기"
+              } · 표시 ${filteredRows.length.toLocaleString("ko-KR")}건`}
         </div>
       </section>
 
+      {!searched ? (
+        <div className="flex items-center justify-center rounded-2xl border border-[#edf0f3] bg-white py-20 text-sm text-gray-400">
+          기간을 선택하고 조회를 누르세요.
+        </div>
+      ) : (
+      <>
       {/* 유형별 현황 + 취소 */}
       <section className="grid grid-cols-2 gap-3 md:grid-cols-3">
         {(["상담", "수술", "시술", "치료", "경과", "진료", "검진"] as const).map((type) => {
@@ -342,6 +374,8 @@ export default function DashboardPage() {
             ])}
         />
       </Panel>
+      </>
+      )}
     </div>
   );
 }

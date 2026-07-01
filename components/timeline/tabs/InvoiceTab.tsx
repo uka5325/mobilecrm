@@ -409,7 +409,7 @@ export function InvoiceTab({ reservationDocId, patientId, currentUser, appointme
       {/* 이 예약 인보이스 없으면 생성 버튼 */}
       {!thisReservationInvoice && (
         <div className="rounded-2xl border-2 border-dashed border-[#dfe3e8] p-4 text-center">
-          {appointmentType === "수술" ? (() => {
+          {(appointmentType === "수술" || appointmentType === "시술") ? (() => {
             const canCreate = currentUser.role === "admin" ||
               (coordinators ?? []).includes(currentUser.displayName);
             return canCreate ? (
@@ -427,7 +427,7 @@ export function InvoiceTab({ reservationDocId, patientId, currentUser, appointme
               <div className="text-sm text-gray-400">담당 코디네이터만 인보이스를 생성할 수 있습니다.</div>
             );
           })() : (
-            <div className="text-sm text-gray-400">수술 예약 건만 인보이스를 생성할 수 있습니다.</div>
+            <div className="text-sm text-gray-400">수술·시술 예약 건만 인보이스를 생성할 수 있습니다.</div>
           )}
         </div>
       )}

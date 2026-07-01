@@ -336,6 +336,19 @@ export async function POST(req: NextRequest) {
       const HARD_CAP = 1000;
       const base = adminDb.collection("invoices").where("isDeleted", "==", false);
 
+      // 날짜(기간)가 오면 surgeryDate 범위를 Firestore 쿼리로 내려 "해당 기간 문서만" 읽는다(읽기 절감).
+      // 미전달 시 기존 createdAt 최신순 경로로 폴백. surgeryDate는 "YYYY-MM-DD" 문자열이라 사전식 범위가 날짜순과 일치.
+      // 인덱스: (isDeleted, surgeryDate) / (coordinatorUids⊃, isDeleted, surgeryDate) / (coordinators⊃, isDeleted, surgeryDate)
+      //         + 폴백용 createdAt 인덱스 — firestore.indexes.json 참고.
+      // 주의: surgeryDate가 빈 인보이스는 범위 조회에서 제외됨(생성 시 reservationDate로 채워지므로 정상 케이스엔 영향 없음).
+      const hasRange = !!(startDate || endDate);
+      const sd = startDate || "0000-00-00";
+      const ed = endDate || "9999-99-99";
+      const applyScope = (q: FirebaseFirestore.Query): FirebaseFirestore.Query =>
+        hasRange
+          ? q.where("surgeryDate", ">=", sd).where("surgeryDate", "<=", ed).orderBy("surgeryDate", "desc").limit(HARD_CAP)
+          : q.orderBy("createdAt", "desc").limit(HARD_CAP);
+
       const docsMap = new Map<string, FirebaseFirestore.DocumentData>();
       let rawCount = 0;
       const collect = (snap: FirebaseFirestore.QuerySnapshot) => {
@@ -344,17 +357,13 @@ export async function POST(req: NextRequest) {
       };
 
       if (isAdmin) {
-        collect(await base.orderBy("createdAt", "desc").limit(HARD_CAP).get());
+        collect(await applyScope(base).get());
       } else {
         const queries: Promise<FirebaseFirestore.QuerySnapshot>[] = [
-          base.where("coordinatorUids", "array-contains", callerUid)
-            .orderBy("createdAt", "desc").limit(HARD_CAP).get(),
+          applyScope(base.where("coordinatorUids", "array-contains", callerUid)).get(),
         ];
         if (callerName) {
-          queries.push(
-            base.where("coordinators", "array-contains", callerName)
-              .orderBy("createdAt", "desc").limit(HARD_CAP).get()
-          );
+          queries.push(applyScope(base.where("coordinators", "array-contains", callerName)).get());
         }
         (await Promise.all(queries)).forEach(collect);
       }
@@ -362,24 +371,14 @@ export async function POST(req: NextRequest) {
       // 단일 쿼리가 상한에 닿으면 일부 누락 가능 → UI 경고용 플래그.
       const capped = rawCount >= HARD_CAP;
 
-      // 병합 후 createdAt 최신순 재정렬(서버 필터로 isDeleted/권한은 이미 보장).
+      // 병합 후 재정렬: 범위 조회면 surgeryDate desc, 폴백이면 createdAt desc.
+      // (날짜 필터는 쿼리로 내렸으므로 메모리 후필터 불필요.)
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       let records = Array.from(docsMap.values()).sort((a: any, b: any) =>
-        Number(b.createdAt || 0) - Number(a.createdAt || 0)
+        hasRange
+          ? String(b.surgeryDate || "").localeCompare(String(a.surgeryDate || ""))
+          : Number(b.createdAt || 0) - Number(a.createdAt || 0)
       );
-
-      // 날짜 필터: surgeryDate 있으면 surgeryDate 기준, 없으면 createdAt 기준
-      if (startDate || endDate) {
-        const sd = startDate || "0000-00-00";
-        const ed = endDate   || "9999-99-99";
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        records = records.filter((r: any) => {
-          const ts = r.createdAt;
-          const fallback = ts ? new Date(typeof ts === "number" ? ts : Number(ts)).toISOString().slice(0, 10) : "";
-          const effectiveDate = r.surgeryDate ? String(r.surgeryDate) : fallback;
-          return effectiveDate >= sd && effectiveDate <= ed;
-        });
-      }
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       if (status) records = records.filter((r: any) => r.status === status);
       if (patientName) {

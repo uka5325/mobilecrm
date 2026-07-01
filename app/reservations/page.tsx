@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { DetailDrawer } from "@/components/timeline/DetailDrawer";
 import {
   deleteReservation,
@@ -57,17 +57,15 @@ function invalidateHistoryCache(patientId: string) {
 }
 
 export default function ReservationsPage() {
-  const { currentUser, authReady, firebaseReady } = useCurrentUser();
-  const { reservations, loading, refresh } = useReservationData(
-    currentUser,
-    authReady,
-    firebaseReady
-  );
+  const { currentUser, authReady } = useCurrentUser();
+  const { reservations, loading, refresh } = useReservationData(authReady);
 
   const [search, setSearch] = useState("");
   const [groupPage, setGroupPage] = useState(1);
-  const PAGE_SIZE = 20;
+  const PAGE_SIZE = 10;
   const [patients, setPatients] = useState<PatientRecord[]>([]);
+  // 전체 환자 목록을 이미 로드했는지(지연 로드): 검색을 시작할 때 1회만 로드한다.
+  const patientsLoadedRef = useRef(false);
 
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [importDrawerOpen, setImportDrawerOpen] = useState(false);
@@ -291,10 +289,15 @@ export default function ReservationsPage() {
 
   useEffect(() => { setGroupPage(1); }, [search]);
 
+  // 지연 로드: 진입 시 환자 전체(최대 2,000)를 읽지 않는다. 기본 화면은 최근 예약 환자(구독 데이터)로 구성.
+  // 검색을 시작할 때만 전체 환자 목록을 1회 로드(이후 search 변경은 로컬 필터, 캐시 10분).
   useEffect(() => {
     if (!authReady) return;
-    listPatients().then(setPatients);
-  }, [authReady]);
+    if (search.trim() && !patientsLoadedRef.current) {
+      patientsLoadedRef.current = true;
+      listPatients().then(setPatients);
+    }
+  }, [authReady, search]);
 
   const pagedGroups = useMemo(() => {
     const start = (groupPage - 1) * PAGE_SIZE;
@@ -851,8 +854,8 @@ export default function ReservationsPage() {
           initialPatient={addPatient}
           mode={addPatient ? "reservation" : "register"}
           onCreated={addPatient
-            ? () => { refresh(); listPatients().then(setPatients); }
-            : () => { listPatients().then(setPatients); }
+            ? () => { refresh(); if (patientsLoadedRef.current) listPatients().then(setPatients); }
+            : () => { if (patientsLoadedRef.current) listPatients().then(setPatients); }
           }
         />
       )}

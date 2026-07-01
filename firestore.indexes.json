@@ -68,6 +68,32 @@
       ]
     },
     {
+      "collectionGroup": "invoices",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "isDeleted", "order": "ASCENDING" },
+        { "fieldPath": "surgeryDate", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "invoices",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "coordinatorUids", "arrayConfig": "CONTAINS" },
+        { "fieldPath": "isDeleted", "order": "ASCENDING" },
+        { "fieldPath": "surgeryDate", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "invoices",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "coordinators", "arrayConfig": "CONTAINS" },
+        { "fieldPath": "isDeleted", "order": "ASCENDING" },
+        { "fieldPath": "surgeryDate", "order": "DESCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "patients",
       "queryScope": "COLLECTION",
       "fields": [

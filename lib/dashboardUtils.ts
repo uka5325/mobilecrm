@@ -324,7 +324,7 @@ export function pctText(value: number) {
   return `${Number(value || 0).toFixed(1).replace(".0", "")}%`;
 }
 
-export function setQuickRange(type: "today" | "week" | "month" | "last7" | "last30") {
+export function setQuickRange(type: "today" | "week" | "month" | "lastMonth" | "last7" | "last30") {
   const now = new Date();
   let start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   let end = new Date(start.getTime());
@@ -340,6 +340,11 @@ export function setQuickRange(type: "today" | "week" | "month" | "last7" | "last
   if (type === "month") {
     start = new Date(now.getFullYear(), now.getMonth(), 1);
     end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+  }
+
+  if (type === "lastMonth") {
+    start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    end = new Date(now.getFullYear(), now.getMonth(), 0);
   }
 
   if (type === "last7") start.setDate(start.getDate() - 6);
