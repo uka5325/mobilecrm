@@ -1,12 +1,14 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { DetailDrawer } from "@/components/timeline/DetailDrawer";
 import {
   deleteReservation,
   updateReservationFull,
-  getPatientReservationHistory,
-  listPatients,
+  getPatientFullHistoryCached,
+  getCachedPatientFullHistory,
+  invalidatePatientFullHistoryCache,
+  searchPatients,
   type ReservationRecord,
   type AppointmentType,
   type PatientRecord,
@@ -23,39 +25,6 @@ import { getReservationNotes, addReservationNote, updateReservationNote, deleteR
 import { toDate } from "@/lib/settingsUtils";
 
 
-const HISTORY_CACHE_PREFIX = "crm_history_";
-const HISTORY_CACHE_TTL = 3 * 60 * 1000;
-
-type HistoryCacheEntry = {
-  reservations: ReservationRecord[];
-  nextCursor: string | null;
-  hasMore: boolean;
-  cachedAt: number;
-};
-
-function getHistoryCache(patientId: string): HistoryCacheEntry | null {
-  try {
-    const raw = localStorage.getItem(HISTORY_CACHE_PREFIX + patientId);
-    if (!raw) return null;
-    const parsed: HistoryCacheEntry = JSON.parse(raw);
-    if (Date.now() - parsed.cachedAt > HISTORY_CACHE_TTL) return null;
-    return parsed;
-  } catch { return null; }
-}
-
-function setHistoryCache(patientId: string, entry: Omit<HistoryCacheEntry, "cachedAt">) {
-  try {
-    localStorage.setItem(
-      HISTORY_CACHE_PREFIX + patientId,
-      JSON.stringify({ ...entry, cachedAt: Date.now() })
-    );
-  } catch {}
-}
-
-function invalidateHistoryCache(patientId: string) {
-  try { localStorage.removeItem(HISTORY_CACHE_PREFIX + patientId); } catch {}
-}
-
 export default function ReservationsPage() {
   const { currentUser, authReady } = useCurrentUser();
   const { reservations, loading, refresh } = useReservationData(authReady);
@@ -64,8 +33,6 @@ export default function ReservationsPage() {
   const [groupPage, setGroupPage] = useState(1);
   const PAGE_SIZE = 10;
   const [patients, setPatients] = useState<PatientRecord[]>([]);
-  // 전체 환자 목록을 이미 로드했는지(지연 로드): 검색을 시작할 때 1회만 로드한다.
-  const patientsLoadedRef = useRef(false);
 
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [importDrawerOpen, setImportDrawerOpen] = useState(false);
@@ -96,17 +63,14 @@ export default function ReservationsPage() {
   const [downloading, setDownloading] = useState(false);
   const [pageError, setPageError] = useState("");
 
-  // 환자 전체 이력
+  // 환자 전체 이력 (라이브 윈도우와 무관, 온디맨드 + 세션 캐시 — lib/reservations.ts 공유 캐시)
   const [historyPatientId, setHistoryPatientId] = useState<string | null>(null);
   const [historyPatientName, setHistoryPatientName] = useState("");
   const [historyList, setHistoryList] = useState<ReservationRecord[]>([]);
-  const [historyNextCursor, setHistoryNextCursor] = useState<string | null>(null);
-  const [historyHasMore, setHistoryHasMore] = useState(false);
+  const [historyCapped, setHistoryCapped] = useState(false);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState("");
   const [historyEditTarget, setHistoryEditTarget] = useState<ReservationRecord | null>(null);
-  const [historyPage, setHistoryPage] = useState(1);
-  const [historyCursorStack, setHistoryCursorStack] = useState<(string | null)[]>([]);
 
   async function handleHistoryDelete(r: ReservationRecord) {
     if (!currentUser) return;
@@ -114,77 +78,34 @@ export default function ReservationsPage() {
     const result = await deleteReservation(r.id, r.reservationId, currentUser);
     if (result.success) {
       setHistoryList((prev) => prev.filter((x) => x.id !== r.id));
-      if (historyPatientId) invalidateHistoryCache(historyPatientId);
+      if (historyPatientId) invalidatePatientFullHistoryCache(historyPatientId);
     } else {
       alert(result.message || "삭제 실패");
     }
   }
 
-
   async function openPatientHistory(patientId: string, name: string) {
     setHistoryPatientId(patientId);
     setHistoryPatientName(name);
-    setHistoryPage(1);
-    setHistoryCursorStack([]);
     setHistoryError("");
 
-    const cached = getHistoryCache(patientId);
+    const cached = getCachedPatientFullHistory(patientId);
     if (cached) {
       setHistoryList(cached.reservations);
-      setHistoryNextCursor(cached.nextCursor);
-      setHistoryHasMore(cached.hasMore);
+      setHistoryCapped(cached.capped);
       setHistoryLoading(false);
       return;
     }
 
     setHistoryList([]);
-    setHistoryNextCursor(null);
-    setHistoryHasMore(false);
+    setHistoryCapped(false);
     setHistoryLoading(true);
     try {
-      const result = await getPatientReservationHistory(patientId);
+      const result = await getPatientFullHistoryCached(patientId);
       setHistoryList(result.reservations);
-      setHistoryNextCursor(result.nextCursor);
-      setHistoryHasMore(result.hasMore);
-      setHistoryCache(patientId, result);
+      setHistoryCapped(result.capped);
     } catch (e) {
       setHistoryError(e instanceof Error ? e.message : "이력 조회 중 오류가 발생했습니다.");
-    } finally {
-      setHistoryLoading(false);
-    }
-  }
-
-  async function loadNextHistory() {
-    if (!historyPatientId || !historyNextCursor) return;
-    setHistoryLoading(true);
-    try {
-      const result = await getPatientReservationHistory(historyPatientId, historyNextCursor);
-      setHistoryCursorStack((prev) => [...prev, historyNextCursor]);
-      setHistoryList(result.reservations);
-      setHistoryNextCursor(result.nextCursor);
-      setHistoryHasMore(result.hasMore);
-      setHistoryPage((p) => p + 1);
-    } catch (e) {
-      setHistoryError(e instanceof Error ? e.message : "추가 로드 중 오류가 발생했습니다.");
-    } finally {
-      setHistoryLoading(false);
-    }
-  }
-
-  async function loadPrevHistory() {
-    if (!historyPatientId || historyPage <= 1) return;
-    const stack = [...historyCursorStack];
-    const prevCursor = stack.pop() ?? null;
-    setHistoryCursorStack(stack);
-    setHistoryLoading(true);
-    try {
-      const result = await getPatientReservationHistory(historyPatientId, prevCursor ?? undefined);
-      setHistoryList(result.reservations);
-      setHistoryNextCursor(result.nextCursor);
-      setHistoryHasMore(result.hasMore);
-      setHistoryPage((p) => p - 1);
-    } catch (e) {
-      setHistoryError(e instanceof Error ? e.message : "이전 페이지 로드 중 오류가 발생했습니다.");
     } finally {
       setHistoryLoading(false);
     }
@@ -289,14 +210,16 @@ export default function ReservationsPage() {
 
   useEffect(() => { setGroupPage(1); }, [search]);
 
-  // 지연 로드: 진입 시 환자 전체(최대 2,000)를 읽지 않는다. 기본 화면은 최근 예약 환자(구독 데이터)로 구성.
-  // 검색을 시작할 때만 전체 환자 목록을 1회 로드(이후 search 변경은 로컬 필터, 캐시 10분).
+  // 검색토큰 기반 서버 검색: 진입 시 환자 전체(최대 2,000)를 읽지 않는다. 기본 화면은 최근 예약 환자(구독 데이터).
+  // 검색어 입력 시(디바운스 300ms) 매칭된 환자만 서버에서 읽는다. 빈 검색이면 환자 목록 비움(예약 기반 유지).
   useEffect(() => {
     if (!authReady) return;
-    if (search.trim() && !patientsLoadedRef.current) {
-      patientsLoadedRef.current = true;
-      listPatients().then(setPatients);
-    }
+    const t = search.trim();
+    if (!t) { setPatients([]); return; }
+    const handle = setTimeout(() => {
+      searchPatients(t).then(setPatients).catch(() => {});
+    }, 300);
+    return () => clearTimeout(handle);
   }, [authReady, search]);
 
   const pagedGroups = useMemo(() => {
@@ -355,6 +278,7 @@ export default function ReservationsPage() {
       );
       setInlineEditId(null);
       setInlineForm(null);
+      invalidatePatientFullHistoryCache(item.patientId);
       await refresh();
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -541,6 +465,7 @@ export default function ReservationsPage() {
       }
       setPatientEditId(null);
       setPatientEditForm(null);
+      invalidatePatientFullHistoryCache(group.patientId);
       await refresh();
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -563,6 +488,7 @@ export default function ReservationsPage() {
         return;
       }
     }
+    invalidatePatientFullHistoryCache(group.patientId);
     await refresh();
   }
 
@@ -599,6 +525,7 @@ export default function ReservationsPage() {
       },
       currentUser
     );
+    invalidatePatientFullHistoryCache(item.patientId);
     await refresh();
   }
 
@@ -614,6 +541,7 @@ export default function ReservationsPage() {
       setPageError(result.message || "예약 삭제 권한이 없습니다.");
       return;
     }
+    invalidatePatientFullHistoryCache(item.patientId);
     await refresh();
   }
 
@@ -741,6 +669,11 @@ export default function ReservationsPage() {
               <button onClick={() => setHistoryPatientId(null)} className="text-2xl leading-none text-gray-400 hover:text-gray-700">×</button>
             </div>
             {historyError && <div className="mb-2 text-sm text-red-500">{historyError}</div>}
+            {historyCapped && (
+              <div className="mb-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700">
+                이력이 300건을 초과하여 최신 300건만 표시됩니다. 더 보시려면 지원팀에 문의해주세요.
+              </div>
+            )}
             {historyLoading && historyList.length === 0 ? (
               <div className="py-8 text-center text-sm text-gray-400">로딩 중...</div>
             ) : historyList.length === 0 ? (
@@ -771,19 +704,6 @@ export default function ReservationsPage() {
                 ))}
               </div>
             )}
-            <div className="mt-3 flex items-center justify-between gap-2">
-              <button
-                onClick={loadPrevHistory}
-                disabled={historyPage <= 1 || historyLoading}
-                className="rounded-xl border border-[#dfe3e8] px-3 py-1.5 text-sm text-gray-600 transition hover:bg-gray-50 disabled:opacity-30"
-              >← 이전</button>
-              <span className="text-xs text-gray-400">{historyPage}페이지</span>
-              <button
-                onClick={loadNextHistory}
-                disabled={!historyHasMore || historyLoading}
-                className="rounded-xl border border-[#dfe3e8] px-3 py-1.5 text-sm text-gray-600 transition hover:bg-gray-50 disabled:opacity-30"
-              >{historyLoading ? "로딩 중..." : "다음 →"}</button>
-            </div>
           </div>
         </div>
       )}
@@ -797,7 +717,7 @@ export default function ReservationsPage() {
           onRefreshLatestLog={async () => {}}
           onRefresh={() => {
             if (historyPatientId) {
-              invalidateHistoryCache(historyPatientId);
+              invalidatePatientFullHistoryCache(historyPatientId);
               openPatientHistory(historyPatientId, historyPatientName);
             }
           }}
@@ -854,8 +774,8 @@ export default function ReservationsPage() {
           initialPatient={addPatient}
           mode={addPatient ? "reservation" : "register"}
           onCreated={addPatient
-            ? () => { refresh(); if (patientsLoadedRef.current) listPatients().then(setPatients); }
-            : () => { if (patientsLoadedRef.current) listPatients().then(setPatients); }
+            ? () => { invalidatePatientFullHistoryCache(addPatient.patientId); refresh(); const t = search.trim(); if (t) searchPatients(t).then(setPatients).catch(() => {}); }
+            : () => { const t = search.trim(); if (t) searchPatients(t).then(setPatients).catch(() => {}); }
           }
         />
       )}

@@ -5,6 +5,7 @@ import type { ReservationRecord, AppointmentType } from "@/lib/reservations";
 import { APPOINTMENT_TYPES } from "@/lib/reservations";
 import { getReservationBirthInfo } from "@/lib/reservationUtils";
 import { getInvoiceCountByPatientId, getCachedInvoiceCount } from "@/lib/invoices";
+import { getPatientFullHistoryCached, getCachedPatientFullHistory } from "@/lib/reservations";
 import { PatientInvoiceModal } from "./PatientInvoiceModal";
 
 export type PatientGroup = {
@@ -224,6 +225,28 @@ export function ReservationsTable({
     });
   }, [patientGroups]);
 
+  // 환자 카드 배지("총 건수"/예약금/수술비용/부위)를 라이브 윈도우(45일)와 무관하게
+  // 정확히 표시하기 위한 전체 이력 지연 로드 — invoiceCounts와 동일한 구조.
+  const [fullHistory, setFullHistory] = useState<Record<string, ReservationRecord[]>>({});
+  const fullHistoryRef = useRef<Record<string, ReservationRecord[]>>({});
+  useEffect(() => { fullHistoryRef.current = fullHistory; }, [fullHistory]);
+
+  useEffect(() => {
+    if (!patientGroups.length) return;
+    patientGroups.forEach((g) => {
+      const pid = g.patientId || g.patientKey;
+      if (!pid || pid in fullHistoryRef.current) return;
+      const cached = getCachedPatientFullHistory(pid);
+      if (cached) {
+        setFullHistory((prev) => ({ ...prev, [pid]: cached.reservations }));
+        return;
+      }
+      getPatientFullHistoryCached(pid)
+        .then((result) => setFullHistory((prev) => ({ ...prev, [pid]: result.reservations })))
+        .catch(() => {});
+    });
+  }, [patientGroups]);
+
   function toggleAmountPopover(groupKey: string, type: "deposit" | "surgery") {
     setAmountPopover((prev) =>
       prev?.groupKey === groupKey && prev.type === type ? null : { groupKey, type }
@@ -343,11 +366,16 @@ export function ReservationsTable({
       gender: group.gender,
     } as Parameters<typeof getReservationBirthInfo>[0]);
 
-    const surgeryReserved = group.reservations.some((r) => r.surgeryReserved);
-    const consultAreas = getConsultAreas(group.reservations, "상담");
-    const surgeryAreas = getConsultAreas(group.reservations, "수술");
+    // 라이브 윈도우(45일)와 무관한 정확한 배지: 전체 이력 로딩 전에는 group.reservations로
+    // fallback(0/빈 값 깜빡임 방지), 로딩 완료 시 전체 이력으로 교체.
+    const pid = group.patientId || group.patientKey;
+    const fullList = fullHistory[pid] ?? group.reservations;
 
-    const makeKey = (r: typeof group.reservations[0]) => [
+    const surgeryReserved = fullList.some((r) => r.surgeryReserved);
+    const consultAreas = getConsultAreas(fullList, "상담");
+    const surgeryAreas = getConsultAreas(fullList, "수술");
+
+    const makeKey = (r: typeof fullList[0]) => [
       (r.hospital || "").trim().toLowerCase(),
       (r.consultArea || "").trim().toLowerCase(),
       (r.doctors || []).map((d) => d.trim().toLowerCase()).sort().join(","),
@@ -355,7 +383,7 @@ export function ReservationsTable({
 
     const depositRows = (() => {
       const seen = new Set<string>();
-      return [...group.reservations]
+      return [...fullList]
         .sort((a, b) => (b.depositAmount ? 1 : 0) - (a.depositAmount ? 1 : 0))
         .filter((r) => {
           if (!r.depositAmount) return false;
@@ -368,7 +396,7 @@ export function ReservationsTable({
     })();
     const surgeryRows = (() => {
       const seen = new Set<string>();
-      return [...group.reservations]
+      return [...fullList]
         .sort((a, b) => (b.surgeryCost ? 1 : 0) - (a.surgeryCost ? 1 : 0))
         .filter((r) => {
           if (!r.surgeryCost) return false;
@@ -552,7 +580,7 @@ export function ReservationsTable({
                 삭제
               </button>
               <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-semibold text-blue-700">
-                총 {group.reservations.length}건
+                총 {fullList.length}건
               </span>
             </div>
           </div>
