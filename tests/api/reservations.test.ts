@@ -127,3 +127,40 @@ test("create: 동일 reservationId로 재요청하면 중복으로 거부된다"
   assert.equal(secondBody.success, false);
   assert.equal(secondBody.duplicate, true);
 });
+
+test("patient_full_history_batch: 여러 환자의 오래된 이력을 한 번에 묶어서 반환한다", async () => {
+  __resetStaffCacheForTests();
+
+  const oldRef1 = adminDb.collection("reservations").doc();
+  const oldRef2 = adminDb.collection("reservations").doc();
+  const recentRef = adminDb.collection("reservations").doc();
+  createdReservationDocIds.push(oldRef1.id, oldRef2.id, recentRef.id);
+
+  await oldRef1.set({
+    reservationId: `R-OLD1-${Date.now()}`, name: "배치환자1", patientId: "P-BATCH-1",
+    reservationDate: "2026-01-01", doctors: [], isDeleted: false,
+  });
+  await oldRef2.set({
+    reservationId: `R-OLD2-${Date.now()}`, name: "배치환자2", patientId: "P-BATCH-2",
+    reservationDate: "2026-02-01", doctors: [], isDeleted: false,
+  });
+  // 컷오프(2026-06-01)보다 최근 — 배치 결과에 포함되면 안 된다(라이브 구독이 이미 갖고 있는 데이터).
+  await recentRef.set({
+    reservationId: `R-RECENT-${Date.now()}`, name: "배치환자1", patientId: "P-BATCH-1",
+    reservationDate: "2026-06-15", doctors: [], isDeleted: false,
+  });
+
+  const res = await POST(
+    makeReq(staff.idToken, "patient_full_history_batch", {
+      patientIds: ["P-BATCH-1", "P-BATCH-2", "P-BATCH-NONE"],
+      before: "2026-06-01",
+    })
+  );
+  assert.equal(res.status, 200);
+  const body = await res.json();
+  assert.equal(body.success, true);
+  assert.equal(body.byPatient["P-BATCH-1"].length, 1);
+  assert.equal(body.byPatient["P-BATCH-1"][0].reservationDate, "2026-01-01");
+  assert.equal(body.byPatient["P-BATCH-2"].length, 1);
+  assert.deepEqual(body.byPatient["P-BATCH-NONE"], []);
+});

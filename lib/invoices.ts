@@ -196,6 +196,24 @@ export async function getInvoiceCountByPatientId(patientId: string): Promise<num
   return invoices.length;
 }
 
+// 여러 환자의 인보이스 개수를 "1번의 배치 요청"으로 채운다. 고객관리 카드 배지가
+// 환자마다 getInvoiceCountByPatientId를 따로 부르면 서버 왕복이 N번 생기므로,
+// 아직 캐시가 없는 환자만 모아 counts_by_patients로 한 번에 받는다.
+export async function warmInvoiceCountCache(patientIds: string[]): Promise<void> {
+  const stale = [...new Set(patientIds.filter(Boolean))].filter(
+    (pid) => getCachedInvoiceCount(pid) === undefined
+  );
+  if (!stale.length) return;
+
+  const result = await callInvoicesApi("counts_by_patients", { patientIds: stale });
+  if (!result.success) return;
+  const counts = (result.counts as Record<string, number> | undefined) || {};
+  const now = Date.now();
+  for (const pid of stale) {
+    _invoiceCountCache.set(pid, { at: now, count: counts[pid] ?? 0 });
+  }
+}
+
 export async function getInvoiceByReservationDocId(reservationDocId: string) {
   const result = await callInvoicesApi("get_by_reservation", { reservationDocId });
   if (!result.success || !result.invoice) return null;

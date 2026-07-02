@@ -87,6 +87,50 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: true, invoices });
     }
 
+    // ── COUNTS_BY_PATIENTS ───────────────────────────────────────────────────
+    // 고객관리 카드의 "인보이스 개수" 배지 — 환자마다 전체 문서를 읽어(get_by_patient)
+    // 길이만 쓰던 걸, 여러 환자를 한 번에 처리한다.
+    // admin: 환자별 count() 집계(문서 내용을 안 읽고 개수만 셈 → 인보이스 개수와 무관하게 항상 1 읽기).
+    // 그 외 역할: coordinatorUids/coordinators 필터가 문서 단위라 count()로 못 구하므로,
+    //   patientId in [...] 배치 조회 1번 + 메모리 필터로 집계(왕복 횟수만 줄임).
+    if (action === "counts_by_patients") {
+      const { patientIds } = (payload || {}) as { patientIds?: string[] };
+      const ids = Array.isArray(patientIds) ? [...new Set(patientIds.filter(Boolean))] : [];
+      if (!ids.length) return NextResponse.json({ success: true, counts: {} });
+
+      const counts: Record<string, number> = {};
+
+      if (isAdmin) {
+        await Promise.all(
+          ids.map(async (pid) => {
+            const agg = await adminDb.collection("invoices")
+              .where("patientId", "==", pid)
+              .where("isDeleted", "==", false)
+              .count()
+              .get();
+            counts[pid] = agg.data().count;
+          })
+        );
+      } else {
+        for (const id of ids) counts[id] = 0;
+        const CHUNK = 30; // Firestore in 최대 30개
+        for (let i = 0; i < ids.length; i += CHUNK) {
+          const chunk = ids.slice(i, i + CHUNK);
+          const snap = await adminDb.collection("invoices")
+            .where("patientId", "in", chunk)
+            .get();
+          for (const d of snap.docs) {
+            const obj = docToObj(d);
+            if (obj.isDeleted || !isCoordinatorOf(obj)) continue;
+            const pid = String(obj.patientId || "");
+            if (pid in counts) counts[pid] += 1;
+          }
+        }
+      }
+
+      return NextResponse.json({ success: true, counts });
+    }
+
     // ── GET_BY_RESERVATION ───────────────────────────────────────────────────
     if (action === "get_by_reservation") {
       const { reservationDocId } = payload as { reservationDocId: string };
