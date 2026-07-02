@@ -1,15 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { usePathname } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
-import type { User } from "firebase/auth";
-import { getStaffByUid, listenCurrentUser, logout } from "@/lib/auth";
-import type { StaffUser } from "@/lib/auth";
-import { clearAllClientCaches, clearFirestorePersistence } from "@/lib/clientCache";
+import { logout } from "@/lib/auth";
 import { ReservationsProvider } from "@/components/ReservationsProvider";
 import { TodayMemosProvider } from "@/components/TodayMemosProvider";
+import { CurrentUserProvider, useCurrentUserContext } from "@/components/CurrentUserProvider";
 
 type AppShellProps = {
   children: ReactNode;
@@ -60,52 +58,6 @@ const pageInfo: Record<string, { title: string; description: string }> = {
   },
 };
 
-const STAFF_CACHE_KEY = "arc_crm_staff_user";
-
-function getCachedStaff(): StaffUser | null {
-  if (typeof window === "undefined") return null;
-
-  try {
-    const cached = sessionStorage.getItem(STAFF_CACHE_KEY);
-    return cached ? JSON.parse(cached) : null;
-  } catch {
-    return null;
-  }
-}
-
-function setCachedStaff(staff: StaffUser) {
-  if (typeof window === "undefined") return;
-
-  try {
-    sessionStorage.setItem(STAFF_CACHE_KEY, JSON.stringify(staff));
-  } catch {
-    // ignore
-  }
-}
-
-function clearCachedStaff() {
-  if (typeof window === "undefined") return;
-
-  try {
-    sessionStorage.removeItem(STAFF_CACHE_KEY);
-  } catch {
-    // ignore
-  }
-}
-
-function isSameStaff(a: StaffUser | null, b: StaffUser | null) {
-  if (!a || !b) return false;
-
-  return (
-    a.uid === b.uid &&
-    a.displayName === b.displayName &&
-    a.email === b.email &&
-    a.role === b.role &&
-    a.active === b.active &&
-    a.staffCode === b.staffCode
-  );
-}
-
 function LoadingScreen() {
   return (
     <main className="flex min-h-screen items-center justify-center bg-white">
@@ -118,16 +70,22 @@ function LoadingScreen() {
 }
 
 export default function AppShell({ children }: AppShellProps) {
-  const router = useRouter();
+  return (
+    <CurrentUserProvider>
+      <AppShellContent>{children}</AppShellContent>
+    </CurrentUserProvider>
+  );
+}
+
+function AppShellContent({ children }: AppShellProps) {
   const pathname = usePathname();
+  const { currentUser: staffUser, authReady, firebaseUser } = useCurrentUserContext();
+  const loading = !authReady;
 
   const isLoginPage = pathname === "/login";
   const isTimelinePage = pathname.startsWith("/timeline") || pathname.startsWith("/schedule") || pathname.startsWith("/reservations") || pathname.startsWith("/dashboard") || pathname.startsWith("/invoice") || pathname.startsWith("/commission");
 
   const [mounted, setMounted] = useState(false);
-  const [firebaseUser, setFirebaseUser] = useState<User | null>(null);
-  const [staffUser, setStaffUser] = useState<StaffUser | null>(null);
-  const [loading, setLoading] = useState(true);
   const [isOnline, setIsOnline] = useState(true);
 
   const currentPage = useMemo(() => {
@@ -159,166 +117,9 @@ export default function AppShell({ children }: AppShellProps) {
     };
   }, []);
 
-  const refreshStaff = useCallback(
-    async (user: User | null = firebaseUser, options?: { silent?: boolean }) => {
-      if (isLoginPage) {
-        setLoading(false);
-        return;
-      }
-
-      if (!user) {
-        clearCachedStaff();
-        setStaffUser(null);
-        setLoading(false);
-        router.push("/login");
-        return;
-      }
-
-      if (!options?.silent) {
-        setLoading(true);
-      }
-
-      try {
-        const staff = await getStaffByUid();
-
-        if (!staff || !staff.active) {
-          clearCachedStaff();
-          setStaffUser(null);
-          setLoading(false);
-          router.push("/login");
-          return;
-        }
-
-        setCachedStaff(staff);
-
-        setStaffUser((prev) => {
-          if (isSameStaff(prev, staff)) return prev;
-          return staff;
-        });
-
-        setLoading(false);
-      } catch (error) {
-        console.error("Staff refresh error:", (error as Error)?.message ?? "");
-
-        clearCachedStaff();
-        setStaffUser(null);
-        setLoading(false);
-        router.push("/login");
-      }
-    },
-    [firebaseUser, isLoginPage, router]
-  );
-
-  useEffect(() => {
-    if (!mounted) return;
-
-    if (isLoginPage) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- 로그인 페이지 진입은 라우팅 반응이라 effect가 정당함
-      setLoading(false);
-      return;
-    }
-
-    let alive = true;
-
-    const unsubscribe = listenCurrentUser(async (user) => {
-      if (!alive) return;
-
-      setFirebaseUser(user);
-
-      if (!user) {
-        // 세션 종료(로그아웃·토큰 폐기·만료)의 단일 권위 지점.
-        // 직원 세션 캐시 + 업무 데이터 캐시(localStorage) + Firestore 영속 캐시(IndexedDB)를 함께 비운다.
-        clearCachedStaff();
-        clearAllClientCaches();
-        setStaffUser(null);
-        setLoading(false);
-        // 영속 캐시(예약 PII)를 purge한 뒤에는 새 Firestore 인스턴스가 필요하므로
-        // 하드 리로드로 /login 이동(공용기기 잔존 차단 + 깨끗한 재초기화).
-        await clearFirestorePersistence();
-        window.location.replace("/login");
-        return;
-      }
-
-      const cachedStaff = getCachedStaff();
-
-      if (cachedStaff && cachedStaff.uid === user.uid && cachedStaff.active) {
-        setStaffUser(cachedStaff);
-        setLoading(false);
-      }
-
-      try {
-        const staff = await getStaffByUid();
-
-        if (!alive) return;
-
-        if (!staff || !staff.active) {
-          clearCachedStaff();
-          setStaffUser(null);
-          setLoading(false);
-          router.push("/login");
-          return;
-        }
-
-        setCachedStaff(staff);
-
-        setStaffUser((prev) => {
-          if (isSameStaff(prev, staff)) return prev;
-          return staff;
-        });
-
-        setLoading(false);
-      } catch (error) {
-        console.error("Auth check error:", (error as Error)?.message ?? "");
-
-        if (!alive) return;
-
-        clearCachedStaff();
-        setStaffUser(null);
-        setLoading(false);
-        router.push("/login");
-      }
-    });
-
-    return () => {
-      alive = false;
-      unsubscribe();
-    };
-  }, [mounted, isLoginPage, router]);
-
-  useEffect(() => {
-    if (!mounted || isLoginPage || !firebaseUser) return;
-
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- pathname 변경마다 직원 상태를 재검증하는 내비게이션 반응 effect
-    refreshStaff(firebaseUser, { silent: true });
-  }, [mounted, pathname, firebaseUser, isLoginPage, refreshStaff]);
-
-  useEffect(() => {
-    if (!mounted || isLoginPage) return;
-
-    function handleFocus() {
-      if (firebaseUser) {
-        refreshStaff(firebaseUser, { silent: true });
-      }
-    }
-
-    function handleVisibilityChange() {
-      if (document.visibilityState === "visible" && firebaseUser) {
-        refreshStaff(firebaseUser, { silent: true });
-      }
-    }
-
-    window.addEventListener("focus", handleFocus);
-    document.addEventListener("visibilitychange", handleVisibilityChange);
-
-    return () => {
-      window.removeEventListener("focus", handleFocus);
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
-    };
-  }, [mounted, firebaseUser, isLoginPage, refreshStaff]);
-
   async function handleLogout() {
-    clearCachedStaff();
-    // signOut → listenCurrentUser(null) 단일 권위 지점이 캐시 purge + 하드 리로드(/login)를 수행.
+    // signOut → CurrentUserProvider의 auth-state 리스너(단일 권위 지점)가
+    // 캐시 purge + 하드 리로드(/login)를 수행.
     await logout();
   }
 
