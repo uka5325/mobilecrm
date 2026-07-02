@@ -470,55 +470,6 @@ export function subscribeAllReservations(
   };
 }
 
-export function subscribeTimelineReservations(
-  date: string,
-  callback: (data: {
-    reservations: ReservationRecord[];
-    doctors: DoctorOption[];
-  }) => void,
-  onError?: (error: Error) => void
-) {
-  let unsubscribeSnapshot: (() => void) | null = null;
-  let latestDoctors: DoctorOption[] = [];
-
-  const unsubscribeAuth = auth.onAuthStateChanged((user) => {
-    if (unsubscribeSnapshot) { unsubscribeSnapshot(); unsubscribeSnapshot = null; }
-    if (!user) return;
-
-    // 실시간 단일 경로: onSnapshot이 데이터를 공급. (이중 읽기 방지로 API seed 제거)
-    getClientDoctors().then((d) => { latestDoctors = d; }).catch(() => {});
-
-    unsubscribeSnapshot = onSnapshot(
-      query(
-        collection(db, "reservations"),
-        where("isDeleted", "==", false),
-        where("reservationDate", "==", date)
-      ),
-      (snap) => {
-        // 캐시 기반 빈 스냅샷은 무시 (초기 깜빡임 방지)
-        if (snap.metadata.fromCache && snap.empty) return;
-        const reservations = sortReservations(
-          snap.docs
-            .map((d) => mapReservationDoc(d.id, d.data() as Record<string, unknown>))
-            .filter((item) => !item.isDeleted),
-          "time"
-        );
-        const fallback = makeDoctorOptionsFromReservations(reservations);
-        callback({ reservations, doctors: latestDoctors.length ? latestDoctors : fallback });
-      },
-      (error) => {
-        console.error("[subscribeTimelineReservations error]", (error as Error)?.message ?? "");
-        onError?.(error);
-      }
-    );
-  });
-
-  return () => {
-    unsubscribeAuth();
-    unsubscribeSnapshot?.();
-  };
-}
-
 export async function getTimelineReservations(date: string): Promise<{
   reservations: ReservationRecord[];
   doctors: DoctorOption[];
