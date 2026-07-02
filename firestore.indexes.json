@@ -12,14 +12,6 @@
       "collectionGroup": "reservations",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "isDeleted", "order": "ASCENDING" },
-        { "fieldPath": "reservationDate", "order": "ASCENDING" }
-      ]
-    },
-    {
-      "collectionGroup": "reservations",
-      "queryScope": "COLLECTION",
-      "fields": [
         { "fieldPath": "reservationId", "order": "ASCENDING" },
         { "fieldPath": "isDeleted", "order": "ASCENDING" }
       ]
@@ -123,31 +115,6 @@
       "fields": [
         { "fieldPath": "patientId", "order": "ASCENDING" },
         { "fieldPath": "createdAt", "order": "DESCENDING" }
-      ]
-    },
-    {
-      "collectionGroup": "reservationNotes",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "reservationDocId", "order": "ASCENDING" },
-        { "fieldPath": "createdAt", "order": "DESCENDING" }
-      ]
-    },
-    {
-      "collectionGroup": "reservationNotes",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "isDeleted", "order": "ASCENDING" },
-        { "fieldPath": "reservationId", "order": "ASCENDING" },
-        { "fieldPath": "createdAt", "order": "DESCENDING" }
-      ]
-    },
-    {
-      "collectionGroup": "reservationNotes",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "patientId", "order": "ASCENDING" },
-        { "fieldPath": "createdAt", "order": "ASCENDING" }
       ]
     },
     {
