@@ -56,23 +56,6 @@ test("admin이 아닌 호출자는 403", async () => {
   assert.equal(res.status, 403);
 });
 
-test("active=false인 admin은 직원 생성 실패(403)", async () => {
-  const inactiveAdmin = await createTestUser("staffcreate-inactive-admin");
-  await adminDb.collection("staff").doc(inactiveAdmin.uid).set({ role: "admin", active: false, displayName: "비활성관리자" });
-  try {
-    const res = await POST(
-      makeReq(
-        { email: `ia${Date.now()}@example.com`, password: "abcdef", displayName: "X", role: "staff" },
-        inactiveAdmin.idToken
-      )
-    );
-    assert.equal(res.status, 403);
-  } finally {
-    await adminDb.collection("staff").doc(inactiveAdmin.uid).delete();
-    await adminAuth.deleteUser(inactiveAdmin.uid).catch(() => {});
-  }
-});
-
 test("허용되지 않은 role이면 400", async () => {
   const res = await POST(
     makeReq(

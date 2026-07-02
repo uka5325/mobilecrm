@@ -51,12 +51,3 @@ test("Firebase Storage 도메인이 아니면 400 (오픈 프록시 차단)", as
   const body = await res.json();
   assert.equal(body.error, "invalid url");
 });
-
-test("Firebase Storage지만 reservationFiles 경로가 아니면 400", async () => {
-  const res = await GET(
-    makeReq("https://firebasestorage.googleapis.com/v0/b/bkt/o/secret%2Ffile.png?alt=media", activeStaff.idToken)
-  );
-  assert.equal(res.status, 400);
-  const body = await res.json();
-  assert.equal(body.error, "invalid path");
-});

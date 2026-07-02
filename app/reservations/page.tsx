@@ -4,9 +4,6 @@ import { useEffect, useMemo, useState } from "react";
 import { DetailDrawer } from "@/components/timeline/DetailDrawer";
 import {
   deleteReservation,
-  deletePatient,
-  updatePatientProfile,
-  fetchReservationsForExport,
   updateReservationFull,
   getPatientFullHistoryCached,
   getCachedPatientFullHistory,
@@ -215,13 +212,10 @@ export default function ReservationsPage() {
 
   // 검색토큰 기반 서버 검색: 진입 시 환자 전체(최대 2,000)를 읽지 않는다. 기본 화면은 최근 예약 환자(구독 데이터).
   // 검색어 입력 시(디바운스 300ms) 매칭된 환자만 서버에서 읽는다. 빈 검색이면 환자 목록 비움(예약 기반 유지).
-  // 최소 글자 제한: 이름 2자↑ / 숫자(전화)만이면 4자↑ — 1글자 검색으로 인한 불필요한 서버 호출 방지.
   useEffect(() => {
     if (!authReady) return;
     const t = search.trim();
-    const digitsOnly = t.length > 0 && /^[0-9]+$/.test(t);
-    const longEnough = digitsOnly ? t.length >= 4 : t.length >= 2;
-    if (!t || !longEnough) { setPatients([]); return; }
+    if (!t) { setPatients([]); return; }
     const handle = setTimeout(() => {
       searchPatients(t).then(setPatients).catch(() => {});
     }, 300);
@@ -370,8 +364,16 @@ export default function ReservationsPage() {
   async function handleDownload() {
     setDownloading(true);
     try {
-      // 서버에서 지정 기간 전체를 정확히 읽고, 메모는 배치로 묶어서 받는다(누락/과금 방지).
-      const { reservations: rows, notesByDoc, capped } = await fetchReservationsForExport(dlStart, dlEnd, true);
+      const inRange = reservations.filter((r) => {
+        const d = r.reservationDate || "";
+        return d >= dlStart && d <= dlEnd;
+      });
+
+      const notesPerReservation = await Promise.all(
+        inRange.map((r) =>
+          getReservationNotes(r.reservationId, r.id, r.patientId).catch(() => [] as ReservationNote[])
+        )
+      );
 
       const header = [
         "예약일", "예약시간", "환자명", "생년월일", "성별", "연락처",
@@ -379,9 +381,9 @@ export default function ReservationsPage() {
         "예약금", "수술비용", "현재상태", "전체메모", "등록일", "최종수정일",
       ];
 
-      const csvRows = rows.map((r) => {
+      const rows = inRange.map((r, i) => {
         const birthInfo = getReservationBirthInfo(r);
-        const notes = notesByDoc[r.id] || [];
+        const notes = notesPerReservation[i];
         const allMemo = notes.map((n) => `[${n.createdBy || ""}] ${n.memoText}`).join(" | ");
 
         return [
@@ -406,7 +408,7 @@ export default function ReservationsPage() {
       });
 
       const bom = "﻿";
-      const csv = bom + [header.map(escapeCsv).join(","), ...csvRows].join("\n");
+      const csv = bom + [header.map(escapeCsv).join(","), ...rows].join("\n");
       const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -415,9 +417,6 @@ export default function ReservationsPage() {
       a.click();
       URL.revokeObjectURL(url);
       setDownloadOpen(false);
-      if (capped) setPageError("내보낼 데이터가 많아 최대치(5000건)까지만 포함되었습니다.");
-    } catch (err) {
-      setPageError(err instanceof Error ? err.message : "CSV 내보내기 중 오류가 발생했습니다.");
     } finally {
       setDownloading(false);
     }
@@ -438,17 +437,31 @@ export default function ReservationsPage() {
     if (!patientEditForm || !currentUser) return;
     setPatientEditSaving(true);
     try {
-      // 서버 1회 배치: patients 마스터 + 해당 환자의 모든 예약 역정규화 필드 갱신
-      const result = await updatePatientProfile(group.patientId, {
-        name: patientEditForm.name,
-        birthInput: patientEditForm.birthInput,
-        phone: patientEditForm.phone,
-        nationality: patientEditForm.nationality,
-        gender: patientEditForm.gender,
-      });
-      if (!result.success) {
-        setPageError(result.message || "환자정보 수정에 실패했습니다.");
-        return;
+      for (const r of group.reservations) {
+        await updateReservationFull(
+          r.id,
+          r.reservationId,
+          r.patientId,
+          {
+            name: patientEditForm.name,
+            birthInput: patientEditForm.birthInput,
+            birth: patientEditForm.birthInput,
+            phone: patientEditForm.phone,
+            nationality: patientEditForm.nationality,
+            gender: patientEditForm.gender,
+            reservationDate: r.reservationDate,
+            reservationTime: r.reservationTime,
+            consultArea: r.consultArea,
+            hospital: r.hospital,
+            appointmentType: r.appointmentType,
+            coordinators: r.coordinators,
+            depositAmount: r.depositAmount,
+            surgeryCost: r.surgeryCost,
+            currentDoctorStatusMap: r.doctorStatusMap,
+            currentDoctorStatusMetaMap: r.doctorStatusMetaMap,
+          },
+          currentUser
+        );
       }
       setPatientEditId(null);
       setPatientEditForm(null);
@@ -464,15 +477,16 @@ export default function ReservationsPage() {
 
   async function handleDeletePatient(group: PatientGroup) {
     if (!currentUser) return;
-    const ok = confirm(`${group.name} 님의 전체 예약과 환자 정보를 모두 삭제할까요? (과거 예약 포함)`);
+    const ok = confirm(`${group.name} 님의 예약 ${group.reservations.length}건을 모두 삭제할까요?`);
     if (!ok) return;
 
-    // 서버에서 patientId 기준 전체 예약 + 환자 문서를 일괄 soft-delete (45일 윈도우 밖 포함)
-    const result = await deletePatient(group.patientId, currentUser);
-    if (!result.success) {
-      setPageError(result.message || "삭제 권한이 없습니다.");
-      await refresh();
-      return;
+    for (const r of group.reservations) {
+      const result = await deleteReservation(r.id, r.reservationId, currentUser);
+      if (!result.success) {
+        setPageError(result.message || "삭제 권한이 없습니다.");
+        await refresh();
+        return;
+      }
     }
     invalidatePatientFullHistoryCache(group.patientId);
     await refresh();
