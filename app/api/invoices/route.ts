@@ -151,42 +151,14 @@ export async function POST(req: NextRequest) {
       // 작성자/감사로그 신원은 검증된 토큰(ctx)만 사용 → 위조 차단
       const staffUid = ctx.uid, staffName = ctx.name, staffEmail = ctx.email, staffRole = ctx.role, staffCode = ctx.staffCode;
 
-      // 기존 인보이스 확인
-      const existing = await adminDb.collection("invoices")
-        .where("reservationDocId", "==", reservationDocId)
-        .get();
-      for (const d of existing.docs) {
-        if (!d.data().isDeleted) {
-          const existingInv = docToObj(d);
-          if (!isCoordinatorOf(existingInv)) {
-            return NextResponse.json({ success: false, message: "접근 권한이 없습니다." }, { status: 403 });
-          }
-          return NextResponse.json({ success: true, invoice: existingInv, alreadyExists: true });
-        }
-      }
-
-      // 예약 정보 조회
-      const resSnap = await adminDb.collection("reservations").doc(reservationDocId).get();
+      // 예약 정보 조회 (권한/필드 계산에 필요)
+      const invoicesCol = adminDb.collection("invoices");
+      const reservationRef = adminDb.collection("reservations").doc(reservationDocId);
+      const resSnap = await reservationRef.get();
       if (!resSnap.exists) {
         return NextResponse.json({ success: false, message: "예약 정보를 찾을 수 없습니다." });
       }
       const reservation = resSnap.data() as Record<string, unknown>;
-
-      // coordinator 또는 admin만 인보이스 생성 가능
-      if (!isAdmin && callerRole !== "coordinator") {
-        return NextResponse.json({ success: false, message: "코디네이터만 인보이스를 생성할 수 있습니다." }, { status: 403 });
-      }
-      // coordinator: 해당 예약의 담당자인지 확인 (uid 우선, 이름 폴백)
-      if (!isAdmin) {
-        const resCoordUids = Array.isArray(reservation.coordinatorUids) ? reservation.coordinatorUids as string[] : [];
-        const resCoords = Array.isArray(reservation.coordinators) ? reservation.coordinators as string[] : [];
-        const allowed = resCoordUids.length
-          ? resCoordUids.includes(callerUid)
-          : (!!callerName && resCoords.includes(callerName));
-        if (!allowed) {
-          return NextResponse.json({ success: false, message: "담당 코디네이터만 인보이스를 생성할 수 있습니다." }, { status: 403 });
-        }
-      }
 
       const rawBirth = cleanText(reservation.birthInput || reservation.birth);
       const birthInfo = parseBirthInfo(rawBirth, cleanText(reservation.gender));
@@ -226,29 +198,59 @@ export async function POST(req: NextRequest) {
         isDeleted: false,
       };
 
-      const invoiceRef = await adminDb.collection("invoices").add(invoicePayload);
-      const invoiceDocId = invoiceRef.id;
+      // 트랜잭션: 중복 인보이스 생성 방지(TOCTOU) — 존재확인 + 생성 + 예약갱신을 원자화.
+      const txResult = await adminDb.runTransaction(async (tx) => {
+        const existingSnap = await tx.get(invoicesCol.where("reservationDocId", "==", reservationDocId));
+        const existingDoc = existingSnap.docs.find((d) => d.data().isDeleted !== true);
+        if (existingDoc) return { kind: "existing" as const, invoice: docToObj(existingDoc) };
 
-      await adminDb.collection("reservations").doc(reservationDocId).update({
-        invoiceId,
-        invoiceDocId,
-        invoiceStatus: "draft",
-        invoiceUpdatedAt: FieldValue.serverTimestamp(),
-        updatedAt: FieldValue.serverTimestamp(),
-        updatedBy: staffName,
-        updatedByUid: staffUid,
+        // coordinator 또는 admin만, coordinator는 해당 예약의 담당자만 생성 가능
+        if (!isAdmin && callerRole !== "coordinator") {
+          return { kind: "forbidden" as const, message: "코디네이터만 인보이스를 생성할 수 있습니다." };
+        }
+        if (!isAdmin) {
+          const resCoordUids = Array.isArray(reservation.coordinatorUids) ? reservation.coordinatorUids as string[] : [];
+          const resCoords = Array.isArray(reservation.coordinators) ? reservation.coordinators as string[] : [];
+          const allowed = resCoordUids.length
+            ? resCoordUids.includes(callerUid)
+            : (!!callerName && resCoords.includes(callerName));
+          if (!allowed) return { kind: "forbidden" as const, message: "담당 코디네이터만 인보이스를 생성할 수 있습니다." };
+        }
+
+        const invoiceRef = invoicesCol.doc();
+        tx.set(invoiceRef, invoicePayload);
+        tx.update(reservationRef, {
+          invoiceId,
+          invoiceDocId: invoiceRef.id,
+          invoiceStatus: "draft",
+          invoiceUpdatedAt: FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp(),
+          updatedBy: staffName,
+          updatedByUid: staffUid,
+        });
+        return { kind: "created" as const, invoiceDocId: invoiceRef.id };
       });
 
+      if (txResult.kind === "existing") {
+        if (!isCoordinatorOf(txResult.invoice)) {
+          return NextResponse.json({ success: false, message: "접근 권한이 없습니다." }, { status: 403 });
+        }
+        return NextResponse.json({ success: true, invoice: txResult.invoice, alreadyExists: true });
+      }
+      if (txResult.kind === "forbidden") {
+        return NextResponse.json({ success: false, message: txResult.message }, { status: 403 });
+      }
+
       await writeLog({
-        action: "invoice_create", targetType: "invoice", targetId: invoiceDocId,
+        action: "invoice_create", targetType: "invoice", targetId: txResult.invoiceDocId,
         staffUid, staffName, staffEmail, staffRole, staffCode: staffCode || "",
         patientId: cleanText(reservation.patientId),
         reservationId: cleanText(reservation.reservationId),
         message: `${staffName}님이 인보이스를 생성했습니다.`,
-        after: { invoiceId, invoiceDocId },
+        after: { invoiceId, invoiceDocId: txResult.invoiceDocId },
       });
 
-      const newSnap = await invoiceRef.get();
+      const newSnap = await invoicesCol.doc(txResult.invoiceDocId).get();
       return NextResponse.json({ success: true, invoice: docToObj(newSnap), alreadyExists: false });
     }
 
