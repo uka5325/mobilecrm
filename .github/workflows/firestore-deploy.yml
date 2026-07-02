@@ -6,7 +6,12 @@ on:
     paths:
       - "firestore.rules"
       - "firestore.indexes.json"
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      force_delete_indexes:
+        description: "firestore.indexes.json에 없는 콘솔 인덱스를 삭제(--force). 수동 실행 전용 — push 배포는 항상 비파괴적."
+        type: boolean
+        default: false
 
 jobs:
   deploy:
@@ -27,7 +32,8 @@ jobs:
         env:
           GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/firebase-sa.json
           FIREBASE_PROJECT_ID: ${{ secrets.FIREBASE_PROJECT_ID }}
-        run: npx firebase-tools@15 deploy --only firestore:rules,firestore:indexes --project "$FIREBASE_PROJECT_ID" --non-interactive
+          FORCE_DELETE: ${{ inputs.force_delete_indexes == true && '--force' || '' }}
+        run: npx firebase-tools@15 deploy --only firestore:rules,firestore:indexes --project "$FIREBASE_PROJECT_ID" --non-interactive $FORCE_DELETE
 
       - name: Remove credentials
         if: always()
