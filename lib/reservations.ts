@@ -470,22 +470,6 @@ export function subscribeAllReservations(
   };
 }
 
-export async function getTimelineReservations(date: string): Promise<{
-  reservations: ReservationRecord[];
-  doctors: DoctorOption[];
-}> {
-  const result = await callReservationsApi("read_by_date", { date });
-  const reservations = mapReservationsFromApi(
-    result.reservations as Record<string, unknown>[] | undefined,
-    "time"
-  );
-  const doctors = withDoctorFallback(
-    mapDoctorsFromApi(result.doctors as Record<string, unknown>[] | undefined),
-    reservations
-  );
-  return { reservations, doctors };
-}
-
 export async function createReservation(
   params: CreateReservationParams,
   staff: StaffUser
