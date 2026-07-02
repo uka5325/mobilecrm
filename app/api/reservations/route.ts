@@ -33,17 +33,26 @@ const ALLOWED_PATIENT_UPDATE_FIELDS = new Set([
   "name", "birth", "birthInput", "gender", "phone", "nationality",
 ]);
 
-// 화이트리스트에 포함된 키만 남긴 얕은 복사본을 반환한다.
-function pickAllowed(
+// 서버가 신원을 강제하는 필드 — 합법 클라이언트가 보낼 수 있어 조용히 무시한다(거부하지 않음).
+const SERVER_MANAGED_IGNORE = new Set(["updatedBy", "updatedByUid", "updatedAt"]);
+
+// patch를 검증해 {safe, disallowed}로 분리한다.
+// - 허용 필드 → safe에 통과
+// - 서버관리 필드 → 조용히 무시
+// - 그 외(isDeleted/createdBy*/invoice*/식별자 등) → disallowed에 수집(호출부에서 거부)
+function splitPatch(
   patch: Record<string, unknown> | undefined | null,
   allowed: Set<string>
-): Record<string, unknown> {
-  const out: Record<string, unknown> = {};
-  if (!patch || typeof patch !== "object") return out;
+): { safe: Record<string, unknown>; disallowed: string[] } {
+  const safe: Record<string, unknown> = {};
+  const disallowed: string[] = [];
+  if (!patch || typeof patch !== "object") return { safe, disallowed };
   for (const [k, v] of Object.entries(patch)) {
-    if (allowed.has(k)) out[k] = v;
+    if (allowed.has(k)) safe[k] = v;
+    else if (SERVER_MANAGED_IGNORE.has(k)) continue;
+    else disallowed.push(k);
   }
-  return out;
+  return { safe, disallowed };
 }
 
 // 의사 목록은 거의 변경되지 않으므로 서버 메모리에 10분 캐싱
@@ -244,7 +253,24 @@ export async function POST(req: NextRequest) {
     if (action === "create_patient") {
       const { patient } = payload as { patient: Record<string, unknown> };
       const now = FieldValue.serverTimestamp();
-      const ref = adminDb.collection("patients").doc();
+
+      // 중복 방지(정책: 연결만·없으면 생성): 같은 patientId 문서가 이미 있으면 그걸 반환.
+      const incomingPatientId = String((patient as { patientId?: unknown }).patientId || "");
+      if (incomingPatientId) {
+        const existing = await adminDb
+          .collection("patients")
+          .where("patientId", "==", incomingPatientId)
+          .limit(1)
+          .get();
+        if (!existing.empty) {
+          return NextResponse.json({ success: true, patientDocId: existing.docs[0].id, linkedExistingPatient: true });
+        }
+      }
+
+      // 신규는 문서 ID를 patientId로 고정(동시성 중복 차단). 비면 auto-id 폴백.
+      const ref = incomingPatientId
+        ? adminDb.collection("patients").doc(incomingPatientId)
+        : adminDb.collection("patients").doc();
       // 작성자 신원은 검증된 토큰(ctx)으로 강제 → 위조 차단
       await ref.set({
         ...patient,
@@ -380,7 +406,11 @@ export async function POST(req: NextRequest) {
         });
       }
 
-      const patientRef = adminDb.collection("patients").doc();
+      // 신규 환자는 문서 ID를 patientId로 고정 → 같은 patientId 동시 생성이 같은 문서를 가리켜
+      // 중복 doc이 생기지 않는다(auto-id 경합 창 제거). patientId가 비면 auto-id 폴백.
+      const patientRef = incomingPatientId
+        ? adminDb.collection("patients").doc(incomingPatientId)
+        : adminDb.collection("patients").doc();
       const batch = adminDb.batch();
       batch.set(patientRef, { ...patient, searchTokens: makePatientSearchTokens(String((patient as { name?: unknown }).name || "")), isDeleted: false, ...authorFields, createdAt: now, updatedAt: now });
       batch.set(reservationRef, { ...reservation, ...authorFields, createdAt: now, updatedAt: now });
@@ -411,15 +441,35 @@ export async function POST(req: NextRequest) {
         patientPatch?: Record<string, unknown>;
       };
 
-      // 필드 화이트리스트 — isDeleted/createdBy*/invoice*/식별자 등은 여기서 걸러진다.
+      // 필드 화이트리스트 — 비허용 필드(isDeleted/createdBy*/invoice*/식별자 등)가 하나라도
+      // 있으면 "조용히 무시"가 아니라 요청을 거부한다(숨은 버그·악성 payload 노출).
       // (admin SDK는 규칙을 우회하므로 서버가 유일한 방어선)
-      const safeReservationPatch = pickAllowed(reservationPatch, ALLOWED_RESERVATION_UPDATE_FIELDS);
-      const safePatientPatch = pickAllowed(patientPatch, ALLOWED_PATIENT_UPDATE_FIELDS);
+      const { safe: safeReservationPatch, disallowed: resDisallowed } = splitPatch(reservationPatch, ALLOWED_RESERVATION_UPDATE_FIELDS);
+      const { safe: safePatientPatch, disallowed: patDisallowed } = splitPatch(patientPatch, ALLOWED_PATIENT_UPDATE_FIELDS);
+
+      const disallowed = [...resDisallowed, ...patDisallowed];
+      if (disallowed.length) {
+        return NextResponse.json(
+          { success: false, message: `허용되지 않은 필드입니다: ${disallowed.join(", ")}` },
+          { status: 400 }
+        );
+      }
+      if (!Object.keys(safeReservationPatch).length && !Object.keys(safePatientPatch).length) {
+        return NextResponse.json({ success: false, message: "변경할 필드가 없습니다." }, { status: 400 });
+      }
 
       const now = FieldValue.serverTimestamp();
 
+      // 감사 before/after: update 직전 값을 1회 읽어 변경 필드의 이전 값을 로그에 남긴다
+      // (예약금·수술비용 등 민감 필드 추적).
+      const resRef = adminDb.collection("reservations").doc(reservationDocId);
+      const beforeSnap = await resRef.get();
+      const beforeData = beforeSnap.exists ? (beforeSnap.data() as Record<string, unknown>) : {};
+      const beforeChanged: Record<string, unknown> = {};
+      for (const k of Object.keys(safeReservationPatch)) beforeChanged[k] = beforeData[k] ?? null;
+
       // 수정자 신원은 검증된 토큰(ctx)으로 강제 → 위조 차단
-      await adminDb.collection("reservations").doc(reservationDocId).update({
+      await resRef.update({
         ...safeReservationPatch,
         updatedBy: ctx.name,
         updatedByUid: ctx.uid,
@@ -464,7 +514,7 @@ export async function POST(req: NextRequest) {
         reservationId: reservationId || "",
         invoiceId: "",
         message: `${ctx.name}님이 예약 정보를 수정했습니다.`,
-        before: null,
+        before: beforeChanged,
         after: { ...safeReservationPatch, ...(Object.keys(safePatientPatch).length ? { patient: safePatientPatch } : {}) },
         createdAt: now,
       });
@@ -482,7 +532,13 @@ export async function POST(req: NextRequest) {
       if (!patientId) {
         return NextResponse.json({ success: false, message: "patientId가 없습니다." }, { status: 400 });
       }
-      const safe = pickAllowed(patientPatch, ALLOWED_PATIENT_UPDATE_FIELDS);
+      const { safe, disallowed } = splitPatch(patientPatch, ALLOWED_PATIENT_UPDATE_FIELDS);
+      if (disallowed.length) {
+        return NextResponse.json(
+          { success: false, message: `허용되지 않은 필드입니다: ${disallowed.join(", ")}` },
+          { status: 400 }
+        );
+      }
       if (!Object.keys(safe).length) {
         return NextResponse.json({ success: false, message: "변경할 필드가 없습니다." }, { status: 400 });
       }

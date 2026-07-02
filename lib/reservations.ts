@@ -851,6 +851,7 @@ export async function updateReservationFull(
 
     ...(doctors !== null && { doctors, doctorStatusMap, doctorStatusMetaMap }),
 
+    // updatedBy/updatedByUid는 서버가 SERVER_MANAGED_IGNORE로 무시하고 ctx로 강제한다(거부 대상 아님).
     updatedBy: staff.displayName,
     updatedByUid: staff.uid,
   };
