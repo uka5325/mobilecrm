@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import type { StaffUser } from "@/lib/auth";
 import type { SettingsStaffRecord, SettingsStaffRole } from "@/lib/settings";
 import { Td } from "./ui";
@@ -32,17 +32,15 @@ export function StaffRow({
   }) => Promise<void>;
   onDeactivate: () => Promise<void>;
 }) {
+  // key={staff.id}(부모 app/settings/page.tsx)로 직원마다 컴포넌트가 분리돼 있으므로
+  // 아래 초기값은 "다른 직원으로 바뀔 때"만 다시 잡힌다. 과거엔 [item] 변화마다
+  // 로컬 편집값을 서버값으로 재동기화하는 effect가 있었는데, 다른 직원을 저장하면
+  // 부모가 staffList 전체를 새 배열/새 객체로 교체해 이 행의 item도 참조만 바뀌면서
+  // 편집 중이던(아직 저장 안 한) 값이 조용히 원래 값으로 되돌아가는 버그가 있었다.
   const [displayName, setDisplayName] = useState(item.displayName);
   const [role, setRole] = useState<SettingsStaffRole | string>(item.role);
   const [active, setActive] = useState(item.active);
   const [orderNo, setOrderNo] = useState(Number(item.orderNo || 999999));
-
-  useEffect(() => {
-    setDisplayName(item.displayName);
-    setRole(item.role);
-    setActive(item.active);
-    setOrderNo(Number(item.orderNo || 999999));
-  }, [item]);
 
   const isMe = currentUser?.uid === item.uid || currentUser?.uid === item.id;
 

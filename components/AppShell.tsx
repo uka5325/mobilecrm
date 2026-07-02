@@ -146,6 +146,7 @@ export default function AppShell({ children }: AppShellProps) {
   }, [pathname]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- ssr:false 컴포넌트의 최초 마운트 감지는 effect 없이 알 수 없음
     setMounted(true);
     setIsOnline(navigator.onLine);
     const handleOnline = () => setIsOnline(true);
@@ -212,6 +213,7 @@ export default function AppShell({ children }: AppShellProps) {
     if (!mounted) return;
 
     if (isLoginPage) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- 로그인 페이지 진입은 라우팅 반응이라 effect가 정당함
       setLoading(false);
       return;
     }
@@ -286,6 +288,7 @@ export default function AppShell({ children }: AppShellProps) {
   useEffect(() => {
     if (!mounted || isLoginPage || !firebaseUser) return;
 
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- pathname 변경마다 직원 상태를 재검증하는 내비게이션 반응 effect
     refreshStaff(firebaseUser, { silent: true });
   }, [mounted, pathname, firebaseUser, isLoginPage, refreshStaff]);
 

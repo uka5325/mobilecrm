@@ -47,6 +47,7 @@ export function ChartCanvas({ open, existingUrl, onSave, onClose, saving, onErro
       return;
     }
 
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- 비동기 이미지 로드 시작을 알리는 표준 데이터페칭 effect 패턴
     setLoading(true);
 
     (async () => {
