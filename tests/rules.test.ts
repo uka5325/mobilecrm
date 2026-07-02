@@ -61,6 +61,7 @@ beforeEach(async () => {
     await setDoc(doc(db, "invoices/inv1"), { isDeleted: false, totalAmount: 1000 });
     await setDoc(doc(db, "logs/log1"), { action: "x" });
     await setDoc(doc(db, "patients/p1"), { name: "홍길동", isDeleted: false });
+    await setDoc(doc(db, "conferenceMemos/m1"), { memoDate: "2026-07-02", memoText: "테스트 메모", deleted: false });
   });
 });
 
@@ -93,6 +94,16 @@ test("활성 직원이라도 patients 직접 읽기는 차단된다", async () =
 
 test("활성 직원이라도 invoices 직접 쓰기는 차단된다", async () => {
   await assertFails(setDoc(doc(activeStaff(), "invoices/inv2"), { totalAmount: 9 }));
+});
+
+test("활성 직원은 conferenceMemos를 직접 읽을 수 있다 (실시간 구독 허용)", async () => {
+  await assertSucceeds(getDoc(doc(activeStaff(), "conferenceMemos/m1")));
+});
+
+test("활성 직원이라도 conferenceMemos 직접 쓰기는 차단된다 (API 우회 방지)", async () => {
+  await assertFails(
+    setDoc(doc(activeStaff(), "conferenceMemos/m2"), { memoDate: "2026-07-02", memoText: "우회 시도" })
+  );
 });
 
 // ── #7 작성자/삭제플래그 위조 차단 ──────────────────────────────────────────

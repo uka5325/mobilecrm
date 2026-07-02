@@ -9,6 +9,7 @@ import { getStaffByUid, listenCurrentUser, logout } from "@/lib/auth";
 import type { StaffUser } from "@/lib/auth";
 import { clearAllClientCaches, clearFirestorePersistence } from "@/lib/clientCache";
 import { ReservationsProvider } from "@/components/ReservationsProvider";
+import { TodayMemosProvider } from "@/components/TodayMemosProvider";
 
 type AppShellProps = {
   children: ReactNode;
@@ -491,8 +492,10 @@ export default function AppShell({ children }: AppShellProps) {
           </p>
         </div>
 
-        {/* 전역 단일 예약 구독: AppShell이 라우트 전환에도 유지되므로 구독도 1회만 살아 있다. */}
-        <ReservationsProvider>{children}</ReservationsProvider>
+        {/* 전역 단일 예약/메모 구독: AppShell이 라우트 전환에도 유지되므로 구독도 1회만 살아 있다. */}
+        <ReservationsProvider>
+          <TodayMemosProvider>{children}</TodayMemosProvider>
+        </ReservationsProvider>
       </main>
     </div>
   );
