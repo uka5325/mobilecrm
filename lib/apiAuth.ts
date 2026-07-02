@@ -95,7 +95,9 @@ export async function requireActiveStaff(
 
   const cached = _staffCache.get(uid);
   let ctx: StaffContext;
-  if (cached && Date.now() - cached.at < STAFF_CACHE_TTL) {
+  // 쓰기/민감 작업(checkRevoked)은 staff 캐시를 우회해 fresh lookup → active/role 변경을 즉시 반영.
+  // (읽기 전용 요청만 최대 5분 캐시. 비활성화된 직원의 쓰기가 최대 5분 열리던 창을 닫는다.)
+  if (!opts.checkRevoked && cached && Date.now() - cached.at < STAFF_CACHE_TTL) {
     ctx = cached;
   } else {
     ctx = await lookupStaff(uid, email);

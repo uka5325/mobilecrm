@@ -58,6 +58,8 @@ beforeEach(async () => {
     await setDoc(doc(db, "reservations/r1"), {
       isDeleted: false, createdByUid: "x", doctors: ["김"], reservationDate: "2026-06-26",
     });
+    await setDoc(doc(db, "reservationPhotos/ph1"), { uploadedByUid: "staffA", isDeleted: false, storagePath: "reservationFiles/x/photos/a.png" });
+    await setDoc(doc(db, "reservationCharts/ch1"), { createdByUid: "staffA", isDeleted: false, chartUrl: "u", storagePath: "s" });
     await setDoc(doc(db, "invoices/inv1"), { isDeleted: false, totalAmount: 1000 });
     await setDoc(doc(db, "logs/log1"), { action: "x" });
     await setDoc(doc(db, "patients/p1"), { name: "홍길동", isDeleted: false });
@@ -116,6 +118,32 @@ test("reservationPhotos 생성: uploadedByUid가 본인이면 허용", async () 
 test("reservationPhotos 생성: uploadedByUid가 타인이면 차단", async () => {
   await assertFails(
     addDoc(collection(activeStaff(), "reservationPhotos"), { uploadedByUid: "someoneElse", isDeleted: false })
+  );
+});
+
+test("reservationPhotos 업데이트: 소프트삭제 필드만이면 허용", async () => {
+  await assertSucceeds(
+    updateDoc(doc(activeStaff(), "reservationPhotos/ph1"), { isDeleted: true, deletedAt: new Date() })
+  );
+});
+
+test("reservationPhotos 업데이트: 화이트리스트 밖 필드(uploadedByUid 위조)는 차단", async () => {
+  await assertFails(
+    updateDoc(doc(activeStaff(), "reservationPhotos/ph1"), { uploadedByUid: "someoneElse" })
+  );
+});
+
+test("reservationCharts 업데이트: 이미지/소프트삭제 필드는 허용", async () => {
+  await assertSucceeds(
+    updateDoc(doc(activeStaff(), "reservationCharts/ch1"), {
+      chartUrl: "new", storagePath: "sp", updatedAt: new Date(), updatedBy: "A", updatedByUid: "staffA",
+    })
+  );
+});
+
+test("reservationCharts 업데이트: 화이트리스트 밖 필드(createdByUid 위조)는 차단", async () => {
+  await assertFails(
+    updateDoc(doc(activeStaff(), "reservationCharts/ch1"), { createdByUid: "someoneElse" })
   );
 });
 

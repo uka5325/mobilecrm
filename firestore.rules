@@ -68,7 +68,9 @@ service cloud.firestore {
       allow read: if isActiveStaff();
       allow create: if isActiveStaff()
         && request.resource.data.uploadedByUid == request.auth.uid;
-      allow update: if isActiveStaff();   // 소프트삭제(isDeleted=true) 포함
+      // 소프트삭제(isDeleted/deletedAt)만 허용 — uploadedByUid 등 신원/식별 필드 변조 차단
+      allow update: if isActiveStaff()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["isDeleted", "deletedAt"]);
       allow delete: if false;
     }
 
@@ -77,7 +79,10 @@ service cloud.firestore {
       allow read: if isActiveStaff();
       allow create: if isActiveStaff()
         && request.resource.data.createdByUid == request.auth.uid;
-      allow update: if isActiveStaff();   // 소프트삭제(isDeleted=true) 포함
+      // 차트 이미지 갱신 + 소프트삭제 필드만 허용 — createdByUid 등 신원 필드 변조 차단
+      allow update: if isActiveStaff()
+        && request.resource.data.diff(resource.data).affectedKeys()
+             .hasOnly(["chartUrl", "storagePath", "updatedAt", "updatedBy", "updatedByUid", "isDeleted", "deletedAt"]);
       allow delete: if false;
     }
 

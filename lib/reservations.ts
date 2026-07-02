@@ -721,94 +721,6 @@ export async function createReservationsBatch(
   };
 }
 
-export async function updateDoctorStatus(
-  reservationDocId: string,
-  reservationId: string,
-  doctorName: string,
-  newStatus: ReservationStatus,
-  staff: StaffUser,
-  options?: { previousOperationStatus?: string }
-) {
-  const reservationPatch: Record<string, unknown> = {
-    [`doctorStatusMap.${doctorName}`]: newStatus,
-    [`doctorStatusMetaMap.${doctorName}.status`]: newStatus,
-    [`doctorStatusMetaMap.${doctorName}.updatedAt`]: new Date().toISOString(),
-    [`doctorStatusMetaMap.${doctorName}.updatedBy`]: staff.displayName,
-    [`doctorStatusMetaMap.${doctorName}.updatedRole`]: staff.role,
-    updatedBy: staff.displayName,
-    updatedByUid: staff.uid,
-  };
-
-  if (newStatus === "원상중") {
-    reservationPatch.operationStatus = "원상중";
-    if (options?.previousOperationStatus !== undefined) {
-      reservationPatch.preConsStatus = options.previousOperationStatus;
-    }
-  } else {
-    reservationPatch.preConsStatus = "";
-  }
-
-  const apiResult = await callReservationsApi("update", {
-    reservationDocId,
-    reservationPatch,
-  });
-
-  if (!apiResult.success) {
-    return { success: false, message: apiResult.message || "상태 변경에 실패했습니다." };
-  }
-
-  createLog({
-    action: "reservation_update",
-    targetType: "reservation",
-    targetId: reservationId,
-    reservationId,
-    staff,
-    message: `${staff.displayName}님이 ${doctorName} 원상중 상태를 변경했습니다.`,
-    before: null,
-    after: { doctorStatusMap: { [doctorName]: newStatus } },
-  }).catch((e) => console.warn("[updateDoctorStatus] log write failed:", e));
-
-  return { success: true };
-}
-
-export async function updateReservationStatus(
-  reservationDocId: string,
-  reservationId: string,
-  newStatus: ReservationStatus,
-  staff: StaffUser
-) {
-  const reservationPatch = {
-    operationStatus: newStatus,
-    preConsStatus: "",
-    updatedBy: staff.displayName,
-    updatedByUid: staff.uid,
-  };
-
-  const apiResult = await callReservationsApi("update", {
-    reservationDocId,
-    reservationPatch,
-  });
-
-  if (!apiResult.success) {
-    return { success: false, message: apiResult.message || "상태 변경에 실패했습니다." };
-  }
-
-  createLog({
-    action: "reservation_update",
-    targetType: "reservation",
-    targetId: reservationId,
-    reservationId,
-    staff,
-    message: `${staff.displayName}님이 예약 상태를 ${newStatus}(으)로 변경했습니다.`,
-    before: null,
-    after: {
-      operationStatus: newStatus,
-    },
-  }).catch((e) => console.warn("[updateReservationStatus] log write failed:", e));
-
-  return { success: true };
-}
-
 export async function toggleSurgeryReserved(
   reservationDocId: string,
   reservationId: string,
@@ -952,9 +864,11 @@ export async function updateReservationFull(
     nationality: cleanText(params.nationality),
   };
 
-  // Pass patientId so server can find the patientDocId
+  // Pass patientId so server can find the patientDocId.
+  // reservationId는 서버 감사로그(reservation_update)에 사용 — 로그는 서버에서 기록한다.
   const apiResult = await callReservationsApi("update", {
     reservationDocId,
+    reservationId,
     patientId,
     reservationPatch,
     patientPatch,
@@ -963,31 +877,6 @@ export async function updateReservationFull(
   if (!apiResult.success) {
     return { success: false, message: apiResult.message || "예약 수정에 실패했습니다." };
   }
-
-  createLog({
-    action: "reservation_update",
-    targetType: "reservation",
-    targetId: reservationId,
-    patientId,
-    reservationId,
-    staff,
-    message: `${staff.displayName}님이 예약 정보를 수정했습니다.`,
-    before: null,
-    after: {
-      name,
-      birth: parsedBirth.birth,
-      hospital: cleanText(params.hospital),
-      appointmentType: params.appointmentType,
-      completed: params.completed,
-      consultArea: cleanText(params.consultArea),
-      reservationDate,
-      reservationTime: cleanText(params.reservationTime),
-      doctors,
-      coordinators: params.coordinators || [],
-      depositAmount: cleanText(params.depositAmount),
-      surgeryCost: cleanText(params.surgeryCost),
-    },
-  }).catch((e) => console.warn("[updateReservationFull] log write failed:", e));
 
   return { success: true };
 }
@@ -1129,4 +1018,77 @@ export async function deleteReservation(
   }).catch((e) => console.warn("[deleteReservation] log write failed:", e));
 
   return { success: true };
+}
+
+// CSV 내보내기용 서버 조회: 지정 기간을 Firestore 쿼리로 정확히 읽고 메모를 배치로 묶는다.
+// (기존 클라 CSV의 "45일 메모리 데이터만 포함 + 메모 N회 호출" 문제 해결)
+export async function fetchReservationsForExport(
+  startDate: string,
+  endDate: string,
+  includeNotes: boolean
+): Promise<{
+  reservations: ReservationRecord[];
+  notesByDoc: Record<string, { createdBy: string; memoText: string }[]>;
+  capped: boolean;
+}> {
+  const firebaseUser = auth.currentUser;
+  if (!firebaseUser) throw new Error("로그인 상태를 확인할 수 없습니다.");
+  const idToken = await firebaseUser.getIdToken();
+  const res = await fetch("/api/reservations/export", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ idToken, startDate, endDate, includeNotes }),
+  });
+  if (!res.ok) throw new Error(`서버 오류가 발생했습니다. (${res.status})`);
+  const data = (await res.json()) as Record<string, unknown> & { success: boolean; message?: string };
+  if (!data.success) throw new Error(String(data.message || "내보내기에 실패했습니다."));
+  const raw = (data.reservations as Record<string, unknown>[] | undefined) || [];
+  return {
+    reservations: raw.map((r) => mapReservationDoc(String(r.id || ""), r)),
+    notesByDoc: (data.notesByDoc as Record<string, { createdBy: string; memoText: string }[]>) || {},
+    capped: Boolean(data.capped),
+  };
+}
+
+// 환자 정보 수정: 예약 N건마다 update를 호출하던 걸 서버 1회 배치로 대체.
+// patients 마스터 1회 + 해당 환자의 예약 역정규화 필드를 서버 배치로 갱신한다.
+// 감사로그는 서버(update_patient_profile)가 기록하므로 클라 로그는 남기지 않는다.
+export async function updatePatientProfile(
+  patientId: string,
+  params: { name: string; birthInput?: string; phone?: string; nationality?: string; gender?: string }
+) {
+  const name = cleanText(params.name);
+  if (!name) return { success: false, message: "이름을 입력하세요." };
+  const parsed = parseBirthInfo(params.birthInput || "", params.gender || "");
+  const patientPatch = {
+    name,
+    birth: parsed.birth,
+    birthInput: parsed.birthInput,
+    gender: parsed.gender,
+    phone: cleanText(params.phone),
+    nationality: cleanText(params.nationality),
+  };
+  const apiResult = await callReservationsApi("update_patient_profile", { patientId, patientPatch });
+  if (!apiResult.success) {
+    return { success: false, message: apiResult.message || "환자 정보 수정에 실패했습니다." };
+  }
+  invalidatePatientsCache();
+  return { success: true };
+}
+
+// 환자 전체 삭제(admin 전용): patientId 기준 모든 예약 + 환자 문서 soft-delete.
+// 45일 윈도우 밖 과거 예약까지 서버에서 일괄 처리하고 감사로그도 서버가 기록한다.
+export async function deletePatient(patientId: string, staff: StaffUser) {
+  if (staff.role !== "admin") {
+    return { success: false, message: "환자 삭제 권한이 없습니다." };
+  }
+  const apiResult = await callReservationsApi("delete_patient", { patientId });
+  if (!apiResult.success) {
+    return { success: false, message: apiResult.message || "환자 삭제에 실패했습니다." };
+  }
+  invalidatePatientsCache();
+  return {
+    success: true,
+    deletedReservations: Number(apiResult.deletedReservations || 0),
+  };
 }
