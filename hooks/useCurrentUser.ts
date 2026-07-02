@@ -1,68 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
-import type { User } from "firebase/auth";
-import { getStaffByUid, listenCurrentUser } from "@/lib/auth";
-import type { StaffUser } from "@/lib/auth";
-
-const STAFF_CACHE_KEY = "arc_crm_staff_user";
-
-export function useCurrentUser() {
-  const router = useRouter();
-  const [currentUser, setCurrentUser] = useState<StaffUser | null>(null);
-  const [authReady, setAuthReady] = useState(false);
-  const [firebaseReady, setFirebaseReady] = useState(false);
-
-  useEffect(() => {
-    const unsubscribe = listenCurrentUser(async (user: User | null) => {
-      setFirebaseReady(true); // Firebase auth state 확인 즉시 set
-      if (!user) {
-        setCurrentUser(null);
-        setAuthReady(true);
-        router.replace("/login");
-        return;
-      }
-
-      try {
-        const raw = sessionStorage.getItem(STAFF_CACHE_KEY);
-        if (raw) {
-          const cached: StaffUser = JSON.parse(raw);
-          if (cached.uid === user.uid && cached.active) {
-            setCurrentUser(cached);
-            setAuthReady(true);
-            return;
-          }
-        }
-      } catch {}
-
-      let staff = null;
-      try {
-        staff = await getStaffByUid();
-      } catch {
-        setCurrentUser(null);
-        setAuthReady(true);
-        router.replace("/login");
-        return;
-      }
-
-      if (!staff || !staff.active) {
-        setCurrentUser(null);
-        setAuthReady(true);
-        router.replace("/login");
-        return;
-      }
-
-      try {
-        sessionStorage.setItem(STAFF_CACHE_KEY, JSON.stringify(staff));
-      } catch {}
-
-      setCurrentUser(staff);
-      setAuthReady(true);
-    });
-
-    return () => unsubscribe();
-  }, [router]);
-
-  return { currentUser, authReady, firebaseReady };
-}
+// 전역 단일 직원 상태(components/CurrentUserProvider.tsx)를 그대로 재노출한다.
+// 예전에는 이 훅이 자체적으로 onAuthStateChanged 구독 + getStaffByUid()를 또 돌려서
+// AppShell의 동일 로직과 로그인 시점에 경쟁(중복 verify-staff 호출)했다 — 이제는
+// Provider가 유일한 출처이므로 여기서는 그 결과를 읽기만 한다. 반환 형태
+// ({currentUser, authReady, firebaseReady})는 기존과 동일해 호출부 변경이 필요 없다.
+export { useCurrentUserContext as useCurrentUser } from "@/components/CurrentUserProvider";
