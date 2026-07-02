@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminAuth, adminDb, FieldValue } from "@/lib/firebaseAdmin";
-import { requireActiveStaff, toAuthErrorResponse } from "@/lib/apiAuth";
 
 type RequestBody = {
   email: string;
@@ -8,25 +7,21 @@ type RequestBody = {
   displayName: string;
   role: string;
   staffCode?: string;
-  callerUid?: string;
+  callerUid: string;
 };
 
 export async function POST(req: NextRequest) {
-  // 호출자 인가: 다른 API와 동일하게 requireActiveStaff로 통일.
-  // active===true + 토큰 폐기(checkRevoked) 검사까지 수행 → 비활성/퇴사 admin 토큰 차단.
+  // 토큰으로 호출자 검증 (클라이언트 callerUid 신뢰 제거)
   const authHeader = req.headers.get("authorization");
-  const token = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : undefined;
-
-  let ctx;
-  try {
-    ctx = await requireActiveStaff(token, { checkRevoked: true });
-  } catch (authErr) {
-    const res = toAuthErrorResponse(authErr);
-    if (res) return res;
-    throw authErr;
+  if (!authHeader?.startsWith("Bearer ")) {
+    return NextResponse.json({ success: false, message: "인증이 필요합니다." }, { status: 401 });
   }
-  if (ctx.role !== "admin") {
-    return NextResponse.json({ success: false, message: "권한이 없습니다." }, { status: 403 });
+  let callerUid: string;
+  try {
+    const decoded = await adminAuth.verifyIdToken(authHeader.slice(7));
+    callerUid = decoded.uid;
+  } catch {
+    return NextResponse.json({ success: false, message: "인증이 유효하지 않습니다." }, { status: 401 });
   }
 
   let body: RequestBody;
@@ -40,6 +35,12 @@ export async function POST(req: NextRequest) {
 
   if (!email || !password || !displayName || !role) {
     return NextResponse.json({ success: false, message: "필수 항목이 누락되었습니다." }, { status: 400 });
+  }
+
+  // 호출자가 admin인지 서버에서 재확인
+  const callerDoc = await adminDb.collection("staff").doc(callerUid).get();
+  if (!callerDoc.exists || callerDoc.data()?.role !== "admin") {
+    return NextResponse.json({ success: false, message: "권한이 없습니다." }, { status: 403 });
   }
 
   // 로그인 사용자 역할만 허용. "doctor"는 로그인 계정으로 쓰지 않으므로 제외
@@ -62,20 +63,21 @@ export async function POST(req: NextRequest) {
       orderNo: 0,
       createdAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
-      updatedBy: ctx.name,
-      updatedByUid: ctx.uid,
+      updatedBy: callerDoc.data()?.displayName || "",
+      updatedByUid: callerUid,
     });
 
-    // audit log — 신원은 검증된 토큰(ctx)만 사용
+    // audit log
+    const callerData = callerDoc.data();
     await adminDb.collection("logs").add({
       action: "settings_update",
       targetType: "settings",
       targetId: userRecord.uid,
-      staffUid: ctx.uid,
-      staffName: ctx.name,
-      staffEmail: ctx.email,
-      staffRole: ctx.role,
-      staffCode: ctx.staffCode,
+      staffUid: callerUid,
+      staffName: callerData?.displayName || "",
+      staffEmail: callerData?.email || "",
+      staffRole: callerData?.role || "",
+      staffCode: callerData?.staffCode || "",
       patientId: "",
       reservationId: "",
       invoiceId: "",

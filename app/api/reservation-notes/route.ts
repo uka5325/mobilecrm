@@ -107,17 +107,7 @@ export async function POST(req: NextRequest) {
       const staffName = ctx.name;
       const staffUid = ctx.uid;
 
-      // 작성자 본인 또는 admin만 수정 가능
-      const noteRef = adminDb.collection("reservationNotes").doc(noteId);
-      const noteSnap = await noteRef.get();
-      if (!noteSnap.exists) {
-        return NextResponse.json({ success: false, message: "메모를 찾을 수 없습니다." });
-      }
-      if (ctx.role !== "admin" && String(noteSnap.data()?.createdByUid || "") !== ctx.uid) {
-        return NextResponse.json({ success: false, message: "작성자만 수정할 수 있습니다." }, { status: 403 });
-      }
-
-      await noteRef.update({
+      await adminDb.collection("reservationNotes").doc(noteId).update({
         memoText: memoText.trim(),
         updatedAt: FieldValue.serverTimestamp(),
         updatedBy: staffName,
@@ -152,17 +142,7 @@ export async function POST(req: NextRequest) {
       const staffName = ctx.name;
       const staffUid = ctx.uid;
 
-      // 작성자 본인 또는 admin만 삭제 가능
-      const noteRef = adminDb.collection("reservationNotes").doc(noteId);
-      const noteSnap = await noteRef.get();
-      if (!noteSnap.exists) {
-        return NextResponse.json({ success: false, message: "메모를 찾을 수 없습니다." });
-      }
-      if (ctx.role !== "admin" && String(noteSnap.data()?.createdByUid || "") !== ctx.uid) {
-        return NextResponse.json({ success: false, message: "작성자만 삭제할 수 있습니다." }, { status: 403 });
-      }
-
-      await noteRef.update({
+      await adminDb.collection("reservationNotes").doc(noteId).update({
         isDeleted: true,
         updatedAt: FieldValue.serverTimestamp(),
         updatedBy: staffName,
