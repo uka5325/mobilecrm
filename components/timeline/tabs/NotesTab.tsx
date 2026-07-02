@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { type ReservationNote } from "@/lib/reservationNotes";
 import { NoteCard } from "@/components/timeline/NoteCard";
 
@@ -19,8 +19,13 @@ type Props = {
 
 export function NotesTab({ memoText, notes, memoError, memoSuccess, onMemoTextChange, onAddMemo, onUpdateNote, onDeleteNote }: Props) {
   const [page, setPage] = useState(1);
-
-  useEffect(() => { setPage(1); }, [notes.length]);
+  // 렌더 중 상태 조정(React 공식 패턴) — notes.length가 바뀌면(새 메모 추가/삭제)
+  // effect 없이 이번 렌더에서 바로 1페이지로 되돌린다.
+  const [prevNotesLength, setPrevNotesLength] = useState(notes.length);
+  if (notes.length !== prevNotesLength) {
+    setPrevNotesLength(notes.length);
+    setPage(1);
+  }
 
   const totalPages = Math.ceil(notes.length / PAGE_SIZE);
   const pagedNotes = notes.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);

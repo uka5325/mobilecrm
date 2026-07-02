@@ -14,12 +14,9 @@ import { useReservationsContext } from "@/components/ReservationsProvider";
 // authReady가 true가 되면 색상 설정을 1회 동기화한다.
 export function useReservationData(authReady: boolean) {
   const { reservations, doctors, loading, refresh } = useReservationsContext();
-  const [statusColors, setStatusColors] = useState<VisitStatusColorMap>(DEFAULT_VISIT_STATUS_COLORS);
-
-  useEffect(() => {
-    const cached = getCachedVisitStatusColors();
-    if (cached) setStatusColors(cached);
-  }, []);
+  const [statusColors, setStatusColors] = useState<VisitStatusColorMap>(
+    () => getCachedVisitStatusColors() ?? DEFAULT_VISIT_STATUS_COLORS
+  );
 
   useEffect(() => {
     if (!authReady) return;

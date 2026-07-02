@@ -1,13 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 import { useRouter } from "next/navigation";
-import {
-  getTimelineReservations,
-  type ReservationRecord,
-} from "@/lib/reservations";
+import type { ReservationRecord } from "@/lib/reservations";
+import { useReservationsContext } from "@/components/ReservationsProvider";
+import { useTodayMemosContext } from "@/components/TodayMemosProvider";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
-import { getCachedConferenceMemos, getConferenceMemos, type ConferenceMemo } from "@/lib/settings";
 import { todayString } from "@/lib/dateUtils";
 import { toDate } from "@/lib/settingsUtils";
 
@@ -70,77 +68,17 @@ function formatMemoTime(value: unknown) {
 
 const ROLE_LIST = ["admin", "coordinator", "staff", "interpreter"];
 
-// 오늘 예약 캐시 (재진입 시 즉시 표시) — 날짜가 바뀌면 무효.
-const HOME_RES_CACHE = "crm_home_today_res";
-function readHomeResCache(date: string): ReservationRecord[] {
-  if (typeof window === "undefined") return [];
-  try {
-    const raw = sessionStorage.getItem(HOME_RES_CACHE);
-    if (!raw) return [];
-    const o = JSON.parse(raw) as { date: string; list: ReservationRecord[] };
-    return o.date === date ? (o.list || []) : [];
-  } catch {
-    return [];
-  }
-}
-function writeHomeResCache(date: string, list: ReservationRecord[]) {
-  if (typeof window === "undefined") return;
-  try {
-    sessionStorage.setItem(HOME_RES_CACHE, JSON.stringify({ date, list }));
-  } catch {}
-}
-
 export default function HomePage() {
   const router = useRouter();
-  const { currentUser, firebaseReady } = useCurrentUser();
-  const today = todayString();
+  const { currentUser } = useCurrentUser();
 
-  // 캐시 시드 → 재진입 시 로딩 없이 즉시 표시
-  const [reservations, setReservations] = useState<ReservationRecord[]>(() => readHomeResCache(today));
-  const [todayMemos, setTodayMemos] = useState<ConferenceMemo[]>(() => getCachedConferenceMemos(today) ?? []);
-  const [loading, setLoading] = useState(reservations.length === 0);
-  const [memoLoading, setMemoLoading] = useState(todayMemos.length === 0);
-  const [loadError, setLoadError] = useState("");
+  // 오늘 예약: 전역 단일 구독(ReservationsProvider)에서 공유받아 오늘 날짜만 필터링.
+  // 별도 서버 조회를 하지 않으므로 홈 재진입마다의 중복 읽기가 없다.
+  const { reservations, loading } = useReservationsContext();
 
-  // 오늘 예약: 캐시 즉시 표시 + 백그라운드 갱신(변경 반영)
-  const loadData = useCallback(async () => {
-    try {
-      const data = await getTimelineReservations(today);
-      const list = data.reservations || [];
-      setReservations(list);
-      writeHomeResCache(today, list);
-      setLoadError("");
-    } catch (error) {
-      console.error("홈 데이터 로드 실패:", (error as Error)?.message ?? "");
-      // 캐시가 없을 때만 에러 노출(있으면 캐시 유지)
-      setReservations((prev) => {
-        if (prev.length === 0) setLoadError("홈 데이터를 불러오지 못했습니다.");
-        return prev;
-      });
-    } finally {
-      setLoading(false);
-    }
-  }, [today]);
-
-  // 오늘 메모: 캐시 즉시 표시 + force 재조회로 변경 반영
-  const loadTodayMemos = useCallback(async () => {
-    setMemoLoading(true);
-    try {
-      const list = await getConferenceMemos(today, 10, true);
-      setTodayMemos(list);
-    } catch (error) {
-      console.error("오늘의 메모를 불러오지 못했습니다.", (error as Error)?.message ?? "");
-      // 실패 시 캐시 유지
-    } finally {
-      setMemoLoading(false);
-    }
-  }, [today]);
-
-  useEffect(() => {
-    if (!firebaseReady) return;
-    loadData();
-    loadTodayMemos();
-  }, [firebaseReady, loadData, loadTodayMemos]);
+  // 오늘의 전체 메모: 전역 단일 구독(TodayMemosProvider)에서 실시간으로 공유받는다.
+  // 다른 직원이 추가/수정/삭제하면 onSnapshot이 push해 즉시 반영된다.
+  const { memos: todayMemos, loading: memoLoading, refresh: refreshTodayMemos } = useTodayMemosContext();
 
   const todayReservations = useMemo(() => {
     return reservations.filter(isTodayReservation);
@@ -148,9 +86,6 @@ export default function HomePage() {
 
   return (
     <div className="space-y-[18px]">
-      {loadError && (
-        <div className="rounded-lg bg-red-50 px-4 py-2 text-sm text-red-600">{loadError}</div>
-      )}
       <div className="grid min-h-0 grid-cols-1 gap-[18px] xl:grid-cols-[1.4fr_1fr]">
         <section className="min-w-0">
           {/* 2×2 grid — all 4 boxes same size on every breakpoint */}
@@ -192,7 +127,7 @@ export default function HomePage() {
                 </div>
 
                 <button
-                  onClick={loadTodayMemos}
+                  onClick={refreshTodayMemos}
                   className="shrink-0 rounded-[8px] border border-black/10 bg-[#f9fafb] px-3 py-2 text-xs text-[#6b7280] transition hover:bg-gray-100 active:scale-95"
                 >
                   새로고침

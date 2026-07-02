@@ -4,6 +4,7 @@ import {
   getDoc,
   getDocs,
   limit,
+  onSnapshot,
   query,
   serverTimestamp,
   startAfter,
@@ -19,6 +20,7 @@ import {
   updatePassword,
 } from "firebase/auth";
 import { auth, db } from "./firebase";
+import { toDate } from "./settingsUtils";
 
 async function callSettingsApi(action: string, payload: Record<string, unknown> = {}) {
   const firebaseUser = auth.currentUser;
@@ -405,6 +407,66 @@ export async function getConferenceMemos(
   }, 0);
 
   return memos;
+}
+
+// 스냅샷 갱신 시 다음 전체 새로고침의 즉시표시 시드를 최신으로 유지.
+export function writeConferenceMemoCache(memoDate: string, memos: ConferenceMemo[]) {
+  if (typeof window === "undefined") return;
+  try {
+    sessionStorage.setItem(MEMO_CACHE_PREFIX + normalizeDateOnly(memoDate), JSON.stringify(memos));
+  } catch {}
+}
+
+function mapConferenceMemoDoc(id: string, data: Record<string, unknown>): ConferenceMemo {
+  return {
+    id,
+    memoDate: String(data.memoDate || ""),
+    memoText: String(data.memoText || ""),
+    createdBy: String(data.createdBy || ""),
+    createdByName: String(data.createdByName || ""),
+    createdAt: data.createdAt,
+    deleted: data.deleted === true,
+    deletedAt: data.deletedAt,
+    deletedBy: String(data.deletedBy || ""),
+  };
+}
+
+// 오늘의 전체 메모 실시간 구독 — 클라이언트 onSnapshot(conferenceMemos는 read 전용으로
+// 개방됨, firestore.rules 참고). subscribeAllReservations(lib/reservations.ts)와 동일한
+// 게이팅/정리 패턴: auth 상태가 바뀌면 재구독하고, unsubscribe로 정리한다.
+export function subscribeConferenceMemos(
+  memoDate: string,
+  callback: (memos: ConferenceMemo[]) => void,
+  onError?: (error: Error) => void
+) {
+  const targetDate = normalizeDateOnly(memoDate);
+  let unsubscribeSnapshot: (() => void) | null = null;
+
+  const unsubscribeAuth = auth.onAuthStateChanged((user) => {
+    if (unsubscribeSnapshot) { unsubscribeSnapshot(); unsubscribeSnapshot = null; }
+    if (!user) return;
+
+    unsubscribeSnapshot = onSnapshot(
+      query(collection(db, "conferenceMemos"), where("memoDate", "==", targetDate)),
+      (snap) => {
+        if (snap.metadata.fromCache && snap.empty) return;
+        const memos = snap.docs
+          .map((d) => mapConferenceMemoDoc(d.id, d.data() as Record<string, unknown>))
+          .filter((m) => !m.deleted)
+          .sort((a, b) => (toDate(b.createdAt)?.getTime() ?? 0) - (toDate(a.createdAt)?.getTime() ?? 0));
+        callback(memos);
+      },
+      (error) => {
+        console.error("[subscribeConferenceMemos error]", (error as Error)?.message ?? "");
+        onError?.(error);
+      }
+    );
+  });
+
+  return () => {
+    unsubscribeAuth();
+    unsubscribeSnapshot?.();
+  };
 }
 
 export async function addConferenceMemo(

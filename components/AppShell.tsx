@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { logout } from "@/lib/auth";
 import { ReservationsProvider } from "@/components/ReservationsProvider";
+import { TodayMemosProvider } from "@/components/TodayMemosProvider";
 import { CurrentUserProvider, useCurrentUserContext } from "@/components/CurrentUserProvider";
 
 type AppShellProps = {
@@ -103,6 +104,7 @@ function AppShellContent({ children }: AppShellProps) {
   }, [pathname]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- ssr:false 컴포넌트의 최초 마운트 감지는 effect 없이 알 수 없음
     setMounted(true);
     setIsOnline(navigator.onLine);
     const handleOnline = () => setIsOnline(true);
@@ -294,8 +296,10 @@ function AppShellContent({ children }: AppShellProps) {
           </p>
         </div>
 
-        {/* 전역 단일 예약 구독: AppShell이 라우트 전환에도 유지되므로 구독도 1회만 살아 있다. */}
-        <ReservationsProvider>{children}</ReservationsProvider>
+        {/* 전역 단일 예약/메모 구독: AppShell이 라우트 전환에도 유지되므로 구독도 1회만 살아 있다. */}
+        <ReservationsProvider>
+          <TodayMemosProvider>{children}</TodayMemosProvider>
+        </ReservationsProvider>
       </main>
     </div>
   );
