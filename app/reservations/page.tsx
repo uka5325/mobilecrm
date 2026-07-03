@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { DetailDrawer } from "@/components/timeline/DetailDrawer";
 import {
   deleteReservation,
@@ -12,6 +12,7 @@ import {
   getCachedPatientFullHistory,
   invalidatePatientFullHistoryCache,
   searchPatients,
+  listPatientsSummary,
   type ReservationRecord,
   type AppointmentType,
   type PatientRecord,
@@ -172,6 +173,13 @@ export default function ReservationsPage() {
         phone: p.phone || "",
         nationality: p.nationality || "",
         reservations: [],
+        // 배지는 저장된 summary로 표시(추가 조회 없음).
+        reservationCount: p.reservationCount,
+        depositCount: p.depositCount,
+        surgeryCostCount: p.surgeryCostCount,
+        invoiceCount: p.invoiceCount,
+        memoCount: p.memoCount,
+        lastReservationDate: p.lastReservationDate || "",
       });
     }
 
@@ -203,10 +211,11 @@ export default function ReservationsPage() {
       );
     }
 
-    // 4. 최신 예약날짜 기준 내림차순 (예약 없는 환자는 하단)
+    // 4. 최신 예약날짜 기준 내림차순. summary의 lastReservationDate 우선,
+    //    없으면(구독 병합 그룹) 로드된 예약의 최신 날짜로 fallback.
     return [...map.values()].sort((a, b) => {
-      const latestA = a.reservations[a.reservations.length - 1]?.reservationDate || "";
-      const latestB = b.reservations[b.reservations.length - 1]?.reservationDate || "";
+      const latestA = a.lastReservationDate || a.reservations[a.reservations.length - 1]?.reservationDate || "";
+      const latestB = b.lastReservationDate || b.reservations[b.reservations.length - 1]?.reservationDate || "";
       return latestB.localeCompare(latestA);
     });
   }, [filteredPatients, filteredReservations]);
@@ -216,17 +225,35 @@ export default function ReservationsPage() {
   // 검색토큰 기반 서버 검색: 진입 시 환자 전체(최대 2,000)를 읽지 않는다. 기본 화면은 최근 예약 환자(구독 데이터).
   // 검색어 입력 시(디바운스 300ms) 매칭된 환자만 서버에서 읽는다. 빈 검색이면 환자 목록 비움(예약 기반 유지).
   // 최소 글자 제한: 이름 2자↑ / 숫자(전화)만이면 4자↑ — 1글자 검색으로 인한 불필요한 서버 호출 방지.
+  // 고객관리 첫 화면: patients 요약 최근순(45일 지난 환자 포함). 배지는 summary 값.
+  const reloadPatients = useCallback(() => {
+    listPatientsSummary(50).then((r) => setPatients(r.patients)).catch(() => {});
+  }, []);
+
+  // 현재 화면(검색 중이면 검색 결과, 아니면 요약 목록)을 다시 로드 — mutation 후 갱신용.
+  const reloadCurrent = useCallback(() => {
+    const t = search.trim();
+    const digitsOnly = t.length > 0 && /^[0-9]+$/.test(t);
+    const longEnough = digitsOnly ? t.length >= 4 : t.length >= 2;
+    if (t && longEnough) searchPatients(t).then(setPatients).catch(() => {});
+    else listPatientsSummary(50).then((r) => setPatients(r.patients)).catch(() => {});
+  }, [search]);
+
   useEffect(() => {
     if (!authReady) return;
     const t = search.trim();
     const digitsOnly = t.length > 0 && /^[0-9]+$/.test(t);
     const longEnough = digitsOnly ? t.length >= 4 : t.length >= 2;
-    if (!t || !longEnough) { setPatients([]); return; }
+    if (!t || !longEnough) {
+      // 검색어가 없거나 짧으면 기본 요약 목록.
+      reloadPatients();
+      return;
+    }
     const handle = setTimeout(() => {
       searchPatients(t).then(setPatients).catch(() => {});
     }, 300);
     return () => clearTimeout(handle);
-  }, [authReady, search]);
+  }, [authReady, search, reloadPatients]);
 
   const pagedGroups = useMemo(() => {
     const start = (groupPage - 1) * PAGE_SIZE;
@@ -451,7 +478,7 @@ export default function ReservationsPage() {
       setPatientEditId(null);
       setPatientEditForm(null);
       invalidatePatientFullHistoryCache(group.patientId);
-      await refresh();
+      reloadCurrent();
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       setPageError(`환자정보 수정 오류: ${msg}`);
@@ -469,46 +496,16 @@ export default function ReservationsPage() {
     const result = await deletePatient(group.patientId, currentUser);
     if (!result.success) {
       setPageError(result.message || "삭제 권한이 없습니다.");
-      await refresh();
+      reloadCurrent();
       return;
     }
     invalidatePatientFullHistoryCache(group.patientId);
-    await refresh();
+    reloadCurrent();
   }
 
   async function openPatientMemoPopover(group: PatientGroup) {
     const rep = group.reservations[group.reservations.length - 1];
     await openMemoPopover(rep);
-  }
-
-  async function handleSaveAmount(reservationId: string, field: "depositAmount" | "surgeryCost", value: string) {
-    if (!currentUser) return;
-    const item = reservations.find((r) => r.id === reservationId);
-    if (!item) return;
-    await updateReservationFull(
-      item.id,
-      item.reservationId,
-      item.patientId,
-      {
-        name: item.name,
-        birthInput: item.birthInput || item.birth || "",
-        birth: item.birthInput || item.birth || "",
-        phone: item.phone,
-        nationality: item.nationality,
-        consultArea: item.consultArea,
-        reservationDate: item.reservationDate,
-        reservationTime: item.reservationTime,
-        hospital: item.hospital,
-        appointmentType: item.appointmentType,
-        coordinators: item.coordinators,
-        doctors: item.doctors || [],
-        depositAmount: field === "depositAmount" ? value : item.depositAmount,
-        surgeryCost: field === "surgeryCost" ? value : item.surgeryCost,
-      },
-      currentUser
-    );
-    invalidatePatientFullHistoryCache(item.patientId);
-    await refresh();
   }
 
   async function handleDelete(item: ReservationRecord) {
@@ -701,6 +698,7 @@ export default function ReservationsPage() {
             if (historyPatientId) {
               invalidatePatientFullHistoryCache(historyPatientId);
               openPatientHistory(historyPatientId, historyPatientName);
+              reloadCurrent(); // 이력 편집 후 summary 배지 갱신
             }
           }}
         />
@@ -728,7 +726,7 @@ export default function ReservationsPage() {
         onDeletePatient={handleDeletePatient}
         onOpenPatientMemo={openPatientMemoPopover}
         onOpenPatientHistory={openPatientHistory}
-        onSaveAmount={handleSaveAmount}
+        onPatientMutated={() => reloadCurrent()}
       />
 
       {totalPages > 1 && (
@@ -756,8 +754,8 @@ export default function ReservationsPage() {
           initialPatient={addPatient}
           mode={addPatient ? "reservation" : "register"}
           onCreated={addPatient
-            ? () => { invalidatePatientFullHistoryCache(addPatient.patientId); refresh(); const t = search.trim(); if (t) searchPatients(t).then(setPatients).catch(() => {}); }
-            : () => { const t = search.trim(); if (t) searchPatients(t).then(setPatients).catch(() => {}); }
+            ? () => { invalidatePatientFullHistoryCache(addPatient.patientId); reloadCurrent(); }
+            : () => { reloadCurrent(); }
           }
         />
       )}

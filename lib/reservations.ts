@@ -590,7 +590,79 @@ export type PatientRecord = {
   gender?: string;
   phone?: string;
   nationality?: string;
+  // 고객관리 배지용 요약(patients 문서 저장값 — lib/patientSummary.ts). 백필 전 문서는 undefined.
+  reservationCount?: number;
+  depositCount?: number;      // 묶음 그룹 수
+  surgeryCostCount?: number;  // 묶음 그룹 수
+  invoiceCount?: number;
+  memoCount?: number;
+  totalDepositAmount?: number;
+  totalSurgeryCost?: number;
+  lastReservationDate?: string;
+  lastReservationTime?: string;
+  hasMemo?: boolean;
+  hasInvoice?: boolean;
 };
+
+// patients 문서(요약 포함) → PatientRecord. 숫자 필드는 숫자만 통과(백필 전엔 undefined).
+function mapPatientRecord(p: Record<string, unknown>): PatientRecord {
+  const num = (v: unknown) => (typeof v === "number" ? v : undefined);
+  return {
+    id: cleanText(p.id),
+    patientId: cleanText(p.patientId),
+    name: cleanText(p.name),
+    birth: cleanText(p.birth),
+    birthInput: cleanText(p.birthInput),
+    gender: cleanText(p.gender),
+    phone: cleanText(p.phone),
+    nationality: cleanText(p.nationality),
+    reservationCount: num(p.reservationCount),
+    depositCount: num(p.depositCount),
+    surgeryCostCount: num(p.surgeryCostCount),
+    invoiceCount: num(p.invoiceCount),
+    memoCount: num(p.memoCount),
+    totalDepositAmount: num(p.totalDepositAmount),
+    totalSurgeryCost: num(p.totalSurgeryCost),
+    lastReservationDate: cleanText(p.lastReservationDate),
+    lastReservationTime: cleanText(p.lastReservationTime),
+    hasMemo: p.hasMemo === true,
+    hasInvoice: p.hasInvoice === true,
+  };
+}
+
+// 고객관리 첫 화면: patients를 요약(lastReservationDate 내림차순)으로 페이지 조회.
+// 45일 라이브 윈도우와 무관 — 과거 환자도 노출되며 배지는 저장된 summary로 표시.
+export async function listPatientsSummary(
+  limit = 50,
+  cursor?: string
+): Promise<{ patients: PatientRecord[]; nextCursor: string | null }> {
+  const result = await callReservationsApi("list_patients_summary", { limit, cursor });
+  if (!result.success || !Array.isArray(result.patients)) return { patients: [], nextCursor: null };
+  return {
+    patients: (result.patients as Record<string, unknown>[]).map(mapPatientRecord),
+    nextCursor: (result.nextCursor as string) ?? null,
+  };
+}
+
+// 예약금/수술비 최소 수정 — 금액 팝오버 저장용. 화이트리스트 필드만 patch하며
+// 신원/감사로그/요약 재계산은 서버가 처리한다.
+export async function updateReservationAmount(
+  reservationDocId: string,
+  reservationId: string,
+  patientId: string,
+  field: "depositAmount" | "surgeryCost",
+  value: string
+): Promise<{ success: boolean; message?: string }> {
+  const apiResult = await callReservationsApi("update", {
+    reservationDocId,
+    reservationId,
+    patientId,
+    reservationPatch: { [field]: cleanText(value) },
+  });
+  return apiResult.success
+    ? { success: true }
+    : { success: false, message: cleanText(apiResult.message) || "금액 저장에 실패했습니다." };
+}
 
 export async function createPatientOnly(
   params: { name: string; birthInput: string; phone: string; nationality: string; patientId?: string },
@@ -638,16 +710,7 @@ export async function listPatients(force = false): Promise<PatientRecord[]> {
   }
   const result = await callReservationsApi("list_patients", {});
   if (!result.success || !Array.isArray(result.patients)) return _patientsCache?.data ?? [];
-  const data = (result.patients as Record<string, unknown>[]).map((p) => ({
-    id: cleanText(p.id),
-    patientId: cleanText(p.patientId),
-    name: cleanText(p.name),
-    birth: cleanText(p.birth),
-    birthInput: cleanText(p.birthInput),
-    gender: cleanText(p.gender),
-    phone: cleanText(p.phone),
-    nationality: cleanText(p.nationality),
-  }));
+  const data = (result.patients as Record<string, unknown>[]).map(mapPatientRecord);
   _patientsCache = { at: Date.now(), data };
   return data;
 }
@@ -659,16 +722,7 @@ export async function searchPatients(term: string): Promise<PatientRecord[]> {
   if (!t) return [];
   const result = await callReservationsApi("search_patients", { term: t });
   if (!result.success || !Array.isArray(result.patients)) return [];
-  return (result.patients as Record<string, unknown>[]).map((p) => ({
-    id: cleanText(p.id),
-    patientId: cleanText(p.patientId),
-    name: cleanText(p.name),
-    birth: cleanText(p.birth),
-    birthInput: cleanText(p.birthInput),
-    gender: cleanText(p.gender),
-    phone: cleanText(p.phone),
-    nationality: cleanText(p.nationality),
-  }));
+  return (result.patients as Record<string, unknown>[]).map(mapPatientRecord);
 }
 
 export async function createReservationsBatch(
