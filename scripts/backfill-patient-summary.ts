@@ -13,9 +13,11 @@
  *   invoiceCount, hasInvoice, memoCount, hasMemo, summaryUpdatedAt
  *
  * 실행:
- *   1) 키 파일 경로 지정(권장):
+ *   1) Google Cloud Shell(권장 — 키 파일 불필요, 브라우저에서 자동 인증):
+ *        npx tsx scripts/backfill-patient-summary.ts --project mobilecrm-c405e --dry-run
+ *   2) 키 파일 경로 지정(로컬):
  *        npx tsx scripts/backfill-patient-summary.ts --key ./serviceAccount.json --dry-run
- *   2) 환경변수에 JSON 문자열(CI 등):
+ *   3) 환경변수에 JSON 문자열(CI 등):
  *        FIREBASE_SERVICE_ACCOUNT_KEY='{...}' npx tsx scripts/backfill-patient-summary.ts --dry-run
  *
  * 안전:
@@ -29,25 +31,30 @@ import { readFileSync } from "node:fs";
 const DRY_RUN = process.argv.includes("--dry-run");
 const RESERVATION_CAP = 300;
 
-function getServiceAccountJson(): string {
+// 서비스 계정 키(JSON) 반환. --key 파일 또는 FIREBASE_SERVICE_ACCOUNT_KEY 환경변수.
+// 둘 다 없으면 null → Application Default Credentials(ADC)로 폴백(예: Google Cloud Shell).
+function getServiceAccountJsonOrNull(): string | null {
   const idx = process.argv.indexOf("--key");
   if (idx !== -1) {
     const path = process.argv[idx + 1];
     if (!path) throw new Error("--key 다음에 serviceAccount.json 파일 경로를 지정하세요.");
     return readFileSync(path, "utf8");
   }
-  const env = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
-  if (env) return env;
-  throw new Error(
-    "서비스 계정 키가 필요합니다. '--key <serviceAccount.json 경로>' 또는 " +
-      "FIREBASE_SERVICE_ACCOUNT_KEY 환경변수를 지정하세요."
-  );
+  return process.env.FIREBASE_SERVICE_ACCOUNT_KEY || null;
 }
 
 function init() {
   if (admin.apps.length) return;
-  const key = getServiceAccountJson();
-  admin.initializeApp({ credential: admin.credential.cert(JSON.parse(key) as admin.ServiceAccount) });
+  const key = getServiceAccountJsonOrNull();
+  if (key) {
+    admin.initializeApp({ credential: admin.credential.cert(JSON.parse(key) as admin.ServiceAccount) });
+    return;
+  }
+  // 키 미지정 → ADC 사용. Google Cloud Shell/GCP 환경에서 자동 인증되어 키 파일이 불필요.
+  // (GOOGLE_CLOUD_PROJECT가 없으면 --project 인자나 env로 프로젝트를 넘겨야 할 수 있음)
+  const projIdx = process.argv.indexOf("--project");
+  const projectId = projIdx !== -1 ? process.argv[projIdx + 1] : process.env.GOOGLE_CLOUD_PROJECT || process.env.GCLOUD_PROJECT;
+  admin.initializeApp(projectId ? { projectId } : undefined);
 }
 
 function parseAmount(v: unknown): number {
