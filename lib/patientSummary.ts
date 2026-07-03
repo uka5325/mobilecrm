@@ -15,6 +15,18 @@ export function parseAmount(v: unknown): number {
   return Number.isFinite(n) ? n : 0;
 }
 
+// 예약금/수술비 "묶음" 기준 키 — 같은 병원+상담부위+원장이면 1건으로 묶는다.
+// components/reservations/ReservationsTable.tsx의 makeKey와 동일 규칙이어야 배지 수치와
+// 팝오버 그룹 수가 일치한다.
+export function reservationGroupKey(r: Record<string, unknown>): string {
+  const doctors = Array.isArray(r.doctors) ? (r.doctors as unknown[]) : [];
+  return [
+    String(r.hospital || "").trim().toLowerCase(),
+    String(r.consultArea || "").trim().toLowerCase(),
+    doctors.map((d) => String(d).trim().toLowerCase()).sort().join(","),
+  ].join("|");
+}
+
 // 동일 patientId 문서(들)에 patch를 병합 update. summaryUpdatedAt 함께 기록.
 async function mergeIntoPatients(patientId: string, patch: Record<string, unknown>) {
   if (!patientId) return;
@@ -41,21 +53,22 @@ export async function recomputeReservationSummary(patientId: string): Promise<vo
     .get();
 
   let reservationCount = 0;
-  let depositCount = 0;
-  let surgeryCostCount = 0;
   let totalDepositAmount = 0;
   let totalSurgeryCost = 0;
   let lastReservationDate = "";
   let lastReservationTime = "";
   let lastComposite = "";
+  // 예약금/수술비는 "묶음(그룹) 수"로 센다(같은 병원+부위+원장 = 1건).
+  const depositGroups = new Set<string>();
+  const surgeryGroups = new Set<string>();
 
   for (const d of snap.docs) {
     const r = d.data() as Record<string, unknown>;
     reservationCount += 1;
-    const dep = parseAmount(r.depositAmount);
-    const sur = parseAmount(r.surgeryCost);
-    if (dep > 0) { depositCount += 1; totalDepositAmount += dep; }
-    if (sur > 0) { surgeryCostCount += 1; totalSurgeryCost += sur; }
+    const hasDeposit = String(r.depositAmount ?? "").trim() !== "";
+    const hasSurgery = String(r.surgeryCost ?? "").trim() !== "";
+    if (hasDeposit) { depositGroups.add(reservationGroupKey(r)); totalDepositAmount += parseAmount(r.depositAmount); }
+    if (hasSurgery) { surgeryGroups.add(reservationGroupKey(r)); totalSurgeryCost += parseAmount(r.surgeryCost); }
     // 같은 날짜 내 시간 순서는 orderBy로 보장되지 않으므로 "날짜+시간" 합성값으로 최댓값 선택.
     const date = String(r.reservationDate || "");
     const time = String(r.reservationTime || "");
@@ -69,8 +82,8 @@ export async function recomputeReservationSummary(patientId: string): Promise<vo
 
   await mergeIntoPatients(patientId, {
     reservationCount,
-    depositCount,
-    surgeryCostCount,
+    depositCount: depositGroups.size,
+    surgeryCostCount: surgeryGroups.size,
     totalDepositAmount,
     totalSurgeryCost,
     lastReservationDate,

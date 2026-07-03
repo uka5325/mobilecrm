@@ -56,6 +56,16 @@ function parseAmount(v: unknown): number {
   return Number.isFinite(n) ? n : 0;
 }
 
+// lib/patientSummary.ts reservationGroupKey와 동일 규칙(병원+부위+원장) — 배지/팝오버 일치.
+function reservationGroupKey(r: Record<string, unknown>): string {
+  const doctors = Array.isArray(r.doctors) ? (r.doctors as unknown[]) : [];
+  return [
+    String(r.hospital || "").trim().toLowerCase(),
+    String(r.consultArea || "").trim().toLowerCase(),
+    doctors.map((d) => String(d).trim().toLowerCase()).sort().join(","),
+  ].join("|");
+}
+
 async function computeSummary(
   db: admin.firestore.Firestore,
   patientId: string
@@ -69,21 +79,21 @@ async function computeSummary(
     .get();
 
   let reservationCount = 0;
-  let depositCount = 0;
-  let surgeryCostCount = 0;
   let totalDepositAmount = 0;
   let totalSurgeryCost = 0;
   let lastReservationDate = "";
   let lastReservationTime = "";
   let lastComposite = "";
+  const depositGroups = new Set<string>();
+  const surgeryGroups = new Set<string>();
 
   for (const d of resSnap.docs) {
     const r = d.data();
     reservationCount += 1;
-    const dep = parseAmount(r.depositAmount);
-    const sur = parseAmount(r.surgeryCost);
-    if (dep > 0) { depositCount += 1; totalDepositAmount += dep; }
-    if (sur > 0) { surgeryCostCount += 1; totalSurgeryCost += sur; }
+    const hasDeposit = String(r.depositAmount ?? "").trim() !== "";
+    const hasSurgery = String(r.surgeryCost ?? "").trim() !== "";
+    if (hasDeposit) { depositGroups.add(reservationGroupKey(r)); totalDepositAmount += parseAmount(r.depositAmount); }
+    if (hasSurgery) { surgeryGroups.add(reservationGroupKey(r)); totalSurgeryCost += parseAmount(r.surgeryCost); }
     const date = String(r.reservationDate || "");
     const time = String(r.reservationTime || "");
     const comp = `${date} ${time}`;
@@ -93,6 +103,8 @@ async function computeSummary(
       lastReservationTime = time;
     }
   }
+  const depositCount = depositGroups.size;
+  const surgeryCostCount = surgeryGroups.size;
 
   const [invAgg, memoAgg] = await Promise.all([
     db.collection("invoices").where("patientId", "==", patientId).where("isDeleted", "==", false).count().get(),
