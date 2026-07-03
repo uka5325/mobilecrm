@@ -3,8 +3,9 @@ rules_version = '2';
 // ─────────────────────────────────────────────────────────────────────────────
 // MobileCRM Cloud Storage 보안 규칙
 //
-// 환자 사진·상담차트(민감 의료정보)는 클라이언트 SDK로 직접 업로드되므로
+// 환자 사진(민감 의료정보)은 클라이언트 SDK로 직접 업로드되므로
 // (lib/reservationFiles.ts), 활성 직원만 read/write 가능하도록 제한한다.
+// (상담차트 기능은 제거됨 — 신규 업로드 없음. 남은 charts/ 파일은 후속 정리 대상.)
 //
 // 주의(잔여 한계): getDownloadURL()이 만드는 토큰 URL은 이 규칙과 무관하게
 // URL 보유자라면 접근 가능하다. 완전한 기밀화가 필요하면 다운로드 URL을
@@ -20,7 +21,7 @@ service firebase.storage {
         && firestore.get(/databases/(default)/documents/staff/$(request.auth.uid)).data.active == true;
     }
 
-    // 예약 첨부(사진/차트) — reservationFiles/{reservationDocId}/...
+    // 예약 첨부(사진) — reservationFiles/{reservationDocId}/...
     match /reservationFiles/{reservationDocId}/{allPaths=**} {
       allow read: if isActiveStaff();
       // 업로드 크기 제한은 클라이언트(10MB)와 일치

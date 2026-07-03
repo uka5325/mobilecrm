@@ -37,23 +37,6 @@ export type PhotoRecord = {
   isDeleted: boolean;
 };
 
-export type ChartRecord = {
-  id: string;
-  reservationDocId: string;
-  reservationId: string;
-  patientId: string;
-  label: string;
-  chartUrl: string;
-  storagePath: string;
-  createdAt?: unknown;
-  createdBy: string;
-  createdByUid: string;
-  updatedAt?: unknown;
-  updatedBy: string;
-  updatedByUid: string;
-  isDeleted: boolean;
-};
-
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function sanitizeFileName(name: string): string {
@@ -73,25 +56,6 @@ function mapPhotoDoc(id: string, data: Record<string, unknown>): PhotoRecord {
     uploadedAt: data.uploadedAt,
     uploadedBy: cleanText(data.uploadedBy),
     uploadedByUid: cleanText(data.uploadedByUid),
-    isDeleted: Boolean(data.isDeleted),
-  };
-}
-
-function mapChartDoc(id: string, data: Record<string, unknown>): ChartRecord {
-  return {
-    id,
-    reservationDocId: cleanText(data.reservationDocId),
-    reservationId: cleanText(data.reservationId),
-    patientId: cleanText(data.patientId),
-    label: cleanText(data.label),
-    chartUrl: cleanText(data.chartUrl),
-    storagePath: cleanText(data.storagePath),
-    createdAt: data.createdAt,
-    createdBy: cleanText(data.createdBy),
-    createdByUid: cleanText(data.createdByUid),
-    updatedAt: data.updatedAt,
-    updatedBy: cleanText(data.updatedBy),
-    updatedByUid: cleanText(data.updatedByUid),
     isDeleted: Boolean(data.isDeleted),
   };
 }
@@ -226,147 +190,6 @@ export async function deleteReservationPhoto(
     targetId: photoId,
     staff,
     message: `사진 삭제: ${fileName}`,
-    reservationId,
-    patientId,
-  });
-}
-
-// ─── Charts ──────────────────────────────────────────────────────────────────
-
-export async function getReservationCharts(
-  reservationDocId: string
-): Promise<ChartRecord[]> {
-  const snap = await getDocs(
-    query(
-      collection(db, "reservationCharts"),
-      where("reservationDocId", "==", reservationDocId),
-      where("isDeleted", "==", false)
-    )
-  );
-  return sortByTime(
-    snap.docs.map((d: { id: string; data: () => Record<string, unknown> }) =>
-      mapChartDoc(d.id, d.data())
-    )
-  );
-}
-
-export async function uploadReservationChart(
-  reservationDocId: string,
-  reservationId: string,
-  patientId: string,
-  blob: Blob,
-  label: string,
-  staff: StaffUser
-): Promise<ChartRecord> {
-  const ts = Date.now();
-  const uid = typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID().slice(0, 8) : Math.random().toString(36).slice(2, 10);
-  const storagePath = `reservationFiles/${reservationDocId}/charts/${ts}_${uid}.png`;
-  const storageRef = ref(storage, storagePath);
-
-  await uploadBytes(storageRef, blob, { contentType: "image/png" });
-  const chartUrl = await getDownloadURL(storageRef);
-
-  const docRef = await addDoc(collection(db, "reservationCharts"), {
-    reservationDocId,
-    reservationId,
-    patientId,
-    label,
-    chartUrl,
-    storagePath,
-    createdAt: serverTimestamp(),
-    createdBy: staff.displayName,
-    createdByUid: staff.uid,
-    updatedAt: serverTimestamp(),
-    updatedBy: staff.displayName,
-    updatedByUid: staff.uid,
-    isDeleted: false,
-  });
-
-  createLog({
-    action: "file_upload",
-    targetType: "file",
-    targetId: docRef.id,
-    staff,
-    message: `상담차트 생성: ${label}`,
-    reservationId,
-    patientId,
-  }).catch(() => {});
-
-  return mapChartDoc(docRef.id, {
-    reservationDocId, reservationId, patientId, label, chartUrl, storagePath,
-    createdAt: null, createdBy: staff.displayName, createdByUid: staff.uid,
-    updatedAt: null, updatedBy: staff.displayName, updatedByUid: staff.uid,
-    isDeleted: false,
-  });
-}
-
-export async function updateReservationChart(
-  chartId: string,
-  oldStoragePath: string,
-  reservationDocId: string,
-  reservationId: string,
-  patientId: string,
-  label: string,
-  blob: Blob,
-  staff: StaffUser
-): Promise<ChartRecord> {
-  // 기존 Storage 파일 삭제 후 같은 경로에 재업로드
-  const ts = Date.now();
-  const uid = typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID().slice(0, 8) : Math.random().toString(36).slice(2, 10);
-  const storagePath = `reservationFiles/${reservationDocId}/charts/${ts}_${uid}.png`;
-  const storageRef = ref(storage, storagePath);
-
-  await uploadBytes(storageRef, blob, { contentType: "image/png" });
-  const chartUrl = await getDownloadURL(storageRef);
-
-  // 기존 파일 삭제 (실패 무시)
-  try { await deleteObject(ref(storage, oldStoragePath)); } catch {}
-
-  await updateDoc(doc(db, "reservationCharts", chartId), {
-    chartUrl,
-    storagePath,
-    updatedAt: serverTimestamp(),
-    updatedBy: staff.displayName,
-    updatedByUid: staff.uid,
-  });
-
-  createLog({
-    action: "file_upload",
-    targetType: "file",
-    targetId: chartId,
-    staff,
-    message: `상담차트 수정: ${label}`,
-    reservationId,
-    patientId,
-  }).catch(() => {});
-
-  return mapChartDoc(chartId, {
-    reservationDocId, reservationId, patientId, label, chartUrl, storagePath,
-    createdAt: null, createdBy: "", createdByUid: "",
-    updatedAt: null, updatedBy: staff.displayName, updatedByUid: staff.uid,
-    isDeleted: false,
-  });
-}
-
-export async function deleteReservationChart(
-  chartId: string,
-  storagePath: string,
-  label: string,
-  reservationId: string,
-  patientId: string,
-  staff: StaffUser
-): Promise<void> {
-  await updateDoc(doc(db, "reservationCharts", chartId), {
-    isDeleted: true,
-    deletedAt: serverTimestamp(),
-  });
-  try { await deleteObject(ref(storage, storagePath)); } catch {}
-  await createLog({
-    action: "file_delete",
-    targetType: "file",
-    targetId: chartId,
-    staff,
-    message: `상담차트 삭제: ${label}`,
     reservationId,
     patientId,
   });

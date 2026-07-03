@@ -3,18 +3,12 @@
 import { useEffect, useRef, useState } from "react";
 import type { StaffUser } from "@/lib/auth";
 import {
-  deleteReservationChart,
   deleteReservationPhoto,
-  getReservationCharts,
   getReservationPhotos,
   uploadPhotoToStorage,
   savePhotoRecord,
-  uploadReservationChart,
-  updateReservationChart,
-  type ChartRecord,
   type PhotoRecord,
 } from "@/lib/reservationFiles";
-import { ChartCanvas } from "@/components/timeline/tabs/ChartCanvas";
 import { compressImage } from "@/lib/imageCompress";
 
 type Props = {
@@ -45,17 +39,8 @@ function formatDate(value: unknown): string {
 
 export function FilesTab({ reservationDocId, reservationId, patientId, currentUser }: Props) {
   const [photos, setPhotos] = useState<PhotoRecord[]>([]);
-  const [charts, setCharts] = useState<ChartRecord[]>([]);
   const [photosLoading, setPhotosLoading] = useState(true);
-  const [chartsLoading, setChartsLoading] = useState(true);
   const [uploadingCount, setUploadingCount] = useState(0);
-  const [chartSaving, setChartSaving] = useState(false);
-
-  // 상담차트 캔버스 모달
-  const [canvasOpen, setCanvasOpen] = useState(false);
-  const [editingChart, setEditingChart] = useState<ChartRecord | null>(null);
-  // 신규 차트 생성 시 업로드된 기반 이미지 URL (캔버스에 로드)
-  const [baseImageUrl, setBaseImageUrl] = useState<string | undefined>(undefined);
 
   // 이미지/파일 뷰어
   const [viewingUrl, setViewingUrl] = useState<string | null>(null);
@@ -64,7 +49,6 @@ export function FilesTab({ reservationDocId, reservationId, patientId, currentUs
   const [error, setError] = useState("");
 
   const photoInputRef = useRef<HTMLInputElement | null>(null);
-  const baseImageInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     load();
@@ -73,20 +57,14 @@ export function FilesTab({ reservationDocId, reservationId, patientId, currentUs
 
   async function load() {
     setPhotosLoading(true);
-    setChartsLoading(true);
     try {
-      const [p, c] = await Promise.all([
-        getReservationPhotos(reservationDocId),
-        getReservationCharts(reservationDocId),
-      ]);
+      const p = await getReservationPhotos(reservationDocId);
       setPhotos(p);
-      setCharts(c);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       setError(`파일 목록을 불러오지 못했습니다. (${msg})`);
     } finally {
       setPhotosLoading(false);
-      setChartsLoading(false);
     }
   }
 
@@ -187,82 +165,6 @@ export function FilesTab({ reservationDocId, reservationId, patientId, currentUs
     }
   }
 
-  // ─── 상담차트: 기반 이미지 업로드 → 캔버스 ──────────────────────────────────
-
-  function openNewChart() {
-    // 기반 이미지 없이 빈 캔버스로 바로 열기
-    setEditingChart(null);
-    setBaseImageUrl(undefined);
-    setCanvasOpen(true);
-  }
-
-  async function handleBaseImageFile(files: FileList | null) {
-    if (!files || files.length === 0) return;
-    const file = files[0];
-    // 로컬 Object URL로 캔버스에 바로 로드 (업로드는 저장 시 한 번만)
-    const url = URL.createObjectURL(file);
-    setEditingChart(null);
-    setBaseImageUrl(url);
-    setCanvasOpen(true);
-    if (baseImageInputRef.current) baseImageInputRef.current.value = "";
-  }
-
-  function openEditChart(chart: ChartRecord) {
-    setEditingChart(chart);
-    setBaseImageUrl(chart.chartUrl);
-    setCanvasOpen(true);
-  }
-
-  async function handleSaveChart(blob: Blob) {
-    setChartSaving(true);
-    setError("");
-    try {
-      if (editingChart) {
-        const updated = await updateReservationChart(
-          editingChart.id,
-          editingChart.storagePath,
-          reservationDocId,
-          reservationId,
-          patientId,
-          editingChart.label,
-          blob,
-          currentUser
-        );
-        setCharts((prev) =>
-          prev.map((c) => (c.id === updated.id ? { ...c, chartUrl: updated.chartUrl, storagePath: updated.storagePath } : c))
-        );
-      } else {
-        const label = `차트 ${charts.length + 1}`;
-        const newChart = await uploadReservationChart(
-          reservationDocId, reservationId, patientId,
-          blob, label, currentUser
-        );
-        setCharts((prev) => [newChart, ...prev]);
-      }
-      setCanvasOpen(false);
-      setEditingChart(null);
-      setBaseImageUrl(undefined);
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      setError(`차트 저장에 실패했습니다. (${msg})`);
-    } finally {
-      setChartSaving(false);
-    }
-  }
-
-  async function handleDeleteChart(chart: ChartRecord) {
-    if (!confirm(`"${chart.label}" 차트를 삭제할까요?`)) return;
-    try {
-      await deleteReservationChart(
-        chart.id, chart.storagePath, chart.label,
-        reservationId, patientId, currentUser
-      );
-      setCharts((prev) => prev.filter((c) => c.id !== chart.id));
-    } catch {
-      setError("차트 삭제에 실패했습니다.");
-    }
-  }
-
   return (
     <div className="space-y-6">
       {error && (
@@ -339,87 +241,6 @@ export function FilesTab({ reservationDocId, reservationId, patientId, currentUs
         )}
       </section>
 
-      {/* ── 상담차트 섹션 ──────────────────────────────────────── */}
-      <section>
-        <div className="mb-3 flex items-center justify-between">
-          <div className="text-sm font-semibold text-gray-800">
-            상담차트
-            {!chartsLoading && (
-              <span className="ml-1.5 text-xs font-normal text-gray-400">{charts.length}개</span>
-            )}
-          </div>
-          <div className="flex gap-1.5">
-            <button
-              type="button"
-              onClick={openNewChart}
-              className="rounded-lg border border-[#dfe3e8] bg-white px-3 py-1.5 text-xs text-gray-700 transition hover:-translate-y-0.5 hover:bg-gray-50 active:scale-95"
-            >
-              ✏️ 빈 차트
-            </button>
-            <button
-              type="button"
-              onClick={() => baseImageInputRef.current?.click()}
-              className="rounded-lg border border-[#dfe3e8] bg-white px-3 py-1.5 text-xs text-gray-700 transition hover:-translate-y-0.5 hover:bg-gray-50 active:scale-95"
-            >
-              📎 파일로 생성
-            </button>
-            <input
-              ref={baseImageInputRef}
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={(e) => handleBaseImageFile(e.target.files)}
-            />
-          </div>
-        </div>
-
-        {chartsLoading ? (
-          <div className="rounded-xl border border-dashed border-[#dfe3e8] p-4 text-center text-xs text-gray-400">
-            불러오는 중...
-          </div>
-        ) : charts.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-[#dfe3e8] p-4 text-center text-xs text-gray-400">
-            등록된 차트가 없습니다
-          </div>
-        ) : (
-          <ul className="divide-y divide-[#f0f0f0] rounded-xl border border-[#edf0f3] bg-white">
-            {charts.map((chart) => (
-              <li key={chart.id} className="flex items-center gap-2 px-3 py-2.5">
-                <div className="min-w-0 flex-1">
-                  <div className="truncate text-sm text-gray-800">{chart.label}</div>
-                  {formatDate(chart.updatedAt || chart.createdAt) && (
-                    <div className="mt-0.5 text-xs text-gray-400">
-                      {formatDate(chart.updatedAt || chart.createdAt)}
-                    </div>
-                  )}
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setViewingUrl(chart.chartUrl)}
-                  className="shrink-0 rounded-lg border border-[#dfe3e8] px-2.5 py-1 text-xs text-gray-600 transition hover:bg-gray-50 active:scale-95"
-                >
-                  보기
-                </button>
-                <button
-                  type="button"
-                  onClick={() => openEditChart(chart)}
-                  className="shrink-0 rounded-lg border border-[#dfe3e8] px-2.5 py-1 text-xs text-gray-600 transition hover:bg-gray-50 active:scale-95"
-                >
-                  수정
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleDeleteChart(chart)}
-                  className="shrink-0 rounded-lg border border-red-100 px-2.5 py-1 text-xs text-red-500 transition hover:bg-red-50 active:scale-95"
-                >
-                  삭제
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
-
       {/* ── 이미지 뷰어 모달 ───────────────────────────────────── */}
       {viewingUrl && (
         <>
@@ -445,22 +266,6 @@ export function FilesTab({ reservationDocId, reservationId, patientId, currentUs
           </div>
         </>
       )}
-
-      {/* ── 차트 캔버스 모달 ───────────────────────────────────── */}
-      <ChartCanvas
-        open={canvasOpen}
-        existingUrl={baseImageUrl}
-        onSave={handleSaveChart}
-        onError={(msg) => setError(msg)}
-        onClose={() => {
-          if (!chartSaving) {
-            setCanvasOpen(false);
-            setEditingChart(null);
-            setBaseImageUrl(undefined);
-          }
-        }}
-        saving={chartSaving}
-      />
     </div>
   );
 }
