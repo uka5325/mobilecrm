@@ -504,7 +504,15 @@ export default function ReservationsPage() {
   }
 
   async function openPatientMemoPopover(group: PatientGroup) {
-    const rep = group.reservations[group.reservations.length - 1];
+    let rep = group.reservations[group.reservations.length - 1];
+    if (!rep) {
+      // summary만 있는(45일 지난) 환자: 메모를 붙일 대표 예약을 lazy-load(최신 1건).
+      try {
+        const { reservations: full } = await getPatientFullHistoryCached(group.patientId);
+        rep = full[0];
+      } catch { /* 무시 */ }
+    }
+    if (!rep) { setPageError("메모를 추가할 예약이 없습니다."); return; }
     await openMemoPopover(rep);
   }
 
