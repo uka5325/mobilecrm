@@ -186,8 +186,6 @@ export function DetailDrawer({ open, reservation, currentUser, onClose, onRefres
           surgeryCost: detailForm.surgeryCost,
           doctors: splitComma(detailForm.doctors),
           completed: detailForm.completed,
-          currentDoctorStatusMap: selectedReservation.doctorStatusMap,
-          currentDoctorStatusMetaMap: selectedReservation.doctorStatusMetaMap,
         },
         currentUser
       );
@@ -254,8 +252,6 @@ export function DetailDrawer({ open, reservation, currentUser, onClose, onRefres
         depositAmount: detailForm.depositAmount,
         surgeryCost: detailForm.surgeryCost,
         completed: next,
-        currentDoctorStatusMap: selectedReservation.doctorStatusMap,
-        currentDoctorStatusMetaMap: selectedReservation.doctorStatusMetaMap,
       },
       currentUser
     );
@@ -290,8 +286,6 @@ export function DetailDrawer({ open, reservation, currentUser, onClose, onRefres
         surgeryCost: detailForm.surgeryCost,
         completed: detailForm.completed,
         cancelled: next,
-        currentDoctorStatusMap: selectedReservation.doctorStatusMap,
-        currentDoctorStatusMetaMap: selectedReservation.doctorStatusMetaMap,
       },
       currentUser
     );

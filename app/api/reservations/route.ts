@@ -27,7 +27,7 @@ const ALLOWED_RESERVATION_UPDATE_FIELDS = new Set([
   "reservationDate", "reservationTime", "hospital", "appointmentType",
   "completed", "cancelled", "consultArea", "depositAmount", "surgeryCost",
   "coordinators", "doctors", "operationStatus", "preConsStatus",
-  "surgeryReserved", "surgeryReservedAt", "doctorStatusMap", "doctorStatusMetaMap",
+  "surgeryReserved", "surgeryReservedAt",
 ]);
 
 const ALLOWED_PATIENT_UPDATE_FIELDS = new Set([

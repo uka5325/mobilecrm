@@ -506,19 +506,6 @@ export async function createReservation(
     nationality: cleanText(params.nationality),
   };
 
-  const doctorStatusMap: Record<string, ReservationStatus> = {};
-  const doctorStatusMetaMap: ReservationRecord["doctorStatusMetaMap"] = {};
-
-  doctors.forEach((doctor) => {
-    doctorStatusMap[doctor] = "내원전";
-    doctorStatusMetaMap[doctor] = {
-      status: "내원전",
-      updatedAt: "",
-      updatedBy: "",
-      updatedRole: "",
-    };
-  });
-
   const reservationData = {
     reservationId,
     patientId,
@@ -550,9 +537,6 @@ export async function createReservation(
     coordinators: Array.isArray(params.coordinators)
       ? params.coordinators.map(cleanText).filter(Boolean)
       : [],
-
-    doctorStatusMap,
-    doctorStatusMetaMap,
 
     invoiceUrl: "",
     invoiceId: "",
@@ -744,8 +728,6 @@ export type UpdateReservationParams = {
   coordinators?: string[];
   depositAmount?: string;
   surgeryCost?: string;
-  currentDoctorStatusMap?: Record<string, string>;
-  currentDoctorStatusMetaMap?: ReservationRecord["doctorStatusMetaMap"];
 };
 
 export async function updateReservationFull(
@@ -775,24 +757,6 @@ export async function updateReservationFull(
     params.gender || ""
   );
 
-  const previousDoctorStatusMap = params.currentDoctorStatusMap || {};
-  const previousDoctorStatusMetaMap = params.currentDoctorStatusMetaMap || {};
-
-  const doctorStatusMap: Record<string, ReservationStatus | string> = {};
-  const doctorStatusMetaMap: ReservationRecord["doctorStatusMetaMap"] = {};
-
-  if (doctors !== null) {
-    doctors.forEach((doctor) => {
-      doctorStatusMap[doctor] = previousDoctorStatusMap[doctor] || "내원전";
-      doctorStatusMetaMap[doctor] = previousDoctorStatusMetaMap[doctor] || {
-        status: String(doctorStatusMap[doctor] || "내원전"),
-        updatedAt: "",
-        updatedBy: "",
-        updatedRole: "",
-      };
-    });
-  }
-
   const reservationPatch: Record<string, unknown> = {
     name,
     patientName: name,
@@ -819,7 +783,7 @@ export async function updateReservationFull(
       ? params.coordinators.map(cleanText).filter(Boolean)
       : [],
 
-    ...(doctors !== null && { doctors, doctorStatusMap, doctorStatusMetaMap }),
+    ...(doctors !== null && { doctors }),
 
     // updatedBy/updatedByUid는 서버가 SERVER_MANAGED_IGNORE로 무시하고 ctx로 강제한다(거부 대상 아님).
     updatedBy: staff.displayName,

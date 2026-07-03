@@ -277,8 +277,6 @@ export default function ReservationsPage() {
           doctors: inlineForm.doctors.split(",").map((s) => s.trim()).filter(Boolean),
           depositAmount: inlineForm.depositAmount,
           surgeryCost: inlineForm.surgeryCost,
-          currentDoctorStatusMap: item.doctorStatusMap,
-          currentDoctorStatusMetaMap: item.doctorStatusMetaMap,
         },
         currentUser
       );
@@ -506,8 +504,6 @@ export default function ReservationsPage() {
         doctors: item.doctors || [],
         depositAmount: field === "depositAmount" ? value : item.depositAmount,
         surgeryCost: field === "surgeryCost" ? value : item.surgeryCost,
-        currentDoctorStatusMap: item.doctorStatusMap,
-        currentDoctorStatusMetaMap: item.doctorStatusMetaMap,
       },
       currentUser
     );

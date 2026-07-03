@@ -51,19 +51,6 @@ export function getCardStatus(item: ReservationRecord) {
   return item.operationStatus || "내원전";
 }
 
-export function getCardStatusForDoctor(item: ReservationRecord, doctorName: string): string {
-  // 이 doctor가 원상중으로 설정된 경우
-  if (item.doctorStatusMap?.[doctorName] === "원상중") return "원상중";
-
-  // 전역 상태가 원상중이지만 이 doctor는 원상중을 누르지 않은 경우:
-  // preConsStatus(원상중 이전 상태)를 보여줌
-  if (item.operationStatus === "원상중" && (item.doctors?.length ?? 0) > 1) {
-    return (item as ReservationRecord & { preConsStatus?: string }).preConsStatus || "내원전";
-  }
-
-  return item.operationStatus || "내원전";
-}
-
 export function buildGlobalSlotInfo(dayReservations: ReservationRecord[]): {
   rowMap: Map<string, number>;
   slotCounts: Map<number, number>;
