@@ -307,11 +307,10 @@ export default function DashboardPage() {
       {/* 병원별 KPI */}
       <Panel title="병원별 KPI">
         <KpiTable
-          headers={["병원명", "상담", "내원", "수술예약", "완료", "전환율", "예약금"]}
+          headers={["병원명", "상담", "수술예약", "완료", "전환율", "예약금"]}
           rows={dashboard.hospitalRows.map((row) => [
             row.name || "미지정",
             row.consultCount.toLocaleString("ko-KR"),
-            row.visited.toLocaleString("ko-KR"),
             row.surgery.toLocaleString("ko-KR"),
             row.completedCount.toLocaleString("ko-KR"),
             pctText(row.surgeryRate),
