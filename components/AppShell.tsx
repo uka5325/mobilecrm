@@ -5,7 +5,6 @@ import { usePathname } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { logout } from "@/lib/auth";
-import { ReservationsProvider } from "@/components/ReservationsProvider";
 import { TodayMemosProvider } from "@/components/TodayMemosProvider";
 import { CurrentUserProvider, useCurrentUserContext } from "@/components/CurrentUserProvider";
 
@@ -296,10 +295,9 @@ function AppShellContent({ children }: AppShellProps) {
           </p>
         </div>
 
-        {/* 전역 단일 예약/메모 구독: AppShell이 라우트 전환에도 유지되므로 구독도 1회만 살아 있다. */}
-        <ReservationsProvider>
-          <TodayMemosProvider>{children}</TodayMemosProvider>
-        </ReservationsProvider>
+        {/* 전역 45일 예약 구독은 폐기됨(화면별 범위 조회로 전환) — 홈=오늘, 스케줄=선택 범위,
+            고객관리=patients 요약. 오늘의 메모 구독만 전역 유지. */}
+        <TodayMemosProvider>{children}</TodayMemosProvider>
       </main>
     </div>
   );

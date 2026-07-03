@@ -18,7 +18,6 @@ import {
   type PatientRecord,
 } from "@/lib/reservations";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
-import { useReservationData } from "@/hooks/useReservationData";
 import { getReservationBirthInfo } from "@/lib/reservationUtils";
 import { todayString } from "@/lib/dateUtils";
 import { CreateDrawer } from "@/components/reservations/CreateDrawer";
@@ -31,7 +30,8 @@ import { toDate } from "@/lib/settingsUtils";
 
 export default function ReservationsPage() {
   const { currentUser, authReady } = useCurrentUser();
-  const { reservations, loading, refresh } = useReservationData(authReady);
+  // 전역 45일 예약 구독 폐기 — 고객관리는 patients 요약만 조회한다.
+  const [listLoading, setListLoading] = useState(true);
 
   const [search, setSearch] = useState("");
   const [groupPage, setGroupPage] = useState(1);
@@ -115,39 +115,6 @@ export default function ReservationsPage() {
     }
   }
 
-  const filteredReservations = useMemo(() => {
-    const keyword = search.trim().toLowerCase();
-
-    return reservations.filter((item) => {
-      if (!keyword) return true;
-
-      const birthInfo = getReservationBirthInfo(item);
-
-      const target = [
-        item.name,
-        birthInfo.birthDisplay,
-        birthInfo.ageText,
-        birthInfo.gender,
-        item.phone,
-        item.nationality,
-        item.consultArea,
-        item.hospital,
-        item.appointmentType,
-        item.reservationDate,
-        item.reservationTime,
-        item.operationStatus,
-        item.depositAmount,
-        item.surgeryCost,
-        item.coordinators.join(", "),
-      ]
-        .join(" ")
-        .toLowerCase();
-
-      return target.includes(keyword);
-    });
-  }, [reservations, search]);
-
-
   const filteredPatients = useMemo(() => {
     const keyword = search.trim().toLowerCase();
     if (!keyword) return patients;
@@ -158,12 +125,11 @@ export default function ReservationsPage() {
   }, [patients, search]);
 
   const patientGroups = useMemo<PatientGroup[]>(() => {
-    const map = new Map<string, PatientGroup>();
-
-    // 1. patients 컬렉션을 단일 소스로 먼저 등록
+    // patients 요약을 단일 소스로 그룹 구성(예약 구독 없음 — 상세는 클릭 시 lazy-load).
+    const groups: PatientGroup[] = [];
     for (const p of filteredPatients) {
       if (!p.patientId) continue;
-      map.set(p.patientId, {
+      groups.push({
         patientKey: p.patientId,
         patientId: p.patientId,
         name: p.name,
@@ -182,43 +148,11 @@ export default function ReservationsPage() {
         lastReservationDate: p.lastReservationDate || "",
       });
     }
-
-    // 2. reservations를 환자 그룹에 결합 (patients에 없는 레거시 데이터는 fallback 그룹 생성)
-    for (const r of filteredReservations) {
-      const key = r.patientId || `${r.name}_${r.birth}`;
-      if (!map.has(key)) {
-        map.set(key, {
-          patientKey: key,
-          patientId: r.patientId || key,
-          name: r.name,
-          birth: r.birth,
-          birthInput: r.birthInput || r.birth || "",
-          gender: r.gender,
-          phone: r.phone,
-          nationality: r.nationality,
-          reservations: [],
-        });
-      }
-      map.get(key)!.reservations.push(r);
-    }
-
-    // 3. 각 그룹 내 예약 날짜순 정렬
-    for (const g of map.values()) {
-      g.reservations.sort((a, b) =>
-        (a.reservationDate + a.reservationTime).localeCompare(
-          b.reservationDate + b.reservationTime
-        )
-      );
-    }
-
-    // 4. 최신 예약날짜 기준 내림차순. summary의 lastReservationDate 우선,
-    //    없으면(구독 병합 그룹) 로드된 예약의 최신 날짜로 fallback.
-    return [...map.values()].sort((a, b) => {
-      const latestA = a.lastReservationDate || a.reservations[a.reservations.length - 1]?.reservationDate || "";
-      const latestB = b.lastReservationDate || b.reservations[b.reservations.length - 1]?.reservationDate || "";
-      return latestB.localeCompare(latestA);
-    });
-  }, [filteredPatients, filteredReservations]);
+    // 최신 예약일 내림차순(요약 lastReservationDate). 서버가 이미 정렬해 주지만 검색 결과도 정렬.
+    return groups.sort((a, b) =>
+      (b.lastReservationDate || "").localeCompare(a.lastReservationDate || "")
+    );
+  }, [filteredPatients]);
 
   useEffect(() => { setGroupPage(1); }, [search]);
 
@@ -227,7 +161,11 @@ export default function ReservationsPage() {
   // 최소 글자 제한: 이름 2자↑ / 숫자(전화)만이면 4자↑ — 1글자 검색으로 인한 불필요한 서버 호출 방지.
   // 고객관리 첫 화면: patients 요약 최근순(45일 지난 환자 포함). 배지는 summary 값.
   const reloadPatients = useCallback(() => {
-    listPatientsSummary(50).then((r) => setPatients(r.patients)).catch(() => {});
+    setListLoading(true);
+    listPatientsSummary(50)
+      .then((r) => setPatients(r.patients))
+      .catch(() => {})
+      .finally(() => setListLoading(false));
   }, []);
 
   // 현재 화면(검색 중이면 검색 결과, 아니면 요약 목록)을 다시 로드 — mutation 후 갱신용.
@@ -235,8 +173,9 @@ export default function ReservationsPage() {
     const t = search.trim();
     const digitsOnly = t.length > 0 && /^[0-9]+$/.test(t);
     const longEnough = digitsOnly ? t.length >= 4 : t.length >= 2;
-    if (t && longEnough) searchPatients(t).then(setPatients).catch(() => {});
-    else listPatientsSummary(50).then((r) => setPatients(r.patients)).catch(() => {});
+    setListLoading(true);
+    const p = (t && longEnough) ? searchPatients(t) : listPatientsSummary(50).then((r) => r.patients);
+    p.then(setPatients).catch(() => {}).finally(() => setListLoading(false));
   }, [search]);
 
   useEffect(() => {
@@ -250,7 +189,8 @@ export default function ReservationsPage() {
       return;
     }
     const handle = setTimeout(() => {
-      searchPatients(t).then(setPatients).catch(() => {});
+      setListLoading(true);
+      searchPatients(t).then(setPatients).catch(() => {}).finally(() => setListLoading(false));
     }, 300);
     return () => clearTimeout(handle);
   }, [authReady, search, reloadPatients]);
@@ -310,7 +250,7 @@ export default function ReservationsPage() {
       setInlineEditId(null);
       setInlineForm(null);
       invalidatePatientFullHistoryCache(item.patientId);
-      await refresh();
+      reloadCurrent();
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       setPageError(`수정 오류: ${msg}`);
@@ -529,7 +469,7 @@ export default function ReservationsPage() {
       return;
     }
     invalidatePatientFullHistoryCache(item.patientId);
-    await refresh();
+    reloadCurrent();
   }
 
   function handleAddReservation(group: PatientGroup) {
@@ -624,10 +564,7 @@ export default function ReservationsPage() {
                   </div>
                 </div>
                 <div className="mb-3 text-xs text-gray-400">
-                  해당 기간 예약: {reservations.filter((r) => {
-                    const d = r.reservationDate || "";
-                    return d >= dlStart && d <= dlEnd;
-                  }).length}건
+                  선택한 기간의 예약을 서버에서 조회해 내보냅니다.
                 </div>
                 <button
                   onClick={handleDownload}
@@ -644,7 +581,7 @@ export default function ReservationsPage() {
       </div>
 
       <div className="px-5 pb-3 text-sm text-gray-500">
-        전체 {reservations.length}건 / 표시 {filteredReservations.length}건
+        환자 {patientGroups.length}명
       </div>
 
       {/* 환자 전체 이력 모달 */}
@@ -714,7 +651,7 @@ export default function ReservationsPage() {
 
       <ReservationsTable
         patientGroups={pagedGroups}
-        loading={loading}
+        loading={listLoading}
         inlineEditId={inlineEditId}
         inlineForm={inlineForm}
         inlineSaving={inlineSaving}
