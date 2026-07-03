@@ -418,7 +418,12 @@ async function getClientDoctors(): Promise<DoctorOption[]> {
 // getAllReservations와 동일 동작(45일 1회 조회). 호출부 호환을 위해 별칭 유지.
 export const fetchAllReservationsOnce = getAllReservations;
 
-export function subscribeAllReservations(
+// 예약을 [from, to] 날짜 범위로 실시간 구독한다. to가 null이면 from 이후 전체.
+// 화면별 필요한 범위만 구독하는 구조의 기반(홈=오늘, 스케줄=선택 범위).
+// 인덱스: reservations (isDeleted ASC, reservationDate) — firestore.indexes.json.
+export function subscribeReservationsByRange(
+  from: string,
+  to: string | null,
   callback: (data: {
     reservations: ReservationRecord[];
     doctors: DoctorOption[];
@@ -432,18 +437,17 @@ export function subscribeAllReservations(
     if (unsubscribeSnapshot) { unsubscribeSnapshot(); unsubscribeSnapshot = null; }
     if (!user) return;
 
-    const fromDate = get45DaysAgo();
-
-    // 실시간 단일 경로: onSnapshot이 데이터를 공급. (이중 읽기 방지로 API seed 제거)
-    // 의사 목록만 별도 조회.
+    // 실시간 단일 경로: onSnapshot이 데이터를 공급. 의사 목록만 별도 조회.
     getClientDoctors().then((d) => { latestDoctors = d; }).catch(() => {});
 
+    const constraints = [
+      where("isDeleted", "==", false),
+      where("reservationDate", ">=", from),
+    ];
+    if (to) constraints.push(where("reservationDate", "<=", to));
+
     unsubscribeSnapshot = onSnapshot(
-      query(
-        collection(db, "reservations"),
-        where("isDeleted", "==", false),
-        where("reservationDate", ">=", fromDate)
-      ),
+      query(collection(db, "reservations"), ...constraints),
       (snap) => {
         // 캐시 기반 빈 스냅샷은 무시 (초기 깜빡임 방지)
         if (snap.metadata.fromCache && snap.empty) return;
@@ -457,7 +461,7 @@ export function subscribeAllReservations(
         callback({ reservations, doctors: latestDoctors.length ? latestDoctors : fallback });
       },
       (error) => {
-        console.error("[subscribeAllReservations error]", (error as Error)?.message ?? "");
+        console.error("[subscribeReservationsByRange error]", (error as Error)?.message ?? "");
         onError?.(error);
       }
     );
@@ -467,6 +471,17 @@ export function subscribeAllReservations(
     unsubscribeAuth();
     unsubscribeSnapshot?.();
   };
+}
+
+// 최근 45일 전체 구독(하위호환) — 범위 구독의 특수 케이스.
+export function subscribeAllReservations(
+  callback: (data: {
+    reservations: ReservationRecord[];
+    doctors: DoctorOption[];
+  }) => void,
+  onError?: (error: Error) => void
+) {
+  return subscribeReservationsByRange(get45DaysAgo(), null, callback, onError);
 }
 
 export async function createReservation(

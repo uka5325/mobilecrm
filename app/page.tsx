@@ -1,9 +1,8 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import type { ReservationRecord } from "@/lib/reservations";
-import { useReservationsContext } from "@/components/ReservationsProvider";
+import { subscribeReservationsByRange, type ReservationRecord } from "@/lib/reservations";
 import { useTodayMemosContext } from "@/components/TodayMemosProvider";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { todayString } from "@/lib/dateUtils";
@@ -72,9 +71,20 @@ export default function HomePage() {
   const router = useRouter();
   const { currentUser } = useCurrentUser();
 
-  // 오늘 예약: 전역 단일 구독(ReservationsProvider)에서 공유받아 오늘 날짜만 필터링.
-  // 별도 서버 조회를 하지 않으므로 홈 재진입마다의 중복 읽기가 없다.
-  const { reservations, loading } = useReservationsContext();
+  // 오늘 예약: 화면별 필요한 범위만 조회 — 오늘 날짜만 실시간 구독한다.
+  // (기존: 전역 45일 구독을 오늘로 필터 → 오늘 범위 구독으로 전환해 읽기 최소화.)
+  const [reservations, setReservations] = useState<ReservationRecord[]>([]);
+  const [loading, setLoading] = useState(true);
+  useEffect(() => {
+    const today = todayString();
+    const unsub = subscribeReservationsByRange(
+      today,
+      today,
+      (data) => { setReservations(data.reservations); setLoading(false); },
+      () => setLoading(false)
+    );
+    return () => unsub();
+  }, []);
 
   // 오늘의 전체 메모: 전역 단일 구독(TodayMemosProvider)에서 실시간으로 공유받는다.
   // 다른 직원이 추가/수정/삭제하면 onSnapshot이 push해 즉시 반영된다.
