@@ -366,6 +366,35 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: true, patients });
     }
 
+    // ── LIST PATIENTS BY SUMMARY (고객관리 첫 화면 — patients만 읽기) ─────────
+    // patients 요약(lastReservationDate)으로 최근순 페이지네이션. 45일 라이브 윈도우와
+    // 무관하게 과거 환자도 노출되며, 배지는 저장된 summary 필드로 표시(추가 조회 0).
+    // 인덱스: patients (isDeleted ASC, lastReservationDate DESC) — firestore.indexes.json.
+    if (action === "list_patients_summary") {
+      const { cursor, limit } = (payload || {}) as { cursor?: string; limit?: number };
+      const pageSize = Math.min(Math.max(Number(limit) || 10, 1), 50);
+
+      let q = adminDb
+        .collection("patients")
+        .where("isDeleted", "==", false)
+        .orderBy("lastReservationDate", "desc")
+        .limit(pageSize);
+
+      if (cursor) {
+        const curDoc = await adminDb.collection("patients").doc(cursor).get();
+        if (curDoc.exists) q = q.startAfter(curDoc) as typeof q;
+      }
+
+      const snap = await q.get();
+      const nextCursor = snap.docs.length === pageSize ? snap.docs[snap.docs.length - 1].id : null;
+      return NextResponse.json({
+        success: true,
+        patients: snap.docs.map(docToObj),
+        nextCursor,
+        hasMore: !!nextCursor,
+      });
+    }
+
     // ── CREATE ────────────────────────────────────────────────────────────
     if (action === "create") {
       const { patient, reservation } = payload as {
