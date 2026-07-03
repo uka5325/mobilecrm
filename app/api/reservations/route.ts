@@ -3,6 +3,7 @@ import { adminDb, FieldValue } from "@/lib/firebaseAdmin";
 import { requireActiveStaff, toAuthErrorResponse } from "@/lib/apiAuth";
 import { toSerializable, docToObj } from "@/lib/adminUtils";
 import { makePatientSearchTokens } from "@/lib/searchTokens";
+import { recomputeReservationSummary, safeRecompute } from "@/lib/patientSummary";
 
 // 데이터 변경 action — 토큰 폐기 검사 적용
 const WRITE_ACTIONS = new Set([
@@ -473,6 +474,12 @@ export async function POST(req: NextRequest) {
         now,
       });
 
+      // 고객관리 요약(예약 파생) 재계산 — best-effort
+      await safeRecompute(
+        () => recomputeReservationSummary(String(reservation.patientId || "")),
+        "create/reservation"
+      );
+
       return NextResponse.json({
         success: true,
         patientDocId: resultPatientDocId,
@@ -576,6 +583,12 @@ export async function POST(req: NextRequest) {
         after: { ...safeReservationPatch, ...(Object.keys(safePatientPatch).length ? { patient: safePatientPatch } : {}) },
         createdAt: now,
       });
+
+      // 예약금·수술비·날짜 등이 바뀔 수 있으므로 예약 파생 요약 재계산 — best-effort
+      await safeRecompute(
+        () => recomputeReservationSummary(String(beforeData.patientId || patientId || "")),
+        "update/reservation"
+      );
 
       return NextResponse.json({ success: true });
     }
@@ -716,6 +729,12 @@ export async function POST(req: NextRequest) {
         after: { isDeleted: true },
         now,
       });
+
+      // 예약 파생 요약 재계산 — best-effort
+      await safeRecompute(
+        () => recomputeReservationSummary(String(delData.patientId || "")),
+        "delete/reservation"
+      );
 
       return NextResponse.json({ success: true });
     }

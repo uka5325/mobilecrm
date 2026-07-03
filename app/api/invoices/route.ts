@@ -3,6 +3,7 @@ import { adminDb, FieldValue } from "@/lib/firebaseAdmin";
 import { requireActiveStaff, toAuthErrorResponse } from "@/lib/apiAuth";
 import { docToObj, cleanText } from "@/lib/adminUtils";
 import { parseBirthInfo } from "@/lib/invoiceUtils";
+import { recomputeInvoiceSummary, safeRecompute } from "@/lib/patientSummary";
 
 // 데이터 변경 action — 토큰 폐기 검사 적용
 const WRITE_ACTIONS = new Set(["create", "update", "delete"]);
@@ -254,6 +255,12 @@ export async function POST(req: NextRequest) {
         after: { invoiceId, invoiceDocId: txResult.invoiceDocId },
       });
 
+      // 고객관리 요약(인보이스 개수) 재계산 — best-effort
+      await safeRecompute(
+        () => recomputeInvoiceSummary(cleanText(reservation.patientId)),
+        "create/invoice"
+      );
+
       const newSnap = await invoicesCol.doc(txResult.invoiceDocId).get();
       return NextResponse.json({ success: true, invoice: docToObj(newSnap), alreadyExists: false });
     }
@@ -372,6 +379,12 @@ export async function POST(req: NextRequest) {
         message: `${staffName}님이 인보이스를 삭제했습니다.`,
         before: { invoiceId: current.invoiceId },
       });
+
+      // 고객관리 요약(인보이스 개수) 재계산 — best-effort
+      await safeRecompute(
+        () => recomputeInvoiceSummary(cleanText(current.patientId)),
+        "delete/invoice"
+      );
 
       return NextResponse.json({ success: true });
     }
