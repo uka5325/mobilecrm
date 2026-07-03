@@ -216,6 +216,9 @@ export function DetailDrawer({ open, reservation, currentUser, onClose, onRefres
 
       setSelectedReservation(updated);
       setDetailMessage("수정 저장 완료");
+      // 부모(전체 이력 모달/리스트)에 저장 사실을 알려 stale 목록을 갱신한다.
+      // (형제 핸들러 handleCompletedToggle/handleCancelledToggle과 동일 패턴)
+      onRefresh?.();
       await loadLogs(updated);
       await onRefreshLatestLog(updated);
     } catch (err) {
