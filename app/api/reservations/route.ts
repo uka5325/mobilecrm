@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { createHash } from "node:crypto";
 import { adminDb, FieldValue } from "@/lib/firebaseAdmin";
 import { requireActiveStaff, toAuthErrorResponse } from "@/lib/apiAuth";
 import { toSerializable, docToObj } from "@/lib/adminUtils";
@@ -26,7 +27,7 @@ const ALLOWED_RESERVATION_UPDATE_FIELDS = new Set([
   "name", "patientName", "birth", "birthInput", "gender", "phone", "nationality",
   "reservationDate", "reservationTime", "hospital", "appointmentType",
   "completed", "cancelled", "consultArea", "depositAmount", "surgeryCost",
-  "coordinators", "doctors", "operationStatus", "preConsStatus",
+  "coordinators", "doctors",
   "surgeryReserved", "surgeryReservedAt",
 ]);
 
@@ -34,27 +35,51 @@ const ALLOWED_PATIENT_UPDATE_FIELDS = new Set([
   "name", "birth", "birthInput", "gender", "phone", "nationality",
 ]);
 
+// create 액션 화이트리스트 — isDeleted/invoice*/operationStatus 등 서버 전용·삭제 필드는
+// 의도적으로 제외한다(직접 API 호출로 임의 필드 주입 차단).
+const ALLOWED_PATIENT_CREATE_FIELDS = new Set([
+  "patientId", "name", "birth", "birthInput", "gender", "phone", "nationality",
+]);
+
+const ALLOWED_RESERVATION_CREATE_FIELDS = new Set([
+  "reservationId", "patientId",
+  "name", "patientName", "birth", "birthInput", "gender", "phone", "nationality",
+  "reservationDate", "reservationTime", "hospital", "appointmentType", "completed",
+  "surgeryReserved", "surgeryReservedAt",
+  "depositAmount", "surgeryCost", "consultArea",
+  "doctors", "coordinators",
+  "invoiceUrl", "invoiceId", "invoiceSheetName",
+]);
+
 // 서버가 신원을 강제하는 필드 — 합법 클라이언트가 보낼 수 있어 조용히 무시한다(거부하지 않음).
 const SERVER_MANAGED_IGNORE = new Set(["updatedBy", "updatedByUid", "updatedAt"]);
 
+const CREATE_SERVER_MANAGED_IGNORE = new Set([
+  "createdBy", "createdByUid", "updatedBy", "updatedByUid", "createdAt", "updatedAt", "isDeleted", "searchTokens",
+]);
+
 // patch를 검증해 {safe, disallowed}로 분리한다.
 // - 허용 필드 → safe에 통과
-// - 서버관리 필드 → 조용히 무시
+// - 서버관리 필드(ignore) → 조용히 무시
 // - 그 외(isDeleted/createdBy*/invoice*/식별자 등) → disallowed에 수집(호출부에서 거부)
 function splitPatch(
   patch: Record<string, unknown> | undefined | null,
-  allowed: Set<string>
+  allowed: Set<string>,
+  ignore: Set<string> = SERVER_MANAGED_IGNORE
 ): { safe: Record<string, unknown>; disallowed: string[] } {
   const safe: Record<string, unknown> = {};
   const disallowed: string[] = [];
   if (!patch || typeof patch !== "object") return { safe, disallowed };
   for (const [k, v] of Object.entries(patch)) {
     if (allowed.has(k)) safe[k] = v;
-    else if (SERVER_MANAGED_IGNORE.has(k)) continue;
+    else if (ignore.has(k)) continue;
     else disallowed.push(k);
   }
   return { safe, disallowed };
 }
+
+// create 액션의 중복예약 트랜잭션에서 "중복이라 저장하지 않음"을 알리기 위한 마커 에러.
+class DuplicateReservationError extends Error {}
 
 // 의사 목록은 거의 변경되지 않으므로 서버 메모리에 10분 캐싱
 let _doctorsCache: Record<string, unknown>[] | null = null;
@@ -292,10 +317,19 @@ export async function POST(req: NextRequest) {
     // ── CREATE PATIENT ONLY ───────────────────────────────────────────────
     if (action === "create_patient") {
       const { patient } = payload as { patient: Record<string, unknown> };
+
+      const { safe: safePatient, disallowed } = splitPatch(patient, ALLOWED_PATIENT_CREATE_FIELDS, CREATE_SERVER_MANAGED_IGNORE);
+      if (disallowed.length) {
+        return NextResponse.json(
+          { success: false, message: `허용되지 않은 필드입니다: ${disallowed.join(", ")}` },
+          { status: 400 }
+        );
+      }
+
       const now = FieldValue.serverTimestamp();
 
       // 중복 방지(정책: 연결만·없으면 생성): 같은 patientId 문서가 이미 있으면 그걸 반환.
-      const incomingPatientId = String((patient as { patientId?: unknown }).patientId || "");
+      const incomingPatientId = String((safePatient as { patientId?: unknown }).patientId || "");
       if (incomingPatientId) {
         const existing = await adminDb
           .collection("patients")
@@ -313,8 +347,8 @@ export async function POST(req: NextRequest) {
         : adminDb.collection("patients").doc();
       // 작성자 신원은 검증된 토큰(ctx)으로 강제 → 위조 차단
       await ref.set({
-        ...patient,
-        searchTokens: makePatientSearchTokens(String((patient as { name?: unknown }).name || "")),
+        ...safePatient,
+        searchTokens: makePatientSearchTokens(String((safePatient as { name?: unknown }).name || "")),
         isDeleted: false,
         createdBy: ctx.name, createdByUid: ctx.uid,
         updatedBy: ctx.name, updatedByUid: ctx.uid,
@@ -402,102 +436,111 @@ export async function POST(req: NextRequest) {
         reservation: Record<string, unknown>;
       };
 
-      const dupDate = String(reservation.reservationDate || "");
-      const dupResId = String(reservation.reservationId || "");
-      const dupName = String(reservation.name || "");
-
-      if (dupResId) {
-        const idSnap = await adminDb
-          .collection("reservations")
-          .where("reservationId", "==", dupResId)
-          .where("isDeleted", "==", false)
-          .get();
-        if (!idSnap.empty) {
-          return NextResponse.json({
-            success: false,
-            message: "이미 등록된 예약으로 보여 저장하지 않았습니다.",
-            duplicate: true,
-          });
-        }
+      const { safe: safePatient, disallowed: patDisallowed } = splitPatch(patient, ALLOWED_PATIENT_CREATE_FIELDS, CREATE_SERVER_MANAGED_IGNORE);
+      const { safe: safeReservation, disallowed: resDisallowed } = splitPatch(reservation, ALLOWED_RESERVATION_CREATE_FIELDS, CREATE_SERVER_MANAGED_IGNORE);
+      const createDisallowed = [...patDisallowed, ...resDisallowed];
+      if (createDisallowed.length) {
+        return NextResponse.json(
+          { success: false, message: `허용되지 않은 필드입니다: ${createDisallowed.join(", ")}` },
+          { status: 400 }
+        );
       }
 
-      if (dupDate && dupName) {
-        const dateSnap = await adminDb
-          .collection("reservations")
-          .where("reservationDate", "==", dupDate)
-          .where("isDeleted", "==", false)
-          .limit(50)
-          .get();
-
-        const inKey = normDupKey(reservation);
-        const isDuplicate = dateSnap.docs.some((d) => normDupKey(d.data()) === inKey);
-
-        if (isDuplicate) {
-          return NextResponse.json({
-            success: false,
-            message: "이미 등록된 예약으로 보여 저장하지 않았습니다.",
-            duplicate: true,
-          });
-        }
-      }
+      const dupDate = String(safeReservation.reservationDate || "");
+      const dupResId = String(safeReservation.reservationId || "");
+      const dupName = String(safeReservation.name || "");
+      // 같은 날짜+이름 조합 중복키를 해시해 Firestore 문서 ID로 사용(원본 키에 "/" 등 금지문자가
+      // 섞일 수 있어 해시 필수). reservationLocks 문서 존재 여부를 트랜잭션 안에서 원자적으로 검사+생성해
+      // 두 요청이 동시에 들어와도 하나만 통과하도록 한다(query-then-set 레이스 제거).
+      const duplicateKey = dupDate && dupName ? normDupKey(safeReservation) : "";
+      const lockRef = duplicateKey
+        ? adminDb.collection("reservationLocks").doc(createHash("sha1").update(duplicateKey).digest("hex"))
+        : null;
 
       const now = FieldValue.serverTimestamp();
-
-      // 작성자 신원은 검증된 토큰(ctx)으로 강제 → 위조 차단
       const authorFields = {
         createdBy: ctx.name, createdByUid: ctx.uid,
         updatedBy: ctx.name, updatedByUid: ctx.uid,
       };
-
-      // 기존 환자에 예약 추가(정책: 연결만·없으면 생성):
-      // patientId가 있고 patients 문서가 이미 있으면 마스터를 건드리지 않고 예약만 생성한다.
-      // (마스터 정정은 update_patient_profile / savePatientEdit 전용 경로로만)
-      const incomingPatientId = String((patient as { patientId?: unknown }).patientId || "");
-      let existingPatientDocId = "";
-      if (incomingPatientId) {
-        const pSnap = await adminDb
-          .collection("patients")
-          .where("patientId", "==", incomingPatientId)
-          .limit(1)
-          .get();
-        if (!pSnap.empty) existingPatientDocId = pSnap.docs[0].id;
-      }
-
+      const incomingPatientId = String((safePatient as { patientId?: unknown }).patientId || "");
       const reservationRef = adminDb.collection("reservations").doc();
 
-      let resultPatientDocId: string;
-      const linkedExistingPatient = !!existingPatientDocId;
+      let resultPatientDocId = "";
+      let linkedExistingPatient = false;
 
-      if (existingPatientDocId) {
-        await reservationRef.set({ ...reservation, ...authorFields, createdAt: now, updatedAt: now });
-        resultPatientDocId = existingPatientDocId;
-      } else {
-        // 신규 환자는 문서 ID를 patientId로 고정 → 같은 patientId 동시 생성이 같은 문서를 가리켜
-        // 중복 doc이 생기지 않는다(auto-id 경합 창 제거). patientId가 비면 auto-id 폴백.
-        const patientRef = incomingPatientId
-          ? adminDb.collection("patients").doc(incomingPatientId)
-          : adminDb.collection("patients").doc();
-        const batch = adminDb.batch();
-        batch.set(patientRef, { ...patient, searchTokens: makePatientSearchTokens(String((patient as { name?: unknown }).name || "")), isDeleted: false, ...authorFields, createdAt: now, updatedAt: now });
-        batch.set(reservationRef, { ...reservation, ...authorFields, createdAt: now, updatedAt: now });
-        await batch.commit();
-        resultPatientDocId = patientRef.id;
+      try {
+        await adminDb.runTransaction(async (tx) => {
+          // ── 읽기(전부 쓰기보다 먼저) ──────────────────────────────────
+          if (dupResId) {
+            const idSnap = await tx.get(
+              adminDb.collection("reservations").where("reservationId", "==", dupResId).where("isDeleted", "==", false)
+            );
+            if (!idSnap.empty) throw new DuplicateReservationError();
+          }
+          if (lockRef) {
+            const lockSnap = await tx.get(lockRef);
+            if (lockSnap.exists) throw new DuplicateReservationError();
+          }
+          // 기존 환자에 예약 추가(정책: 연결만·없으면 생성):
+          // patientId가 있고 patients 문서가 이미 있으면 마스터를 건드리지 않고 예약만 생성한다.
+          // (마스터 정정은 update_patient_profile / savePatientEdit 전용 경로로만)
+          let existingPatientDocId = "";
+          if (incomingPatientId) {
+            const pSnap = await tx.get(
+              adminDb.collection("patients").where("patientId", "==", incomingPatientId).limit(1)
+            );
+            if (!pSnap.empty) existingPatientDocId = pSnap.docs[0].id;
+          }
+
+          // ── 쓰기(원자적) ──────────────────────────────────────────────
+          if (lockRef) tx.set(lockRef, { duplicateKey, reservationRef: reservationRef.id, createdAt: now });
+
+          if (existingPatientDocId) {
+            tx.set(reservationRef, { ...safeReservation, isDeleted: false, ...authorFields, createdAt: now, updatedAt: now });
+            resultPatientDocId = existingPatientDocId;
+            linkedExistingPatient = true;
+          } else {
+            // 신규 환자는 문서 ID를 patientId로 고정 → 같은 patientId 동시 생성이 같은 문서를 가리켜
+            // 중복 doc이 생기지 않는다(auto-id 경합 창 제거). patientId가 비면 auto-id 폴백.
+            const patientRef = incomingPatientId
+              ? adminDb.collection("patients").doc(incomingPatientId)
+              : adminDb.collection("patients").doc();
+            tx.set(patientRef, {
+              ...safePatient,
+              searchTokens: makePatientSearchTokens(String((safePatient as { name?: unknown }).name || "")),
+              isDeleted: false,
+              ...authorFields,
+              createdAt: now, updatedAt: now,
+            });
+            tx.set(reservationRef, { ...safeReservation, isDeleted: false, ...authorFields, createdAt: now, updatedAt: now });
+            resultPatientDocId = patientRef.id;
+          }
+        });
+      } catch (e) {
+        if (e instanceof DuplicateReservationError) {
+          return NextResponse.json({
+            success: false,
+            message: "이미 등록된 예약으로 보여 저장하지 않았습니다.",
+            duplicate: true,
+          });
+        }
+        throw e;
       }
 
       // 감사로그(서버 권위 기록) — 클라이언트 createLog 대체
       await writeReservationLog(ctx, {
         action: "reservation_create",
-        targetId: String(reservation.reservationId || reservationRef.id),
-        patientId: String(reservation.patientId || ""),
-        reservationId: String(reservation.reservationId || ""),
+        targetId: String(safeReservation.reservationId || reservationRef.id),
+        patientId: String(safeReservation.patientId || ""),
+        reservationId: String(safeReservation.reservationId || ""),
         message: `${ctx.name}님이 신규 예약을 등록했습니다.`,
         before: null,
         after: {
-          name: reservation.name ?? "",
-          reservationDate: reservation.reservationDate ?? "",
-          reservationTime: reservation.reservationTime ?? "",
-          hospital: reservation.hospital ?? "",
-          appointmentType: reservation.appointmentType ?? "",
+          name: safeReservation.name ?? "",
+          reservationDate: safeReservation.reservationDate ?? "",
+          reservationTime: safeReservation.reservationTime ?? "",
+          hospital: safeReservation.hospital ?? "",
+          appointmentType: safeReservation.appointmentType ?? "",
           linkedExistingPatient,
         },
         now,
@@ -505,7 +548,7 @@ export async function POST(req: NextRequest) {
 
       // 고객관리 요약(예약 파생) 재계산 — best-effort
       await safeRecompute(
-        () => recomputeReservationSummary(String(reservation.patientId || "")),
+        () => recomputeReservationSummary(String(safeReservation.patientId || "")),
         "create/reservation"
       );
 

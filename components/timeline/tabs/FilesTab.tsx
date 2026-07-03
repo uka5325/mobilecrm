@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { StaffUser } from "@/lib/auth";
+import { auth } from "@/lib/firebase";
 import {
   deleteReservationPhoto,
   getReservationPhotos,
@@ -42,13 +43,50 @@ export function FilesTab({ reservationDocId, reservationId, patientId, currentUs
   const [photosLoading, setPhotosLoading] = useState(true);
   const [uploadingCount, setUploadingCount] = useState(0);
 
-  // 이미지/파일 뷰어
+  // 이미지/파일 뷰어 — storagePath가 있으면 인증된 /api/proxy-image로 blob을 받아
+  // object URL로 표시(장기 유효 다운로드 토큰을 <img src>에 직접 노출하지 않음).
+  // objectUrl이 세팅돼 있으면 닫을 때 revoke 대상.
   const [viewingUrl, setViewingUrl] = useState<string | null>(null);
+  const [viewingObjectUrl, setViewingObjectUrl] = useState<string | null>(null);
+  const [viewerLoading, setViewerLoading] = useState(false);
 
   // 오류 메시지
   const [error, setError] = useState("");
 
   const photoInputRef = useRef<HTMLInputElement | null>(null);
+
+  async function openViewer(photo: PhotoRecord) {
+    if (!photo.storagePath) {
+      // 레거시 레코드(storagePath 없음) — fileUrl 폴백만 가능.
+      setViewingUrl(photo.fileUrl);
+      return;
+    }
+    setViewerLoading(true);
+    try {
+      const firebaseUser = auth.currentUser;
+      if (!firebaseUser) throw new Error("로그인 정보를 확인할 수 없습니다.");
+      const idToken = await firebaseUser.getIdToken();
+      const res = await fetch(`/api/proxy-image?path=${encodeURIComponent(photo.storagePath)}`, {
+        headers: { Authorization: `Bearer ${idToken}` },
+      });
+      if (!res.ok) throw new Error(`proxy-image ${res.status}`);
+      const blob = await res.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      setViewingObjectUrl(objectUrl);
+      setViewingUrl(objectUrl);
+    } catch {
+      // 프록시 실패 시 기존 fileUrl로 폴백.
+      setViewingUrl(photo.fileUrl);
+    } finally {
+      setViewerLoading(false);
+    }
+  }
+
+  function closeViewer() {
+    if (viewingObjectUrl) URL.revokeObjectURL(viewingObjectUrl);
+    setViewingObjectUrl(null);
+    setViewingUrl(null);
+  }
 
   useEffect(() => {
     load();
@@ -223,8 +261,9 @@ export function FilesTab({ reservationDocId, reservationId, patientId, currentUs
                 </div>
                 <button
                   type="button"
-                  onClick={() => setViewingUrl(photo.fileUrl)}
-                  className="shrink-0 rounded-lg border border-[#dfe3e8] px-2.5 py-1 text-xs text-gray-600 transition hover:bg-gray-50 active:scale-95"
+                  onClick={() => openViewer(photo)}
+                  disabled={viewerLoading}
+                  className="shrink-0 rounded-lg border border-[#dfe3e8] px-2.5 py-1 text-xs text-gray-600 transition hover:bg-gray-50 active:scale-95 disabled:opacity-50"
                 >
                   보기
                 </button>
@@ -246,13 +285,13 @@ export function FilesTab({ reservationDocId, reservationId, patientId, currentUs
         <>
           <div
             className="fixed inset-0 z-[1050] bg-black/70"
-            onClick={() => setViewingUrl(null)}
+            onClick={closeViewer}
           />
           <div className="fixed inset-0 z-[1051] flex items-center justify-center p-4">
             <div className="relative max-h-full max-w-3xl">
               <button
                 type="button"
-                onClick={() => setViewingUrl(null)}
+                onClick={closeViewer}
                 className="absolute -right-3 -top-3 flex h-8 w-8 items-center justify-center rounded-full bg-white text-xl shadow-lg"
               >
                 ×

@@ -13,11 +13,13 @@ import {
   invalidatePatientFullHistoryCache,
   searchPatients,
   listPatientsSummary,
+  getCachedPatientsSummary,
   type ReservationRecord,
   type AppointmentType,
   type PatientRecord,
 } from "@/lib/reservations";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
+import { getCardStatus } from "@/lib/timelineUtils";
 import { getReservationBirthInfo } from "@/lib/reservationUtils";
 import { todayString } from "@/lib/dateUtils";
 import { CreateDrawer } from "@/components/reservations/CreateDrawer";
@@ -31,12 +33,15 @@ import { toDate } from "@/lib/settingsUtils";
 export default function ReservationsPage() {
   const { currentUser, authReady } = useCurrentUser();
   // 전역 45일 예약 구독 폐기 — 고객관리는 patients 요약만 조회한다.
-  const [listLoading, setListLoading] = useState(true);
+  // 캐시가 있으면 즉시 렌더 + 백그라운드 갱신, 없을 때만 blocking 로딩.
+  const [listLoading, setListLoading] = useState(() => !getCachedPatientsSummary());
+  const [loadingMore, setLoadingMore] = useState(false);
 
   const [search, setSearch] = useState("");
   const [groupPage, setGroupPage] = useState(1);
   const PAGE_SIZE = 10;
-  const [patients, setPatients] = useState<PatientRecord[]>([]);
+  const [patients, setPatients] = useState<PatientRecord[]>(() => getCachedPatientsSummary()?.patients ?? []);
+  const [patientsNextCursor, setPatientsNextCursor] = useState<string | null>(() => getCachedPatientsSummary()?.nextCursor ?? null);
 
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [importDrawerOpen, setImportDrawerOpen] = useState(false);
@@ -162,8 +167,8 @@ export default function ReservationsPage() {
   // 고객관리 첫 화면: patients 요약 최근순(45일 지난 환자 포함). 배지는 summary 값.
   const reloadPatients = useCallback(() => {
     setListLoading(true);
-    listPatientsSummary(50)
-      .then((r) => setPatients(r.patients))
+    listPatientsSummary(30)
+      .then((r) => { setPatients(r.patients); setPatientsNextCursor(r.nextCursor); })
       .catch(() => {})
       .finally(() => setListLoading(false));
   }, []);
@@ -174,9 +179,26 @@ export default function ReservationsPage() {
     const digitsOnly = t.length > 0 && /^[0-9]+$/.test(t);
     const longEnough = digitsOnly ? t.length >= 4 : t.length >= 2;
     setListLoading(true);
-    const p = (t && longEnough) ? searchPatients(t) : listPatientsSummary(50).then((r) => r.patients);
+    const p = (t && longEnough)
+      ? searchPatients(t).then((list) => { setPatientsNextCursor(null); return list; })
+      : listPatientsSummary(30).then((r) => { setPatientsNextCursor(r.nextCursor); return r.patients; });
     p.then(setPatients).catch(() => {}).finally(() => setListLoading(false));
   }, [search]);
+
+  // 서버 커서로 다음 페이지를 이어붙인다("더보기") — 검색 중에는 사용하지 않음.
+  const loadMorePatients = useCallback(async () => {
+    if (!patientsNextCursor || loadingMore) return;
+    setLoadingMore(true);
+    try {
+      const r = await listPatientsSummary(30, patientsNextCursor);
+      setPatients((prev) => [...prev, ...r.patients]);
+      setPatientsNextCursor(r.nextCursor);
+    } catch {
+      /* 무시 — 다음 클릭 시 재시도 */
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [patientsNextCursor, loadingMore]);
 
   useEffect(() => {
     if (!authReady) return;
@@ -190,6 +212,7 @@ export default function ReservationsPage() {
     }
     const handle = setTimeout(() => {
       setListLoading(true);
+      setPatientsNextCursor(null);
       searchPatients(t).then(setPatients).catch(() => {}).finally(() => setListLoading(false));
     }, 300);
     return () => clearTimeout(handle);
@@ -363,7 +386,7 @@ export default function ReservationsPage() {
           r.surgeryReserved ? "예" : "아니오",
           r.depositAmount || "",
           r.surgeryCost || "",
-          r.operationStatus || "",
+          getCardStatus(r),
           allMemo,
           toDateStr(r.createdAt),
           toDateStr(r.updatedAt),
@@ -510,7 +533,7 @@ export default function ReservationsPage() {
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="이름, 상담부위, 원장 검색..."
+            placeholder="한글 이름 / 영문 성·이름 검색"
             className="h-10 min-w-0 flex-1 rounded-xl border border-[#dfe3e8] bg-white px-4 text-sm outline-none focus:border-[#1d9e75]"
           />
         </div>
@@ -580,8 +603,11 @@ export default function ReservationsPage() {
         </div>
       </div>
 
-      <div className="px-5 pb-3 text-sm text-gray-500">
-        환자 {patientGroups.length}명
+      <div className="px-5 pb-3 flex items-center gap-2 text-sm text-gray-500">
+        <span>환자 {patientGroups.length}명</span>
+        {listLoading && patients.length > 0 && (
+          <span className="text-xs text-gray-400">새로고침 중...</span>
+        )}
       </div>
 
       {/* 환자 전체 이력 모달 */}
@@ -612,7 +638,7 @@ export default function ReservationsPage() {
                     {r.consultArea && <span className="shrink-0 text-xs text-gray-500">{r.consultArea}</span>}
                     <span className="shrink-0 text-xs text-gray-400">{r.hospital}</span>
                     <span className="shrink-0 text-xs text-gray-400">
-                      {r.completed ? "완료" : (r.operationStatus && r.operationStatus !== "내원전" ? r.operationStatus : "")}
+                      {getCardStatus(r)}
                     </span>
                     <div className="ml-auto flex shrink-0 gap-1.5">
                       <button
@@ -687,6 +713,18 @@ export default function ReservationsPage() {
             disabled={groupPage === totalPages}
             className="rounded-xl border border-[#dfe3e8] bg-white px-4 py-2 text-gray-600 transition hover:bg-gray-50 disabled:opacity-30"
           >다음 →</button>
+        </div>
+      )}
+
+      {!search.trim() && patientsNextCursor && (
+        <div className="flex justify-center pb-4">
+          <button
+            onClick={loadMorePatients}
+            disabled={loadingMore}
+            className="rounded-xl border border-[#dfe3e8] bg-white px-5 py-2 text-sm text-gray-600 transition hover:bg-gray-50 disabled:opacity-50"
+          >
+            {loadingMore ? "불러오는 중..." : "더보기"}
+          </button>
         </div>
       )}
 

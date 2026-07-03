@@ -6,6 +6,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from "react";
 import type { ReservationRecord } from "@/lib/reservations";
+import { getPatientFullHistoryCached } from "@/lib/reservations";
 import type { InvoiceRecord } from "@/lib/invoices";
 import {
   getInvoicesByPatientId,
@@ -26,15 +27,19 @@ function formatMoney(v: number) { return v.toLocaleString("ko-KR"); }
 type PatientInvoiceModalProps = {
   patientId: string;
   patientName: string;
-  reservations: ReservationRecord[];
   onClose: () => void;
   onCountLoaded: (patientId: string, count: number) => void;
 };
 
-export function PatientInvoiceModal({ patientId, patientName, reservations, onClose, onCountLoaded }: PatientInvoiceModalProps) {
+export function PatientInvoiceModal({ patientId, patientName, onClose, onCountLoaded }: PatientInvoiceModalProps) {
   const cached = getInvoicesByPatientCache(patientId);
   const [invoices, setInvoices] = useState<InvoiceRecord[]>(cached ?? []);
   const [loading, setLoading] = useState(!cached);
+  // 고객관리가 summary 구조로 바뀌면서 patientGroup.reservations가 비어 있으므로,
+  // 모달 내부에서 전체 이력을 lazy-load(getPatientFullHistoryCached는 세션 캐시가 있어
+  // 금액 팝오버 등과 중복 호출해도 추가 read가 거의 없다).
+  const [reservations, setReservations] = useState<ReservationRecord[]>([]);
+  const [reservationsLoading, setReservationsLoading] = useState(true);
   const [creating, setCreating] = useState<string | null>(null);
   const [editingInvoice, setEditingInvoice] = useState<InvoiceRecord | null>(null);
   const [viewingInvoice, setViewingInvoice] = useState<InvoiceRecord | null>(null);
@@ -52,7 +57,20 @@ export function PatientInvoiceModal({ patientId, patientName, reservations, onCl
     }
   }, [patientId, onCountLoaded]);
 
+  const loadReservations = useCallback(async () => {
+    setReservationsLoading(true);
+    try {
+      const { reservations: full } = await getPatientFullHistoryCached(patientId);
+      setReservations(full);
+    } catch {
+      setReservations([]);
+    } finally {
+      setReservationsLoading(false);
+    }
+  }, [patientId]);
+
   useEffect(() => { load(); }, [load]);
+  useEffect(() => { loadReservations(); }, [loadReservations]);
 
   async function handleDelete(inv: InvoiceRecord) {
     if (!confirm(`인보이스를 삭제할까요?`)) return;
@@ -300,7 +318,7 @@ export function PatientInvoiceModal({ patientId, patientName, reservations, onCl
                   </div>
                 </div>
               ))}
-              {surgeryReservationsWithoutInvoice.length > 0 && (
+              {!reservationsLoading && surgeryReservationsWithoutInvoice.length > 0 && (
                 <div className="mt-1">
                   <button
                     onClick={() => setShowCreatePanel((v) => !v)}

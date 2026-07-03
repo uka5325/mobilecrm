@@ -202,7 +202,7 @@ export function ReservationsTable({
   const cellCls = "border-b border-gray-100 px-2 py-2";
   const inputCls = "w-full rounded-lg border border-[#dfe3e8] px-2 py-1 text-xs focus:border-[#1d9e75] focus:outline-none";
 
-  const [invoiceModal, setInvoiceModal] = useState<{ patientId: string; patientName: string; reservations: ReservationRecord[] } | null>(null);
+  const [invoiceModal, setInvoiceModal] = useState<{ patientId: string; patientName: string } | null>(null);
 
   // 예약금/수술비 팝오버 — 배지 클릭 시 해당 환자 예약만 lazy-load해 그룹 팝오버로 표시.
   // (기존: 보이는 환자 전원의 전체 이력/인보이스 count를 미리 warm → summary 배지로 대체.)
@@ -498,7 +498,7 @@ export function ReservationsTable({
 
             {/* 인보이스 (건수) — summary */}
             <button
-              onClick={() => setInvoiceModal({ patientId: pid, patientName: group.name, reservations: group.reservations })}
+              onClick={() => setInvoiceModal({ patientId: pid, patientName: group.name })}
               className={`rounded-md border px-2 py-0.5 text-xs transition ${invoiceCount > 0 ? "border-emerald-200 bg-white text-[#1d9e75] hover:bg-emerald-50" : "border-gray-200 bg-white text-gray-400 hover:bg-gray-50"}`}
             >
               인보이스{invoiceCount > 0 ? ` (${invoiceCount})` : ""}
@@ -548,7 +548,7 @@ export function ReservationsTable({
   }
 
   function renderBody() {
-    if (loading) {
+    if (loading && patientGroups.length === 0) {
       return (
         <tr>
           <td colSpan={8} className="py-12 text-center text-gray-400">데이터 로딩 중...</td>
@@ -578,7 +578,6 @@ export function ReservationsTable({
       <PatientInvoiceModal
         patientId={invoiceModal.patientId}
         patientName={invoiceModal.patientName}
-        reservations={invoiceModal.reservations}
         onClose={() => setInvoiceModal(null)}
         onCountLoaded={() => { /* 배지는 summary로 표시 — count 콜백 불필요 */ }}
       />

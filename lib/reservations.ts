@@ -49,14 +49,6 @@ export const APPOINTMENT_TYPE_COLORS: Record<AppointmentType, string> = {
   검진: "#0891b2",
 };
 
-export type ReservationStatus =
-  | "내원전"
-  | "대기"
-  | "원상중"
-  | "후상중"
-  | "귀가"
-  | "부도";
-
 export type ReservationRecord = {
   id: string;
   reservationId: string;
@@ -78,8 +70,6 @@ export type ReservationRecord = {
   completed: boolean;
   cancelled: boolean;
 
-  operationStatus: ReservationStatus;
-  preConsStatus: string;
   surgeryReserved: boolean;
   surgeryReservedAt?: string;
 
@@ -89,17 +79,6 @@ export type ReservationRecord = {
 
   doctors: string[];
   coordinators: string[];
-
-  doctorStatusMap: Record<string, ReservationStatus | string>;
-  doctorStatusMetaMap: Record<
-    string,
-    {
-      status: string;
-      updatedAt: string;
-      updatedBy: string;
-      updatedRole: string;
-    }
-  >;
 
   invoiceUrl: string;
   invoiceId: string;
@@ -155,23 +134,6 @@ function makeDateBasedId(prefix: "P" | "R") {
   return `${prefix}-${y}${m}${d}-${random}`;
 }
 
-function normalizeReservationStatus(value: unknown): ReservationStatus {
-  const v = cleanText(value);
-
-  if (
-    v === "내원전" ||
-    v === "대기" ||
-    v === "원상중" ||
-    v === "후상중" ||
-    v === "귀가" ||
-    v === "부도"
-  ) {
-    return v;
-  }
-
-  return "내원전";
-}
-
 function normalizeAppointmentType(value: unknown): AppointmentType {
   const v = cleanText(value);
   if (v === "상담" || v === "수술" || v === "시술" || v === "치료" || v === "경과" || v === "진료" || v === "검진") return v;
@@ -202,8 +164,6 @@ export function mapReservationDoc(id: string, data: Record<string, unknown>): Re
     completed: data.completed === true,
     cancelled: data.cancelled === true,
 
-    operationStatus: normalizeReservationStatus(data.operationStatus),
-    preConsStatus: cleanText(data.preConsStatus),
     surgeryReserved: data.surgeryReserved === true,
     surgeryReservedAt: cleanText(data.surgeryReservedAt),
 
@@ -221,9 +181,6 @@ export function mapReservationDoc(id: string, data: Record<string, unknown>): Re
       : typeof data.coordinators === "string" && data.coordinators
       ? data.coordinators.split("|").map(cleanText).filter(Boolean)
       : [],
-
-    doctorStatusMap: (data.doctorStatusMap as Record<string, string>) || {},
-    doctorStatusMetaMap: (data.doctorStatusMetaMap as ReservationRecord["doctorStatusMetaMap"]) || {},
 
     invoiceUrl: cleanText(data.invoiceUrl),
     invoiceId: cleanText(data.invoiceId),
@@ -540,7 +497,6 @@ export async function createReservation(
     appointmentType: (params.appointmentType || "상담") as AppointmentType,
     completed: params.completed === true,
 
-    operationStatus: "내원전" as ReservationStatus,
     surgeryReserved: false,
     surgeryReservedAt: "",
 
@@ -571,6 +527,7 @@ export async function createReservation(
   }
 
   invalidatePatientsCache();
+  invalidatePatientsSummaryCache();
   const savedReservationId = String(apiResult.reservationDocId || "");
 
   // 감사로그는 서버(/api/reservations create)에서 권위 있게 기록됨 → 클라 createLog 제거(중복 방지).
@@ -630,18 +587,34 @@ function mapPatientRecord(p: Record<string, unknown>): PatientRecord {
   };
 }
 
+// 고객관리 첫 화면 summary 캐시 — 재진입 시 즉시 렌더 + 백그라운드 갱신.
+// 첫 페이지(cursor 없음) 결과만 캐시한다(더보기로 누적된 페이지는 캐시 대상 아님).
+let _patientsSummaryCache: { at: number; patients: PatientRecord[]; nextCursor: string | null } | null = null;
+const PATIENTS_SUMMARY_CACHE_TTL = 5 * 60 * 1000;
+
+export function getCachedPatientsSummary(): { patients: PatientRecord[]; nextCursor: string | null } | undefined {
+  if (!_patientsSummaryCache || Date.now() - _patientsSummaryCache.at >= PATIENTS_SUMMARY_CACHE_TTL) return undefined;
+  return { patients: _patientsSummaryCache.patients, nextCursor: _patientsSummaryCache.nextCursor };
+}
+
+export function invalidatePatientsSummaryCache() {
+  _patientsSummaryCache = null;
+}
+
 // 고객관리 첫 화면: patients를 요약(lastReservationDate 내림차순)으로 페이지 조회.
 // 45일 라이브 윈도우와 무관 — 과거 환자도 노출되며 배지는 저장된 summary로 표시.
 export async function listPatientsSummary(
-  limit = 50,
+  limit = 30,
   cursor?: string
 ): Promise<{ patients: PatientRecord[]; nextCursor: string | null }> {
   const result = await callReservationsApi("list_patients_summary", { limit, cursor });
   if (!result.success || !Array.isArray(result.patients)) return { patients: [], nextCursor: null };
-  return {
+  const mapped = {
     patients: (result.patients as Record<string, unknown>[]).map(mapPatientRecord),
     nextCursor: (result.nextCursor as string) ?? null,
   };
+  if (!cursor) _patientsSummaryCache = { at: Date.now(), ...mapped };
+  return mapped;
 }
 
 // 예약금/수술비 최소 수정 — 금액 팝오버 저장용. 화이트리스트 필드만 patch하며
@@ -689,7 +662,7 @@ export async function createPatientOnly(
   };
 
   const result = await callReservationsApi("create_patient", { patient });
-  if (result.success) invalidatePatientsCache();
+  if (result.success) { invalidatePatientsCache(); invalidatePatientsSummaryCache(); }
   return result.success
     ? { success: true, patientDocId: String(result.patientDocId || "") }
     : { success: false, message: cleanText(result.message) || "등록 실패" };
@@ -1066,6 +1039,7 @@ export async function updatePatientProfile(
     return { success: false, message: apiResult.message || "환자 정보 수정에 실패했습니다." };
   }
   invalidatePatientsCache();
+  invalidatePatientsSummaryCache();
   return { success: true };
 }
 
@@ -1080,6 +1054,7 @@ export async function deletePatient(patientId: string, staff: StaffUser) {
     return { success: false, message: apiResult.message || "환자 삭제에 실패했습니다." };
   }
   invalidatePatientsCache();
+  invalidatePatientsSummaryCache();
   return {
     success: true,
     deletedReservations: Number(apiResult.deletedReservations || 0),

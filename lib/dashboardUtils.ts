@@ -45,7 +45,6 @@ export type ReservationDoc = {
   manager_name?: string;
   coordinator?: string;
   operationStatus?: string;
-  operation_status?: string;
   status?: string;
   surgeryReserved?: boolean;
   surgery_reserved?: boolean;
@@ -208,7 +207,7 @@ export function getManagers(item: ReservationDoc) {
 }
 
 export function getStatus(item: ReservationDoc) {
-  return cleanText(item.operationStatus || item.operation_status || item.status || "내원전");
+  return cleanText(item.operationStatus || item.status || "내원전");
 }
 
 export function isSurgeryReserved(item: ReservationDoc) {

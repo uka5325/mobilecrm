@@ -47,8 +47,12 @@ export function getReservationDoctors(item: ReservationRecord) {
   return Array.isArray(item.doctors) ? item.doctors : [];
 }
 
+// 내원상태(operationStatus) 대신 cancelled/completed/surgeryReserved 플래그로만 파생한다.
 export function getCardStatus(item: ReservationRecord) {
-  return item.operationStatus || "내원전";
+  if (item.cancelled === true) return "예약취소";
+  if (item.completed === true) return "완료";
+  if (item.surgeryReserved === true) return "수술예약";
+  return "";
 }
 
 export function buildGlobalSlotInfo(dayReservations: ReservationRecord[]): {
