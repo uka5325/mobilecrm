@@ -106,6 +106,15 @@ test("담당 코디네이터는 update로 금액을 바꿀 수 있고 예약 문
   assert.equal(resSnap.data()?.invoiceStatus, "confirmed");
 });
 
+test("update: 허용되지 않은 status 값은 400으로 거부된다", async () => {
+  __resetStaffCacheForTests();
+  const res = await POST(makeReq(coordA.idToken, "update", { invoiceDocId, totalAmount: 100, status: "paid" }));
+  assert.equal(res.status, 400);
+  // 거부 시 기존 status(confirmed)가 유지되어야 한다
+  const snap = await adminDb.collection("invoices").doc(invoiceDocId).get();
+  assert.equal(snap.data()?.status, "confirmed");
+});
+
 test("list: admin은 전체를, coordinator는 본인 담당분만 본다", async () => {
   __resetStaffCacheForTests();
   const asAdmin = await (await POST(makeReq(admin.idToken, "list", {}))).json();

@@ -69,6 +69,43 @@ async function getCachedDoctors(): Promise<Record<string, unknown>[]> {
   return result;
 }
 
+// read_all 안전 상한 — 응답에 capped 플래그로 노출해 UI가 "일부만 표시" 경고 가능
+const READ_ALL_CAP = 500;
+
+// 예약 감사로그를 서버에서 권위 있게 기록 → 직접 API 호출/우회도 남고, 신원 위조를 차단.
+// (클라이언트 createLog는 중복 방지를 위해 제거됨)
+async function writeReservationLog(
+  ctx: Awaited<ReturnType<typeof requireActiveStaff>>,
+  params: {
+    action: string;
+    targetId: string;
+    patientId?: string;
+    reservationId?: string;
+    message: string;
+    before?: unknown;
+    after?: unknown;
+    now: FirebaseFirestore.FieldValue;
+  }
+) {
+  await adminDb.collection("logs").add({
+    action: params.action,
+    targetType: "reservation",
+    targetId: params.targetId,
+    staffUid: ctx.uid,
+    staffName: ctx.name,
+    staffEmail: ctx.email,
+    staffRole: ctx.role,
+    staffCode: ctx.staffCode,
+    patientId: params.patientId || "",
+    reservationId: params.reservationId || "",
+    invoiceId: "",
+    message: params.message,
+    before: params.before ?? null,
+    after: params.after ?? null,
+    createdAt: params.now,
+  });
+}
+
 function normDupKey(r: Record<string, unknown>) {
   const docs = Array.isArray(r.doctors)
     ? [...(r.doctors as string[])].sort().join("|")
@@ -113,7 +150,7 @@ export async function POST(req: NextRequest) {
         .where("isDeleted", "==", false)
         .where("reservationDate", ">=", fromDate)
         .orderBy("reservationDate", "desc")
-        .limit(500);
+        .limit(READ_ALL_CAP);
       if (to) resQ = resQ.where("reservationDate", "<=", to) as typeof resQ;
 
       const [rSnap, doctors] = await Promise.all([resQ.get(), getCachedDoctors()]);
@@ -122,6 +159,8 @@ export async function POST(req: NextRequest) {
         success: true,
         reservations: rSnap.docs.map(docToObj),
         doctors,
+        // 상한에 닿으면 더 오래된 예약이 잘렸을 수 있음 → UI가 "일부만 표시" 경고에 사용
+        capped: rSnap.docs.length === READ_ALL_CAP,
       });
     }
 
@@ -396,30 +435,49 @@ export async function POST(req: NextRequest) {
 
       const reservationRef = adminDb.collection("reservations").doc();
 
+      let resultPatientDocId: string;
+      const linkedExistingPatient = !!existingPatientDocId;
+
       if (existingPatientDocId) {
         await reservationRef.set({ ...reservation, ...authorFields, createdAt: now, updatedAt: now });
-        return NextResponse.json({
-          success: true,
-          patientDocId: existingPatientDocId,
-          reservationDocId: reservationRef.id,
-          linkedExistingPatient: true,
-        });
+        resultPatientDocId = existingPatientDocId;
+      } else {
+        // 신규 환자는 문서 ID를 patientId로 고정 → 같은 patientId 동시 생성이 같은 문서를 가리켜
+        // 중복 doc이 생기지 않는다(auto-id 경합 창 제거). patientId가 비면 auto-id 폴백.
+        const patientRef = incomingPatientId
+          ? adminDb.collection("patients").doc(incomingPatientId)
+          : adminDb.collection("patients").doc();
+        const batch = adminDb.batch();
+        batch.set(patientRef, { ...patient, searchTokens: makePatientSearchTokens(String((patient as { name?: unknown }).name || "")), isDeleted: false, ...authorFields, createdAt: now, updatedAt: now });
+        batch.set(reservationRef, { ...reservation, ...authorFields, createdAt: now, updatedAt: now });
+        await batch.commit();
+        resultPatientDocId = patientRef.id;
       }
 
-      // 신규 환자는 문서 ID를 patientId로 고정 → 같은 patientId 동시 생성이 같은 문서를 가리켜
-      // 중복 doc이 생기지 않는다(auto-id 경합 창 제거). patientId가 비면 auto-id 폴백.
-      const patientRef = incomingPatientId
-        ? adminDb.collection("patients").doc(incomingPatientId)
-        : adminDb.collection("patients").doc();
-      const batch = adminDb.batch();
-      batch.set(patientRef, { ...patient, searchTokens: makePatientSearchTokens(String((patient as { name?: unknown }).name || "")), isDeleted: false, ...authorFields, createdAt: now, updatedAt: now });
-      batch.set(reservationRef, { ...reservation, ...authorFields, createdAt: now, updatedAt: now });
-      await batch.commit();
+      // 감사로그(서버 권위 기록) — 클라이언트 createLog 대체
+      await writeReservationLog(ctx, {
+        action: "reservation_create",
+        targetId: String(reservation.reservationId || reservationRef.id),
+        patientId: String(reservation.patientId || ""),
+        reservationId: String(reservation.reservationId || ""),
+        message: `${ctx.name}님이 신규 예약을 등록했습니다.`,
+        before: null,
+        after: {
+          name: reservation.name ?? "",
+          reservationDate: reservation.reservationDate ?? "",
+          reservationTime: reservation.reservationTime ?? "",
+          hospital: reservation.hospital ?? "",
+          appointmentType: reservation.appointmentType ?? "",
+          linkedExistingPatient,
+        },
+        now,
+      });
 
       return NextResponse.json({
         success: true,
-        patientDocId: patientRef.id,
+        patientDocId: resultPatientDocId,
         reservationDocId: reservationRef.id,
+        ...(linkedExistingPatient ? { linkedExistingPatient: true } : {}),
       });
     }
 
@@ -597,12 +655,29 @@ export async function POST(req: NextRequest) {
         surgeryReserved: boolean;
       };
 
-      await adminDb.collection("reservations").doc(reservationDocId).update({
+      const now = FieldValue.serverTimestamp();
+      const toggleRef = adminDb.collection("reservations").doc(reservationDocId);
+      // 감사 대상/이전값을 서버에서 확정하기 위해 1회 읽는다(신원·before 위조 차단).
+      const toggleBefore = await toggleRef.get();
+      const toggleData = toggleBefore.exists ? (toggleBefore.data() as Record<string, unknown>) : {};
+
+      await toggleRef.update({
         surgeryReserved,
         surgeryReservedAt: surgeryReserved ? new Date().toISOString() : "",
-        updatedAt: FieldValue.serverTimestamp(),
+        updatedAt: now,
         updatedBy: ctx.name,
         updatedByUid: ctx.uid,
+      });
+
+      await writeReservationLog(ctx, {
+        action: "reservation_update",
+        targetId: String(toggleData.reservationId || reservationDocId),
+        patientId: String(toggleData.patientId || ""),
+        reservationId: String(toggleData.reservationId || ""),
+        message: `${ctx.name}님이 수술예약 상태를 ${surgeryReserved ? "예약" : "미예약"}으로 변경했습니다.`,
+        before: { surgeryReserved: toggleData.surgeryReserved ?? null },
+        after: { surgeryReserved },
+        now,
       });
 
       return NextResponse.json({ success: true });
@@ -618,11 +693,28 @@ export async function POST(req: NextRequest) {
         reservationDocId: string;
       };
 
-      await adminDb.collection("reservations").doc(reservationDocId).update({
+      const now = FieldValue.serverTimestamp();
+      const delRef = adminDb.collection("reservations").doc(reservationDocId);
+      // 감사 대상 식별자를 서버에서 확정하기 위해 1회 읽는다.
+      const delBefore = await delRef.get();
+      const delData = delBefore.exists ? (delBefore.data() as Record<string, unknown>) : {};
+
+      await delRef.update({
         isDeleted: true,
-        updatedAt: FieldValue.serverTimestamp(),
+        updatedAt: now,
         updatedBy: ctx.name,
         updatedByUid: ctx.uid,
+      });
+
+      await writeReservationLog(ctx, {
+        action: "reservation_delete",
+        targetId: String(delData.reservationId || reservationDocId),
+        patientId: String(delData.patientId || ""),
+        reservationId: String(delData.reservationId || ""),
+        message: `${ctx.name}님이 예약을 삭제 처리했습니다.`,
+        before: { isDeleted: delData.isDeleted ?? false },
+        after: { isDeleted: true },
+        now,
       });
 
       return NextResponse.json({ success: true });

@@ -2,7 +2,6 @@ import { auth, db } from "./firebase";
 import { collection, onSnapshot, query, where, getDocs } from "firebase/firestore";
 import type { StaffUser } from "./auth";
 import { cleanText } from "./stringUtils";
-import { createLog } from "./logs";
 import { parseBirthInfo } from "./reservationUtils";
 
 async function callReservationsApi(action: string, payload: Record<string, unknown>) {
@@ -575,23 +574,7 @@ export async function createReservation(
   invalidatePatientsCache();
   const savedReservationId = String(apiResult.reservationDocId || "");
 
-  createLog({
-    action: "reservation_create",
-    targetType: "reservation",
-    targetId: reservationId,
-    patientId,
-    reservationId,
-    staff,
-    message: `${staff.displayName}님이 신규 예약을 등록했습니다.`,
-    before: null,
-    after: {
-      name,
-      reservationDate,
-      reservationTime: cleanText(params.reservationTime),
-      hospital,
-      appointmentType: params.appointmentType || "상담",
-    },
-  }).catch((e) => console.warn("[createReservation] log write failed:", e));
+  // 감사로그는 서버(/api/reservations create)에서 권위 있게 기록됨 → 클라 createLog 제거(중복 방지).
 
   return {
     success: true,
@@ -738,20 +721,7 @@ export async function toggleSurgeryReserved(
     return { success: false, message: apiResult.message || "수술예약 상태 변경에 실패했습니다." };
   }
 
-  createLog({
-    action: "reservation_update",
-    targetType: "reservation",
-    targetId: reservationId,
-    reservationId,
-    staff,
-    message: `${staff.displayName}님이 수술예약 상태를 ${
-      nextValue ? "예약" : "미예약"
-    }으로 변경했습니다.`,
-    before: null,
-    after: {
-      surgeryReserved: nextValue,
-    },
-  }).catch((e) => console.warn("[toggleSurgeryReserved] log write failed:", e));
+  // 감사로그는 서버(/api/reservations toggleSurgery)에서 권위 있게 기록됨 → 클라 createLog 제거.
 
   return { success: true };
 }
@@ -1005,18 +975,7 @@ export async function deleteReservation(
     return { success: false, message: apiResult.message || "예약 삭제에 실패했습니다." };
   }
 
-  createLog({
-    action: "reservation_delete",
-    targetType: "reservation",
-    targetId: reservationId,
-    reservationId,
-    staff,
-    message: `${staff.displayName}님이 예약을 삭제 처리했습니다.`,
-    before: null,
-    after: {
-      isDeleted: true,
-    },
-  }).catch((e) => console.warn("[deleteReservation] log write failed:", e));
+  // 감사로그는 서버(/api/reservations delete)에서 권위 있게 기록됨 → 클라 createLog 제거.
 
   return { success: true };
 }
