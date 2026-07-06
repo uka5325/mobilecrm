@@ -26,13 +26,33 @@ import {
 import type { ReactNode } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import type { User } from "firebase/auth";
+import { signOut } from "firebase/auth";
 import { doc, onSnapshot } from "firebase/firestore";
-import { db } from "@/lib/firebase";
+import { auth, db } from "@/lib/firebase";
 import { listenCurrentUser } from "@/lib/auth";
 import type { StaffUser } from "@/lib/auth";
 import { clearAllClientCaches, clearFirestorePersistence } from "@/lib/clientCache";
 
 const STAFF_CACHE_KEY = "arc_crm_staff_user";
+
+// 로그아웃 재진입 방지 guard — signOut이 auth listener를 null로 트리거하면서
+// 로그아웃 경로가 중복 실행되거나 무한 반복되는 것을 막는다(모듈 스코프 1회성).
+let loggingOut = false;
+
+// 안전 로그아웃: 앱 캐시/세션·Firestore 영속 캐시를 정리하고, 실패 여부와 무관하게
+// 반드시 로그인 화면으로 hard redirect한다(공용기기 PII 잔존 + 부분 세션 잔존 차단).
+async function runSecureLogout() {
+  if (loggingOut || typeof window === "undefined") return;
+  loggingOut = true;
+  try {
+    try { sessionStorage.removeItem(STAFF_CACHE_KEY); } catch {}
+    clearAllClientCaches();
+    try { await signOut(auth); } catch {}
+    await clearFirestorePersistence();
+  } finally {
+    window.location.replace("/login");
+  }
+}
 
 function getCachedStaff(): StaffUser | null {
   if (typeof window === "undefined") return null;
@@ -100,6 +120,8 @@ export function CurrentUserProvider({ children }: { children: ReactNode }) {
   // 로그인 상태 추적 + 로그아웃(세션 종료)의 단일 권위 지점.
   useEffect(() => {
     if (isLoginPage) {
+      // 로그인 페이지는 인증 게이팅이 없으므로 즉시 ready로 표시(1회성 초기화 — 의도된 패턴).
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setFirebaseReady(true);
       setAuthReady(true);
       return;
@@ -114,15 +136,10 @@ export function CurrentUserProvider({ children }: { children: ReactNode }) {
       setFirebaseReady(true);
 
       if (!user) {
-        // 직원 세션 캐시 + 업무 데이터 캐시(localStorage) + Firestore 영속 캐시(IndexedDB)를 함께 비운다.
-        clearCachedStaff();
-        clearAllClientCaches();
         setCurrentUser(null);
         setAuthReady(true);
-        // 영속 캐시(예약 PII)를 purge한 뒤에는 새 Firestore 인스턴스가 필요하므로
-        // 하드 리로드로 /login 이동(공용기기 잔존 차단 + 깨끗한 재초기화).
-        await clearFirestorePersistence();
-        window.location.replace("/login");
+        // 세션/업무 캐시 + Firestore 영속 캐시를 비우고 하드 리다이렉트(재진입 guard 적용).
+        await runSecureLogout();
       }
     });
 
@@ -139,9 +156,10 @@ export function CurrentUserProvider({ children }: { children: ReactNode }) {
 
     const uid = firebaseUser.uid;
 
-    // 즉시표시: 캐시가 있고 같은 uid면 리스너 응답 전에 먼저 그린다(기존 동작과 동일한 UX).
+    // 즉시표시: 캐시가 있고 같은 uid면 리스너 응답 전에 먼저 그린다(기존 동작과 동일한 UX — 의도된 패턴).
     const cachedStaff = getCachedStaff();
     if (cachedStaff && cachedStaff.uid === uid && cachedStaff.active) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setCurrentUser(cachedStaff);
       setAuthReady(true);
     }
@@ -152,10 +170,10 @@ export function CurrentUserProvider({ children }: { children: ReactNode }) {
         const data = snap.data();
 
         if (!snap.exists() || data?.active !== true) {
-          clearCachedStaff();
+          // 비활성/삭제된 직원 — 안전 로그아웃(캐시 정리 + signOut + 하드 redirect).
           setCurrentUser(null);
           setAuthReady(true);
-          router.push("/login");
+          void runSecureLogout();
           return;
         }
 

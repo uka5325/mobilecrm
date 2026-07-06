@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import type { User } from "firebase/auth";
 import {
   addConferenceMemo,
   changeMyPassword,
@@ -26,8 +25,7 @@ import {
   type SettingsStaffRecord,
   type SettingsStaffRole,
 } from "@/lib/settings";
-import { getStaffByUid, listenCurrentUser } from "@/lib/auth";
-import type { StaffUser } from "@/lib/auth";
+import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { todayString } from "@/lib/dateUtils";
 import {
   getErrorMessage,
@@ -55,8 +53,10 @@ const TAB_ITEMS: { key: SettingsTab; label: string; icon: string }[] = [
 export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState<SettingsTab>("statusColors");
 
-  const [currentUser, setCurrentUser] = useState<StaffUser | null>(null);
-  const [authLoading, setAuthLoading] = useState(true);
+  // 전역 단일 Provider(CurrentUserProvider)에서 직원 상태를 읽는다 — 자체 onAuthStateChanged/
+  // verify-staff 중복 구독 제거, 비활성 직원 처리 일관화(Provider가 안전 로그아웃 담당).
+  const { currentUser, authReady } = useCurrentUser();
+  const authLoading = !authReady;
 
   const [colors, setColors] = useState<AppointmentTypeColorMap>(DEFAULT_APPOINTMENT_TYPE_COLORS);
   const [initialColors, setInitialColors] = useState<AppointmentTypeColorMap>(DEFAULT_APPOINTMENT_TYPE_COLORS);
@@ -95,22 +95,6 @@ export default function SettingsPage() {
   const hasColorChanges = useMemo(() => {
     return JSON.stringify(colors) !== JSON.stringify(initialColors);
   }, [colors, initialColors]);
-
-  useEffect(() => {
-    const unsubscribe = listenCurrentUser(async (user: User | null) => {
-      try {
-        if (!user) { setCurrentUser(null); setAuthLoading(false); return; }
-        const staff = await getStaffByUid();
-        setCurrentUser(staff || null);
-      } catch (err) {
-        console.error((err as Error)?.message ?? "");
-        setCurrentUser(null);
-      } finally {
-        setAuthLoading(false);
-      }
-    });
-    return () => unsubscribe();
-  }, []);
 
   async function loadBaseSettings() {
     setLoading(true);
@@ -166,6 +150,9 @@ export default function SettingsPage() {
     loadBaseSettings();
     loadMemos(todayString());
     if (currentUser) loadStaffList();
+    // 인증이 준비된 시점에 1회 초기 로드한다. loader들은 컴포넌트 스코프 함수라 deps에 넣으면
+    // 매 렌더 재실행되므로 authLoading 트랜지션만 트리거로 둔다.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authLoading]);
 
   function clearAlerts() {

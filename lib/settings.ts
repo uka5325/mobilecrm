@@ -704,7 +704,23 @@ export async function deactivateStaffFromSettings(
     throw new Error("본인 계정은 비활성화할 수 없습니다.");
   }
 
-  return updateStaffFromSettings(id, { active: false }, actor);
+  // 비활성화는 서버 API로 처리한다 — active:false 직후 refresh token을 revoke해야
+  // 이미 로그인한 세션이 즉시 무력화된다(클라 Firestore 직접 쓰기로는 revoke 불가).
+  const token = await auth.currentUser?.getIdToken();
+  const res = await fetch("/api/staff/deactivate", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify({ uid: id }),
+  });
+  const data = (await res.json()) as { success: boolean; message?: string; tokenRevoked?: boolean };
+  if (!data.success) {
+    throw new Error(data.message || "직원 비활성화에 실패했습니다.");
+  }
+  invalidateDoctorsCache();
+  return data;
 }
 
 /* ============================================================
