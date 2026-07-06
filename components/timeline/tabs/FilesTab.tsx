@@ -75,8 +75,9 @@ export function FilesTab({ reservationDocId, reservationId, patientId, currentUs
       setViewingObjectUrl(objectUrl);
       setViewingUrl(objectUrl);
     } catch {
-      // 프록시 실패 시 기존 fileUrl로 폴백.
-      setViewingUrl(photo.fileUrl);
+      // storagePath가 있는 (신규) 레코드는 raw URL로 조용히 폴백하지 않는다 — 사용자에게 오류를 표시.
+      // (레거시 fileUrl 폴백은 storagePath가 없을 때만 위에서 허용)
+      setError("사진을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.");
     } finally {
       setViewerLoading(false);
     }
@@ -140,7 +141,7 @@ export function FilesTab({ reservationDocId, reservationId, patientId, currentUs
         }
         const compressed = allCompressed;
 
-        const storageResults: { f: File; storagePath: string; fileUrl: string }[] = [];
+        const storageResults: { f: File; storagePath: string; contentType: string }[] = [];
         for (let i = 0; i < compressed.length; i += MAX_CONCURRENT) {
           const chunk = compressed.slice(i, i + MAX_CONCURRENT);
           const chunkResults = await Promise.all(
@@ -161,6 +162,7 @@ export function FilesTab({ reservationDocId, reservationId, patientId, currentUs
             fileName: f.name,
             fileUrl: oUrl,
             storagePath,
+            contentType: f.type,
             fileSize: f.size,
             uploadedAt: null,
             uploadedBy: currentUser.displayName,
@@ -172,9 +174,9 @@ export function FilesTab({ reservationDocId, reservationId, patientId, currentUs
         setUploadingCount((n) => n - fileArr.length);
 
         // Persist to Firestore in background
-        storageResults.forEach(({ f, fileUrl, storagePath }, i) => {
+        storageResults.forEach(({ f, storagePath }, i) => {
           const tempId = optimisticItems[i].id;
-          savePhotoRecord(reservationDocId, reservationId, patientId, f, storagePath, fileUrl, currentUser)
+          savePhotoRecord(reservationDocId, reservationId, patientId, f, storagePath, currentUser)
             .then((record) => {
               URL.revokeObjectURL(objectUrls[i]);
               setPhotos((prev) => prev.map((p) => (p.id === tempId ? record : p)));
@@ -195,11 +197,13 @@ export function FilesTab({ reservationDocId, reservationId, patientId, currentUs
     try {
       await deleteReservationPhoto(
         photo.id, photo.storagePath, photo.fileName,
-        reservationId, patientId, currentUser
+        reservationId, patientId, currentUser, reservationDocId
       );
       setPhotos((prev) => prev.filter((p) => p.id !== photo.id));
-    } catch {
-      setError("사진 삭제에 실패했습니다.");
+    } catch (e) {
+      // Storage 원본 삭제 실패 — 메타는 삭제됐지만 원본이 남았을 수 있음. 목록에서 제거하되 오류를 표시.
+      setPhotos((prev) => prev.filter((p) => p.id !== photo.id));
+      setError(e instanceof Error ? e.message : "사진 삭제에 실패했습니다.");
     }
   }
 

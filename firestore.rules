@@ -67,10 +67,11 @@ service cloud.firestore {
       allow read: if isActiveStaff();
       allow create: if isActiveStaff()
         && request.resource.data.uploadedByUid == request.auth.uid;
-      // 소프트삭제/감사 필드만 허용 — uploadedByUid/patientId/reservationId 등 신원·연결 필드 변조 차단
+      // 소프트삭제/감사 + Storage 삭제 관측 필드만 허용 — 신원·연결 필드 변조 차단
       allow update: if isActiveStaff()
         && request.resource.data.diff(resource.data).affectedKeys()
-             .hasOnly(["isDeleted", "deletedAt", "deletedBy", "deletedByUid", "updatedAt", "updatedBy", "updatedByUid"]);
+             .hasOnly(["isDeleted", "deletedAt", "deletedBy", "deletedByUid", "updatedAt", "updatedBy", "updatedByUid",
+                       "storageDeleteStatus", "storageDeleteErrorCode", "storageDeleteAttemptedAt"]);
       allow delete: if false;
     }
 

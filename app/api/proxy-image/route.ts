@@ -30,15 +30,22 @@ export async function GET(req: NextRequest) {
       if (metadata.size && Number(metadata.size) > 20 * 1024 * 1024) {
         return NextResponse.json({ error: "파일이 너무 큽니다. (최대 20MB)" }, { status: 413 });
       }
+      // 이미지 파일만 프록시(비이미지 객체 스트리밍 차단)
+      const contentType = metadata.contentType ?? "";
+      if (!contentType.startsWith("image/")) {
+        return NextResponse.json({ error: "invalid content type" }, { status: 415 });
+      }
       const [buffer] = await file.download();
       return new NextResponse(new Blob([new Uint8Array(buffer)]), {
         headers: {
-          "Content-Type": metadata.contentType ?? "application/octet-stream",
-          "Cache-Control": "private, max-age=86400",
+          "Content-Type": contentType,
+          // 민감 의료 이미지 — 디스크/프록시 캐시 금지
+          "Cache-Control": "private, no-store",
         },
       });
-    } catch (e) {
-      return NextResponse.json({ error: String(e) }, { status: 500 });
+    } catch {
+      // 민감 경로/URL이 에러 메시지로 새지 않도록 상세를 노출하지 않는다.
+      return NextResponse.json({ error: "internal error" }, { status: 500 });
     }
   }
 
@@ -81,14 +88,19 @@ export async function GET(req: NextRequest) {
     if (contentLength && parseInt(contentLength) > 20 * 1024 * 1024) {
       return NextResponse.json({ error: "파일이 너무 큽니다. (최대 20MB)" }, { status: 413 });
     }
+    const upstreamType = upstream.headers.get("Content-Type") ?? "";
+    if (!upstreamType.startsWith("image/")) {
+      return NextResponse.json({ error: "invalid content type" }, { status: 415 });
+    }
     const blob = await upstream.blob();
     return new NextResponse(blob, {
       headers: {
-        "Content-Type": upstream.headers.get("Content-Type") ?? "application/octet-stream",
-        "Cache-Control": "private, max-age=86400",
+        "Content-Type": upstreamType,
+        // 민감 의료 이미지 — 디스크/프록시 캐시 금지
+        "Cache-Control": "private, no-store",
       },
     });
-  } catch (e) {
-    return NextResponse.json({ error: String(e) }, { status: 500 });
+  } catch {
+    return NextResponse.json({ error: "internal error" }, { status: 500 });
   }
 }

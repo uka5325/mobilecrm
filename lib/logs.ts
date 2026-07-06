@@ -16,6 +16,7 @@ export type LogAction =
   | "invoice_delete"
   | "file_upload"
   | "file_delete"
+  | "STORAGE_DELETE_FAILED"
   | "memo_create"
   | "memo_update"
   | "memo_delete"

@@ -24,9 +24,16 @@ service firebase.storage {
     // 예약 첨부(사진) — reservationFiles/{reservationDocId}/...
     match /reservationFiles/{reservationDocId}/{allPaths=**} {
       allow read: if isActiveStaff();
-      // 업로드 크기 제한은 클라이언트(10MB)와 일치
-      allow write: if isActiveStaff()
-        && request.resource.size < 10 * 1024 * 1024;
+
+      // 업로드/수정: 활성 직원 + 10MB 미만 + 이미지 contentType만 허용.
+      allow create, update: if isActiveStaff()
+        && request.resource != null
+        && request.resource.size < 10 * 1024 * 1024
+        && request.resource.contentType != null
+        && request.resource.contentType.matches("image/.*");
+
+      // 삭제: 활성 직원(원본 정리는 삭제 경로에서 수행)
+      allow delete: if isActiveStaff();
     }
 
     // 그 외 경로 차단
