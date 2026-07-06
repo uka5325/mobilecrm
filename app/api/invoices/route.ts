@@ -282,6 +282,16 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ success: false, message: "접근 권한이 없습니다." }, { status: 403 });
       }
 
+      // 삭제된(soft delete) 인보이스는 수정 불가 — 부활 차단.
+      if (current.isDeleted === true) {
+        return NextResponse.json({ success: false, code: "INVOICE_DELETED", message: "삭제된 인보이스는 수정할 수 없습니다." }, { status: 400 });
+      }
+
+      // 클라이언트가 isDeleted를 보내 삭제 상태를 조작하는 것을 거부한다(서버 전용 필드).
+      if (fields.isDeleted !== undefined) {
+        return NextResponse.json({ success: false, code: "DISALLOWED_FIELD", message: "허용되지 않은 필드입니다: isDeleted" }, { status: 400 });
+      }
+
       // status는 허용 enum만 통과(임의 문자열 → 400). 미전달 시 기존값 유지.
       if (fields.status !== undefined && !ALLOWED_INVOICE_STATUS.has(String(fields.status))) {
         return NextResponse.json({ success: false, message: "유효하지 않은 인보이스 상태입니다." }, { status: 400 });
@@ -306,7 +316,7 @@ export async function POST(req: NextRequest) {
         updatedAt: FieldValue.serverTimestamp(),
         updatedBy: staffName,
         updatedByUid: staffUid,
-        isDeleted: false,
+        // isDeleted는 건드리지 않는다(삭제된 인보이스는 위에서 이미 거부). 강제 false 주입 금지.
       };
 
       await adminDb.runTransaction(async (tx) => {
@@ -355,21 +365,28 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ success: false, message: "접근 권한이 없습니다." }, { status: 403 });
       }
 
-      await invoiceRef.update({
-        isDeleted: true,
-        updatedAt: FieldValue.serverTimestamp(),
-        updatedBy: staffName,
-        updatedByUid: staffUid,
-      });
-
-      await adminDb.collection("reservations").doc(cleanText(current.reservationDocId)).update({
-        invoiceId: "",
-        invoiceDocId: "",
-        invoiceStatus: "",
-        invoiceUpdatedAt: FieldValue.serverTimestamp(),
-        updatedAt: FieldValue.serverTimestamp(),
-        updatedBy: staffName,
-        updatedByUid: staffUid,
+      // 인보이스 soft delete와 연결된 예약의 invoice 필드 해제를 한 트랜잭션으로 원자화한다.
+      // (부분 실패 시 인보이스만 삭제되고 예약에 링크가 남는 불일치 차단)
+      const linkedReservationRef = adminDb.collection("reservations").doc(cleanText(current.reservationDocId));
+      await adminDb.runTransaction(async (tx) => {
+        const freshInvoice = await tx.get(invoiceRef);
+        if (!freshInvoice.exists) throw new Error("인보이스를 찾을 수 없습니다.");
+        const now = FieldValue.serverTimestamp();
+        tx.update(invoiceRef, {
+          isDeleted: true,
+          updatedAt: now,
+          updatedBy: staffName,
+          updatedByUid: staffUid,
+        });
+        tx.update(linkedReservationRef, {
+          invoiceId: "",
+          invoiceDocId: "",
+          invoiceStatus: "",
+          invoiceUpdatedAt: now,
+          updatedAt: now,
+          updatedBy: staffName,
+          updatedByUid: staffUid,
+        });
       });
 
       await writeLog({

@@ -4,7 +4,7 @@ import { adminDb, FieldValue } from "@/lib/firebaseAdmin";
 import { requireActiveStaff, toAuthErrorResponse } from "@/lib/apiAuth";
 import { toSerializable, docToObj } from "@/lib/adminUtils";
 import { makePatientSearchTokens } from "@/lib/searchTokens";
-import { recomputeReservationSummary, safeRecompute } from "@/lib/patientSummary";
+import { recomputeReservationSummary, safeRecompute, createEmptyPatientSummary } from "@/lib/patientSummary";
 
 // 데이터 변경 action — 토큰 폐기 검사 적용
 const WRITE_ACTIONS = new Set([
@@ -23,12 +23,13 @@ const WRITE_ACTIONS = new Set([
 // - 삭제는 delete 액션(admin 전용)으로만
 // - 인보이스 연동 필드는 /api/invoices 경유로만
 // - 작성자/수정자 신원은 서버 ctx로만 강제
+// 일반 예약 update 화이트리스트 — 수술 예약 상태(surgeryReserved/surgeryReservedAt)는
+// 전용 toggleSurgery 액션에서만 변경하므로 여기서 제외한다.
 const ALLOWED_RESERVATION_UPDATE_FIELDS = new Set([
   "name", "patientName", "birth", "birthInput", "gender", "phone", "nationality",
   "reservationDate", "reservationTime", "hospital", "appointmentType",
   "completed", "cancelled", "consultArea", "depositAmount", "surgeryCost",
   "coordinators", "doctors",
-  "surgeryReserved", "surgeryReservedAt",
 ]);
 
 const ALLOWED_PATIENT_UPDATE_FIELDS = new Set([
@@ -41,14 +42,15 @@ const ALLOWED_PATIENT_CREATE_FIELDS = new Set([
   "patientId", "name", "birth", "birthInput", "gender", "phone", "nationality",
 ]);
 
+// 일반 예약 create 화이트리스트 — 상태(completed/cancelled/surgeryReserved/surgeryReservedAt)와
+// invoice 필드(invoiceUrl/invoiceId/invoiceSheetName/invoiceDocId/invoiceStatus)는 서버가
+// 기본값을 기록하거나 전용 액션에서만 설정한다. 클라가 주입하면 400(DISALLOWED_FIELD)으로 거부.
 const ALLOWED_RESERVATION_CREATE_FIELDS = new Set([
   "reservationId", "patientId",
   "name", "patientName", "birth", "birthInput", "gender", "phone", "nationality",
-  "reservationDate", "reservationTime", "hospital", "appointmentType", "completed",
-  "surgeryReserved", "surgeryReservedAt",
+  "reservationDate", "reservationTime", "hospital", "appointmentType",
   "depositAmount", "surgeryCost", "consultArea",
   "doctors", "coordinators",
-  "invoiceUrl", "invoiceId", "invoiceSheetName",
 ]);
 
 // 서버가 신원을 강제하는 필드 — 합법 클라이언트가 보낼 수 있어 조용히 무시한다(거부하지 않음).
@@ -346,7 +348,9 @@ export async function POST(req: NextRequest) {
         ? adminDb.collection("patients").doc(incomingPatientId)
         : adminDb.collection("patients").doc();
       // 작성자 신원은 검증된 토큰(ctx)으로 강제 → 위조 차단
+      // 요약 기본값을 함께 기록 → 예약 없이 생성돼도 고객관리 목록(list_patients_summary)에 노출된다.
       await ref.set({
+        ...createEmptyPatientSummary(),
         ...safePatient,
         searchTokens: makePatientSearchTokens(String((safePatient as { name?: unknown }).name || "")),
         isDeleted: false,
@@ -441,10 +445,33 @@ export async function POST(req: NextRequest) {
       const createDisallowed = [...patDisallowed, ...resDisallowed];
       if (createDisallowed.length) {
         return NextResponse.json(
-          { success: false, message: `허용되지 않은 필드입니다: ${createDisallowed.join(", ")}` },
+          { success: false, code: "DISALLOWED_FIELD", message: `허용되지 않은 필드입니다: ${createDisallowed.join(", ")}` },
           { status: 400 }
         );
       }
+
+      // patientId는 환자 문서를 canonical 소스로 삼는다. reservation.patientId가 다르면 거부하고,
+      // 이후 서버가 canonical 값으로 강제한다(예약이 엉뚱한 환자에 붙는 것 차단).
+      const canonicalPatientId = String((safePatient as { patientId?: unknown }).patientId || "");
+      const reservationPatientId = String((safeReservation as { patientId?: unknown }).patientId || "");
+      if (reservationPatientId && canonicalPatientId && reservationPatientId !== canonicalPatientId) {
+        return NextResponse.json(
+          { success: false, code: "PATIENT_ID_MISMATCH", message: "환자 식별자가 일치하지 않습니다." },
+          { status: 400 }
+        );
+      }
+      safeReservation.patientId = canonicalPatientId;
+
+      // 상태·invoice 필드는 서버가 기본값을 기록한다(클라 주입은 위 화이트리스트에서 이미 차단).
+      // surgeryReservedAt은 기록하지 않는다(수술 예약 전용 액션에서만 설정).
+      const reservationDefaults = {
+        completed: false,
+        cancelled: false,
+        surgeryReserved: false,
+        invoiceUrl: "",
+        invoiceId: "",
+        invoiceSheetName: "",
+      };
 
       const dupDate = String(safeReservation.reservationDate || "");
       const dupResId = String(safeReservation.reservationId || "");
@@ -462,7 +489,7 @@ export async function POST(req: NextRequest) {
         createdBy: ctx.name, createdByUid: ctx.uid,
         updatedBy: ctx.name, updatedByUid: ctx.uid,
       };
-      const incomingPatientId = String((safePatient as { patientId?: unknown }).patientId || "");
+      const incomingPatientId = canonicalPatientId;
       const reservationRef = adminDb.collection("reservations").doc();
 
       let resultPatientDocId = "";
@@ -496,7 +523,7 @@ export async function POST(req: NextRequest) {
           if (lockRef) tx.set(lockRef, { duplicateKey, reservationRef: reservationRef.id, createdAt: now });
 
           if (existingPatientDocId) {
-            tx.set(reservationRef, { ...safeReservation, isDeleted: false, ...authorFields, createdAt: now, updatedAt: now });
+            tx.set(reservationRef, { ...reservationDefaults, ...safeReservation, isDeleted: false, ...authorFields, createdAt: now, updatedAt: now });
             resultPatientDocId = existingPatientDocId;
             linkedExistingPatient = true;
           } else {
@@ -505,14 +532,17 @@ export async function POST(req: NextRequest) {
             const patientRef = incomingPatientId
               ? adminDb.collection("patients").doc(incomingPatientId)
               : adminDb.collection("patients").doc();
+            // 요약 기본값을 함께 기록 → 예약 없이 생성돼도 고객관리 목록에 노출된다.
+            // (직후 recomputeReservationSummary가 실제 값으로 덮어써도 무해)
             tx.set(patientRef, {
+              ...createEmptyPatientSummary(),
               ...safePatient,
               searchTokens: makePatientSearchTokens(String((safePatient as { name?: unknown }).name || "")),
               isDeleted: false,
               ...authorFields,
               createdAt: now, updatedAt: now,
             });
-            tx.set(reservationRef, { ...safeReservation, isDeleted: false, ...authorFields, createdAt: now, updatedAt: now });
+            tx.set(reservationRef, { ...reservationDefaults, ...safeReservation, isDeleted: false, ...authorFields, createdAt: now, updatedAt: now });
             resultPatientDocId = patientRef.id;
           }
         });
@@ -562,46 +592,43 @@ export async function POST(req: NextRequest) {
 
     // ── UPDATE ────────────────────────────────────────────────────────────
     if (action === "update") {
-      const {
-        reservationDocId,
-        reservationId,
-        patientDocId: explicitPatientDocId,
-        patientId,
-        reservationPatch,
-        patientPatch,
-      } = payload as {
+      // 예약 update는 reservations 문서만 수정한다. 환자 마스터(patients) 정정은
+      // update_patient_profile 전용 액션이 전담한다(책임 분리). 따라서 patientPatch/
+      // patientDocId는 받지 않으며, 식별자(patientId/reservationId)는 클라 값을 신뢰하지 않고
+      // 서버가 reservationDocId로 읽은 기존 문서에서 canonical 값을 파생한다.
+      const { reservationDocId, reservationPatch } = payload as {
         reservationDocId: string;
-        reservationId?: string;
-        patientDocId?: string;
-        patientId?: string;
         reservationPatch: Record<string, unknown>;
-        patientPatch?: Record<string, unknown>;
       };
 
       // 필드 화이트리스트 — 비허용 필드(isDeleted/createdBy*/invoice*/식별자 등)가 하나라도
       // 있으면 "조용히 무시"가 아니라 요청을 거부한다(숨은 버그·악성 payload 노출).
       // (admin SDK는 규칙을 우회하므로 서버가 유일한 방어선)
       const { safe: safeReservationPatch, disallowed: resDisallowed } = splitPatch(reservationPatch, ALLOWED_RESERVATION_UPDATE_FIELDS);
-      const { safe: safePatientPatch, disallowed: patDisallowed } = splitPatch(patientPatch, ALLOWED_PATIENT_UPDATE_FIELDS);
 
-      const disallowed = [...resDisallowed, ...patDisallowed];
-      if (disallowed.length) {
+      if (resDisallowed.length) {
         return NextResponse.json(
-          { success: false, message: `허용되지 않은 필드입니다: ${disallowed.join(", ")}` },
+          { success: false, code: "DISALLOWED_FIELD", message: `허용되지 않은 필드입니다: ${resDisallowed.join(", ")}` },
           { status: 400 }
         );
       }
-      if (!Object.keys(safeReservationPatch).length && !Object.keys(safePatientPatch).length) {
+      if (!Object.keys(safeReservationPatch).length) {
         return NextResponse.json({ success: false, message: "변경할 필드가 없습니다." }, { status: 400 });
       }
 
       const now = FieldValue.serverTimestamp();
 
       // 감사 before/after: update 직전 값을 1회 읽어 변경 필드의 이전 값을 로그에 남긴다
-      // (예약금·수술비용 등 민감 필드 추적).
+      // (예약금·수술비용 등 민감 필드 추적). 없는 문서는 거부한다.
       const resRef = adminDb.collection("reservations").doc(reservationDocId);
       const beforeSnap = await resRef.get();
-      const beforeData = beforeSnap.exists ? (beforeSnap.data() as Record<string, unknown>) : {};
+      if (!beforeSnap.exists) {
+        return NextResponse.json({ success: false, message: "예약을 찾을 수 없습니다." }, { status: 400 });
+      }
+      const beforeData = beforeSnap.data() as Record<string, unknown>;
+      // 식별자는 서버가 읽은 기존 문서에서 파생(클라 값 신뢰 금지).
+      const canonicalPatientId = String(beforeData.patientId || "");
+      const canonicalReservationId = String(beforeData.reservationId || "");
       const beforeChanged: Record<string, unknown> = {};
       for (const k of Object.keys(safeReservationPatch)) beforeChanged[k] = beforeData[k] ?? null;
 
@@ -613,52 +640,29 @@ export async function POST(req: NextRequest) {
         updatedAt: now,
       });
 
-      let resolvedPatientDocId = explicitPatientDocId;
-      if (!resolvedPatientDocId && patientId && Object.keys(safePatientPatch).length) {
-        const pSnap = await adminDb
-          .collection("patients")
-          .where("patientId", "==", patientId)
-          .limit(1)
-          .get();
-        if (!pSnap.empty) resolvedPatientDocId = pSnap.docs[0].id;
-      }
-
-      if (resolvedPatientDocId && Object.keys(safePatientPatch).length) {
-        await adminDb.collection("patients").doc(resolvedPatientDocId).update({
-          ...safePatientPatch,
-          // 이름이 바뀌면 검색 토큰 재생성
-          ...(safePatientPatch.name !== undefined
-            ? { searchTokens: makePatientSearchTokens(String(safePatientPatch.name || "")) }
-            : {}),
-          updatedBy: ctx.name,
-          updatedByUid: ctx.uid,
-          updatedAt: now,
-        });
-      }
-
       // 감사로그를 서버에서 권위 있게 기록 → 직접 API 호출/우회도 남는다.
-      // (클라이언트 createLog는 중복 방지를 위해 제거됨)
+      // 식별자는 서버가 읽은 canonical 값을 사용한다.
       await adminDb.collection("logs").add({
         action: "reservation_update",
         targetType: "reservation",
-        targetId: reservationId || reservationDocId,
+        targetId: canonicalReservationId || reservationDocId,
         staffUid: ctx.uid,
         staffName: ctx.name,
         staffEmail: ctx.email,
         staffRole: ctx.role,
         staffCode: ctx.staffCode,
-        patientId: patientId || "",
-        reservationId: reservationId || "",
+        patientId: canonicalPatientId,
+        reservationId: canonicalReservationId,
         invoiceId: "",
         message: `${ctx.name}님이 예약 정보를 수정했습니다.`,
         before: beforeChanged,
-        after: { ...safeReservationPatch, ...(Object.keys(safePatientPatch).length ? { patient: safePatientPatch } : {}) },
+        after: { ...safeReservationPatch },
         createdAt: now,
       });
 
       // 예약금·수술비·날짜 등이 바뀔 수 있으므로 예약 파생 요약 재계산 — best-effort
       await safeRecompute(
-        () => recomputeReservationSummary(String(beforeData.patientId || patientId || "")),
+        () => recomputeReservationSummary(canonicalPatientId),
         "update/reservation"
       );
 

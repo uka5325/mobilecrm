@@ -481,3 +481,126 @@ test("create: 동시에 같은 예약(날짜+이름 등 동일 조합)을 저장
   const snap = await adminDb.collection("reservations").where("name", "==", name).get();
   assert.equal(snap.size, 1);
 });
+
+test("update 필드 보존: sparse patch는 전달 안 한 필드(상태/금액/담당자)를 유지한다", async () => {
+  __resetStaffCacheForTests();
+  const docRef = adminDb.collection("reservations").doc();
+  createdReservationDocIds.push(docRef.id);
+  await docRef.set({
+    reservationId: `R-PRESERVE-${Date.now()}`, patientId: `P-PRESERVE-${Date.now()}`,
+    name: "보존환자", reservationDate: "2026-08-01",
+    cancelled: true, completed: false,
+    depositAmount: "1000000", surgeryCost: "5000000",
+    coordinators: ["David"], hospital: "ARC", doctors: [], isDeleted: false,
+  });
+
+  // hospital만 수정
+  const r1 = await POST(makeReq(staff.idToken, "update", {
+    reservationDocId: docRef.id, reservationPatch: { name: "보존환자", reservationDate: "2026-08-01", hospital: "NEW" },
+  }));
+  assert.equal(r1.status, 200);
+  let d = (await docRef.get()).data()!;
+  assert.equal(d.hospital, "NEW");
+  assert.equal(d.cancelled, true);            // 유지
+  assert.equal(d.completed, false);           // 유지
+  assert.equal(d.depositAmount, "1000000");   // 유지
+  assert.equal(d.surgeryCost, "5000000");     // 유지
+  assert.deepEqual(d.coordinators, ["David"]); // 유지
+
+  // completed만 수정 → cancelled 유지
+  const r2 = await POST(makeReq(staff.idToken, "update", {
+    reservationDocId: docRef.id, reservationPatch: { name: "보존환자", reservationDate: "2026-08-01", completed: true },
+  }));
+  assert.equal(r2.status, 200);
+  d = (await docRef.get()).data()!;
+  assert.equal(d.completed, true);
+  assert.equal(d.cancelled, true);            // 유지
+
+  // coordinators=[] 명시 → 빈 배열로 변경
+  const r3 = await POST(makeReq(staff.idToken, "update", {
+    reservationDocId: docRef.id, reservationPatch: { name: "보존환자", reservationDate: "2026-08-01", coordinators: [] },
+  }));
+  assert.equal(r3.status, 200);
+  d = (await docRef.get()).data()!;
+  assert.deepEqual(d.coordinators, []);
+  assert.equal(d.depositAmount, "1000000");   // 여전히 유지
+});
+
+test("update: 존재하지 않는 reservationDocId → 400", async () => {
+  __resetStaffCacheForTests();
+  const res = await POST(makeReq(staff.idToken, "update", {
+    reservationDocId: "nonexistent-doc-id",
+    reservationPatch: { name: "x", reservationDate: "2026-08-01", hospital: "X" },
+  }));
+  assert.equal(res.status, 400);
+  assert.equal((await res.json()).success, false);
+});
+
+test("create: patient.patientId와 reservation.patientId 불일치 → 400 PATIENT_ID_MISMATCH", async () => {
+  __resetStaffCacheForTests();
+  const name = `불일치${Date.now()}`;
+  const res = await POST(makeReq(staff.idToken, "create", {
+    patient: { name, patientId: `P-A-${Date.now()}` },
+    reservation: { reservationId: `R-MM-${Date.now()}`, name, patientId: `P-B-${Date.now()}`, reservationDate: "2026-08-02", doctors: [], isDeleted: false },
+  }));
+  assert.equal(res.status, 400);
+  const body = await res.json();
+  assert.equal(body.success, false);
+  assert.equal(body.code, "PATIENT_ID_MISMATCH");
+  const byName = await adminDb.collection("reservations").where("name", "==", name).get();
+  assert.equal(byName.size, 0);
+});
+
+for (const field of ["invoiceId", "invoiceUrl", "invoiceSheetName", "surgeryReservedAt"]) {
+  test(`create: ${field} 주입 → 400 DISALLOWED_FIELD`, async () => {
+    __resetStaffCacheForTests();
+    const name = `주입${field}${Date.now()}`;
+    const res = await POST(makeReq(staff.idToken, "create", {
+      patient: { name },
+      reservation: {
+        reservationId: `R-INJ-${field}-${Date.now()}`, name,
+        reservationDate: "2026-08-03", doctors: [], isDeleted: false, [field]: "injected",
+      },
+    }));
+    assert.equal(res.status, 400);
+    const body = await res.json();
+    assert.equal(body.success, false);
+    assert.equal(body.code, "DISALLOWED_FIELD");
+    const byName = await adminDb.collection("reservations").where("name", "==", name).get();
+    assert.equal(byName.size, 0);
+  });
+}
+
+test("create: 일반 신규 예약은 서버 기본값(completed/cancelled/surgeryReserved=false)을 기록한다", async () => {
+  __resetStaffCacheForTests();
+  const res = await POST(makeReq(staff.idToken, "create", {
+    patient: { name: "기본값", patientId: `P-DEF-${Date.now()}` },
+    reservation: { reservationId: `R-DEF-${Date.now()}`, name: "기본값", reservationDate: "2026-08-04", doctors: [], isDeleted: false },
+  }));
+  const body = await res.json();
+  assert.equal(body.success, true);
+  createdReservationDocIds.push(body.reservationDocId);
+  createdPatientDocIds.push(body.patientDocId);
+  const d = (await adminDb.collection("reservations").doc(body.reservationDocId).get()).data()!;
+  assert.equal(d.completed, false);
+  assert.equal(d.cancelled, false);
+  assert.equal(d.surgeryReserved, false);
+  assert.ok(!("surgeryReservedAt" in d));
+});
+
+test("create_patient: 예약 없이 환자만 생성해도 summary 기본값(lastReservationDate/reservationCount)이 기록된다", async () => {
+  __resetStaffCacheForTests();
+  const patientId = `P-EMPTY-${Date.now()}`;
+  createdPatientDocIds.push(patientId);
+  const res = await POST(makeReq(staff.idToken, "create_patient", {
+    patient: { name: "예약없는환자", patientId },
+  }));
+  assert.equal(res.status, 200);
+  assert.equal((await res.json()).success, true);
+  const d = (await adminDb.collection("patients").doc(patientId).get()).data()!;
+  assert.equal(d.reservationCount, 0);
+  assert.equal(d.lastReservationDate, "");
+  assert.ok("lastReservationDate" in d);   // 목록 노출 위해 필드 존재 필수
+  assert.equal(d.hasInvoice, false);
+  assert.equal(d.hasMemo, false);
+});

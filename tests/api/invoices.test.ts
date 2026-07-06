@@ -167,3 +167,36 @@ test("담당 코디네이터는 인보이스를 삭제(소프트)할 수 있고 
   assert.equal(pat.invoiceCount, 0);
   assert.equal(pat.hasInvoice, false);
 });
+
+test("삭제된 인보이스는 update가 400(INVOICE_DELETED)으로 거부된다", async () => {
+  __resetStaffCacheForTests();
+  // 앞 테스트에서 invoiceDocId는 이미 soft delete된 상태.
+  const res = await POST(makeReq(coordA.idToken, "update", { invoiceDocId, totalAmount: 123 }));
+  assert.equal(res.status, 400);
+  const body = await res.json();
+  assert.equal(body.success, false);
+  assert.equal(body.code, "INVOICE_DELETED");
+  // 부활되지 않았는지 확인
+  const snap = await adminDb.collection("invoices").doc(invoiceDocId).get();
+  assert.equal(snap.data()?.isDeleted, true);
+});
+
+test("update에 isDeleted를 보내면 400(DISALLOWED_FIELD)으로 거부된다", async () => {
+  __resetStaffCacheForTests();
+  // 살아있는 인보이스가 필요 → 새 예약+인보이스 생성.
+  const resRef = adminDb.collection("reservations").doc();
+  await resRef.set({
+    reservationId: `R-INVDEL-${Date.now()}`, name: "삭제필드", patientId: "P-TEST-1",
+    reservationDate: "2026-07-02", surgeryCost: "500000",
+    coordinatorUids: [coordA.uid], coordinators: ["코디A"], doctors: [], isDeleted: false,
+  });
+  const created = await POST(makeReq(coordA.idToken, "create", { reservationDocId: resRef.id }));
+  const liveInvoiceDocId = (await created.json()).invoice.id;
+
+  const res = await POST(makeReq(coordA.idToken, "update", { invoiceDocId: liveInvoiceDocId, isDeleted: false, totalAmount: 1 }));
+  assert.equal(res.status, 400);
+  assert.equal((await res.json()).code, "DISALLOWED_FIELD");
+
+  await adminDb.collection("invoices").doc(liveInvoiceDocId).delete().catch(() => {});
+  await resRef.delete().catch(() => {});
+});
