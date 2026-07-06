@@ -22,6 +22,7 @@ import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { getCardStatus } from "@/lib/timelineUtils";
 import { getReservationBirthInfo } from "@/lib/reservationUtils";
 import { todayString } from "@/lib/dateUtils";
+import { buildCsvContent } from "@/lib/csv";
 import { CreateDrawer } from "@/components/reservations/CreateDrawer";
 import { ImportDrawer } from "@/components/reservations/ImportDrawer";
 import { MemoPopover, type MemoPopoverState } from "@/components/reservations/MemoPopover";
@@ -335,13 +336,6 @@ export default function ReservationsPage() {
     setMemoPopover((prev) => prev ? { ...prev, notes } : prev);
   }
 
-  function escapeCsv(value: string): string {
-    const s = String(value ?? "");
-    if (s.includes(",") || s.includes('"') || s.includes("\n")) {
-      return '"' + s.replace(/"/g, '""') + '"';
-    }
-    return s;
-  }
 
   function toDateStr(value: unknown): string {
     const d = toDate(value);
@@ -390,11 +384,11 @@ export default function ReservationsPage() {
           allMemo,
           toDateStr(r.createdAt),
           toDateStr(r.updatedAt),
-        ].map(escapeCsv).join(",");
+        ];
       });
 
-      const bom = "﻿";
-      const csv = bom + [header.map(escapeCsv).join(","), ...csvRows].join("\n");
+      // formula injection 방어 + 안전한 quoting/BOM은 공통 유틸에서 처리.
+      const csv = buildCsvContent([header, ...csvRows]);
       const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -452,7 +446,14 @@ export default function ReservationsPage() {
 
   async function handleDeletePatient(group: PatientGroup) {
     if (!currentUser) return;
-    const ok = confirm(`${group.name} 님의 전체 예약과 환자 정보를 모두 삭제할까요? (과거 예약 포함)`);
+    // 삭제 정책: 환자/예약은 soft delete(목록에서 숨김), reservationLocks만 hard delete.
+    // 인보이스·메모·사진·Storage 원본은 보존한다. "영구/전체 삭제"로 표현하지 않는다.
+    const ok = confirm(
+      `${group.name} 님을 고객 목록에서 삭제할까요?\n\n` +
+      "이 작업은 환자와 관련 예약을 일반 고객 목록에서 숨깁니다.\n" +
+      "의료기록, 인보이스, 사진, 메모 등 보존이 필요한 자료는 유지될 수 있습니다.\n\n" +
+      "계속하시겠습니까?"
+    );
     if (!ok) return;
 
     // 서버에서 patientId 기준 전체 예약 + 환자 문서를 일괄 soft-delete (45일 윈도우 밖 포함)

@@ -862,7 +862,9 @@ export async function searchReservationsByDateRange(
   from: string,
   to: string
 ): Promise<ReservationRecord[]> {
-  const result = await callReservationsApi("read_all", { from, to });
+  // KPI/대시보드는 기간 전체를 서버 pagination으로 정확히 집계한다(500 상한 부분집계 금지).
+  // 하드 상한 초과 시 서버가 KPI_QUERY_LIMIT_EXCEEDED 오류를 주고, 여기서 그대로 throw한다.
+  const result = await callReservationsApi("read_range_all", { from, to });
   if (!result.success) throw new Error(String(result.message || "검색 실패"));
   const raw = (result.reservations as Record<string, unknown>[] | undefined) || [];
   return raw

@@ -182,6 +182,52 @@ export async function POST(req: NextRequest) {
       });
     }
 
+    // ── READ: 기간 전체 예약(KPI용) — 서버 cursor pagination으로 500 상한을 넘겨 전체 집계 ──
+    // 대시보드 KPI가 500건 상한에 조용히 잘린 부분집계를 정상 수치처럼 표시하던 문제를 없앤다.
+    // 페이지(500)를 반복 조회해 기간 전체를 모으고, 하드 상한(MAX_KPI_ROWS)을 넘으면
+    // capped=true(KPI_QUERY_LIMIT_EXCEEDED)로 표시해 UI가 "부분 집계/기간 축소"를 안내한다.
+    if (action === "read_range_all") {
+      const { from, to } = (payload || {}) as { from?: string; to?: string };
+      if (!from || !to) {
+        return NextResponse.json({ success: false, message: "조회 기간(from/to)이 필요합니다." }, { status: 400 });
+      }
+      const PAGE = 500;
+      const MAX_KPI_ROWS = 20000; // 하드 상한(약 40페이지) — 초과 시 명시적 제한 오류
+      const all: Record<string, unknown>[] = [];
+      let cursorSnap: FirebaseFirestore.QueryDocumentSnapshot | null = null;
+      let capped = false;
+
+      // orderBy(reservationDate desc) + startAfter(문서 스냅샷)로 안정적 커서 페이지네이션.
+      for (;;) {
+        let q = adminDb
+          .collection("reservations")
+          .where("isDeleted", "==", false)
+          .where("reservationDate", ">=", from)
+          .where("reservationDate", "<=", to)
+          .orderBy("reservationDate", "desc")
+          .limit(PAGE);
+        if (cursorSnap) q = q.startAfter(cursorSnap) as typeof q;
+        const snap = await q.get();
+        if (snap.empty) break;
+        for (const d of snap.docs) all.push(docToObj(d));
+        if (all.length >= MAX_KPI_ROWS) { capped = true; break; }
+        if (snap.docs.length < PAGE) break;
+        cursorSnap = snap.docs[snap.docs.length - 1];
+      }
+
+      if (capped) {
+        // 부분 집계를 정상 KPI로 표시하지 않도록 명시적 제한 오류로 반환.
+        return NextResponse.json({
+          success: false,
+          code: "KPI_QUERY_LIMIT_EXCEEDED",
+          message: `조회 기간의 예약이 ${MAX_KPI_ROWS}건을 초과합니다. 기간을 좁혀 다시 조회해 주세요.`,
+          limit: MAX_KPI_ROWS,
+        }, { status: 413 });
+      }
+
+      return NextResponse.json({ success: true, reservations: all, capped: false });
+    }
+
     // ── READ: patient full reservation history (no date limit, cursor pagination) ──
     if (action === "patient_history") {
       const { patientId, cursor } = (payload || {}) as { patientId?: string; cursor?: string };

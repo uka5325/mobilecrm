@@ -130,3 +130,32 @@ test("payload: name/reservationDate는 항상 포함, updatedBy 강제", () => {
   assert.ok(!("birth" in p));
   assert.ok(!("gender" in p));
 });
+
+// ── sanitizeCsvCell: formula injection 방어 (3단계) ────────────────────────
+import { sanitizeCsvCell, buildCsvContent, CSV_BOM } from "../lib/csv";
+
+test("sanitizeCsvCell: 위험 접두(=,+,-,@,tab,CR)는 ' 프리픽스 후 quoting", () => {
+  assert.equal(sanitizeCsvCell("=HYPERLINK(1)"), `"'=HYPERLINK(1)"`);
+  assert.equal(sanitizeCsvCell("+SUM(1,2)"), `"'+SUM(1,2)"`);
+  assert.equal(sanitizeCsvCell("-10+20"), `"'-10+20"`);
+  assert.equal(sanitizeCsvCell("@SUM(A1)"), `"'@SUM(A1)"`);
+  assert.equal(sanitizeCsvCell("\tCMD"), `"'\tCMD"`);
+  assert.equal(sanitizeCsvCell("\rFORMULA"), `"'\rFORMULA"`);
+});
+
+test("sanitizeCsvCell: 일반 텍스트/따옴표/줄바꿈/쉼표 처리", () => {
+  assert.equal(sanitizeCsvCell("홍길동"), `"홍길동"`);
+  assert.equal(sanitizeCsvCell('a"b'), `"a""b"`);
+  assert.equal(sanitizeCsvCell("a\nb"), `"a\nb"`);
+  assert.equal(sanitizeCsvCell("a,b"), `"a,b"`);
+  assert.equal(sanitizeCsvCell(null), `""`);
+  assert.equal(sanitizeCsvCell(0), `"0"`);
+});
+
+test("buildCsvContent: BOM 포함 + 행/열 조립", () => {
+  const csv = buildCsvContent([["a", "b"], ["=1", "c,d"]]);
+  assert.ok(csv.startsWith(CSV_BOM));
+  assert.equal(csv, `${CSV_BOM}"a","b"\n"'=1","c,d"`);
+  // BOM 비활성 옵션
+  assert.ok(!buildCsvContent([["x"]], { bom: false }).startsWith(CSV_BOM));
+});
