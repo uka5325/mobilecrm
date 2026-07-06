@@ -9,7 +9,7 @@ const ALLOWED_LOG_ACTIONS = new Set([
   "patient_update", "patient_delete",
   "invoice_create", "invoice_update", "invoice_delete",
   "memo_create", "memo_update", "memo_delete",
-  "file_upload", "file_delete",
+  "file_upload", "file_delete", "STORAGE_DELETE_FAILED",
   "settings_update",
 ]);
 const ALLOWED_LOG_TARGET_TYPES = new Set([

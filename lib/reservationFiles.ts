@@ -37,6 +37,9 @@ export type PhotoRecord = {
   uploadedBy: string;
   uploadedByUid: string;
   isDeleted: boolean;
+  // Storage 원본 삭제 상태 — "failed"면 목록에 계속 표시하고 재시도 버튼을 노출한다.
+  storageDeleteStatus?: "pending" | "deleted" | "failed";
+  storageDeleteErrorCode?: string;
 };
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -60,6 +63,8 @@ function mapPhotoDoc(id: string, data: Record<string, unknown>): PhotoRecord {
     uploadedBy: cleanText(data.uploadedBy),
     uploadedByUid: cleanText(data.uploadedByUid),
     isDeleted: Boolean(data.isDeleted),
+    ...(data.storageDeleteStatus ? { storageDeleteStatus: data.storageDeleteStatus as PhotoRecord["storageDeleteStatus"] } : {}),
+    ...(data.storageDeleteErrorCode ? { storageDeleteErrorCode: cleanText(data.storageDeleteErrorCode) } : {}),
   };
 }
 
@@ -179,8 +184,26 @@ export async function uploadReservationPhoto(
   return savePhotoRecord(reservationDocId, reservationId, patientId, file, storagePath, staff);
 }
 
+// Storage 삭제 시도 결과를 분류하는 순수 함수 — Firestore/Storage 의존이 없어 단위 테스트 가능.
+// object-not-found는 이미 삭제된 것으로 보고 "deleted"(성공) 처리한다(재시도 시 다시 실패하지 않게).
+// 그 외 에러는 "failed"로 분류해 isDeleted를 건드리지 않고 재시도 가능한 상태로 남긴다.
+export function classifyStorageDeleteError(
+  err: unknown
+): { status: "deleted" } | { status: "failed"; errorCode: string } {
+  const errorCode = (err as { code?: string })?.code || "unknown";
+  if (errorCode === "storage/object-not-found") return { status: "deleted" };
+  return { status: "failed", errorCode };
+}
+
 // 사진 삭제 — Firestore 메타 soft delete와 Storage 원본 삭제를 분리해 관측한다.
 // Storage 삭제가 실패하면 성공으로 숨기지 않고, 사진 문서에 상태를 기록하고 예외를 던진다.
+// 사진 삭제(재시도 가능) — 순서:
+//   1) storageDeleteStatus=pending 기록(아직 isDeleted는 건드리지 않음 — 삭제 미확정 상태)
+//   2) Storage 원본 삭제 시도
+//   성공(또는 이미 없음: object-not-found): isDeleted=true + storageDeleteStatus=deleted +
+//     file_delete 성공 로그(Storage 삭제 성공 후에만 기록)
+//   실패(그 외 에러): isDeleted는 false로 유지 → 사진이 목록에 계속 표시되고 재시도 가능,
+//     storageDeleteStatus=failed + errorCode/attemptedAt 기록, STORAGE_DELETE_FAILED 로그, 예외를 던진다.
 export async function deleteReservationPhoto(
   photoId: string,
   storagePath: string,
@@ -190,12 +213,51 @@ export async function deleteReservationPhoto(
   staff: StaffUser,
   reservationDocId?: string
 ): Promise<void> {
-  // 1) Firestore 메타 soft delete
-  await updateDoc(doc(db, "reservationPhotos", photoId), {
-    isDeleted: true,
-    deletedAt: serverTimestamp(),
+  void reservationDocId; // 호출부 호환용(관측 식별자) — 현재 로그는 photoId/patientId로 충분
+  const photoRef = doc(db, "reservationPhotos", photoId);
+
+  // 1) pending 상태 기록 — isDeleted는 아직 그대로(false) 둔다.
+  await updateDoc(photoRef, {
+    storageDeleteStatus: "pending",
+    storageDeleteAttemptedAt: serverTimestamp(),
   });
 
+  // 2) Storage 원본 삭제 시도
+  try {
+    await deleteObject(ref(storage, storagePath));
+  } catch (e) {
+    const outcome = classifyStorageDeleteError(e);
+    if (outcome.status === "failed") {
+      // URL/경로 원문은 로그에 남기지 않는다 — 안전한 해시/식별자만. isDeleted는 false로 유지되어
+      // 목록에 계속 표시되고(getReservationPhotos는 isDeleted==false만 조회) 재시도 버튼이 노출된다.
+      await updateDoc(photoRef, {
+        storageDeleteStatus: "failed",
+        storageDeleteErrorCode: outcome.errorCode,
+        storageDeleteAttemptedAt: serverTimestamp(),
+      }).catch(() => {});
+      createLog({
+        action: "STORAGE_DELETE_FAILED",
+        targetType: "file",
+        targetId: photoId,
+        staff,
+        message: `사진 Storage 원본 삭제 실패 (code=${outcome.errorCode}, path#${safeHash(storagePath)})`,
+        reservationId,
+        patientId,
+      }).catch(() => {});
+      throw new Error("사진 원본 삭제에 실패했습니다. 목록에서 다시 시도해 주세요.");
+    }
+    // object-not-found → 아래로 흘러 성공 처리.
+  }
+
+  // 3) 성공(또는 이미 없음) — Firestore soft delete를 여기서 확정한다.
+  await updateDoc(photoRef, {
+    isDeleted: true,
+    deletedAt: serverTimestamp(),
+    storageDeleteStatus: "deleted",
+    storageDeleteAttemptedAt: serverTimestamp(),
+  });
+
+  // file_delete 성공 로그는 Storage 삭제가 실제로 성공한 뒤에만 기록한다.
   await createLog({
     action: "file_delete",
     targetType: "file",
@@ -205,32 +267,4 @@ export async function deleteReservationPhoto(
     reservationId,
     patientId,
   });
-
-  // 2) Storage 원본 삭제 — 실패 시 관측 가능하게 기록하고 예외를 던진다(성공으로 숨기지 않음).
-  try {
-    await deleteObject(ref(storage, storagePath));
-    await updateDoc(doc(db, "reservationPhotos", photoId), {
-      storageDeleteStatus: "deleted",
-      storageDeleteAttemptedAt: serverTimestamp(),
-    });
-  } catch (e) {
-    const errorCode = (e as { code?: string })?.code || "unknown";
-    // URL/경로 원문은 로그에 남기지 않는다 — 안전한 해시/식별자만.
-    await updateDoc(doc(db, "reservationPhotos", photoId), {
-      storageDeleteStatus: "failed",
-      storageDeleteErrorCode: errorCode,
-      storageDeleteAttemptedAt: serverTimestamp(),
-    }).catch(() => {});
-    createLog({
-      action: "STORAGE_DELETE_FAILED",
-      targetType: "file",
-      targetId: photoId,
-      staff,
-      message: `사진 Storage 원본 삭제 실패 (code=${errorCode}, path#${safeHash(storagePath)})`,
-      reservationId,
-      patientId,
-    }).catch(() => {});
-    void reservationDocId; // 호출부 호환용(관측 식별자) — 현재 로그는 photoId/patientId로 충분
-    throw new Error("사진 원본 삭제에 실패했습니다. 목록에서 재시도해 주세요.");
-  }
 }

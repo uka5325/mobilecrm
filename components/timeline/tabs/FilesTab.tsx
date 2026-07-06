@@ -192,8 +192,9 @@ export function FilesTab({ reservationDocId, reservationId, patientId, currentUs
     })();
   }
 
-  async function handleDeletePhoto(photo: PhotoRecord) {
-    if (!confirm(`"${photo.fileName}" 사진을 삭제할까요?`)) return;
+  // isRetry: 이미 실패(storageDeleteStatus=failed)한 항목을 재시도할 때는 확인창을 다시 띄우지 않는다.
+  async function handleDeletePhoto(photo: PhotoRecord, isRetry = false) {
+    if (!isRetry && !confirm(`"${photo.fileName}" 사진을 삭제할까요?`)) return;
     try {
       await deleteReservationPhoto(
         photo.id, photo.storagePath, photo.fileName,
@@ -201,8 +202,9 @@ export function FilesTab({ reservationDocId, reservationId, patientId, currentUs
       );
       setPhotos((prev) => prev.filter((p) => p.id !== photo.id));
     } catch (e) {
-      // Storage 원본 삭제 실패 — 메타는 삭제됐지만 원본이 남았을 수 있음. 목록에서 제거하되 오류를 표시.
-      setPhotos((prev) => prev.filter((p) => p.id !== photo.id));
+      // Storage 원본 삭제 실패 — isDeleted는 false로 유지되어 목록에 계속 표시된다(재시도 가능).
+      // 최신 상태(storageDeleteStatus=failed 등)를 다시 불러와 재시도 버튼이 보이게 한다.
+      await load();
       setError(e instanceof Error ? e.message : "사진 삭제에 실패했습니다.");
     }
   }
@@ -262,6 +264,11 @@ export function FilesTab({ reservationDocId, reservationId, patientId, currentUs
                     <span>{formatFileSize(photo.fileSize)}</span>
                     {formatDate(photo.uploadedAt) && <span>{formatDate(photo.uploadedAt)}</span>}
                   </div>
+                  {photo.storageDeleteStatus === "failed" && (
+                    <div className="mt-0.5 text-xs font-medium text-amber-600">
+                      원본 삭제 실패 — 재시도해 주세요
+                    </div>
+                  )}
                 </div>
                 <button
                   type="button"
@@ -271,13 +278,23 @@ export function FilesTab({ reservationDocId, reservationId, patientId, currentUs
                 >
                   보기
                 </button>
-                <button
-                  type="button"
-                  onClick={() => handleDeletePhoto(photo)}
-                  className="shrink-0 rounded-lg border border-red-100 px-2.5 py-1 text-xs text-red-500 transition hover:bg-red-50 active:scale-95"
-                >
-                  삭제
-                </button>
+                {photo.storageDeleteStatus === "failed" ? (
+                  <button
+                    type="button"
+                    onClick={() => handleDeletePhoto(photo, true)}
+                    className="shrink-0 rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs text-amber-700 transition hover:bg-amber-100 active:scale-95"
+                  >
+                    재시도
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => handleDeletePhoto(photo)}
+                    className="shrink-0 rounded-lg border border-red-100 px-2.5 py-1 text-xs text-red-500 transition hover:bg-red-50 active:scale-95"
+                  >
+                    삭제
+                  </button>
+                )}
               </li>
             ))}
           </ul>
