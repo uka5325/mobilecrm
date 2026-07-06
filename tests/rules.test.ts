@@ -179,3 +179,13 @@ test("비활성화된 admin은 staff 수정 권한을 잃는다 (isAdmin active 
 test("비활성화된 admin은 reservations 읽기도 차단된다 (isActiveStaff)", async () => {
   await assertFails(getDoc(doc(inactiveAdmin(), "reservations/r1")));
 });
+
+// ── P0: staff.active는 클라 SDK로 직접 바꿀 수 없다(admin이어도) ────────────────
+// 비활성화는 refresh token revoke를 동반해야 하므로 전용 서버 API로만 처리한다.
+test("admin이어도 client SDK로 staff.active를 직접 update하면 거부된다", async () => {
+  await assertFails(updateDoc(doc(admin(), "staff/staffA"), { active: false }));
+});
+
+test("admin의 displayName만 update하는 것은 여전히 허용된다(active 미포함 회귀)", async () => {
+  await assertSucceeds(updateDoc(doc(admin(), "staff/staffA"), { displayName: "새이름" }));
+});

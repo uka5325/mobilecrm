@@ -44,7 +44,12 @@ service cloud.firestore {
     // ── 직원 정보 ──────────────────────────────────────────────────────────
     match /staff/{userId} {
       allow read: if isActiveStaff();
-      allow create, update: if isAdmin();
+      allow create: if isAdmin();
+      // active는 전용 서버 API(/api/staff/deactivate, /api/staff/activate, admin SDK)에서만
+      // 변경한다 — admin이어도 클라 SDK로 직접 active를 바꿀 수 없다(비활성화 시 refresh token
+      // revoke가 함께 일어나야 하므로, 일반 update 경로로 우회되면 안 된다).
+      allow update: if isAdmin()
+        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(["active"]);
       allow delete: if false;
     }
 

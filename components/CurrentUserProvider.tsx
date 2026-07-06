@@ -24,7 +24,7 @@ import {
   useState,
 } from "react";
 import type { ReactNode } from "react";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import type { User } from "firebase/auth";
 import { signOut } from "firebase/auth";
 import { doc, onSnapshot } from "firebase/firestore";
@@ -75,16 +75,6 @@ function setCachedStaff(staff: StaffUser) {
   }
 }
 
-function clearCachedStaff() {
-  if (typeof window === "undefined") return;
-
-  try {
-    sessionStorage.removeItem(STAFF_CACHE_KEY);
-  } catch {
-    // ignore
-  }
-}
-
 function isSameStaff(a: StaffUser | null, b: StaffUser | null) {
   if (!a || !b) return false;
 
@@ -108,7 +98,6 @@ type CurrentUserContextValue = {
 const CurrentUserContext = createContext<CurrentUserContextValue | null>(null);
 
 export function CurrentUserProvider({ children }: { children: ReactNode }) {
-  const router = useRouter();
   const pathname = usePathname();
   const isLoginPage = pathname === "/login";
 
@@ -191,16 +180,18 @@ export function CurrentUserProvider({ children }: { children: ReactNode }) {
         setAuthReady(true);
       },
       (error) => {
+        // staff 문서 리스너 자체가 에러(권한 거부 등)를 받았다는 건 더 이상 안전하게
+        // 세션을 유지할 근거가 없다는 뜻 — 다른 비활성화 경로와 동일하게 안전 로그아웃을 탄다
+        // (캐시 정리는 runSecureLogout이 STAFF_CACHE_KEY 제거를 포함하므로 중복 호출 불필요).
         console.error("[staff listener error]", (error as Error)?.message ?? "");
-        clearCachedStaff();
         setCurrentUser(null);
         setAuthReady(true);
-        router.push("/login");
+        void runSecureLogout();
       }
     );
 
     return () => unsubscribe();
-  }, [firebaseUser, isLoginPage, router]);
+  }, [firebaseUser, isLoginPage]);
 
   return (
     <CurrentUserContext.Provider value={{ currentUser, authReady, firebaseReady, firebaseUser }}>

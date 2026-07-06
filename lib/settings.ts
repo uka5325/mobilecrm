@@ -146,10 +146,11 @@ export type SettingsStaffRecord = {
   updatedByUid?: string;
 };
 
+// active는 여기 포함하지 않는다 — 활성화/비활성화는 전용 서버 API
+// (/api/staff/activate, /api/staff/deactivate)로만 처리한다(토큰 revoke 동반).
 export type StaffUpdatePayload = {
   displayName?: string;
   role?: SettingsStaffRole | string;
-  active?: boolean;
   orderNo?: number;
 };
 
@@ -612,10 +613,6 @@ export async function updateStaffFromSettings(
     updatePayload.role = cleanRole(payload.role);
   }
 
-  if (payload.active !== undefined) {
-    updatePayload.active = Boolean(payload.active);
-  }
-
   if (payload.orderNo !== undefined) {
     updatePayload.orderNo = Number(payload.orderNo || 999999);
   }
@@ -718,6 +715,34 @@ export async function deactivateStaffFromSettings(
   const data = (await res.json()) as { success: boolean; message?: string; tokenRevoked?: boolean };
   if (!data.success) {
     throw new Error(data.message || "직원 비활성화에 실패했습니다.");
+  }
+  invalidateDoctorsCache();
+  return data;
+}
+
+export async function activateStaffFromSettings(
+  staffId: string,
+  actor: StaffUser
+) {
+  assertCanManageSettings(actor);
+
+  const id = cleanText(staffId);
+  if (!id) throw new Error("직원 ID가 없습니다.");
+
+  // 활성화도 전용 서버 API로 처리한다 — active는 클라 Firestore 직접 쓰기로
+  // 바꿀 수 없다(firestore.rules에서 차단). 활성화는 세션 무력화 대상이 아니므로 token revoke는 없다.
+  const token = await auth.currentUser?.getIdToken();
+  const res = await fetch("/api/staff/activate", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify({ uid: id }),
+  });
+  const data = (await res.json()) as { success: boolean; message?: string };
+  if (!data.success) {
+    throw new Error(data.message || "직원 활성화에 실패했습니다.");
   }
   invalidateDoctorsCache();
   return data;

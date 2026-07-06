@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import {
+  activateStaffFromSettings,
   addConferenceMemo,
   changeMyPassword,
   DEFAULT_APPOINTMENT_TYPE_COLORS,
@@ -421,6 +422,24 @@ export default function SettingsPage() {
                             await loadStaffList();
                             notifyStaffSettingsUpdated();
                             setMessage("직원이 비활성화되었습니다.");
+                          } catch (err) {
+                            console.error((err as Error)?.message ?? "");
+                            setError(getErrorMessage(err));
+                          } finally {
+                            setSaving(false);
+                          }
+                        }}
+                        onActivate={async () => {
+                          if (!currentUser) { setError("로그인 정보를 확인할 수 없습니다."); return; }
+                          const ok = confirm("이 직원을 다시 활성화할까요?");
+                          if (!ok) return;
+                          setSaving(true);
+                          clearAlerts();
+                          try {
+                            await activateStaffFromSettings(staff.id, currentUser);
+                            await loadStaffList();
+                            notifyStaffSettingsUpdated();
+                            setMessage("직원이 활성화되었습니다.");
                           } catch (err) {
                             console.error((err as Error)?.message ?? "");
                             setError(getErrorMessage(err));

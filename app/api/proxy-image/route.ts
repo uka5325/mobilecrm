@@ -3,10 +3,12 @@ import { requireActiveStaff, toAuthErrorResponse } from "@/lib/apiAuth";
 import { adminStorage } from "@/lib/firebaseAdmin";
 
 export async function GET(req: NextRequest) {
-  // 활성 직원만 프록시 허용 (오픈 프록시 방지)
+  // 활성 직원만 프록시 허용 (오픈 프록시 방지). 의료사진은 민감정보이므로 checkRevoked:true로
+  // 토큰 폐기 검사 + staff active 5분 캐시 우회(fresh read)를 강제한다 — 비활성화/퇴사 직후에도
+  // 아직 만료되지 않은 idToken으로 사진에 접근하는 창을 없앤다.
   const authHeader = req.headers.get("authorization");
   try {
-    await requireActiveStaff(authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : undefined);
+    await requireActiveStaff(authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : undefined, { checkRevoked: true });
   } catch (authErr) {
     const res = toAuthErrorResponse(authErr);
     if (res) return res;

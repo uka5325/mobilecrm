@@ -23,6 +23,7 @@ import {
   lockIdForDupKey,
   hasDupKeyComponents,
   isReservationActive,
+  isLockStale,
 } from "../lib/reservationLocks";
 
 const APPLY = process.argv.includes("--apply");
@@ -86,10 +87,12 @@ async function main() {
   const createCandidates: CreateCandidate[] = [];
 
   // ── stale lock 검출 ──────────────────────────────────────────────
+  // 가리키는 예약이 없음/삭제/취소된 경우뿐 아니라, 활성 예약이라도 그 예약 데이터로
+  // "지금" 다시 계산한 lockId가 이 lock 문서 ID와 다르면(예: identity 스킴 변경) stale로 본다.
   for (const d of locksSnap.docs) {
     const lock = d.data();
     const target = resById.get(String(lock.reservationDocId || ""));
-    if (!isReservationActive(target)) {
+    if (isLockStale(d.id, target)) {
       stats.staleLocks += 1;
       deleteCandidates.push({ lockDocId: d.id });
     }

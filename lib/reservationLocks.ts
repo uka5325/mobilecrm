@@ -24,25 +24,35 @@ export function normalizePhone(v: unknown): string {
   return String(v ?? "").replace(/[^0-9+]/g, "");
 }
 
-// dupKey 구성요소(날짜·이름)가 있어야 lock을 만든다. 둘 중 하나라도 없으면 lock 생략.
-export function hasDupKeyComponents(r: Record<string, unknown>): boolean {
+// 중복 판정의 "신원" 부분 — patientId가 있으면 그것만 쓴다(이름/전화 수정으로 lock이 흔들리지
+// 않게 하기 위함). patientId가 없는 레거시 예약만 name+phone으로 fallback한다.
+// prefix("pid:"/"legacy:")로 두 경로의 값이 우연히 충돌하지 않게 한다.
+function computeIdentityKey(r: Record<string, unknown>): string {
+  const patientId = normalizeText(r.patientId);
+  if (patientId) return `pid:${patientId}`;
   const name = normalizeText(r.name ?? r.patientName);
-  const date = normalizeText(r.reservationDate);
-  return !!name && !!date;
+  if (!name) return "";
+  return `legacy:${name}__${normalizePhone(r.phone)}`;
 }
 
-// 중복 기준 키(원문) — 병원+부위 아님에 주의: 예약 중복은
-// 이름/날짜/시간/전화/병원/유형/원장 조합으로 판정한다(구 normDupKey와 호환되는 필드 구성).
-// doctors는 정규화 후 정렬해 순서 무관하게 동일 키를 만든다.
+// dupKey 구성요소(신원·날짜)가 있어야 lock을 만든다. 둘 중 하나라도 없으면 lock 생략.
+export function hasDupKeyComponents(r: Record<string, unknown>): boolean {
+  const identity = computeIdentityKey(r);
+  const date = normalizeText(r.reservationDate);
+  return !!identity && !!date;
+}
+
+// 중복 기준 키(원문) — 신원(patientId 우선, 레거시는 name+phone)/날짜/시간/병원/유형/원장 조합.
+// doctors는 정규화 후 정렬해 순서 무관하게 동일 키를 만든다. patientId가 있으면 phone은
+// key에 별도로 들어가지 않는다(신원이 이미 patientId로 고정되므로).
 export function computeDupKey(r: Record<string, unknown>): string {
   const doctors = Array.isArray(r.doctors)
     ? [...(r.doctors as unknown[])].map(normalizeText).filter(Boolean).sort().join(",")
     : "";
   return [
-    normalizeText(r.name ?? r.patientName),
+    computeIdentityKey(r),
     normalizeText(r.reservationDate),
     normalizeText(r.reservationTime),
-    normalizePhone(r.phone),
     normalizeText(r.hospital),
     normalizeText(r.appointmentType),
     doctors,
@@ -65,9 +75,16 @@ export function isReservationActive(r: Record<string, unknown> | null | undefine
   return !!r && r.isDeleted !== true && r.cancelled !== true;
 }
 
-// lock이 가리키는 예약이 stale(없음/삭제됨/취소됨)인가 → 자동 정리 대상.
-export function isLockTargetStale(target: Record<string, unknown> | null | undefined): boolean {
-  return !isReservationActive(target);
+// lock이 stale(자동 정리 대상)인가 — 두 가지 경우:
+//   1) 가리키는 예약이 없음/삭제됨/취소됨
+//   2) 예약은 활성이지만, 그 예약 데이터로 지금 다시 계산한 lockId가 이 lock 문서 ID와 다름
+//      (예: identity 스킴 변경, 데이터 정정 등으로 이 예약의 "현재" lock이 이미 다른 문서로 옮겨감)
+export function isLockStale(
+  lockDocId: string,
+  target: Record<string, unknown> | null | undefined
+): boolean {
+  if (!isReservationActive(target)) return true;
+  return lockIdForReservation(target as Record<string, unknown>) !== lockDocId;
 }
 
 // lock 문서 본문 생성 — 민감정보 없이 식별자 + 해시 + 타임스탬프만.

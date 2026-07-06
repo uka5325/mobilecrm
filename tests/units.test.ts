@@ -159,3 +159,50 @@ test("buildCsvContent: BOM 포함 + 행/열 조립", () => {
   // BOM 비활성 옵션
   assert.ok(!buildCsvContent([["x"]], { bom: false }).startsWith(CSV_BOM));
 });
+
+// ── reservationLocks: patientId 기반 identity (P0 수정) ────────────────────
+import { computeDupKey, lockIdForReservation } from "../lib/reservationLocks";
+
+const _lockBase = {
+  patientId: "P-1",
+  reservationDate: "2027-01-01",
+  reservationTime: "10:00",
+  hospital: "H1",
+  appointmentType: "상담",
+  doctors: ["김원장", "이원장"],
+};
+
+test("lock identity: patientId 동일 + name만 다름 → 동일 lockId", () => {
+  const a = lockIdForReservation({ ..._lockBase, name: "홍길동" });
+  const b = lockIdForReservation({ ..._lockBase, name: "김철수" });
+  assert.equal(a, b);
+});
+
+test("lock identity: patientId 동일 + phone만 다름 → 동일 lockId", () => {
+  const a = lockIdForReservation({ ..._lockBase, name: "홍길동", phone: "010-1111-2222" });
+  const b = lockIdForReservation({ ..._lockBase, name: "홍길동", phone: "010-9999-8888" });
+  assert.equal(a, b);
+});
+
+test("lock identity: doctors 순서만 달라도 같은 lockId", () => {
+  const a = lockIdForReservation({ ..._lockBase, name: "홍길동", doctors: ["김원장", "이원장"] });
+  const b = lockIdForReservation({ ..._lockBase, name: "홍길동", doctors: ["이원장", "김원장"] });
+  assert.equal(a, b);
+});
+
+test("lock identity: patientId 없는 레거시는 name+phone fallback으로 lockId 산출", () => {
+  const legacy = lockIdForReservation({
+    reservationDate: "2027-01-01", reservationTime: "10:00", hospital: "H1",
+    appointmentType: "상담", doctors: [], name: "홍길동", phone: "010-1111-2222",
+  });
+  assert.ok(legacy);
+  // patientId 있는 케이스와는 다른 lockId(신원 소스가 다름)
+  const withPid = lockIdForReservation({ ..._lockBase, name: "홍길동", phone: "010-1111-2222" });
+  assert.notEqual(legacy, withPid);
+});
+
+test("lock identity: patientId 있으면 dupKey에 phone이 별도로 들어가지 않는다", () => {
+  const k1 = computeDupKey({ ..._lockBase, name: "홍길동", phone: "010-1111-2222" });
+  const k2 = computeDupKey({ ..._lockBase, name: "홍길동", phone: "010-9999-8888" });
+  assert.equal(k1, k2);
+});

@@ -11,6 +11,7 @@ import { adminDb } from "@/lib/firebaseAdmin";
 import { __resetStaffCacheForTests } from "@/lib/apiAuth";
 import { createTestUser, type TestUser } from "../helpers/testAuth";
 import { POST } from "@/app/api/reservations/route";
+import { RESERVATION_LOCKS, lockIdForReservation } from "@/lib/reservationLocks";
 
 function makeReq(idToken: string, action: string, payload: unknown) {
   return new NextRequest("http://localhost/api/reservations", {
@@ -746,4 +747,52 @@ test("read_range_all: from/to 누락 시 400", async () => {
   __resetStaffCacheForTests();
   const res = await POST(makeReq(staff.idToken, "read_range_all", { from: "2027-03-01" }));
   assert.equal(res.status, 400);
+});
+
+// ── lock: stale 판정 강화 + transaction outcome 안정성 (P0 수정) ──────────────
+test("lock: 활성 예약을 가리키지만 현재 계산 lockId와 다른(mismatch) lock은 stale로 self-heal", async () => {
+  const xName = `스테일타깃${Date.now()}`;
+  const x = await createLock(xName, "09:00"); // 자기 콤보의 진짜 lock을 정상 보유한 별개의 활성 예약
+  assert.equal(x.success, true);
+
+  const bName = `스테일신규${Date.now()}`;
+  const bTime = "14:00";
+  const bLockId = lockIdForReservation(lockCombo(bName, bTime).reservation);
+
+  // B 콤보의 자리에 "X를 가리키지만 X의 실제 콤보와는 무관한" 오염된 lock을 직접 심는다
+  // (구 identity 스킴 잔재·데이터 정정 등으로 생기는 lockId 불일치 상황을 재현).
+  const lockRef = adminDb.collection(RESERVATION_LOCKS).doc(bLockId);
+  await lockRef.set({
+    reservationDocId: x.reservationDocId,
+    reservationId: "",
+    patientId: "",
+    dupKeyHash: bLockId,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  });
+
+  const b = await createLock(bName, bTime);
+  assert.equal(b.success, true); // stale로 판정되어 self-heal — duplicate로 막히지 않는다
+});
+
+test("lock: update가 409로 거부된 직후 무관한 정상 update는 이전 실패에 영향받지 않고 성공한다", async () => {
+  const name = `트랜잭션순서${Date.now()}`;
+  const a = await createLock(name, "10:00");
+  await createLock(name, "16:00"); // 다른 활성 예약이 16:00 콤보의 lock을 보유
+
+  __resetStaffCacheForTests();
+  const conflictRes = await POST(makeReq(staff.idToken, "update", {
+    reservationDocId: a.reservationDocId,
+    reservationPatch: { name, reservationDate: "2026-09-01", reservationTime: "16:00" },
+  }));
+  assert.equal(conflictRes.status, 409); // duplicate로 거부
+
+  // 직후 A에 대해 콤보와 무관한 정상 필드만 수정 → 이전 실패 신호가 새어나오지 않고 성공해야 한다
+  __resetStaffCacheForTests();
+  const okRes = await POST(makeReq(staff.idToken, "update", {
+    reservationDocId: a.reservationDocId,
+    reservationPatch: { name, reservationDate: "2026-09-01", reservationTime: "10:00", depositAmount: "10000" },
+  }));
+  assert.equal(okRes.status, 200);
+  assert.equal((await okRes.json()).success, true);
 });
