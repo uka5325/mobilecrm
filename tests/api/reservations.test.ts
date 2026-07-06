@@ -604,3 +604,111 @@ test("create_patient: 예약 없이 환자만 생성해도 summary 기본값(las
   assert.equal(d.hasInvoice, false);
   assert.equal(d.hasMemo, false);
 });
+
+// ── reservation lock lifecycle (2단계) ────────────────────────────────────
+function lockCombo(name: string, time: string) {
+  return {
+    patient: { name },
+    reservation: {
+      name, reservationDate: "2026-09-01", reservationTime: time,
+      hospital: "LockH", appointmentType: "상담", phone: "010-1111-2222",
+      doctors: ["김원장"], isDeleted: false,
+    },
+  };
+}
+async function createLock(name: string, time: string) {
+  __resetStaffCacheForTests();
+  const res = await POST(makeReq(staff.idToken, "create", lockCombo(name, time)));
+  const body = await res.json();
+  if (body.reservationDocId) createdReservationDocIds.push(body.reservationDocId);
+  if (body.patientDocId) createdPatientDocIds.push(body.patientDocId);
+  return body;
+}
+
+test("lock: 예약 삭제 후 같은 조합 재생성 성공(stale lock self-heal)", async () => {
+  const name = `락삭제${Date.now()}`;
+  const a = await createLock(name, "10:00");
+  assert.equal(a.success, true);
+  const dup = await createLock(name, "10:00");
+  assert.equal(dup.duplicate, true);
+  __resetStaffCacheForTests();
+  await POST(makeReq(admin.idToken, "delete", { reservationDocId: a.reservationDocId }));
+  const b = await createLock(name, "10:00");
+  assert.equal(b.success, true);
+});
+
+test("lock: 시간 변경 시 old lock 해제 + new 시간 중복 차단", async () => {
+  const name = `락시간${Date.now()}`;
+  const a = await createLock(name, "10:00");
+  __resetStaffCacheForTests();
+  const upd = await POST(makeReq(staff.idToken, "update", {
+    reservationDocId: a.reservationDocId,
+    reservationPatch: { name, reservationDate: "2026-09-01", reservationTime: "11:00" },
+  }));
+  assert.equal((await upd.json()).success, true);
+  const c = await createLock(name, "11:00");
+  assert.equal(c.duplicate, true);
+  const d = await createLock(name, "10:00");
+  assert.equal(d.success, true);
+});
+
+test("lock: 동일 dupKey 유지 update는 self-lock으로 허용", async () => {
+  const name = `락셀프${Date.now()}`;
+  const a = await createLock(name, "10:00");
+  __resetStaffCacheForTests();
+  const upd = await POST(makeReq(staff.idToken, "update", {
+    reservationDocId: a.reservationDocId,
+    reservationPatch: { name, reservationDate: "2026-09-01", reservationTime: "10:00", depositAmount: "50000" },
+  }));
+  assert.equal((await upd.json()).success, true);
+});
+
+test("lock: dupKey 변경이 다른 활성 예약과 충돌하면 409 DUPLICATE_RESERVATION", async () => {
+  const name = `락충돌${Date.now()}`;
+  const a = await createLock(name, "10:00");
+  await createLock(name, "12:00");
+  __resetStaffCacheForTests();
+  const upd = await POST(makeReq(staff.idToken, "update", {
+    reservationDocId: a.reservationDocId,
+    reservationPatch: { name, reservationDate: "2026-09-01", reservationTime: "12:00" },
+  }));
+  assert.equal(upd.status, 409);
+  assert.equal((await upd.json()).code, "DUPLICATE_RESERVATION");
+});
+
+test("lock: 취소 시 lock 해제 → 같은 조합 신규 가능, 복구 시 충돌 실패", async () => {
+  const name = `락취소${Date.now()}`;
+  const a = await createLock(name, "10:00");
+  __resetStaffCacheForTests();
+  const cancel = await POST(makeReq(staff.idToken, "update", {
+    reservationDocId: a.reservationDocId,
+    reservationPatch: { name, reservationDate: "2026-09-01", reservationTime: "10:00", cancelled: true },
+  }));
+  assert.equal((await cancel.json()).success, true);
+  const b = await createLock(name, "10:00");
+  assert.equal(b.success, true);
+  __resetStaffCacheForTests();
+  const restore = await POST(makeReq(staff.idToken, "update", {
+    reservationDocId: a.reservationDocId,
+    reservationPatch: { name, reservationDate: "2026-09-01", reservationTime: "10:00", cancelled: false },
+  }));
+  assert.equal(restore.status, 409);
+});
+
+test("lock: 취소 복구 시 다른 활성 예약이 없으면 lock 재확보 성공", async () => {
+  const name = `락복구${Date.now()}`;
+  const a = await createLock(name, "10:00");
+  __resetStaffCacheForTests();
+  await POST(makeReq(staff.idToken, "update", {
+    reservationDocId: a.reservationDocId,
+    reservationPatch: { name, reservationDate: "2026-09-01", reservationTime: "10:00", cancelled: true },
+  }));
+  __resetStaffCacheForTests();
+  const restore = await POST(makeReq(staff.idToken, "update", {
+    reservationDocId: a.reservationDocId,
+    reservationPatch: { name, reservationDate: "2026-09-01", reservationTime: "10:00", cancelled: false },
+  }));
+  assert.equal((await restore.json()).success, true);
+  const c = await createLock(name, "10:00");
+  assert.equal(c.duplicate, true);
+});
