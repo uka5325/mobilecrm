@@ -1,11 +1,11 @@
-name: Deploy Firestore rules & indexes
+name: Deploy Firestore & Storage rules
 
+# 배포 게이트: CI(verify) 워크플로가 main에서 성공한 뒤에만 실행한다.
+# CI(lint/tsc/unit/rules/storage/api/build)가 실패하면 rules 배포도 실행되지 않는다.
 on:
-  push:
-    branches: [main]
-    paths:
-      - "firestore.rules"
-      - "firestore.indexes.json"
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
   workflow_dispatch:
     inputs:
       force_delete_indexes:
@@ -16,6 +16,12 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    # 수동 실행(workflow_dispatch)이거나, CI가 성공 + main 브랜치 + 동일 저장소일 때만 배포.
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.head_branch == 'main' &&
+       github.event.workflow_run.head_repository.full_name == github.repository)
     steps:
       - uses: actions/checkout@v4
 
@@ -28,12 +34,12 @@ jobs:
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
         run: echo "$FIREBASE_SERVICE_ACCOUNT" > "$RUNNER_TEMP/firebase-sa.json"
 
-      - name: Deploy firestore:rules and firestore:indexes
+      - name: Deploy firestore & storage rules + indexes
         env:
           GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/firebase-sa.json
           FIREBASE_PROJECT_ID: ${{ secrets.FIREBASE_PROJECT_ID }}
           FORCE_DELETE: ${{ inputs.force_delete_indexes == true && '--force' || '' }}
-        run: npx firebase-tools@15 deploy --only firestore:rules,firestore:indexes --project "$FIREBASE_PROJECT_ID" --non-interactive $FORCE_DELETE
+        run: npx firebase-tools@15 deploy --only firestore:rules,firestore:indexes,storage --project "$FIREBASE_PROJECT_ID" --non-interactive $FORCE_DELETE
 
       - name: Remove credentials
         if: always()

@@ -147,6 +147,8 @@ export async function safeRecompute(fn: () => Promise<void>, label: string): Pro
   try {
     await fn();
   } catch (e) {
-    console.warn(`[patientSummary] ${label} 실패:`, e instanceof Error ? e.message : String(e));
+    // 구조화 오류코드(SUMMARY_RECOMPUTE_FAILED) — best-effort 재계산 실패는 핵심 mutation을 막지 않지만
+    // 관측 가능해야 reconcile 스크립트로 후속 정합성 보정이 가능하다. 민감정보는 남기지 않는다.
+    console.warn(`[patientSummary] SUMMARY_RECOMPUTE_FAILED (${label}):`, e instanceof Error ? e.message : String(e));
   }
 }

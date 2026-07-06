@@ -300,6 +300,9 @@ export function FilesTab({ reservationDocId, reservationId, patientId, currentUs
               >
                 ×
               </button>
+              {/* 인증 proxy가 만든 Blob object URL(또는 레거시 fileUrl)을 그대로 표시한다.
+                  next/image는 외부 로더/최적화 대상이 아니고 blob: URL을 지원하지 않으므로 <img>가 필요하다. */}
+              {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={viewingUrl}
                 alt="파일 보기"
