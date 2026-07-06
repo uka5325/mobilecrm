@@ -495,10 +495,9 @@ export async function createReservation(
 
     hospital,
     appointmentType: (params.appointmentType || "상담") as AppointmentType,
-    completed: params.completed === true,
 
-    surgeryReserved: false,
-    surgeryReservedAt: "",
+    // 상태 필드(completed/cancelled/surgeryReserved/surgeryReservedAt)와 invoice 필드는
+    // 서버가 기본값을 기록한다(create 화이트리스트에서 제외 → 주입 시 400). 여기서 보내지 않는다.
 
     depositAmount: cleanText(params.depositAmount),
     surgeryCost: cleanText(params.surgeryCost),
@@ -508,10 +507,6 @@ export async function createReservation(
     coordinators: Array.isArray(params.coordinators)
       ? params.coordinators.map(cleanText).filter(Boolean)
       : [],
-
-    invoiceUrl: "",
-    invoiceId: "",
-    invoiceSheetName: "",
 
     createdBy: staff.displayName,
     createdByUid: staff.uid,
@@ -772,6 +767,60 @@ export type UpdateReservationParams = {
   surgeryCost?: string;
 };
 
+// 예약 수정 payload(부분 patch) 순수 빌더 — firebase 미의존이라 단위 테스트 가능.
+// 핵심 원칙: params에 "명시적으로 전달된" 필드만 patch에 담는다.
+//   undefined → patch에서 제외(서버가 기존값 보존)
+//   ""/[]/0/false 등 명시값 → 포함
+// 이렇게 해야 호출부가 넘기지 않은 필드가 서버에서 조용히 초기화되지 않는다.
+export function buildReservationUpdatePayload(
+  params: UpdateReservationParams,
+  staff: StaffUser
+): { reservationPatch: Record<string, unknown> } {
+  const name = cleanText(params.name);
+  const reservationPatch: Record<string, unknown> = {
+    name,
+    patientName: name,
+    reservationDate: cleanText(params.reservationDate),
+
+    // updatedBy/updatedByUid는 서버가 SERVER_MANAGED_IGNORE로 무시하고 ctx로 강제한다(거부 대상 아님).
+    updatedBy: staff.displayName,
+    updatedByUid: staff.uid,
+  };
+
+  if (params.phone !== undefined) reservationPatch.phone = cleanText(params.phone);
+  if (params.nationality !== undefined) reservationPatch.nationality = cleanText(params.nationality);
+  if (params.consultArea !== undefined) reservationPatch.consultArea = cleanText(params.consultArea);
+  if (params.reservationTime !== undefined) reservationPatch.reservationTime = cleanText(params.reservationTime);
+  if (params.hospital !== undefined) reservationPatch.hospital = cleanText(params.hospital);
+  if (params.appointmentType !== undefined) reservationPatch.appointmentType = params.appointmentType;
+  if (params.completed !== undefined) reservationPatch.completed = params.completed === true;
+  if (params.cancelled !== undefined) reservationPatch.cancelled = params.cancelled === true;
+  if (params.depositAmount !== undefined) reservationPatch.depositAmount = cleanText(params.depositAmount);
+  if (params.surgeryCost !== undefined) reservationPatch.surgeryCost = cleanText(params.surgeryCost);
+  if (params.coordinators !== undefined) {
+    reservationPatch.coordinators = Array.isArray(params.coordinators)
+      ? params.coordinators.map(cleanText).filter(Boolean)
+      : [];
+  }
+  if (params.doctors !== undefined) {
+    reservationPatch.doctors = (params.doctors as string[]).map(cleanText).filter(Boolean);
+  }
+
+  // 생년/성별 파생 필드는 관련 입력(birthInput/birth/gender)이 하나라도 있을 때만 포함한다.
+  // cleanText(undefined)가 ""를 반환하므로, 미전달 시 기존값을 blank로 덮지 않도록 undefined를 먼저 확인.
+  if (params.birthInput !== undefined || params.birth !== undefined || params.gender !== undefined) {
+    const parsedBirth = parseBirthInfo(
+      params.birthInput || params.birth || "",
+      params.gender || ""
+    );
+    reservationPatch.birth = parsedBirth.birth;
+    reservationPatch.birthInput = parsedBirth.birthInput;
+    reservationPatch.gender = parsedBirth.gender;
+  }
+
+  return { reservationPatch };
+}
+
 export async function updateReservationFull(
   reservationDocId: string,
   reservationId: string,
@@ -781,10 +830,6 @@ export async function updateReservationFull(
 ) {
   const name = cleanText(params.name);
   const reservationDate = cleanText(params.reservationDate);
-  const doctorsProvided = params.doctors !== undefined;
-  const doctors = doctorsProvided
-    ? (params.doctors as string[]).map(cleanText).filter(Boolean)
-    : null;
 
   if (!name) {
     return { success: false, message: "이름을 입력하세요." };
@@ -794,61 +839,16 @@ export async function updateReservationFull(
     return { success: false, message: "예약날짜를 선택하세요." };
   }
 
-  const parsedBirth = parseBirthInfo(
-    params.birthInput || params.birth || "",
-    params.gender || ""
-  );
+  const { reservationPatch } = buildReservationUpdatePayload(params, staff);
 
-  const reservationPatch: Record<string, unknown> = {
-    name,
-    patientName: name,
-
-    birth: parsedBirth.birth,
-    birthInput: parsedBirth.birthInput,
-    gender: parsedBirth.gender,
-    phone: cleanText(params.phone),
-    nationality: cleanText(params.nationality),
-
-    reservationDate,
-    reservationTime: cleanText(params.reservationTime),
-
-    hospital: cleanText(params.hospital),
-    appointmentType: params.appointmentType || "상담",
-    completed: params.completed === true,
-    cancelled: params.cancelled === true,
-
-    consultArea: cleanText(params.consultArea),
-    depositAmount: cleanText(params.depositAmount),
-    surgeryCost: cleanText(params.surgeryCost),
-
-    coordinators: Array.isArray(params.coordinators)
-      ? params.coordinators.map(cleanText).filter(Boolean)
-      : [],
-
-    ...(doctors !== null && { doctors }),
-
-    // updatedBy/updatedByUid는 서버가 SERVER_MANAGED_IGNORE로 무시하고 ctx로 강제한다(거부 대상 아님).
-    updatedBy: staff.displayName,
-    updatedByUid: staff.uid,
-  };
-
-  const patientPatch = {
-    name,
-    birth: parsedBirth.birth,
-    birthInput: parsedBirth.birthInput,
-    gender: parsedBirth.gender,
-    phone: cleanText(params.phone),
-    nationality: cleanText(params.nationality),
-  };
-
-  // Pass patientId so server can find the patientDocId.
-  // reservationId는 서버 감사로그(reservation_update)에 사용 — 로그는 서버에서 기록한다.
+  // 예약 수정은 reservations 문서만 건드린다. 환자 마스터(patients) 정정은
+  // update_patient_profile 전용 경로로만 처리한다(책임 분리). patientId는 서버가
+  // reservationDocId로 기존 문서를 읽어 canonical 값을 파생하므로 전송하지 않는다.
+  // reservationId는 서버 감사로그(reservation_update)용 — 로그는 서버에서 기록한다.
   const apiResult = await callReservationsApi("update", {
     reservationDocId,
     reservationId,
-    patientId,
     reservationPatch,
-    patientPatch,
   });
 
   if (!apiResult.success) {

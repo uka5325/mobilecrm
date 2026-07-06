@@ -68,3 +68,65 @@ test("toSerializable: Timestamp형(toMillis) 변환", () => {
   assert.equal(toSerializable(ts), 1234);
   assert.deepEqual(toSerializable({ a: ts, b: [ts] }), { a: 1234, b: [1234] });
 });
+
+// ── buildReservationUpdatePayload: 부분 patch(생략 필드 보존) ──────────────
+import { buildReservationUpdatePayload } from "../lib/reservations";
+
+const _staff = { uid: "u1", displayName: "Tester" } as unknown as Parameters<typeof buildReservationUpdatePayload>[1];
+const _base = { name: "홍길동", reservationDate: "2026-07-06" };
+
+test("payload: hospital만 전달 → 상태/금액/담당자 키 없음", () => {
+  const { reservationPatch: p } = buildReservationUpdatePayload({ ..._base, hospital: "ARC" }, _staff);
+  assert.equal(p.hospital, "ARC");
+  assert.ok(!("completed" in p));
+  assert.ok(!("cancelled" in p));
+  assert.ok(!("coordinators" in p));
+  assert.ok(!("depositAmount" in p));
+  assert.ok(!("surgeryCost" in p));
+});
+
+test("payload: completed만 전달 → completed 포함, cancelled 없음", () => {
+  const { reservationPatch: p } = buildReservationUpdatePayload({ ..._base, completed: true }, _staff);
+  assert.equal(p.completed, true);
+  assert.ok(!("cancelled" in p));
+});
+
+test("payload: coordinators:[] → 빈 배열 포함", () => {
+  const { reservationPatch: p } = buildReservationUpdatePayload({ ..._base, coordinators: [] }, _staff);
+  assert.ok("coordinators" in p);
+  assert.deepEqual(p.coordinators, []);
+});
+
+test("payload: coordinators:undefined → 키 자체가 없음", () => {
+  const { reservationPatch: p } = buildReservationUpdatePayload({ ..._base, coordinators: undefined }, _staff);
+  assert.ok(!("coordinators" in p));
+});
+
+test("payload: depositAmount:'0' → 포함", () => {
+  const { reservationPatch: p } = buildReservationUpdatePayload({ ..._base, depositAmount: "0" }, _staff);
+  assert.ok("depositAmount" in p);
+  assert.equal(p.depositAmount, "0");
+});
+
+test("payload: depositAmount:undefined → 키 자체가 없음", () => {
+  const { reservationPatch: p } = buildReservationUpdatePayload({ ..._base, depositAmount: undefined }, _staff);
+  assert.ok(!("depositAmount" in p));
+});
+
+test("payload: cancelled:false → false 포함", () => {
+  const { reservationPatch: p } = buildReservationUpdatePayload({ ..._base, cancelled: false }, _staff);
+  assert.ok("cancelled" in p);
+  assert.equal(p.cancelled, false);
+});
+
+test("payload: name/reservationDate는 항상 포함, updatedBy 강제", () => {
+  const { reservationPatch: p } = buildReservationUpdatePayload(_base, _staff);
+  assert.equal(p.name, "홍길동");
+  assert.equal(p.patientName, "홍길동");
+  assert.equal(p.reservationDate, "2026-07-06");
+  assert.equal(p.updatedBy, "Tester");
+  assert.equal(p.updatedByUid, "u1");
+  // 생년/성별 입력 없으면 파생 필드 미포함(기존값 보존)
+  assert.ok(!("birth" in p));
+  assert.ok(!("gender" in p));
+});
