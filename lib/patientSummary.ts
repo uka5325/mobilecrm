@@ -7,6 +7,29 @@ import { adminDb, FieldValue } from "@/lib/firebaseAdmin";
 
 const RESERVATION_CAP = 300;
 
+// 신규 환자 문서에 기록할 요약(summary) 기본값. 필드/타입은 recomputeReservationSummary·
+// recomputeInvoiceSummary·recomputeMemoSummary가 실제로 쓰는 값과 정확히 일치한다.
+// (lastReservationAt은 Timestamp가 아니라 문자열 — 없으면 "".)
+// 목적: 예약 없이 환자만 생성돼도 lastReservationDate 필드가 존재해
+// list_patients_summary(orderBy lastReservationDate)에 노출되고 reservationCount=0으로 보인다.
+export function createEmptyPatientSummary(): Record<string, unknown> {
+  return {
+    reservationCount: 0,
+    depositCount: 0,
+    surgeryCostCount: 0,
+    totalDepositAmount: 0,
+    totalSurgeryCost: 0,
+    lastReservationDate: "",
+    lastReservationTime: "",
+    lastReservationAt: "",
+    reservationCountCapped: false,
+    invoiceCount: 0,
+    hasInvoice: false,
+    memoCount: 0,
+    hasMemo: false,
+  };
+}
+
 // 금액 문자열("1,000,000", "100만" 등) → 숫자. invoices 라우트의 인라인 파싱과 동일 규칙
 // (숫자/점 외 제거) — 표기 문자는 버린다. 파싱 불가 시 0.
 export function parseAmount(v: unknown): number {
