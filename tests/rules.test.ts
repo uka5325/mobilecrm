@@ -3,7 +3,7 @@
  *
  * 목적: 배포 전 회귀 안전망. firestore.rules가 의도대로
  *   - client SDK 직접 우회(invoices/logs/patients 등)를 차단하고
- *   - 실시간 경로(reservations/staff/photos/charts)는 허용하며
+ *   - 실시간 경로(reservations/staff/photos)는 허용하며 (charts는 기능 제거로 차단)
  *   - 비활성 admin의 권한을 박탈하는지
  * 를 자동 검증한다.
  *
@@ -133,17 +133,15 @@ test("reservationPhotos 업데이트: 화이트리스트 밖 필드(uploadedByUi
   );
 });
 
-test("reservationCharts 업데이트: 이미지/소프트삭제 필드는 허용", async () => {
-  await assertSucceeds(
+test("reservationCharts(기능 제거됨): 활성 직원도 직접 읽기가 차단된다", async () => {
+  await assertFails(getDoc(doc(activeStaff(), "reservationCharts/ch1")));
+});
+
+test("reservationCharts(기능 제거됨): 활성 직원도 직접 쓰기가 차단된다", async () => {
+  await assertFails(
     updateDoc(doc(activeStaff(), "reservationCharts/ch1"), {
       chartUrl: "new", storagePath: "sp", updatedAt: new Date(), updatedBy: "A", updatedByUid: "staffA",
     })
-  );
-});
-
-test("reservationCharts 업데이트: 화이트리스트 밖 필드(createdByUid 위조)는 차단", async () => {
-  await assertFails(
-    updateDoc(doc(activeStaff(), "reservationCharts/ch1"), { createdByUid: "someoneElse" })
   );
 });
 

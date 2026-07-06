@@ -44,9 +44,6 @@ export type ReservationDoc = {
   managerName?: string;
   manager_name?: string;
   coordinator?: string;
-  operationStatus?: string;
-  operation_status?: string;
-  status?: string;
   surgeryReserved?: boolean;
   surgery_reserved?: boolean;
   surgeryStatus?: string;
@@ -62,14 +59,7 @@ export type ReservationDoc = {
 export type Counter = {
   name?: string;
   total: number;
-  visited: number;
-  noShow: number;
   surgery: number;
-  before: number;
-  wait: number;
-  cons: number;
-  post: number;
-  left: number;
   consultCount: number;
   surgeryTypeCount: number;
   treatmentCount: number;
@@ -79,9 +69,7 @@ export type Counter = {
 };
 
 export type KpiRow = Counter & {
-  visitRate: number;
   surgeryRate: number;
-  noShowRate: number;
   shareRate?: number;
 };
 
@@ -207,10 +195,6 @@ export function getManagers(item: ReservationDoc) {
   return Array.from(new Set([...fromArray, ...fromSingle])).filter(Boolean);
 }
 
-export function getStatus(item: ReservationDoc) {
-  return cleanText(item.operationStatus || item.operation_status || item.status || "내원전");
-}
-
 export function isSurgeryReserved(item: ReservationDoc) {
   if (typeof item.surgeryReserved === "boolean") return item.surgeryReserved;
   if (typeof item.surgery_reserved === "boolean") return item.surgery_reserved;
@@ -256,7 +240,7 @@ function parseDepositParts(value: unknown) {
 }
 
 export function emptyCounter(name?: string): Counter {
-  return { name, total: 0, visited: 0, noShow: 0, surgery: 0, before: 0, wait: 0, cons: 0, post: 0, left: 0, consultCount: 0, surgeryTypeCount: 0, treatmentCount: 0, followUpCount: 0, completedCount: 0, depositByCurrency: {} };
+  return { name, total: 0, surgery: 0, consultCount: 0, surgeryTypeCount: 0, treatmentCount: 0, followUpCount: 0, completedCount: 0, depositByCurrency: {} };
 }
 
 function addDeposit(counter: Counter, item: ReservationDoc) {
@@ -267,16 +251,8 @@ function addDeposit(counter: Counter, item: ReservationDoc) {
 }
 
 export function accumulate(counter: Counter, item: ReservationDoc) {
-  const status = getStatus(item);
   const apptType = getAppointmentType(item);
   counter.total += 1;
-  if (status === "내원전") counter.before += 1;
-  if (status === "대기") counter.wait += 1;
-  if (status === "원상중") counter.cons += 1;
-  if (status === "후상중") counter.post += 1;
-  if (status === "귀가") counter.left += 1;
-  if (status === "부도") counter.noShow += 1;
-  if (status !== "부도" && status !== "내원전") counter.visited += 1;
   if (isSurgeryReserved(item)) counter.surgery += 1;
   if (apptType === "상담") counter.consultCount += 1;
   if (apptType === "수술") counter.surgeryTypeCount += 1;
@@ -294,8 +270,6 @@ export function rate(a: number, b: number) {
 export function finalizeCounter(counter: Counter, shareBase?: number): KpiRow {
   return {
     ...counter,
-    visitRate: rate(counter.visited, counter.total),
-    noShowRate: rate(counter.noShow, counter.total),
     surgeryRate: rate(counter.surgery, counter.consultCount || counter.total),
     shareRate: shareBase ? rate(counter.consultCount, shareBase) : 0,
   };

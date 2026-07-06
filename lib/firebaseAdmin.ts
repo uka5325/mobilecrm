@@ -34,4 +34,5 @@ export const adminInitialized = admin.apps.length > 0;
 
 export const adminAuth = adminInitialized ? admin.auth() : null!;
 export const adminDb = adminInitialized ? admin.firestore() : null!;
+export const adminStorage = adminInitialized ? admin.storage() : null!;
 export const FieldValue = admin.firestore.FieldValue;

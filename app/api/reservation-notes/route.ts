@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { adminDb, FieldValue } from "@/lib/firebaseAdmin";
 import { requireActiveStaff, toAuthErrorResponse } from "@/lib/apiAuth";
 import { toSerializable as toSer } from "@/lib/adminUtils";
+import { recomputeMemoSummary, safeRecompute } from "@/lib/patientSummary";
 
 export async function POST(req: NextRequest) {
   try {
@@ -96,6 +97,9 @@ export async function POST(req: NextRequest) {
         createdAt: FieldValue.serverTimestamp(),
       });
 
+      // 고객관리 요약(메모 개수) 재계산 — best-effort
+      await safeRecompute(() => recomputeMemoSummary(String(patientId || "")), "create/memo");
+
       return NextResponse.json({ success: true, id: ref.id });
     }
 
@@ -186,6 +190,12 @@ export async function POST(req: NextRequest) {
         after: null,
         createdAt: FieldValue.serverTimestamp(),
       });
+
+      // 고객관리 요약(메모 개수) 재계산 — note 문서의 patientId 우선(payload 폴백)
+      await safeRecompute(
+        () => recomputeMemoSummary(String(noteSnap.data()?.patientId || patientId || "")),
+        "delete/memo"
+      );
 
       return NextResponse.json({ success: true });
     }

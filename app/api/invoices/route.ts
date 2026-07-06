@@ -3,9 +3,14 @@ import { adminDb, FieldValue } from "@/lib/firebaseAdmin";
 import { requireActiveStaff, toAuthErrorResponse } from "@/lib/apiAuth";
 import { docToObj, cleanText } from "@/lib/adminUtils";
 import { parseBirthInfo } from "@/lib/invoiceUtils";
+import { recomputeInvoiceSummary, safeRecompute } from "@/lib/patientSummary";
 
 // 데이터 변경 action — 토큰 폐기 검사 적용
 const WRITE_ACTIONS = new Set(["create", "update", "delete"]);
+
+// 인보이스 상태 허용값(enum) — update에서 임의 문자열 저장 차단.
+// lib/invoices.ts InvoiceRecord.status 정의와 일치해야 함.
+const ALLOWED_INVOICE_STATUS = new Set(["draft", "confirmed", "void"]);
 
 function toNumber(value: unknown) {
   if (typeof value === "number") return value;
@@ -250,6 +255,12 @@ export async function POST(req: NextRequest) {
         after: { invoiceId, invoiceDocId: txResult.invoiceDocId },
       });
 
+      // 고객관리 요약(인보이스 개수) 재계산 — best-effort
+      await safeRecompute(
+        () => recomputeInvoiceSummary(cleanText(reservation.patientId)),
+        "create/invoice"
+      );
+
       const newSnap = await invoicesCol.doc(txResult.invoiceDocId).get();
       return NextResponse.json({ success: true, invoice: docToObj(newSnap), alreadyExists: false });
     }
@@ -269,6 +280,11 @@ export async function POST(req: NextRequest) {
 
       if (!isCoordinatorOf(current)) {
         return NextResponse.json({ success: false, message: "접근 권한이 없습니다." }, { status: 403 });
+      }
+
+      // status는 허용 enum만 통과(임의 문자열 → 400). 미전달 시 기존값 유지.
+      if (fields.status !== undefined && !ALLOWED_INVOICE_STATUS.has(String(fields.status))) {
+        return NextResponse.json({ success: false, message: "유효하지 않은 인보이스 상태입니다." }, { status: 400 });
       }
 
       const patch: Record<string, unknown> = {
@@ -363,6 +379,12 @@ export async function POST(req: NextRequest) {
         message: `${staffName}님이 인보이스를 삭제했습니다.`,
         before: { invoiceId: current.invoiceId },
       });
+
+      // 고객관리 요약(인보이스 개수) 재계산 — best-effort
+      await safeRecompute(
+        () => recomputeInvoiceSummary(cleanText(current.patientId)),
+        "delete/invoice"
+      );
 
       return NextResponse.json({ success: true });
     }

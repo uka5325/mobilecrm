@@ -1,8 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import {
+  subscribeReservationsByRange,
+  searchReservationsByDateRange,
   type ReservationRecord,
   type AppointmentType,
   APPOINTMENT_TYPE_COLORS,
@@ -11,7 +13,6 @@ import { todayString } from "@/lib/dateUtils";
 import { DetailDrawer } from "@/components/timeline/DetailDrawer";
 import { NewReservationDrawer } from "@/components/timeline/NewReservationDrawer";
 import { getConferenceMemos, type ConferenceMemo } from "@/lib/settings";
-import { useReservationsContext } from "@/components/ReservationsProvider";
 
 type ViewMode = "day" | "week" | "month";
 
@@ -115,17 +116,37 @@ function getAppointmentColor(type: AppointmentType | string) {
 }
 
 // ─── useScheduleData ─────────────────────────────────────────────────────────
-// 예약 데이터는 전역 단일 구독(ReservationsProvider)에서 공유받고(#3),
-// 여기서는 보고 있는 날짜 범위로만 필터한다. 실시간 갱신은 그대로 유지된다.
+// 화면별 필요한 범위만 조회: 보고 있는 날짜 범위[startDate,endDate]만 실시간 구독한다.
+// (기존: 전역 45일 구독을 메모리 필터 → 범위 구독으로 전환. 범위 변경 시 재구독.)
 function useScheduleData(startDate: string, endDate: string) {
-  const { reservations: allReservations, loading, refresh } = useReservationsContext();
-
-  const reservations = useMemo(
-    () => allReservations.filter((r) => r.reservationDate >= startDate && r.reservationDate <= endDate),
-    [allReservations, startDate, endDate]
+  const [state, setState] = useState<{ reservations: ReservationRecord[]; loading: boolean }>(
+    { reservations: [], loading: true }
   );
 
-  return { reservations, loading, refresh };
+  useEffect(() => {
+    // 범위 변경 시엔 이전 데이터를 유지하다 새 스냅샷이 오면 교체(플리커 방지).
+    // 초기 로딩만 loading=true(초기 state)로 표시된다.
+    const unsub = subscribeReservationsByRange(
+      startDate,
+      endDate,
+      (data) => setState({ reservations: data.reservations, loading: false }),
+      () => setState((s) => ({ ...s, loading: false }))
+    );
+    return () => unsub();
+  }, [startDate, endDate]);
+
+  // 실시간 구독이 in-range 변경(생성/수정/삭제)을 자동 반영하므로 보통 불필요하지만,
+  // 명시적 새로고침(예: Drawer 저장 후)은 현재 범위를 1회 재조회해 강제 갱신한다.
+  const refresh = useCallback(async () => {
+    try {
+      const list = await searchReservationsByDateRange(startDate, endDate);
+      setState({ reservations: list, loading: false });
+    } catch {
+      /* 구독이 최신을 유지하므로 실패는 무시 */
+    }
+  }, [startDate, endDate]);
+
+  return { reservations: state.reservations, loading: state.loading, refresh };
 }
 
 // ─── DayCard ─────────────────────────────────────────────────────────────────

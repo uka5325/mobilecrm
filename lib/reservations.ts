@@ -2,7 +2,6 @@ import { auth, db } from "./firebase";
 import { collection, onSnapshot, query, where, getDocs } from "firebase/firestore";
 import type { StaffUser } from "./auth";
 import { cleanText } from "./stringUtils";
-import { createLog } from "./logs";
 import { parseBirthInfo } from "./reservationUtils";
 
 async function callReservationsApi(action: string, payload: Record<string, unknown>) {
@@ -50,14 +49,6 @@ export const APPOINTMENT_TYPE_COLORS: Record<AppointmentType, string> = {
   검진: "#0891b2",
 };
 
-export type ReservationStatus =
-  | "내원전"
-  | "대기"
-  | "원상중"
-  | "후상중"
-  | "귀가"
-  | "부도";
-
 export type ReservationRecord = {
   id: string;
   reservationId: string;
@@ -79,8 +70,6 @@ export type ReservationRecord = {
   completed: boolean;
   cancelled: boolean;
 
-  operationStatus: ReservationStatus;
-  preConsStatus: string;
   surgeryReserved: boolean;
   surgeryReservedAt?: string;
 
@@ -90,17 +79,6 @@ export type ReservationRecord = {
 
   doctors: string[];
   coordinators: string[];
-
-  doctorStatusMap: Record<string, ReservationStatus | string>;
-  doctorStatusMetaMap: Record<
-    string,
-    {
-      status: string;
-      updatedAt: string;
-      updatedBy: string;
-      updatedRole: string;
-    }
-  >;
 
   invoiceUrl: string;
   invoiceId: string;
@@ -156,23 +134,6 @@ function makeDateBasedId(prefix: "P" | "R") {
   return `${prefix}-${y}${m}${d}-${random}`;
 }
 
-function normalizeReservationStatus(value: unknown): ReservationStatus {
-  const v = cleanText(value);
-
-  if (
-    v === "내원전" ||
-    v === "대기" ||
-    v === "원상중" ||
-    v === "후상중" ||
-    v === "귀가" ||
-    v === "부도"
-  ) {
-    return v;
-  }
-
-  return "내원전";
-}
-
 function normalizeAppointmentType(value: unknown): AppointmentType {
   const v = cleanText(value);
   if (v === "상담" || v === "수술" || v === "시술" || v === "치료" || v === "경과" || v === "진료" || v === "검진") return v;
@@ -203,8 +164,6 @@ export function mapReservationDoc(id: string, data: Record<string, unknown>): Re
     completed: data.completed === true,
     cancelled: data.cancelled === true,
 
-    operationStatus: normalizeReservationStatus(data.operationStatus),
-    preConsStatus: cleanText(data.preConsStatus),
     surgeryReserved: data.surgeryReserved === true,
     surgeryReservedAt: cleanText(data.surgeryReservedAt),
 
@@ -222,9 +181,6 @@ export function mapReservationDoc(id: string, data: Record<string, unknown>): Re
       : typeof data.coordinators === "string" && data.coordinators
       ? data.coordinators.split("|").map(cleanText).filter(Boolean)
       : [],
-
-    doctorStatusMap: (data.doctorStatusMap as Record<string, string>) || {},
-    doctorStatusMetaMap: (data.doctorStatusMetaMap as ReservationRecord["doctorStatusMetaMap"]) || {},
 
     invoiceUrl: cleanText(data.invoiceUrl),
     invoiceId: cleanText(data.invoiceId),
@@ -419,7 +375,12 @@ async function getClientDoctors(): Promise<DoctorOption[]> {
 // getAllReservations와 동일 동작(45일 1회 조회). 호출부 호환을 위해 별칭 유지.
 export const fetchAllReservationsOnce = getAllReservations;
 
-export function subscribeAllReservations(
+// 예약을 [from, to] 날짜 범위로 실시간 구독한다. to가 null이면 from 이후 전체.
+// 화면별 필요한 범위만 구독하는 구조의 기반(홈=오늘, 스케줄=선택 범위).
+// 인덱스: reservations (isDeleted ASC, reservationDate) — firestore.indexes.json.
+export function subscribeReservationsByRange(
+  from: string,
+  to: string | null,
   callback: (data: {
     reservations: ReservationRecord[];
     doctors: DoctorOption[];
@@ -433,18 +394,17 @@ export function subscribeAllReservations(
     if (unsubscribeSnapshot) { unsubscribeSnapshot(); unsubscribeSnapshot = null; }
     if (!user) return;
 
-    const fromDate = get45DaysAgo();
-
-    // 실시간 단일 경로: onSnapshot이 데이터를 공급. (이중 읽기 방지로 API seed 제거)
-    // 의사 목록만 별도 조회.
+    // 실시간 단일 경로: onSnapshot이 데이터를 공급. 의사 목록만 별도 조회.
     getClientDoctors().then((d) => { latestDoctors = d; }).catch(() => {});
 
+    const constraints = [
+      where("isDeleted", "==", false),
+      where("reservationDate", ">=", from),
+    ];
+    if (to) constraints.push(where("reservationDate", "<=", to));
+
     unsubscribeSnapshot = onSnapshot(
-      query(
-        collection(db, "reservations"),
-        where("isDeleted", "==", false),
-        where("reservationDate", ">=", fromDate)
-      ),
+      query(collection(db, "reservations"), ...constraints),
       (snap) => {
         // 캐시 기반 빈 스냅샷은 무시 (초기 깜빡임 방지)
         if (snap.metadata.fromCache && snap.empty) return;
@@ -458,7 +418,7 @@ export function subscribeAllReservations(
         callback({ reservations, doctors: latestDoctors.length ? latestDoctors : fallback });
       },
       (error) => {
-        console.error("[subscribeAllReservations error]", (error as Error)?.message ?? "");
+        console.error("[subscribeReservationsByRange error]", (error as Error)?.message ?? "");
         onError?.(error);
       }
     );
@@ -468,6 +428,17 @@ export function subscribeAllReservations(
     unsubscribeAuth();
     unsubscribeSnapshot?.();
   };
+}
+
+// 최근 45일 전체 구독(하위호환) — 범위 구독의 특수 케이스.
+export function subscribeAllReservations(
+  callback: (data: {
+    reservations: ReservationRecord[];
+    doctors: DoctorOption[];
+  }) => void,
+  onError?: (error: Error) => void
+) {
+  return subscribeReservationsByRange(get45DaysAgo(), null, callback, onError);
 }
 
 export async function createReservation(
@@ -507,19 +478,6 @@ export async function createReservation(
     nationality: cleanText(params.nationality),
   };
 
-  const doctorStatusMap: Record<string, ReservationStatus> = {};
-  const doctorStatusMetaMap: ReservationRecord["doctorStatusMetaMap"] = {};
-
-  doctors.forEach((doctor) => {
-    doctorStatusMap[doctor] = "내원전";
-    doctorStatusMetaMap[doctor] = {
-      status: "내원전",
-      updatedAt: "",
-      updatedBy: "",
-      updatedRole: "",
-    };
-  });
-
   const reservationData = {
     reservationId,
     patientId,
@@ -539,7 +497,6 @@ export async function createReservation(
     appointmentType: (params.appointmentType || "상담") as AppointmentType,
     completed: params.completed === true,
 
-    operationStatus: "내원전" as ReservationStatus,
     surgeryReserved: false,
     surgeryReservedAt: "",
 
@@ -551,9 +508,6 @@ export async function createReservation(
     coordinators: Array.isArray(params.coordinators)
       ? params.coordinators.map(cleanText).filter(Boolean)
       : [],
-
-    doctorStatusMap,
-    doctorStatusMetaMap,
 
     invoiceUrl: "",
     invoiceId: "",
@@ -573,25 +527,10 @@ export async function createReservation(
   }
 
   invalidatePatientsCache();
+  invalidatePatientsSummaryCache();
   const savedReservationId = String(apiResult.reservationDocId || "");
 
-  createLog({
-    action: "reservation_create",
-    targetType: "reservation",
-    targetId: reservationId,
-    patientId,
-    reservationId,
-    staff,
-    message: `${staff.displayName}님이 신규 예약을 등록했습니다.`,
-    before: null,
-    after: {
-      name,
-      reservationDate,
-      reservationTime: cleanText(params.reservationTime),
-      hospital,
-      appointmentType: params.appointmentType || "상담",
-    },
-  }).catch((e) => console.warn("[createReservation] log write failed:", e));
+  // 감사로그는 서버(/api/reservations create)에서 권위 있게 기록됨 → 클라 createLog 제거(중복 방지).
 
   return {
     success: true,
@@ -608,7 +547,95 @@ export type PatientRecord = {
   gender?: string;
   phone?: string;
   nationality?: string;
+  // 고객관리 배지용 요약(patients 문서 저장값 — lib/patientSummary.ts). 백필 전 문서는 undefined.
+  reservationCount?: number;
+  depositCount?: number;      // 묶음 그룹 수
+  surgeryCostCount?: number;  // 묶음 그룹 수
+  invoiceCount?: number;
+  memoCount?: number;
+  totalDepositAmount?: number;
+  totalSurgeryCost?: number;
+  lastReservationDate?: string;
+  lastReservationTime?: string;
+  hasMemo?: boolean;
+  hasInvoice?: boolean;
 };
+
+// patients 문서(요약 포함) → PatientRecord. 숫자 필드는 숫자만 통과(백필 전엔 undefined).
+function mapPatientRecord(p: Record<string, unknown>): PatientRecord {
+  const num = (v: unknown) => (typeof v === "number" ? v : undefined);
+  return {
+    id: cleanText(p.id),
+    patientId: cleanText(p.patientId),
+    name: cleanText(p.name),
+    birth: cleanText(p.birth),
+    birthInput: cleanText(p.birthInput),
+    gender: cleanText(p.gender),
+    phone: cleanText(p.phone),
+    nationality: cleanText(p.nationality),
+    reservationCount: num(p.reservationCount),
+    depositCount: num(p.depositCount),
+    surgeryCostCount: num(p.surgeryCostCount),
+    invoiceCount: num(p.invoiceCount),
+    memoCount: num(p.memoCount),
+    totalDepositAmount: num(p.totalDepositAmount),
+    totalSurgeryCost: num(p.totalSurgeryCost),
+    lastReservationDate: cleanText(p.lastReservationDate),
+    lastReservationTime: cleanText(p.lastReservationTime),
+    hasMemo: p.hasMemo === true,
+    hasInvoice: p.hasInvoice === true,
+  };
+}
+
+// 고객관리 첫 화면 summary 캐시 — 재진입 시 즉시 렌더 + 백그라운드 갱신.
+// 첫 페이지(cursor 없음) 결과만 캐시한다(더보기로 누적된 페이지는 캐시 대상 아님).
+let _patientsSummaryCache: { at: number; patients: PatientRecord[]; nextCursor: string | null } | null = null;
+const PATIENTS_SUMMARY_CACHE_TTL = 5 * 60 * 1000;
+
+export function getCachedPatientsSummary(): { patients: PatientRecord[]; nextCursor: string | null } | undefined {
+  if (!_patientsSummaryCache || Date.now() - _patientsSummaryCache.at >= PATIENTS_SUMMARY_CACHE_TTL) return undefined;
+  return { patients: _patientsSummaryCache.patients, nextCursor: _patientsSummaryCache.nextCursor };
+}
+
+export function invalidatePatientsSummaryCache() {
+  _patientsSummaryCache = null;
+}
+
+// 고객관리 첫 화면: patients를 요약(lastReservationDate 내림차순)으로 페이지 조회.
+// 45일 라이브 윈도우와 무관 — 과거 환자도 노출되며 배지는 저장된 summary로 표시.
+export async function listPatientsSummary(
+  limit = 30,
+  cursor?: string
+): Promise<{ patients: PatientRecord[]; nextCursor: string | null }> {
+  const result = await callReservationsApi("list_patients_summary", { limit, cursor });
+  if (!result.success || !Array.isArray(result.patients)) return { patients: [], nextCursor: null };
+  const mapped = {
+    patients: (result.patients as Record<string, unknown>[]).map(mapPatientRecord),
+    nextCursor: (result.nextCursor as string) ?? null,
+  };
+  if (!cursor) _patientsSummaryCache = { at: Date.now(), ...mapped };
+  return mapped;
+}
+
+// 예약금/수술비 최소 수정 — 금액 팝오버 저장용. 화이트리스트 필드만 patch하며
+// 신원/감사로그/요약 재계산은 서버가 처리한다.
+export async function updateReservationAmount(
+  reservationDocId: string,
+  reservationId: string,
+  patientId: string,
+  field: "depositAmount" | "surgeryCost",
+  value: string
+): Promise<{ success: boolean; message?: string }> {
+  const apiResult = await callReservationsApi("update", {
+    reservationDocId,
+    reservationId,
+    patientId,
+    reservationPatch: { [field]: cleanText(value) },
+  });
+  return apiResult.success
+    ? { success: true }
+    : { success: false, message: cleanText(apiResult.message) || "금액 저장에 실패했습니다." };
+}
 
 export async function createPatientOnly(
   params: { name: string; birthInput: string; phone: string; nationality: string; patientId?: string },
@@ -635,7 +662,7 @@ export async function createPatientOnly(
   };
 
   const result = await callReservationsApi("create_patient", { patient });
-  if (result.success) invalidatePatientsCache();
+  if (result.success) { invalidatePatientsCache(); invalidatePatientsSummaryCache(); }
   return result.success
     ? { success: true, patientDocId: String(result.patientDocId || "") }
     : { success: false, message: cleanText(result.message) || "등록 실패" };
@@ -656,16 +683,7 @@ export async function listPatients(force = false): Promise<PatientRecord[]> {
   }
   const result = await callReservationsApi("list_patients", {});
   if (!result.success || !Array.isArray(result.patients)) return _patientsCache?.data ?? [];
-  const data = (result.patients as Record<string, unknown>[]).map((p) => ({
-    id: cleanText(p.id),
-    patientId: cleanText(p.patientId),
-    name: cleanText(p.name),
-    birth: cleanText(p.birth),
-    birthInput: cleanText(p.birthInput),
-    gender: cleanText(p.gender),
-    phone: cleanText(p.phone),
-    nationality: cleanText(p.nationality),
-  }));
+  const data = (result.patients as Record<string, unknown>[]).map(mapPatientRecord);
   _patientsCache = { at: Date.now(), data };
   return data;
 }
@@ -677,16 +695,7 @@ export async function searchPatients(term: string): Promise<PatientRecord[]> {
   if (!t) return [];
   const result = await callReservationsApi("search_patients", { term: t });
   if (!result.success || !Array.isArray(result.patients)) return [];
-  return (result.patients as Record<string, unknown>[]).map((p) => ({
-    id: cleanText(p.id),
-    patientId: cleanText(p.patientId),
-    name: cleanText(p.name),
-    birth: cleanText(p.birth),
-    birthInput: cleanText(p.birthInput),
-    gender: cleanText(p.gender),
-    phone: cleanText(p.phone),
-    nationality: cleanText(p.nationality),
-  }));
+  return (result.patients as Record<string, unknown>[]).map(mapPatientRecord);
 }
 
 export async function createReservationsBatch(
@@ -738,20 +747,7 @@ export async function toggleSurgeryReserved(
     return { success: false, message: apiResult.message || "수술예약 상태 변경에 실패했습니다." };
   }
 
-  createLog({
-    action: "reservation_update",
-    targetType: "reservation",
-    targetId: reservationId,
-    reservationId,
-    staff,
-    message: `${staff.displayName}님이 수술예약 상태를 ${
-      nextValue ? "예약" : "미예약"
-    }으로 변경했습니다.`,
-    before: null,
-    after: {
-      surgeryReserved: nextValue,
-    },
-  }).catch((e) => console.warn("[toggleSurgeryReserved] log write failed:", e));
+  // 감사로그는 서버(/api/reservations toggleSurgery)에서 권위 있게 기록됨 → 클라 createLog 제거.
 
   return { success: true };
 }
@@ -774,8 +770,6 @@ export type UpdateReservationParams = {
   coordinators?: string[];
   depositAmount?: string;
   surgeryCost?: string;
-  currentDoctorStatusMap?: Record<string, string>;
-  currentDoctorStatusMetaMap?: ReservationRecord["doctorStatusMetaMap"];
 };
 
 export async function updateReservationFull(
@@ -805,24 +799,6 @@ export async function updateReservationFull(
     params.gender || ""
   );
 
-  const previousDoctorStatusMap = params.currentDoctorStatusMap || {};
-  const previousDoctorStatusMetaMap = params.currentDoctorStatusMetaMap || {};
-
-  const doctorStatusMap: Record<string, ReservationStatus | string> = {};
-  const doctorStatusMetaMap: ReservationRecord["doctorStatusMetaMap"] = {};
-
-  if (doctors !== null) {
-    doctors.forEach((doctor) => {
-      doctorStatusMap[doctor] = previousDoctorStatusMap[doctor] || "내원전";
-      doctorStatusMetaMap[doctor] = previousDoctorStatusMetaMap[doctor] || {
-        status: String(doctorStatusMap[doctor] || "내원전"),
-        updatedAt: "",
-        updatedBy: "",
-        updatedRole: "",
-      };
-    });
-  }
-
   const reservationPatch: Record<string, unknown> = {
     name,
     patientName: name,
@@ -849,7 +825,7 @@ export async function updateReservationFull(
       ? params.coordinators.map(cleanText).filter(Boolean)
       : [],
 
-    ...(doctors !== null && { doctors, doctorStatusMap, doctorStatusMetaMap }),
+    ...(doctors !== null && { doctors }),
 
     // updatedBy/updatedByUid는 서버가 SERVER_MANAGED_IGNORE로 무시하고 ctx로 강제한다(거부 대상 아님).
     updatedBy: staff.displayName,
@@ -1005,18 +981,7 @@ export async function deleteReservation(
     return { success: false, message: apiResult.message || "예약 삭제에 실패했습니다." };
   }
 
-  createLog({
-    action: "reservation_delete",
-    targetType: "reservation",
-    targetId: reservationId,
-    reservationId,
-    staff,
-    message: `${staff.displayName}님이 예약을 삭제 처리했습니다.`,
-    before: null,
-    after: {
-      isDeleted: true,
-    },
-  }).catch((e) => console.warn("[deleteReservation] log write failed:", e));
+  // 감사로그는 서버(/api/reservations delete)에서 권위 있게 기록됨 → 클라 createLog 제거.
 
   return { success: true };
 }
@@ -1074,6 +1039,7 @@ export async function updatePatientProfile(
     return { success: false, message: apiResult.message || "환자 정보 수정에 실패했습니다." };
   }
   invalidatePatientsCache();
+  invalidatePatientsSummaryCache();
   return { success: true };
 }
 
@@ -1088,6 +1054,7 @@ export async function deletePatient(patientId: string, staff: StaffUser) {
     return { success: false, message: apiResult.message || "환자 삭제에 실패했습니다." };
   }
   invalidatePatientsCache();
+  invalidatePatientsSummaryCache();
   return {
     success: true,
     deletedReservations: Number(apiResult.deletedReservations || 0),
