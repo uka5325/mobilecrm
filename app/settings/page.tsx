@@ -418,10 +418,15 @@ export default function SettingsPage() {
                           setSaving(true);
                           clearAlerts();
                           try {
-                            await deactivateStaffFromSettings(staff.id, currentUser);
+                            const result = await deactivateStaffFromSettings(staff.id, currentUser);
                             await loadStaffList();
                             notifyStaffSettingsUpdated();
-                            setMessage("직원이 비활성화되었습니다.");
+                            if (result.tokenRevoked === false) {
+                              // 부분 성공 — 완전 성공으로 숨기지 않고 재확인이 필요함을 알린다.
+                              setError("직원은 비활성화됐지만 기존 로그인 토큰 폐기에 실패했습니다. 재확인이 필요합니다.");
+                            } else {
+                              setMessage("직원이 비활성화되었습니다.");
+                            }
                           } catch (err) {
                             console.error((err as Error)?.message ?? "");
                             setError(getErrorMessage(err));

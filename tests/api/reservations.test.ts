@@ -796,3 +796,81 @@ test("lock: update가 409로 거부된 직후 무관한 정상 update는 이전 
   assert.equal(okRes.status, 200);
   assert.equal((await okRes.json()).success, true);
 });
+
+// ── 삭제된 환자 재등록 차단 (P0 후속) ─────────────────────────────────────────
+test("create: 삭제된 환자의 patientId로 재등록 시도 → 409 PATIENT_DELETED", async () => {
+  __resetStaffCacheForTests();
+  const patientId = `P-DELREG-${Date.now()}`;
+  const c1 = await POST(makeReq(staff.idToken, "create", {
+    patient: { name: "삭제환자", patientId },
+    reservation: { reservationId: `R-DELREG-1-${Date.now()}`, name: "삭제환자", patientId, reservationDate: "2027-04-01", doctors: [], isDeleted: false },
+  }));
+  const c1b = await c1.json();
+  createdReservationDocIds.push(c1b.reservationDocId);
+  createdPatientDocIds.push(c1b.patientDocId);
+
+  // 환자 전체 삭제(soft delete)
+  await POST(makeReq(admin.idToken, "delete_patient", { patientId }));
+
+  // 같은 patientId로 신규 예약 생성 시도 → 조용히 재연결/부활하지 않고 거부
+  const res = await POST(makeReq(staff.idToken, "create", {
+    patient: { name: "삭제환자", patientId },
+    reservation: { reservationId: `R-DELREG-2-${Date.now()}`, name: "삭제환자", patientId, reservationDate: "2027-04-02", doctors: [], isDeleted: false },
+  }));
+  assert.equal(res.status, 409);
+  const body = await res.json();
+  assert.equal(body.success, false);
+  assert.equal(body.code, "PATIENT_DELETED");
+
+  // 환자 문서는 여전히 삭제 상태로 유지(자동 복구되지 않음)
+  const pSnap = await adminDb.collection("patients").where("patientId", "==", patientId).get();
+  assert.ok(pSnap.docs.every((d) => d.data().isDeleted === true));
+});
+
+test("create_patient: 삭제된 환자의 patientId로 재등록 시도 → 409 PATIENT_DELETED", async () => {
+  __resetStaffCacheForTests();
+  const patientId = `P-DELREG-CP-${Date.now()}`;
+  const c1 = await POST(makeReq(staff.idToken, "create_patient", { patient: { name: "삭제환자2", patientId } }));
+  const c1b = await c1.json();
+  createdPatientDocIds.push(c1b.patientDocId);
+
+  await POST(makeReq(admin.idToken, "delete_patient", { patientId }));
+
+  const res = await POST(makeReq(staff.idToken, "create_patient", { patient: { name: "삭제환자2", patientId } }));
+  assert.equal(res.status, 409);
+  assert.equal((await res.json()).code, "PATIENT_DELETED");
+});
+
+test("create: 활성 환자의 patientId로 예약 추가 → 기존 정책대로 연결 성공", async () => {
+  __resetStaffCacheForTests();
+  const patientId = `P-ACTIVE-${Date.now()}`;
+  const c1 = await POST(makeReq(staff.idToken, "create", {
+    patient: { name: "활성환자", patientId },
+    reservation: { reservationId: `R-ACT-1-${Date.now()}`, name: "활성환자", patientId, reservationDate: "2027-04-05", doctors: [], isDeleted: false },
+  }));
+  const c1b = await c1.json();
+  createdReservationDocIds.push(c1b.reservationDocId);
+  createdPatientDocIds.push(c1b.patientDocId);
+
+  const c2 = await POST(makeReq(staff.idToken, "create", {
+    patient: { name: "활성환자", patientId },
+    reservation: { reservationId: `R-ACT-2-${Date.now()}`, name: "활성환자", patientId, reservationDate: "2027-04-06", doctors: [], isDeleted: false },
+  }));
+  const c2b = await c2.json();
+  assert.equal(c2b.success, true);
+  assert.equal(c2b.linkedExistingPatient, true);
+  createdReservationDocIds.push(c2b.reservationDocId);
+});
+
+test("create: 신규 patientId는 정상 생성된다", async () => {
+  __resetStaffCacheForTests();
+  const patientId = `P-NEW-${Date.now()}`;
+  const res = await POST(makeReq(staff.idToken, "create", {
+    patient: { name: "신규환자", patientId },
+    reservation: { reservationId: `R-NEW-${Date.now()}`, name: "신규환자", patientId, reservationDate: "2027-04-07", doctors: [], isDeleted: false },
+  }));
+  const body = await res.json();
+  assert.equal(body.success, true);
+  createdReservationDocIds.push(body.reservationDocId);
+  createdPatientDocIds.push(body.patientDocId);
+});

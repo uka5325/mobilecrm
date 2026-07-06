@@ -78,10 +78,19 @@ export async function POST(req: NextRequest) {
     createdAt: FieldValue.serverTimestamp(),
   });
 
-  // token revoke 실패는 부분 실패로 명확히 표시(성공으로 숨기지 않음).
-  return NextResponse.json({
-    success: true,
-    tokenRevoked,
-    ...(tokenRevoked ? {} : { code: "TOKEN_REVOKE_FAILED", message: "토큰 무효화에 실패했습니다. 잠시 후 다시 시도해 주세요." }),
-  });
+  // token revoke 실패는 부분 실패로 명확히 표시한다 — 직원은 비활성화됐지만(staffDeactivated:true)
+  // 완전 성공(success:true)으로 표시하지 않아, 호출부가 재확인 필요 메시지를 띄우게 한다.
+  if (!tokenRevoked) {
+    return NextResponse.json({
+      success: false,
+      partialSuccess: true,
+      staffDeactivated: true,
+      tokenRevoked: false,
+      errorCode: "TOKEN_REVOKE_FAILED",
+      code: "TOKEN_REVOKE_FAILED",
+      message: "직원은 비활성화됐지만 기존 로그인 토큰 폐기에 실패했습니다. 재확인이 필요합니다.",
+    });
+  }
+
+  return NextResponse.json({ success: true, tokenRevoked: true });
 }

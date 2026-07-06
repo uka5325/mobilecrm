@@ -88,6 +88,8 @@ function splitPatch(
 
 // create 액션의 중복예약 트랜잭션에서 "중복이라 저장하지 않음"을 알리기 위한 마커 에러.
 class DuplicateReservationError extends Error {}
+// 같은 patientId의 기존 patients 문서가 isDeleted=true일 때 — 조용히 재연결/부활시키지 않고 거부한다.
+class PatientDeletedError extends Error {}
 
 // 의사 목록은 거의 변경되지 않으므로 서버 메모리에 10분 캐싱
 let _doctorsCache: Record<string, unknown>[] | null = null;
@@ -368,6 +370,7 @@ export async function POST(req: NextRequest) {
       const now = FieldValue.serverTimestamp();
 
       // 중복 방지(정책: 연결만·없으면 생성): 같은 patientId 문서가 이미 있으면 그걸 반환.
+      // 단, 삭제된 고객이면 조용히 재연결(부활)하지 않는다 — 자동 복구 기능은 범위 밖.
       const incomingPatientId = String((safePatient as { patientId?: unknown }).patientId || "");
       if (incomingPatientId) {
         const existing = await adminDb
@@ -376,6 +379,13 @@ export async function POST(req: NextRequest) {
           .limit(1)
           .get();
         if (!existing.empty) {
+          if (existing.docs[0].data().isDeleted === true) {
+            return NextResponse.json({
+              success: false,
+              code: "PATIENT_DELETED",
+              message: "삭제된 고객입니다. 관리자 복구 후 다시 시도해 주세요.",
+            }, { status: 409 });
+          }
           return NextResponse.json({ success: true, patientDocId: existing.docs[0].id, linkedExistingPatient: true });
         }
       }
@@ -560,7 +570,12 @@ export async function POST(req: NextRequest) {
             const pSnap = await tx.get(
               adminDb.collection("patients").where("patientId", "==", incomingPatientId).limit(1)
             );
-            if (!pSnap.empty) existingPatientDocId = pSnap.docs[0].id;
+            if (!pSnap.empty) {
+              // 삭제된 고객은 조용히 재연결(부활)하지 않는다 — 관리자 복구 절차 없이 신규 예약만으로
+              // 살아나면 안 된다. 자동 복구 기능은 이번 작업 범위 밖.
+              if (pSnap.docs[0].data().isDeleted === true) throw new PatientDeletedError();
+              existingPatientDocId = pSnap.docs[0].id;
+            }
           }
 
           // ── 쓰기(원자적) ──────────────────────────────────────────────
@@ -603,6 +618,13 @@ export async function POST(req: NextRequest) {
             message: "이미 등록된 예약으로 보여 저장하지 않았습니다.",
             duplicate: true,
           });
+        }
+        if (e instanceof PatientDeletedError) {
+          return NextResponse.json({
+            success: false,
+            code: "PATIENT_DELETED",
+            message: "삭제된 고객입니다. 관리자 복구 후 다시 시도해 주세요.",
+          }, { status: 409 });
         }
         throw e;
       }

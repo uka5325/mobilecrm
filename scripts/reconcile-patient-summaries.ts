@@ -24,7 +24,9 @@ import { readFileSync } from "node:fs";
 
 const APPLY = process.argv.includes("--apply");
 const DRY_RUN = !APPLY; // 기본 dry-run
-const RESERVATION_CAP = 300;
+// 런타임 recompute(lib/patientSummary.ts)는 비용 때문에 300건 cap을 유지하지만,
+// reconciliation은 정합성 검증이 목적이므로 cursor pagination으로 전체를 정확히 읽는다.
+const RESERVATION_PAGE_SIZE = 500;
 const BATCH_LIMIT = 400; // 400~450 단위 batch
 
 function getServiceAccountJsonOrNull(): string | null {
@@ -82,15 +84,20 @@ type Summary = {
   hasMemo: boolean;
 };
 
-async function computeSummary(db: admin.firestore.Firestore, patientId: string): Promise<Summary> {
-  const resSnap = await db
-    .collection("reservations")
-    .where("patientId", "==", patientId)
-    .where("isDeleted", "==", false)
-    .orderBy("reservationDate", "desc")
-    .limit(RESERVATION_CAP)
-    .get();
+type ReservationAggregate = {
+  reservationCount: number;
+  depositCount: number;
+  surgeryCostCount: number;
+  totalDepositAmount: number;
+  totalSurgeryCost: number;
+  lastReservationDate: string;
+  lastReservationTime: string;
+};
 
+// Firestore 의존 없는 순수 함수 — 여러 "페이지"(배치)에 걸쳐 도착한 예약 문서를 하나의
+// 누적 집계로 합친다. cursor pagination이 300건 cap 없이 전체를 정확히 더하는지
+// (여러 페이지에 걸쳐도 합계가 깨지지 않는지) emulator 없이 검증할 수 있도록 분리했다.
+export function aggregateReservationPages(pages: Record<string, unknown>[][]): ReservationAggregate {
   let reservationCount = 0;
   let totalDepositAmount = 0;
   let totalSurgeryCost = 0;
@@ -100,29 +107,23 @@ async function computeSummary(db: admin.firestore.Firestore, patientId: string):
   const depositGroups = new Set<string>();
   const surgeryGroups = new Set<string>();
 
-  for (const d of resSnap.docs) {
-    const r = d.data();
-    reservationCount += 1;
-    const hasDeposit = String(r.depositAmount ?? "").trim() !== "";
-    const hasSurgery = String(r.surgeryCost ?? "").trim() !== "";
-    if (hasDeposit) { depositGroups.add(reservationGroupKey(r)); totalDepositAmount += parseAmount(r.depositAmount); }
-    if (hasSurgery) { surgeryGroups.add(reservationGroupKey(r)); totalSurgeryCost += parseAmount(r.surgeryCost); }
-    const date = String(r.reservationDate || "");
-    const time = String(r.reservationTime || "");
-    const comp = `${date} ${time}`;
-    if (comp > lastComposite) {
-      lastComposite = comp;
-      lastReservationDate = date;
-      lastReservationTime = time;
+  for (const page of pages) {
+    for (const r of page) {
+      reservationCount += 1;
+      const hasDeposit = String(r.depositAmount ?? "").trim() !== "";
+      const hasSurgery = String(r.surgeryCost ?? "").trim() !== "";
+      if (hasDeposit) { depositGroups.add(reservationGroupKey(r)); totalDepositAmount += parseAmount(r.depositAmount); }
+      if (hasSurgery) { surgeryGroups.add(reservationGroupKey(r)); totalSurgeryCost += parseAmount(r.surgeryCost); }
+      const date = String(r.reservationDate || "");
+      const time = String(r.reservationTime || "");
+      const comp = `${date} ${time}`;
+      if (comp > lastComposite) {
+        lastComposite = comp;
+        lastReservationDate = date;
+        lastReservationTime = time;
+      }
     }
   }
-
-  const [invAgg, memoAgg] = await Promise.all([
-    db.collection("invoices").where("patientId", "==", patientId).where("isDeleted", "==", false).count().get(),
-    db.collection("reservationNotes").where("patientId", "==", patientId).where("isDeleted", "==", false).count().get(),
-  ]);
-  const invoiceCount = invAgg.data().count;
-  const memoCount = memoAgg.data().count;
 
   return {
     reservationCount,
@@ -132,8 +133,42 @@ async function computeSummary(db: admin.firestore.Firestore, patientId: string):
     totalSurgeryCost,
     lastReservationDate,
     lastReservationTime,
-    lastReservationAt: lastReservationDate ? `${lastReservationDate} ${lastReservationTime}`.trim() : "",
-    reservationCountCapped: resSnap.docs.length === RESERVATION_CAP,
+  };
+}
+
+async function computeSummary(db: admin.firestore.Firestore, patientId: string): Promise<Summary> {
+  // cursor pagination으로 해당 환자의 예약을 전부 읽는다(300건 cap 없음 — reconciliation은 정확해야 함).
+  const pages: Record<string, unknown>[][] = [];
+  let cursor: FirebaseFirestore.QueryDocumentSnapshot | null = null;
+  for (;;) {
+    let q = db
+      .collection("reservations")
+      .where("patientId", "==", patientId)
+      .where("isDeleted", "==", false)
+      .orderBy("reservationDate", "desc")
+      .limit(RESERVATION_PAGE_SIZE);
+    if (cursor) q = q.startAfter(cursor) as typeof q;
+    const snap = await q.get();
+    if (snap.empty) break;
+    pages.push(snap.docs.map((d) => d.data()));
+    if (snap.docs.length < RESERVATION_PAGE_SIZE) break;
+    cursor = snap.docs[snap.docs.length - 1];
+  }
+
+  const agg = aggregateReservationPages(pages);
+
+  const [invAgg, memoAgg] = await Promise.all([
+    db.collection("invoices").where("patientId", "==", patientId).where("isDeleted", "==", false).count().get(),
+    db.collection("reservationNotes").where("patientId", "==", patientId).where("isDeleted", "==", false).count().get(),
+  ]);
+  const invoiceCount = invAgg.data().count;
+  const memoCount = memoAgg.data().count;
+
+  return {
+    ...agg,
+    lastReservationAt: agg.lastReservationDate ? `${agg.lastReservationDate} ${agg.lastReservationTime}`.trim() : "",
+    // 페이지네이션으로 전체를 읽으므로 reconciliation의 계산값은 항상 정확(cap 없음).
+    reservationCountCapped: false,
     invoiceCount,
     hasInvoice: invoiceCount > 0,
     memoCount,
@@ -228,7 +263,11 @@ async function main() {
   console.log("done.");
 }
 
-main().catch((e) => {
-  console.error(e);
-  process.exit(1);
-});
+// CLI로 직접 실행될 때만 main()을 돌린다 — 순수 함수(aggregateReservationPages) 단위 테스트가
+// 이 모듈을 import할 때 Firestore 접속을 시도하며 즉시 실행되는 것을 막는다.
+if (require.main === module) {
+  main().catch((e) => {
+    console.error(e);
+    process.exit(1);
+  });
+}

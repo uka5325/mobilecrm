@@ -71,3 +71,25 @@ test("본인 계정은 비활성화할 수 없다 (400)", async () => {
   const res = await POST(makeReq({ uid: adminUser.uid }, adminUser.idToken));
   assert.equal(res.status, 400);
 });
+
+test("토큰 revoke 실패 시 partial success로 표시한다(active:false는 유지)", async () => {
+  __resetStaffCacheForTests();
+  // Auth emulator에 대응하는 사용자가 없는 uid — revokeRefreshTokens가 실패하도록 유도.
+  const ghostUid = `ghost-${Date.now()}`;
+  await adminDb.collection("staff").doc(ghostUid).set({ role: "staff", active: true, displayName: "고스트" });
+
+  const res = await POST(makeReq({ uid: ghostUid }, adminUser.idToken));
+  assert.equal(res.status, 200);
+  const body = await res.json();
+  assert.equal(body.success, false);
+  assert.equal(body.partialSuccess, true);
+  assert.equal(body.staffDeactivated, true);
+  assert.equal(body.tokenRevoked, false);
+  assert.equal(body.errorCode, "TOKEN_REVOKE_FAILED");
+
+  // active:false 자체는 반영되어 유지된다(완전 실패로 롤백하지 않음).
+  const snap = await adminDb.collection("staff").doc(ghostUid).get();
+  assert.equal(snap.data()?.active, false);
+
+  await adminDb.collection("staff").doc(ghostUid).delete().catch(() => {});
+});

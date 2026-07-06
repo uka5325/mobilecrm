@@ -524,7 +524,9 @@ export async function updateConferenceMemo(memoId: string, memoText: string, sta
 ============================================================ */
 
 let _staffListCache: SettingsStaffRecord[] | null = null;
-const _STAFF_CACHE_KEY = "mcrm_staff_list";
+// 앱 통일 prefix(arc_crm_) 사용 — 과거 mcrm_ prefix 키는 clearAllClientCaches()가
+// 레거시 정리 대상으로 당분간 함께 purge한다(lib/clientCache.ts).
+const _STAFF_CACHE_KEY = "arc_crm_staff_list";
 const _STAFF_CACHE_TTL = 5 * 60 * 1000;
 
 export function clearStaffListCache() {
@@ -712,8 +714,17 @@ export async function deactivateStaffFromSettings(
     },
     body: JSON.stringify({ uid: id }),
   });
-  const data = (await res.json()) as { success: boolean; message?: string; tokenRevoked?: boolean };
-  if (!data.success) {
+  const data = (await res.json()) as {
+    success: boolean;
+    message?: string;
+    tokenRevoked?: boolean;
+    partialSuccess?: boolean;
+    staffDeactivated?: boolean;
+    errorCode?: string;
+  };
+  // staffDeactivated가 true면 active:false 자체는 반영된 부분 성공(토큰 revoke만 실패)이므로
+  // throw하지 않고 그대로 반환한다 — 호출부(UI)가 "재확인 필요" 메시지를 표시할 수 있게.
+  if (!data.success && !data.staffDeactivated) {
     throw new Error(data.message || "직원 비활성화에 실패했습니다.");
   }
   invalidateDoctorsCache();
