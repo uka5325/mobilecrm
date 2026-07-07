@@ -52,22 +52,32 @@ function clean(value: unknown): string {
   return String(value ?? "").trim();
 }
 
-function getServiceAccountJson(): string {
-  const keyPath = argValue("--key");
-  if (keyPath) return readFileSync(keyPath, "utf8");
-  const env = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
-  if (env) return env;
-  throw new Error(
-    "서비스 계정 키가 필요합니다. '--key <serviceAccount.json>' 또는 " +
-      "FIREBASE_SERVICE_ACCOUNT_KEY 환경변수를 지정하세요."
-  );
-}
-
 function init() {
   if (admin.apps.length) return;
+
+  const projectId =
+    argValue("--project") ||
+    process.env.GOOGLE_CLOUD_PROJECT ||
+    process.env.GCLOUD_PROJECT ||
+    "";
+  const keyPath = argValue("--key");
+  const envKey = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
+
+  const credential = keyPath
+    ? admin.credential.cert(JSON.parse(readFileSync(keyPath, "utf8")) as admin.ServiceAccount)
+    : envKey
+      ? admin.credential.cert(JSON.parse(envKey) as admin.ServiceAccount)
+      : admin.credential.applicationDefault();
+
   admin.initializeApp({
-    credential: admin.credential.cert(JSON.parse(getServiceAccountJson()) as admin.ServiceAccount),
+    credential,
+    ...(projectId ? { projectId } : {}),
   });
+
+  console.log(
+    `[invoice-link-backfill] auth=${keyPath || envKey ? "service-account" : "application-default"} ` +
+      `project=${projectId || "auto"}`
+  );
 }
 
 function toItems(snapshot: admin.firestore.QuerySnapshot): DocItem[] {
