@@ -13,8 +13,15 @@ type Body = {
   payload?: Record<string, unknown>;
 };
 
+function rebuild(body: Body) {
+  return new NextRequest("http://localhost/api/invoices", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
 export async function handleInvoiceRequest(req: NextRequest) {
-  const legacyRequest = req.clone();
   let body: Body;
   try {
     body = await req.json() as Body;
@@ -27,7 +34,7 @@ export async function handleInvoiceRequest(req: NextRequest) {
 
   const action = String(body.action || "");
   if (action !== "create" && action !== "update" && action !== "delete") {
-    return legacyPost(legacyRequest);
+    return legacyPost(rebuild(body));
   }
 
   try {
