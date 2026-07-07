@@ -1,4 +1,4 @@
-import { NextRequest } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { POST as legacyPost } from "../reservations/route";
 import { requireActiveStaff, toAuthErrorResponse } from "@/lib/apiAuth";
 import {
@@ -23,8 +23,26 @@ function rebuild(body: Body) {
   });
 }
 
+async function createReservationWithCanonicalResponse(body: Body) {
+  const response = await legacyPost(rebuild(body));
+  const result = await response.json().catch(() => ({})) as Record<string, unknown>;
+  if (!response.ok || result.success !== true) {
+    return NextResponse.json(result, { status: response.status });
+  }
+
+  const reservation = (body.payload?.reservation || {}) as Record<string, unknown>;
+  return NextResponse.json({
+    ...result,
+    patientId: String(reservation.patientId || ""),
+  }, { status: response.status });
+}
+
 export async function POST(req: NextRequest) {
   const body = await req.json() as Body;
+  if (body.action === "create") {
+    return createReservationWithCanonicalResponse(body);
+  }
+
   const customAction = body.action === "create_patient"
     || body.action === "list_patients"
     || body.action === "search_patients"
