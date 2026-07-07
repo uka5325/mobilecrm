@@ -51,6 +51,9 @@ test("비-admin은 403", async () => {
 test("admin이 비활성화하면 active:false + 토큰 revoke + 성공", async () => {
   __resetStaffCacheForTests();
   const before = (await adminAuth.getUser(target.uid)).tokensValidAfterTime;
+  // tokensValidAfterTime은 초 단위 해상도라, 생성 직후 같은 초에 revoke하면 값이
+  // 동일해져 assert.notEqual이 flaky해진다. 다음 초로 넘어갈 때까지 대기해 보장한다.
+  await new Promise((r) => setTimeout(r, 1100));
   const res = await POST(makeReq({ uid: target.uid }, adminUser.idToken));
   assert.equal(res.status, 200);
   const body = await res.json();
