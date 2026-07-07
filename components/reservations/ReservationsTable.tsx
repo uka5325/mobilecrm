@@ -74,8 +74,9 @@ type Props = {
   onDeletePatient: (group: PatientGroup) => void;
   onOpenPatientMemo: (group: PatientGroup) => void;
   onOpenPatientHistory?: (patientId: string, name: string) => void;
-  // 금액 저장/삭제 등 해당 환자 데이터가 바뀌었을 때 부모가 summary 행을 갱신하도록 알림.
   onPatientMutated?: (patientId: string) => void;
+  listError?: string | null;
+  onRetry?: () => void;
 };
 
 // 예약금/수술비 팝오버 한 줄(그룹 대표 예약). id=예약 문서 ID.
@@ -198,6 +199,8 @@ export function ReservationsTable({
   onOpenPatientMemo,
   onOpenPatientHistory,
   onPatientMutated,
+  listError,
+  onRetry,
 }: Props) {
   const cellCls = "border-b border-gray-100 px-2 py-2";
   const inputCls = "w-full rounded-lg border border-[#dfe3e8] px-2 py-1 text-xs focus:border-[#1d9e75] focus:outline-none";
@@ -254,7 +257,11 @@ export function ReservationsTable({
   const saveAmount = useCallback(async (row: AmountRow, value: string) => {
     const type = amountPopover?.type ?? "deposit";
     const field = type === "deposit" ? "depositAmount" as const : "surgeryCost" as const;
-    await updateReservationAmount(row.id, row.reservationId, row.patientId, field, value);
+    const result = await updateReservationAmount(row.id, row.reservationId, row.patientId, field, value);
+    if (!result.success) {
+      alert(result.message || "금액 저장에 실패했습니다.");
+      return;
+    }
     invalidatePatientFullHistoryCache(row.patientId);
     onPatientMutated?.(row.patientId);
     try {
@@ -556,6 +563,18 @@ export function ReservationsTable({
       return (
         <tr>
           <td colSpan={8} className="py-12 text-center text-gray-400">데이터 로딩 중...</td>
+        </tr>
+      );
+    }
+    if (listError) {
+      return (
+        <tr>
+          <td colSpan={8} className="py-12 text-center">
+            <div className="text-red-500">{listError}</div>
+            {onRetry && (
+              <button onClick={onRetry} className="mt-2 text-sm text-blue-600 underline hover:text-blue-800">다시 시도</button>
+            )}
+          </td>
         </tr>
       );
     }

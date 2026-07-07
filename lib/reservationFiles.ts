@@ -129,6 +129,14 @@ export async function uploadPhotoToStorage(
   return { storagePath, contentType: file.type };
 }
 
+export async function deleteStorageFile(storagePath: string): Promise<void> {
+  try {
+    await deleteObject(ref(storage, storagePath));
+  } catch {
+    // best-effort cleanup
+  }
+}
+
 export async function savePhotoRecord(
   reservationDocId: string,
   reservationId: string,

@@ -89,8 +89,14 @@ function splitPatch(
 
 // create 액션의 중복예약 트랜잭션에서 "중복이라 저장하지 않음"을 알리기 위한 마커 에러.
 class DuplicateReservationError extends Error {}
-// 같은 patientId의 기존 patients 문서가 isDeleted=true일 때 — 조용히 재연결/부활시키지 않고 거부한다.
 class PatientDeletedError extends Error {}
+class PatientCandidatesError extends Error {
+  candidates: Array<{ patientDocId: string; patientId: string; name: string; birth: string; phone: string; nationality: string }>;
+  constructor(candidates: PatientCandidatesError["candidates"]) {
+    super("PATIENT_CANDIDATES");
+    this.candidates = candidates;
+  }
+}
 
 // 의사 목록은 거의 변경되지 않으므로 서버 메모리에 10분 캐싱
 let _doctorsCache: Record<string, unknown>[] | null = null;
@@ -111,20 +117,22 @@ const READ_ALL_CAP = 500;
 
 // 예약 감사로그를 서버에서 권위 있게 기록 → 직접 API 호출/우회도 남고, 신원 위조를 차단.
 // (클라이언트 createLog는 중복 방지를 위해 제거됨)
-async function writeReservationLog(
+type ReservationLogParams = {
+  action: string;
+  targetId: string;
+  patientId?: string;
+  reservationId?: string;
+  message: string;
+  before?: unknown;
+  after?: unknown;
+  now: FirebaseFirestore.FieldValue;
+};
+
+function buildReservationLogData(
   ctx: Awaited<ReturnType<typeof requireActiveStaff>>,
-  params: {
-    action: string;
-    targetId: string;
-    patientId?: string;
-    reservationId?: string;
-    message: string;
-    before?: unknown;
-    after?: unknown;
-    now: FirebaseFirestore.FieldValue;
-  }
+  params: ReservationLogParams
 ) {
-  await adminDb.collection("logs").add({
+  return {
     action: params.action,
     targetType: "reservation",
     targetId: params.targetId,
@@ -140,7 +148,30 @@ async function writeReservationLog(
     before: params.before ?? null,
     after: params.after ?? null,
     createdAt: params.now,
-  });
+  };
+}
+
+function writeReservationLogInTx(
+  tx: FirebaseFirestore.Transaction,
+  ctx: Awaited<ReturnType<typeof requireActiveStaff>>,
+  params: ReservationLogParams
+) {
+  tx.set(adminDb.collection("logs").doc(), buildReservationLogData(ctx, params));
+}
+
+function writeReservationLogInBatch(
+  batch: FirebaseFirestore.WriteBatch,
+  ctx: Awaited<ReturnType<typeof requireActiveStaff>>,
+  params: ReservationLogParams
+) {
+  batch.set(adminDb.collection("logs").doc(), buildReservationLogData(ctx, params));
+}
+
+async function writeReservationLog(
+  ctx: Awaited<ReturnType<typeof requireActiveStaff>>,
+  params: ReservationLogParams
+) {
+  await adminDb.collection("logs").add(buildReservationLogData(ctx, params));
 }
 
 // 같은 신원(identityKey)의 첫 문서만 남기는 in-memory dedup — 병합 스크립트 실행 전 과도기
@@ -622,18 +653,43 @@ export async function POST(req: NextRequest) {
               canonicalPatientId = String(pSnap.docs[0].data().patientId || incomingPatientId);
             }
           }
-          // patientId로 못 찾았으면 신원(이름+생년월일+국적+성별)으로 기존 환자를 찾아 연결한다
-          // → 같은 사람이 매번 새 랜덤 patientId로 별도 문서가 되던 중복을 근본 차단.
+          // patientId로 못 찾았으면 신원(이름+생년월일+국적+성별)으로 유사 환자를 검색한다.
+          // 자동 병합 대신, 후보가 있으면 클라이언트에 반환하여 직원이 선택하도록 한다.
           if (!existingPatientDocId && identityKey) {
-            const iSnap = await tx.get(
-              adminDb.collection("patients")
-                .where("identityKey", "==", identityKey)
-                .where("isDeleted", "==", false)
-                .limit(1)
-            );
-            if (!iSnap.empty) {
-              existingPatientDocId = iSnap.docs[0].id;
-              canonicalPatientId = String(iSnap.docs[0].data().patientId || "");
+            const skipIdentityCheck = (payload as Record<string, unknown>).confirmNewPatient === true;
+            if (!skipIdentityCheck) {
+              const iSnap = await tx.get(
+                adminDb.collection("patients")
+                  .where("identityKey", "==", identityKey)
+                  .where("isDeleted", "==", false)
+                  .limit(5)
+              );
+              if (!iSnap.empty) {
+                const candidates = iSnap.docs.map((d) => {
+                  const data = d.data() as Record<string, unknown>;
+                  return {
+                    patientDocId: d.id,
+                    patientId: String(data.patientId || ""),
+                    name: String(data.name || ""),
+                    birth: String(data.birth || ""),
+                    phone: String(data.phone || "").replace(/(.{3}).+(.{4})$/, "$1****$2"),
+                    nationality: String(data.nationality || ""),
+                  };
+                });
+                throw new PatientCandidatesError(candidates);
+              }
+            }
+            // confirmNewPatient=true이면 신규 환자로 진행
+            // linkToPatientId가 있으면 지정된 기존 환자에 연결
+            const linkTo = String((payload as Record<string, unknown>).linkToPatientId || "");
+            if (linkTo) {
+              const linkSnap = await tx.get(
+                adminDb.collection("patients").where("patientId", "==", linkTo).where("isDeleted", "==", false).limit(1)
+              );
+              if (!linkSnap.empty) {
+                existingPatientDocId = linkSnap.docs[0].id;
+                canonicalPatientId = linkTo;
+              }
             }
           }
           // 기존 환자로 연결되면 예약의 patientId도 대표 값으로 맞춘다(랜덤 값 폐기 → 이력/요약 정합).
@@ -672,6 +728,24 @@ export async function POST(req: NextRequest) {
             tx.set(reservationRef, { ...reservationDefaults, ...safeReservation, isDeleted: false, ...authorFields, createdAt: now, updatedAt: now });
             resultPatientDocId = patientRef.id;
           }
+
+          writeReservationLogInTx(tx, ctx, {
+            action: "reservation_create",
+            targetId: String(safeReservation.reservationId || reservationRef.id),
+            patientId: String(safeReservation.patientId || ""),
+            reservationId: String(safeReservation.reservationId || ""),
+            message: `${ctx.name}님이 신규 예약을 등록했습니다.`,
+            before: null,
+            after: {
+              name: safeReservation.name ?? "",
+              reservationDate: safeReservation.reservationDate ?? "",
+              reservationTime: safeReservation.reservationTime ?? "",
+              hospital: safeReservation.hospital ?? "",
+              appointmentType: safeReservation.appointmentType ?? "",
+              linkedExistingPatient,
+            },
+            now,
+          });
         });
       } catch (e) {
         if (e instanceof DuplicateReservationError) {
@@ -686,6 +760,14 @@ export async function POST(req: NextRequest) {
             success: false,
             code: "PATIENT_DELETED",
             message: "삭제된 고객입니다. 관리자 복구 후 다시 시도해 주세요.",
+          }, { status: 409 });
+        }
+        if (e instanceof PatientCandidatesError) {
+          return NextResponse.json({
+            success: false,
+            code: "PATIENT_CANDIDATES",
+            message: "유사한 기존 환자가 발견되었습니다. 기존 환자에 연결하거나 새 환자로 등록해 주세요.",
+            candidates: e.candidates,
           }, { status: 409 });
         }
         throw e;
@@ -704,25 +786,6 @@ export async function POST(req: NextRequest) {
           now,
         });
       }
-
-      // 감사로그(서버 권위 기록) — 클라이언트 createLog 대체
-      await writeReservationLog(ctx, {
-        action: "reservation_create",
-        targetId: String(safeReservation.reservationId || reservationRef.id),
-        patientId: String(safeReservation.patientId || ""),
-        reservationId: String(safeReservation.reservationId || ""),
-        message: `${ctx.name}님이 신규 예약을 등록했습니다.`,
-        before: null,
-        after: {
-          name: safeReservation.name ?? "",
-          reservationDate: safeReservation.reservationDate ?? "",
-          reservationTime: safeReservation.reservationTime ?? "",
-          hospital: safeReservation.hospital ?? "",
-          appointmentType: safeReservation.appointmentType ?? "",
-          linkedExistingPatient,
-        },
-        now,
-      });
 
       // 고객관리 요약(예약 파생) 재계산 — best-effort
       await safeRecompute(
@@ -848,6 +911,17 @@ export async function POST(req: NextRequest) {
           now,
         }));
 
+        writeReservationLogInTx(tx, ctx, {
+          action: "reservation_update",
+          targetId: canonicalReservationId || reservationDocId,
+          patientId: canonicalPatientId,
+          reservationId: canonicalReservationId,
+          message: `${ctx.name}님이 예약 정보를 수정했습니다.`,
+          before: beforeChanged,
+          after: { ...safeReservationPatch },
+          now,
+        });
+
         return { kind: "ok", canonicalPatientId, canonicalReservationId, beforeChanged, staleLockRepaired };
       });
 
@@ -874,25 +948,6 @@ export async function POST(req: NextRequest) {
           now,
         });
       }
-
-      // 감사로그를 서버에서 권위 있게 기록 → 직접 API 호출/우회도 남는다.
-      await adminDb.collection("logs").add({
-        action: "reservation_update",
-        targetType: "reservation",
-        targetId: canonicalReservationId || reservationDocId,
-        staffUid: ctx.uid,
-        staffName: ctx.name,
-        staffEmail: ctx.email,
-        staffRole: ctx.role,
-        staffCode: ctx.staffCode,
-        patientId: canonicalPatientId,
-        reservationId: canonicalReservationId,
-        invoiceId: "",
-        message: `${ctx.name}님이 예약 정보를 수정했습니다.`,
-        before: beforeChanged,
-        after: { ...safeReservationPatch },
-        createdAt: now,
-      });
 
       // 예약금·수술비·날짜 등이 바뀔 수 있으므로 예약 파생 요약 재계산 — best-effort
       await safeRecompute(
@@ -991,15 +1046,15 @@ export async function POST(req: NextRequest) {
       const toggleBefore = await toggleRef.get();
       const toggleData = toggleBefore.exists ? (toggleBefore.data() as Record<string, unknown>) : {};
 
-      await toggleRef.update({
+      const toggleBatch = adminDb.batch();
+      toggleBatch.update(toggleRef, {
         surgeryReserved,
         surgeryReservedAt: surgeryReserved ? new Date().toISOString() : "",
         updatedAt: now,
         updatedBy: ctx.name,
         updatedByUid: ctx.uid,
       });
-
-      await writeReservationLog(ctx, {
+      writeReservationLogInBatch(toggleBatch, ctx, {
         action: "reservation_update",
         targetId: String(toggleData.reservationId || reservationDocId),
         patientId: String(toggleData.patientId || ""),
@@ -1009,6 +1064,7 @@ export async function POST(req: NextRequest) {
         after: { surgeryReserved },
         now,
       });
+      await toggleBatch.commit();
 
       return NextResponse.json({ success: true });
     }
@@ -1045,17 +1101,16 @@ export async function POST(req: NextRequest) {
           updatedBy: ctx.name,
           updatedByUid: ctx.uid,
         });
-      });
-
-      await writeReservationLog(ctx, {
-        action: "reservation_delete",
-        targetId: String(delData.reservationId || reservationDocId),
-        patientId: String(delData.patientId || ""),
-        reservationId: String(delData.reservationId || ""),
-        message: `${ctx.name}님이 예약을 삭제 처리했습니다.`,
-        before: { isDeleted: delData.isDeleted ?? false },
-        after: { isDeleted: true },
-        now,
+        writeReservationLogInTx(tx, ctx, {
+          action: "reservation_delete",
+          targetId: String(delData.reservationId || reservationDocId),
+          patientId: String(delData.patientId || ""),
+          reservationId: String(delData.reservationId || ""),
+          message: `${ctx.name}님이 예약을 삭제 처리했습니다.`,
+          before: { isDeleted: delData.isDeleted ?? false },
+          after: { isDeleted: true },
+          now,
+        });
       });
 
       // 예약 파생 요약 재계산 — best-effort

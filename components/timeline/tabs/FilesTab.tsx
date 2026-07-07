@@ -5,6 +5,7 @@ import type { StaffUser } from "@/lib/auth";
 import { auth } from "@/lib/firebase";
 import {
   deleteReservationPhoto,
+  deleteStorageFile,
   getReservationPhotos,
   uploadPhotoToStorage,
   savePhotoRecord,
@@ -173,7 +174,7 @@ export function FilesTab({ reservationDocId, reservationId, patientId, currentUs
         setPhotos((prev) => [...optimisticItems, ...prev]);
         setUploadingCount((n) => n - fileArr.length);
 
-        // Persist to Firestore in background
+        // Persist to Firestore — on failure, clean up the Storage object and remove the optimistic item
         storageResults.forEach(({ f, storagePath }, i) => {
           const tempId = optimisticItems[i].id;
           savePhotoRecord(reservationDocId, reservationId, patientId, f, storagePath, currentUser)
@@ -181,7 +182,12 @@ export function FilesTab({ reservationDocId, reservationId, patientId, currentUs
               URL.revokeObjectURL(objectUrls[i]);
               setPhotos((prev) => prev.map((p) => (p.id === tempId ? record : p)));
             })
-            .catch(() => {});
+            .catch(async () => {
+              URL.revokeObjectURL(objectUrls[i]);
+              await deleteStorageFile(storagePath);
+              setPhotos((prev) => prev.filter((p) => p.id !== tempId));
+              setError("사진 정보 저장에 실패했습니다. 다시 업로드해 주세요.");
+            });
         });
       } catch (e) {
         objectUrls.forEach((u) => URL.revokeObjectURL(u));

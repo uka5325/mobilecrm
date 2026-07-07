@@ -603,7 +603,9 @@ export async function listPatientsSummary(
   cursor?: string
 ): Promise<{ patients: PatientRecord[]; nextCursor: string | null }> {
   const result = await callReservationsApi("list_patients_summary", { limit, cursor });
-  if (!result.success || !Array.isArray(result.patients)) return { patients: [], nextCursor: null };
+  if (!result.success || !Array.isArray(result.patients)) {
+    throw new Error(result.message ? String(result.message) : "고객 목록을 불러오지 못했습니다.");
+  }
   const mapped = {
     patients: (result.patients as Record<string, unknown>[]).map(mapPatientRecord),
     nextCursor: (result.nextCursor as string) ?? null,
@@ -689,7 +691,9 @@ export async function searchPatients(term: string): Promise<PatientRecord[]> {
   const t = term.trim();
   if (!t) return [];
   const result = await callReservationsApi("search_patients", { term: t });
-  if (!result.success || !Array.isArray(result.patients)) return [];
+  if (!result.success || !Array.isArray(result.patients)) {
+    throw new Error(result.message ? String(result.message) : "검색에 실패했습니다.");
+  }
   return (result.patients as Record<string, unknown>[]).map(mapPatientRecord);
 }
 

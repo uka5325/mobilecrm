@@ -230,79 +230,109 @@ export function DetailDrawer({ open, reservation, currentUser, onClose, onRefres
 
   async function handleCompletedToggle() {
     if (!selectedReservation) return;
-    const next = !detailForm.completed;
+    const prev = detailForm.completed;
+    const next = !prev;
     setDetailForm((p) => ({ ...p, completed: next }));
-    await updateReservationFull(
-      selectedReservation.id,
-      selectedReservation.reservationId,
-      selectedReservation.patientId,
-      {
-        name: detailForm.name,
-        birthInput: detailForm.birthInput,
-        birth: detailForm.birthInput,
-        phone: detailForm.phone,
-        nationality: detailForm.nationality,
-        consultArea: detailForm.consultArea,
-        reservationDate: detailForm.reservationDate,
-        reservationTime: detailForm.reservationTime,
-        hospital: detailForm.hospital,
-        appointmentType: detailForm.appointmentType,
-        coordinators: splitComma(detailForm.coordinators),
-        doctors: splitComma(detailForm.doctors),
-        depositAmount: detailForm.depositAmount,
-        surgeryCost: detailForm.surgeryCost,
-        completed: next,
-      },
-      currentUser
-    );
-    const updated = { ...selectedReservation, completed: next };
-    setSelectedReservation(updated);
-    onRefresh?.();
-    await onRefreshLatestLog(updated);
+    try {
+      const result = await updateReservationFull(
+        selectedReservation.id,
+        selectedReservation.reservationId,
+        selectedReservation.patientId,
+        {
+          name: detailForm.name,
+          birthInput: detailForm.birthInput,
+          birth: detailForm.birthInput,
+          phone: detailForm.phone,
+          nationality: detailForm.nationality,
+          consultArea: detailForm.consultArea,
+          reservationDate: detailForm.reservationDate,
+          reservationTime: detailForm.reservationTime,
+          hospital: detailForm.hospital,
+          appointmentType: detailForm.appointmentType,
+          coordinators: splitComma(detailForm.coordinators),
+          doctors: splitComma(detailForm.doctors),
+          depositAmount: detailForm.depositAmount,
+          surgeryCost: detailForm.surgeryCost,
+          completed: next,
+        },
+        currentUser
+      );
+      if (!result.success) {
+        setDetailForm((p) => ({ ...p, completed: prev }));
+        setDetailError(result.message || "완료 상태 변경에 실패했습니다.");
+        return;
+      }
+      const updated = { ...selectedReservation, completed: next };
+      setSelectedReservation(updated);
+      onRefresh?.();
+      await onRefreshLatestLog(updated);
+    } catch {
+      setDetailForm((p) => ({ ...p, completed: prev }));
+      setDetailError("완료 상태 변경 중 오류가 발생했습니다.");
+    }
   }
 
   async function handleCancelledToggle() {
     if (!selectedReservation) return;
-    const next = !detailForm.cancelled;
+    const prev = detailForm.cancelled;
+    const next = !prev;
     setDetailForm((p) => ({ ...p, cancelled: next }));
-    await updateReservationFull(
-      selectedReservation.id,
-      selectedReservation.reservationId,
-      selectedReservation.patientId,
-      {
-        name: detailForm.name,
-        birthInput: detailForm.birthInput,
-        birth: detailForm.birthInput,
-        phone: detailForm.phone,
-        nationality: detailForm.nationality,
-        consultArea: detailForm.consultArea,
-        reservationDate: detailForm.reservationDate,
-        reservationTime: detailForm.reservationTime,
-        hospital: detailForm.hospital,
-        appointmentType: detailForm.appointmentType,
-        coordinators: splitComma(detailForm.coordinators),
-        doctors: splitComma(detailForm.doctors),
-        depositAmount: detailForm.depositAmount,
-        surgeryCost: detailForm.surgeryCost,
-        completed: detailForm.completed,
-        cancelled: next,
-      },
-      currentUser
-    );
-    const updated = { ...selectedReservation, cancelled: next };
-    setSelectedReservation(updated);
-    onRefresh?.();
-    await onRefreshLatestLog(updated);
+    try {
+      const result = await updateReservationFull(
+        selectedReservation.id,
+        selectedReservation.reservationId,
+        selectedReservation.patientId,
+        {
+          name: detailForm.name,
+          birthInput: detailForm.birthInput,
+          birth: detailForm.birthInput,
+          phone: detailForm.phone,
+          nationality: detailForm.nationality,
+          consultArea: detailForm.consultArea,
+          reservationDate: detailForm.reservationDate,
+          reservationTime: detailForm.reservationTime,
+          hospital: detailForm.hospital,
+          appointmentType: detailForm.appointmentType,
+          coordinators: splitComma(detailForm.coordinators),
+          doctors: splitComma(detailForm.doctors),
+          depositAmount: detailForm.depositAmount,
+          surgeryCost: detailForm.surgeryCost,
+          completed: detailForm.completed,
+          cancelled: next,
+        },
+        currentUser
+      );
+      if (!result.success) {
+        setDetailForm((p) => ({ ...p, cancelled: prev }));
+        setDetailError(result.message || "취소 상태 변경에 실패했습니다.");
+        return;
+      }
+      const updated = { ...selectedReservation, cancelled: next };
+      setSelectedReservation(updated);
+      onRefresh?.();
+      await onRefreshLatestLog(updated);
+    } catch {
+      setDetailForm((p) => ({ ...p, cancelled: prev }));
+      setDetailError("취소 상태 변경 중 오류가 발생했습니다.");
+    }
   }
 
   async function handleSurgeryToggle() {
     if (!selectedReservation) return;
     const next = !selectedReservation.surgeryReserved;
-    await toggleSurgeryReserved(selectedReservation.id, selectedReservation.reservationId, next, currentUser);
-    const updated = { ...selectedReservation, surgeryReserved: next };
-    setSelectedReservation(updated);
-    await loadLogs(updated);
-    await onRefreshLatestLog(updated);
+    try {
+      const result = await toggleSurgeryReserved(selectedReservation.id, selectedReservation.reservationId, next, currentUser);
+      if (!result.success) {
+        setDetailError(result.message || "수술예약 상태 변경에 실패했습니다.");
+        return;
+      }
+      const updated = { ...selectedReservation, surgeryReserved: next };
+      setSelectedReservation(updated);
+      await loadLogs(updated);
+      await onRefreshLatestLog(updated);
+    } catch {
+      setDetailError("수술예약 상태 변경 중 오류가 발생했습니다.");
+    }
   }
 
   async function handleAddMemo() {
