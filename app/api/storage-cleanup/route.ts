@@ -4,6 +4,7 @@ import { requireActiveStaff, toAuthErrorResponse } from "@/lib/apiAuth";
 import { adminDb, adminStorage, FieldValue } from "@/lib/firebaseAdmin";
 
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 function safeJobId(storagePath: string): string {
   return createHash("sha256").update(storagePath).digest("hex");
