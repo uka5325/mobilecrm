@@ -143,21 +143,6 @@ async function writeReservationLog(
   });
 }
 
-function normDupKey(r: Record<string, unknown>) {
-  const docs = Array.isArray(r.doctors)
-    ? [...(r.doctors as string[])].sort().join("|")
-    : "";
-  return [
-    String(r.name || "").toLowerCase(),
-    String(r.reservationDate || ""),
-    String(r.reservationTime || ""),
-    String(r.phone || "").replace(/[^0-9+]/g, ""),
-    String(r.hospital || ""),
-    String(r.appointmentType || ""),
-    docs,
-  ].join("__");
-}
-
 // 같은 신원(identityKey)의 첫 문서만 남기는 in-memory dedup — 병합 스크립트 실행 전 과도기
 // 안전망. identityKey가 없는(미backfill) 문서는 dedup하지 않고 그대로 둔다. 근본 정리(중복 문서
 // soft-delete)는 scripts/reconcile-duplicate-patients.ts가 수행한다.
