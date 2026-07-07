@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { DetailDrawer } from "@/components/timeline/DetailDrawer";
 import {
   deleteReservation,
@@ -38,6 +38,7 @@ export default function ReservationsPage() {
   const [listLoading, setListLoading] = useState(() => !getCachedPatientsSummary());
   const [loadingMore, setLoadingMore] = useState(false);
   const [listError, setListError] = useState<string | null>(null);
+  const searchSeqRef = useRef(0);
 
   const [search, setSearch] = useState("");
   const [groupPage, setGroupPage] = useState(1);
@@ -143,6 +144,7 @@ export default function ReservationsPage() {
         reservations: [],
         // 배지는 저장된 summary로 표시(추가 조회 없음).
         reservationCount: p.reservationCount,
+        reservationCountCapped: p.reservationCountCapped,
         depositCount: p.depositCount,
         surgeryCostCount: p.surgeryCostCount,
         invoiceCount: p.invoiceCount,
@@ -211,14 +213,15 @@ export default function ReservationsPage() {
       reloadPatients();
       return;
     }
+    const seq = ++searchSeqRef.current;
     const handle = setTimeout(() => {
       setListLoading(true);
       setPatientsNextCursor(null);
       setListError(null);
       searchPatients(t)
-        .then((list) => { setPatients(list); setListError(null); })
-        .catch((e) => { setListError(e instanceof Error ? e.message : "검색에 실패했습니다."); })
-        .finally(() => setListLoading(false));
+        .then((list) => { if (searchSeqRef.current === seq) { setPatients(list); setListError(null); } })
+        .catch((e) => { if (searchSeqRef.current === seq) { setListError(e instanceof Error ? e.message : "검색에 실패했습니다."); } })
+        .finally(() => { if (searchSeqRef.current === seq) setListLoading(false); });
     }, 300);
     return () => clearTimeout(handle);
   }, [authReady, search, reloadPatients]);

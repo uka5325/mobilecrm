@@ -984,10 +984,11 @@ export async function POST(req: NextRequest) {
       const CHUNK = 500;
 
       const patSnap = await adminDb.collection("patients").where("patientId", "==", patientId).get();
+      if (patSnap.empty) {
+        return NextResponse.json({ success: false, message: "해당 환자를 찾을 수 없습니다." }, { status: 404 });
+      }
 
-      // 이름/생년월일/국적/성별이 바뀌면 신원 키를 재계산해 최신 상태로 유지한다
-      // (기존 값과 patch를 병합해 계산 — 구성요소가 없으면 기존 identityKey를 건드리지 않는다).
-      const identityBase = patSnap.empty ? {} : (patSnap.docs[0].data() as Record<string, unknown>);
+      const identityBase = patSnap.docs[0].data() as Record<string, unknown>;
       const nextIdentityKey = identityKeyForPatient({ ...identityBase, ...safe });
 
       // patients 문서 갱신 (이름 변경 시 검색토큰 재생성, 신원 변경 시 identityKey 갱신)
@@ -1017,18 +1018,17 @@ export async function POST(req: NextRequest) {
         await batch.commit();
       }
 
-      await adminDb.collection("logs").add({
+      const logBatch = adminDb.batch();
+      writeReservationLogInBatch(logBatch, ctx, {
         action: "patient_update",
-        targetType: "patient",
         targetId: patientId,
-        staffUid: ctx.uid, staffName: ctx.name, staffEmail: ctx.email,
-        staffRole: ctx.role, staffCode: ctx.staffCode,
-        patientId, reservationId: "", invoiceId: "",
+        patientId,
         message: `${ctx.name}님이 환자 정보를 수정했습니다.`,
         before: null,
         after: { ...safe, updatedReservations: resSnap.size },
-        createdAt: now,
+        now,
       });
+      await logBatch.commit();
 
       return NextResponse.json({ success: true, updatedReservations: resSnap.size, updatedPatients: patSnap.size });
     }

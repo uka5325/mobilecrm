@@ -18,6 +18,7 @@ export type PatientGroup = {
   reservations: ReservationRecord[];
   // 고객관리 배지 요약(patients 문서 저장값). 백필 전엔 undefined → 배지 미표시/0.
   reservationCount?: number;
+  reservationCountCapped?: boolean;
   depositCount?: number;
   surgeryCostCount?: number;
   invoiceCount?: number;
@@ -549,7 +550,7 @@ export function ReservationsTable({
                 고객 삭제
               </button>
               <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-semibold text-blue-700">
-                총 {reservationCount}건
+                총 {reservationCount}{group.reservationCountCapped ? "+" : ""}건
               </span>
             </div>
           </div>

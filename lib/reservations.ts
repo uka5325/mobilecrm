@@ -554,6 +554,7 @@ export type PatientRecord = {
   lastReservationTime?: string;
   hasMemo?: boolean;
   hasInvoice?: boolean;
+  reservationCountCapped?: boolean;
 };
 
 // patients 문서(요약 포함) → PatientRecord. 숫자 필드는 숫자만 통과(백필 전엔 undefined).
@@ -579,6 +580,7 @@ function mapPatientRecord(p: Record<string, unknown>): PatientRecord {
     lastReservationTime: cleanText(p.lastReservationTime),
     hasMemo: p.hasMemo === true,
     hasInvoice: p.hasInvoice === true,
+    reservationCountCapped: p.reservationCountCapped === true,
   };
 }
 
