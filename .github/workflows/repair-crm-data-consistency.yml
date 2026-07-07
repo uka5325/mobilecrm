@@ -1,0 +1,538 @@
+name: Repair CRM data consistency
+
+on:
+  push:
+    branches:
+      - claude/crm-data-consistency-uoamow
+    paths:
+      - .github/workflows/repair-crm-data-consistency.yml
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: claude/crm-data-consistency-uoamow
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - name: Apply targeted fixes
+        shell: bash
+        run: |
+          python <<'PY'
+          from pathlib import Path
+          import re
+
+          def replace_once(path: str, old: str, new: str) -> None:
+              p = Path(path)
+              text = p.read_text()
+              count = text.count(old)
+              if count != 1:
+                  raise RuntimeError(f"{path}: expected 1 exact match, found {count}")
+              p.write_text(text.replace(old, new, 1))
+
+          def regex_once(path: str, pattern: str, replacement: str) -> None:
+              p = Path(path)
+              text = p.read_text()
+              updated, count = re.subn(pattern, lambda _m: replacement, text, count=1, flags=re.S)
+              if count != 1:
+                  raise RuntimeError(f"{path}: expected 1 regex match, found {count}")
+              p.write_text(updated)
+
+          route = "app/api/reservations/route.ts"
+
+          replace_once(route,
+          '''// 같은 신원(identityKey)의 첫 문서만 남기는 in-memory dedup — 병합 스크립트 실행 전 과도기
+          // 안전망. identityKey가 없는(미backfill) 문서는 dedup하지 않고 그대로 둔다. 근본 정리(중복 문서
+          // soft-delete)는 scripts/reconcile-duplicate-patients.ts가 수행한다.
+          function dedupByIdentity(rows: unknown[]): unknown[] {
+            const seen = new Set<string>();
+            const out: unknown[] = [];
+            for (const r of rows) {
+              const key = String((r as { identityKey?: unknown })?.identityKey || "");
+              if (key) {
+                if (seen.has(key)) continue;
+                seen.add(key);
+              }
+              out.push(r);
+            }
+            return out;
+          }''',
+          '''// identityKey는 중복 후보 탐색용이며 유일키가 아니다. 직원이 "새 환자"를 선택한
+          // 동명이인까지 목록에서 숨기지 않도록 환자 문서를 그대로 반환한다.
+          function dedupByIdentity(rows: unknown[]): unknown[] {
+            return rows;
+          }''')
+
+          replace_once(route,
+          '''      const CAP = 300;
+                const snap = await adminDb
+                  .collection("reservations")
+                  .where("patientId", "==", patientId)
+                  .where("isDeleted", "==", false)
+                  .orderBy("reservationDate", "desc")
+                  .limit(CAP)
+                  .get();
+
+                return NextResponse.json({
+                  success: true,
+                  reservations: snap.docs.map(docToObj),
+                  capped: snap.docs.length === CAP,
+                });''',
+          '''      const CAP = 300;
+                const snap = await adminDb
+                  .collection("reservations")
+                  .where("patientId", "==", patientId)
+                  .where("isDeleted", "==", false)
+                  .orderBy("reservationDate", "desc")
+                  .limit(CAP + 1)
+                  .get();
+                const docs = snap.docs.slice(0, CAP);
+
+                return NextResponse.json({
+                  success: true,
+                  reservations: docs.map(docToObj),
+                  capped: snap.docs.length > CAP,
+                });''')
+
+          replace_once(route,
+          '''      const snap = await q.get();
+                const nextCursor = snap.docs.length === pageSize ? snap.docs[snap.docs.length - 1].id : null;
+
+                // summaryDirty 환자 자동 재계산 (best-effort, 응답 차단하지 않음)
+                reconcileDirtyPatients(5).catch(() => {});
+
+                return NextResponse.json({''',
+          '''      // 이번 응답부터 최신 summary가 보이도록 복구 완료를 기다린다.
+                await reconcileDirtyPatients(5).catch((e) => {
+                  console.warn("[api/reservations] dirty summary reconcile failed:", e instanceof Error ? e.message : String(e));
+                  return 0;
+                });
+
+                const snap = await q.get();
+                const nextCursor = snap.docs.length === pageSize ? snap.docs[snap.docs.length - 1].id : null;
+
+                return NextResponse.json({''')
+
+          replace_once(route,
+          '''      const dupResId = String(safeReservation.reservationId || "");
+                // 중복 방지 lock — 이름/날짜/시간/전화/병원/유형/원장 조합의 sha256을 문서 ID로 쓴다.
+                // (공통 helper lib/reservationLocks.ts — create/update/cancel/delete/스크립트가 동일 규칙 사용)
+                const lockId = lockIdForReservation(safeReservation);
+                const lockRef = lockId ? adminDb.collection(RESERVATION_LOCKS).doc(lockId) : null;
+          ''',
+          '''      const dupResId = String(safeReservation.reservationId || "");
+                // canonical patientId가 확정된 뒤 계산한 lockId를 로그에도 사용한다.
+                let committedLockId = "";
+          ''')
+
+          replace_once(route,
+          '''          if (lockRef) {
+                    const lockSnap = await tx.get(lockRef);
+                    if (lockSnap.exists) {
+                      // 기존 lock이 가리키는 예약이 아직 "이 lockId를 그대로 갖는" 활성 예약이면 진짜 중복.
+                      // 없음/삭제/취소되었거나, 활성이어도 현재 계산한 lockId가 이 문서 ID와 다르면(stale) 정리 후 재사용.
+                      const targetDocId = String(lockSnap.data()?.reservationDocId || "");
+                      let targetData: Record<string, unknown> | null = null;
+                      if (targetDocId) {
+                        const targetSnap = await tx.get(adminDb.collection("reservations").doc(targetDocId));
+                        targetData = targetSnap.exists ? (targetSnap.data() as Record<string, unknown>) : null;
+                      }
+                      if (!isLockStale(lockId, targetData)) throw new DuplicateReservationError();
+                      staleLockRepaired = true; // 아래 tx.set이 stale lock을 덮어써 self-heal
+                    }
+                  }
+          ''', '')
+
+          replace_once(route,
+          '''          // 기존 환자로 연결되면 예약의 patientId도 대표 값으로 맞춘다(랜덤 값 폐기 → 이력/요약 정합).
+                  if (canonicalPatientId) safeReservation.patientId = canonicalPatientId;
+
+                  // ── 쓰기(원자적) ──────────────────────────────────────────────
+                  if (lockRef) tx.set(lockRef, buildLockDoc({
+                    reservationDocId: reservationRef.id,
+                    reservationId: dupResId,
+                    patientId: incomingPatientId,
+                    lockId: lockId,
+                    now,
+                  }));''',
+          '''          // 기존 환자로 연결되면 예약의 patientId도 대표 값으로 맞춘다(랜덤 값 폐기 → 이력/요약 정합).
+                  if (canonicalPatientId) safeReservation.patientId = canonicalPatientId;
+
+                  // canonical patientId가 확정된 데이터로 lock을 읽고 검증한다.
+                  const effectiveLockId = lockIdForReservation(safeReservation);
+                  const effectiveLockRef = effectiveLockId
+                    ? adminDb.collection(RESERVATION_LOCKS).doc(effectiveLockId)
+                    : null;
+                  if (effectiveLockRef) {
+                    const lockSnap = await tx.get(effectiveLockRef);
+                    if (lockSnap.exists) {
+                      const targetDocId = String(lockSnap.data()?.reservationDocId || "");
+                      let targetData: Record<string, unknown> | null = null;
+                      if (targetDocId) {
+                        const targetSnap = await tx.get(adminDb.collection("reservations").doc(targetDocId));
+                        targetData = targetSnap.exists ? (targetSnap.data() as Record<string, unknown>) : null;
+                      }
+                      if (!isLockStale(effectiveLockId, targetData)) throw new DuplicateReservationError();
+                      staleLockRepaired = true;
+                    }
+                  }
+                  committedLockId = effectiveLockId;
+
+                  // ── 쓰기(원자적) ──────────────────────────────────────────────
+                  if (effectiveLockRef) tx.set(effectiveLockRef, buildLockDoc({
+                    reservationDocId: reservationRef.id,
+                    reservationId: dupResId,
+                    patientId: String(safeReservation.patientId || ""),
+                    lockId: effectiveLockId,
+                    now,
+                  }));''')
+
+          replace_once(route,
+          'after: { lockId, reservationDocId: reservationRef.id },',
+          'after: { lockId: committedLockId, reservationDocId: reservationRef.id },')
+
+          replace_once(route,
+          '''        reservationDocId: reservationRef.id,
+                ...(linkedExistingPatient ? { linkedExistingPatient: true } : {}),''',
+          '''        reservationDocId: reservationRef.id,
+                patientId: String(safeReservation.patientId || ""),
+                ...(linkedExistingPatient ? { linkedExistingPatient: true } : {}),''')
+
+          delete_patient = '''    if (action === "delete_patient") {
+                if (ctx.role !== "admin") {
+                  return NextResponse.json({ success: false, message: "환자 삭제 권한이 없습니다." }, { status: 403 });
+                }
+                const { patientId } = payload as { patientId?: string };
+                if (!patientId) {
+                  return NextResponse.json({ success: false, message: "patientId가 없습니다." }, { status: 400 });
+                }
+
+                type DeletionTarget = { reservationDocId: string; lockId: string };
+                const CHUNK = 450;
+                const jobsCol = adminDb.collection("patientDeletionJobs");
+                const deterministicJobRef = jobsCol.doc(encodeURIComponent(patientId));
+                const legacyJob = await jobsCol
+                  .where("patientId", "==", patientId)
+                  .where("status", "in", ["pending", "in_progress"])
+                  .limit(1)
+                  .get();
+                const jobRef = legacyJob.empty ? deterministicJobRef : legacyJob.docs[0].ref;
+                let jobSnap = await jobRef.get();
+
+                if (jobSnap.exists && jobSnap.data()?.status === "completed") {
+                  const completed = jobSnap.data() as Record<string, unknown>;
+                  return NextResponse.json({
+                    success: true,
+                    resumed: true,
+                    deletedReservations: Number(completed.deletedReservations || 0),
+                    deletedPatients: Number(completed.deletedPatients || 0),
+                    lockCleanupFailures: 0,
+                  });
+                }
+
+                if (!jobSnap.exists) {
+                  await jobRef.set({
+                    patientId,
+                    status: "pending",
+                    step: "prepare",
+                    reservationTargets: [],
+                    targetReservationCount: 0,
+                    staffUid: ctx.uid,
+                    staffName: ctx.name,
+                    staffEmail: ctx.email,
+                    staffRole: ctx.role,
+                    staffCode: ctx.staffCode,
+                    deletedReservations: 0,
+                    deletedPatients: 0,
+                    lockCleanupFailures: 0,
+                    error: null,
+                    createdAt: FieldValue.serverTimestamp(),
+                    updatedAt: FieldValue.serverTimestamp(),
+                  });
+                  jobSnap = await jobRef.get();
+                }
+
+                const jobData = (jobSnap.data() || {}) as Record<string, unknown>;
+                let currentStep = String(jobData.step || "prepare");
+                let deletedReservations = Number(jobData.deletedReservations || 0);
+                let deletedPatients = Number(jobData.deletedPatients || 0);
+                let lockCleanupFailures = Number(jobData.lockCleanupFailures || 0);
+                let targetReservationCount = Number(jobData.targetReservationCount || 0);
+                let reservationTargets: DeletionTarget[] = Array.isArray(jobData.reservationTargets)
+                  ? (jobData.reservationTargets as unknown[]).flatMap((item) => {
+                      const value = item as Record<string, unknown>;
+                      const reservationDocId = String(value.reservationDocId || "");
+                      return reservationDocId ? [{ reservationDocId, lockId: String(value.lockId || "") }] : [];
+                    })
+                  : [];
+
+                const now = FieldValue.serverTimestamp();
+                const auditFields = { updatedAt: now, updatedBy: ctx.name, updatedByUid: ctx.uid };
+
+                try {
+                  await jobRef.update({ status: "in_progress", error: null, updatedAt: now });
+
+                  // soft-delete 전에 대상 예약과 lockId를 고정한다.
+                  if (currentStep === "prepare" || (currentStep === "reservations" && reservationTargets.length === 0)) {
+                    const allReservations = await adminDb.collection("reservations").where("patientId", "==", patientId).get();
+                    reservationTargets = allReservations.docs.map((doc) => ({
+                      reservationDocId: doc.id,
+                      lockId: lockIdForReservation(doc.data() as Record<string, unknown>),
+                    }));
+                    targetReservationCount = allReservations.size;
+                    currentStep = "reservations";
+                    await jobRef.update({ step: currentStep, reservationTargets, targetReservationCount, updatedAt: FieldValue.serverTimestamp() });
+                  }
+
+                  if (currentStep === "reservations") {
+                    const activeReservations = await adminDb
+                      .collection("reservations")
+                      .where("patientId", "==", patientId)
+                      .where("isDeleted", "==", false)
+                      .get();
+                    for (let i = 0; i < activeReservations.docs.length; i += CHUNK) {
+                      const batch = adminDb.batch();
+                      for (const doc of activeReservations.docs.slice(i, i + CHUNK)) {
+                        batch.update(doc.ref, { isDeleted: true, ...auditFields });
+                      }
+                      await batch.commit();
+                    }
+                    deletedReservations = targetReservationCount;
+                    currentStep = "locks";
+                    await jobRef.update({ step: currentStep, deletedReservations, updatedAt: FieldValue.serverTimestamp() });
+                  }
+
+                  if (currentStep === "locks" && reservationTargets.length === 0) {
+                    const allReservations = await adminDb.collection("reservations").where("patientId", "==", patientId).get();
+                    reservationTargets = allReservations.docs.map((doc) => ({
+                      reservationDocId: doc.id,
+                      lockId: lockIdForReservation(doc.data() as Record<string, unknown>),
+                    }));
+                    targetReservationCount = allReservations.size;
+                    await jobRef.update({ reservationTargets, targetReservationCount, updatedAt: FieldValue.serverTimestamp() });
+                  }
+
+                  if (currentStep === "locks") {
+                    let attemptFailures = 0;
+                    for (const target of reservationTargets) {
+                      if (!target.lockId) continue;
+                      try {
+                        await adminDb.runTransaction(async (tx) => {
+                          const lockRef = adminDb.collection(RESERVATION_LOCKS).doc(target.lockId);
+                          const lockSnap = await tx.get(lockRef);
+                          if (lockSnap.exists && String(lockSnap.data()?.reservationDocId || "") === target.reservationDocId) {
+                            tx.delete(lockRef);
+                          }
+                        });
+                      } catch {
+                        attemptFailures += 1;
+                      }
+                    }
+                    if (attemptFailures > 0) {
+                      lockCleanupFailures = attemptFailures;
+                      await jobRef.update({
+                        status: "in_progress",
+                        step: "locks",
+                        lockCleanupFailures,
+                        error: `LOCK_CLEANUP_FAILED:${attemptFailures}`,
+                        updatedAt: FieldValue.serverTimestamp(),
+                      });
+                      return NextResponse.json({
+                        success: false,
+                        code: "LOCK_CLEANUP_FAILED",
+                        message: `예약 lock ${attemptFailures}건 정리에 실패했습니다. 같은 고객 삭제를 다시 실행하면 이어서 재시도합니다.`,
+                        deletedReservations,
+                        deletedPatients,
+                        lockCleanupFailures,
+                      }, { status: 500 });
+                    }
+                    lockCleanupFailures = 0;
+                    currentStep = "patients";
+                    await jobRef.update({ step: currentStep, lockCleanupFailures: 0, error: null, updatedAt: FieldValue.serverTimestamp() });
+                  }
+
+                  if (currentStep === "patients") {
+                    const patientSnap = await adminDb.collection("patients").where("patientId", "==", patientId).get();
+                    for (let i = 0; i < patientSnap.docs.length; i += CHUNK) {
+                      const batch = adminDb.batch();
+                      for (const doc of patientSnap.docs.slice(i, i + CHUNK)) {
+                        batch.update(doc.ref, { isDeleted: true, ...auditFields });
+                      }
+                      await batch.commit();
+                    }
+                    deletedPatients = patientSnap.size;
+                    currentStep = "done";
+                    await jobRef.update({ step: currentStep, deletedPatients, updatedAt: FieldValue.serverTimestamp() });
+                  }
+
+                  const completionBatch = adminDb.batch();
+                  const logRef = adminDb.collection("logs").doc(`patient-delete-${jobRef.id}`);
+                  completionBatch.set(logRef, {
+                    action: "patient_delete",
+                    targetType: "patient",
+                    targetId: patientId,
+                    staffUid: ctx.uid,
+                    staffName: ctx.name,
+                    staffEmail: ctx.email,
+                    staffRole: ctx.role,
+                    staffCode: ctx.staffCode,
+                    patientId,
+                    reservationId: "",
+                    invoiceId: "",
+                    message: `${ctx.name}님이 환자와 전체 예약(${deletedReservations}건)을 삭제했습니다.`,
+                    before: null,
+                    after: { deletedReservations, deletedPatients, lockCleanupFailures: 0 },
+                    createdAt: now,
+                  });
+                  completionBatch.update(jobRef, {
+                    status: "completed",
+                    step: "done",
+                    deletedReservations,
+                    deletedPatients,
+                    lockCleanupFailures: 0,
+                    error: null,
+                    updatedAt: FieldValue.serverTimestamp(),
+                  });
+                  await completionBatch.commit();
+
+                  return NextResponse.json({ success: true, deletedReservations, deletedPatients, lockCleanupFailures: 0 });
+                } catch (e) {
+                  await jobRef.update({
+                    status: "in_progress",
+                    step: currentStep,
+                    error: e instanceof Error ? e.message : String(e),
+                    deletedReservations,
+                    deletedPatients,
+                    lockCleanupFailures,
+                    updatedAt: FieldValue.serverTimestamp(),
+                  }).catch(() => {});
+                  throw e;
+                }
+              }'''
+
+          regex_once(route,
+            r'    if \(action === "delete_patient"\) \{.*?\n    \}\n\n    return NextResponse\.json\(\{ success: false, message: "알 수 없는 action"',
+            delete_patient + '\n\n    return NextResponse.json({ success: false, message: "알 수 없는 action"')
+
+          reservations = "lib/reservations.ts"
+          regex_once(reservations,
+            r'async function callReservationsApi\(action: string, payload: Record<string, unknown>\) \{.*?\n\}',
+            '''async function callReservationsApi(action: string, payload: Record<string, unknown>) {
+              const firebaseUser = auth.currentUser;
+              if (!firebaseUser) {
+                return { success: false as const, message: "로그인 상태를 확인할 수 없습니다. 페이지를 새로고침 후 다시 시도해주세요." };
+              }
+              if (!navigator.onLine) {
+                return { success: false as const, message: "인터넷 연결을 확인해주세요." };
+              }
+              try {
+                const idToken = await firebaseUser.getIdToken();
+                const res = await fetch("/api/reservations", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ idToken, action, payload }),
+                });
+                const body = await res.json().catch(() => ({})) as Record<string, unknown>;
+                if (!res.ok) {
+                  return {
+                    ...body,
+                    success: false as const,
+                    message: typeof body.message === "string" ? body.message : `서버 오류가 발생했습니다. (${res.status})`,
+                  };
+                }
+                return body as Record<string, unknown> & { success: boolean; message?: string };
+              } catch {
+                return { success: false as const, message: "네트워크 오류가 발생했습니다. 연결 상태를 확인해주세요." };
+              }
+            }''')
+
+          replace_once(reservations,
+          '''  const apiResult = await callReservationsApi("create", { patient: patientData, reservation: reservationData });
+            if (!apiResult.success) {
+              return { success: false, message: apiResult.message || "예약 등록에 실패했습니다." };
+            }
+
+            invalidatePatientsCache();
+            invalidatePatientsSummaryCache();
+            const savedReservationId = String(apiResult.reservationDocId || "");''',
+          '''  const basePayload = { patient: patientData, reservation: reservationData };
+            let apiResult = await callReservationsApi("create", basePayload);
+
+            if (apiResult.code === "PATIENT_CANDIDATES" && Array.isArray(apiResult.candidates)) {
+              const candidates = (apiResult.candidates as Record<string, unknown>[])
+                .map((candidate) => ({
+                  patientId: cleanText(candidate.patientId),
+                  name: cleanText(candidate.name),
+                  birth: cleanText(candidate.birth),
+                  phone: cleanText(candidate.phone),
+                  nationality: cleanText(candidate.nationality),
+                }))
+                .filter((candidate) => candidate.patientId);
+
+              if (typeof window === "undefined" || candidates.length === 0) {
+                return { success: false, message: apiResult.message || "유사 환자 확인이 필요합니다." };
+              }
+
+              const choices = candidates.map((candidate, index) =>
+                `${index + 1}. ${candidate.name} / ${candidate.birth || "생년월일 없음"} / ${candidate.phone || "연락처 없음"} / ${candidate.nationality || "국적 없음"}`
+              ).join("\\n");
+              const selected = window.prompt(
+                `유사한 기존 환자가 발견되었습니다.\\n\\n${choices}\\n\\n연결할 번호를 입력하세요. 새 환자로 등록하려면 N, 취소하려면 취소를 누르세요.`,
+                "1"
+              );
+              if (selected === null || !selected.trim()) {
+                return { success: false, message: "예약 등록이 취소되었습니다." };
+              }
+
+              if (selected.trim().toLowerCase() === "n") {
+                apiResult = await callReservationsApi("create", { ...basePayload, confirmNewPatient: true });
+              } else {
+                const candidate = candidates[Number(selected.trim()) - 1];
+                if (!candidate) return { success: false, message: "올바른 환자 번호를 입력해 주세요." };
+                apiResult = await callReservationsApi("create", {
+                  ...basePayload,
+                  confirmNewPatient: true,
+                  linkToPatientId: candidate.patientId,
+                });
+              }
+            }
+
+            if (!apiResult.success) {
+              return { success: false, message: apiResult.message || "예약 등록에 실패했습니다." };
+            }
+
+            invalidatePatientsCache();
+            invalidatePatientsSummaryCache();
+            const savedReservationId = String(apiResult.reservationDocId || "");
+            const savedPatientId = cleanText(apiResult.patientId || patientId);''')
+
+          replace_once(reservations,
+          '''    reservation: mapReservationDoc(savedReservationId, { ...reservationData, createdAt: null, updatedAt: null }),''',
+          '''    reservation: mapReservationDoc(savedReservationId, { ...reservationData, patientId: savedPatientId, createdAt: null, updatedAt: null }),''')
+          PY
+
+      - run: npm run lint
+      - run: npx tsc --noEmit
+      - run: npm test
+      - run: npm run build
+
+      - name: Commit repaired sources
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/repair-crm-data-consistency.yml
+          git add app/api/reservations/route.ts lib/reservations.ts
+          git commit -m "fix: complete CRM data consistency safeguards"
+          git push origin HEAD:claude/crm-data-consistency-uoamow
