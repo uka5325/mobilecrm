@@ -263,6 +263,9 @@ export function ReservationsTable({
     } catch { /* 무시 */ }
   }, [amountPopover, buildAmountRows, onPatientMutated]);
 
+  // 행 단위 인라인 편집 렌더러 — 현재 화면에서 호출되지 않는 레거시 경로(환자 헤더 편집으로 대체됨).
+  // 부모의 inline-edit 상태 체인과 함께 별도 정리 예정. (3단계 범위 밖 — 다중 파일 정리 리스크)
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   function renderReservationRow(item: ReservationRecord) {
     const apptType = item.appointmentType || "상담";
     const isEditing = inlineEditId === item.id;
@@ -533,9 +536,10 @@ export function ReservationsTable({
               </button>
               <button
                 onClick={() => onDeletePatient(group)}
+                title="고객 목록에서 숨깁니다(예약 soft delete). 의료기록·인보이스·사진·메모는 보존됩니다."
                 className="rounded-md border border-gray-200 bg-white px-2 py-0.5 text-xs text-red-500 hover:bg-red-50"
               >
-                삭제
+                고객 삭제
               </button>
               <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-semibold text-blue-700">
                 총 {reservationCount}건

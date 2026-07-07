@@ -56,7 +56,11 @@ export default function DashboardPage() {
       setSearched(true);
     } catch (e) {
       console.error("[dashboard] load error:", e);
-      setError("대시보드 데이터를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.");
+      // 기간 초과(KPI_QUERY_LIMIT_EXCEEDED) 등 서버가 준 구체 메시지가 있으면 그대로 안내
+      // (부분 집계를 정상 수치처럼 표시하지 않기 위함).
+      const msg = e instanceof Error && e.message ? e.message : "대시보드 데이터를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.";
+      setError(msg);
+      setSearched(false);
     } finally {
       setLoading(false);
     }

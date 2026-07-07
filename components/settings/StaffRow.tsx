@@ -19,18 +19,20 @@ export function StaffRow({
   saving,
   onSave,
   onDeactivate,
+  onActivate,
 }: {
   item: SettingsStaffRecord;
   currentUser: StaffUser | null;
   canManage: boolean;
   saving: boolean;
+  // active는 여기 포함하지 않는다 — 전용 API(onActivate/onDeactivate)로만 바꾼다.
   onSave: (payload: {
     displayName: string;
     role: SettingsStaffRole | string;
-    active: boolean;
     orderNo: number;
   }) => Promise<void>;
   onDeactivate: () => Promise<void>;
+  onActivate: () => Promise<void>;
 }) {
   // key={staff.id}(부모 app/settings/page.tsx)로 직원마다 컴포넌트가 분리돼 있으므로
   // 아래 초기값은 "다른 직원으로 바뀔 때"만 다시 잡힌다. 과거엔 [item] 변화마다
@@ -39,8 +41,9 @@ export function StaffRow({
   // 편집 중이던(아직 저장 안 한) 값이 조용히 원래 값으로 되돌아가는 버그가 있었다.
   const [displayName, setDisplayName] = useState(item.displayName);
   const [role, setRole] = useState<SettingsStaffRole | string>(item.role);
-  const [active, setActive] = useState(item.active);
   const [orderNo, setOrderNo] = useState(Number(item.orderNo || 999999));
+  // active는 로컬 편집 상태가 아니다 — 전용 API(활성화/비활성화 버튼)로만 바뀌므로
+  // item.active를 그대로 표시한다(체크박스 없음).
 
   const isMe = currentUser?.uid === item.uid || currentUser?.uid === item.id;
 
@@ -83,23 +86,15 @@ export function StaffRow({
       </Td>
 
       <Td>
-        <label className="inline-flex items-center gap-2 text-sm">
-          <input
-            type="checkbox"
-            checked={active}
-            disabled={!canManage || saving || isMe}
-            onChange={(e) => setActive(e.target.checked)}
-          />
-          <span
-            className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
-              active
-                ? "bg-emerald-50 text-emerald-700"
-                : "bg-gray-100 text-gray-500"
-            }`}
-          >
-            {active ? "활성" : "비활성"}
-          </span>
-        </label>
+        <span
+          className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
+            item.active
+              ? "bg-emerald-50 text-emerald-700"
+              : "bg-gray-100 text-gray-500"
+          }`}
+        >
+          {item.active ? "활성" : "비활성"}
+        </span>
       </Td>
 
       <Td>
@@ -110,7 +105,6 @@ export function StaffRow({
               onSave({
                 displayName,
                 role,
-                active,
                 orderNo,
               })
             }
@@ -119,13 +113,23 @@ export function StaffRow({
             저장
           </button>
 
-          <button
-            disabled={!canManage || saving || !active || isMe}
-            onClick={onDeactivate}
-            className="rounded-lg bg-red-50 px-3 py-2 text-xs font-medium text-red-600 transition hover:bg-red-100 active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            비활성화
-          </button>
+          {item.active ? (
+            <button
+              disabled={!canManage || saving || isMe}
+              onClick={onDeactivate}
+              className="rounded-lg bg-red-50 px-3 py-2 text-xs font-medium text-red-600 transition hover:bg-red-100 active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              비활성화
+            </button>
+          ) : (
+            <button
+              disabled={!canManage || saving || isMe}
+              onClick={onActivate}
+              className="rounded-lg bg-emerald-50 px-3 py-2 text-xs font-medium text-emerald-700 transition hover:bg-emerald-100 active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              활성화
+            </button>
+          )}
         </div>
       </Td>
     </tr>

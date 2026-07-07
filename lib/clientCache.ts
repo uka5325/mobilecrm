@@ -14,15 +14,29 @@ export const SCHEDULE_CACHE_KEY = "crm_schedule_v1";
 export const RESERVATIONS_CACHE_KEY = "crm_reservations_v3";
 export const INVOICE_LIST_CACHE_PREFIX = "crm_invoices_v1_";
 
+// 앱 전용 캐시 키 prefix 목록 — 이 접두로 시작하는 키만 purge한다(타 앱/서비스 키 보존).
+// 신규 캐시 키는 arc_crm_ 하나로 통일하는 것을 지향한다(현 코드의 crm_/inv_/conference_는 레거시).
+// mcrm_은 과거 직원 목록 캐시(lib/settings.ts)가 통일 prefix 없이 쓰던 잔재 — 신규 키는
+// arc_crm_으로 이전했지만, 이미 사용자 기기에 남아있는 기존 mcrm_ 키도 당분간 함께 정리한다.
+export const APP_CACHE_PREFIXES = ["arc_crm_", "crm_", "inv_", "conference_", "mcrm_"];
+
+function purgeByPrefix(storage: Storage) {
+  // 삭제 중 인덱스 변동을 피하려고 키를 먼저 모은 뒤 제거한다.
+  const keys: string[] = [];
+  for (let i = 0; i < storage.length; i++) {
+    const k = storage.key(i);
+    if (k && APP_CACHE_PREFIXES.some((p) => k.startsWith(p))) keys.push(k);
+  }
+  keys.forEach((k) => storage.removeItem(k));
+}
+
 // 로그아웃/세션 종료 시 클라 캐시 일괄 삭제 (공용기기 PII/금액 잔존 차단).
+// localStorage/sessionStorage 양쪽에서 앱 전용 prefix 키만 제거한다.
 export function clearAllClientCaches() {
   if (typeof window === "undefined") return;
   try {
-    localStorage.removeItem(SCHEDULE_CACHE_KEY);
-    localStorage.removeItem(RESERVATIONS_CACHE_KEY);
-    Object.keys(localStorage)
-      .filter((k) => k.startsWith(INVOICE_LIST_CACHE_PREFIX))
-      .forEach((k) => localStorage.removeItem(k));
+    purgeByPrefix(localStorage);
+    purgeByPrefix(sessionStorage);
   } catch {
     // ignore (Quota/SecurityError 등)
   }

@@ -1,11 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createHash } from "node:crypto";
 import { adminDb, FieldValue } from "@/lib/firebaseAdmin";
 import { requireActiveStaff, toAuthErrorResponse } from "@/lib/apiAuth";
 import { toSerializable, docToObj } from "@/lib/adminUtils";
 import { makePatientSearchTokens } from "@/lib/searchTokens";
-import { recomputeReservationSummary, safeRecompute } from "@/lib/patientSummary";
+import { recomputeReservationSummary, safeRecompute, createEmptyPatientSummary } from "@/lib/patientSummary";
 import { identityKeyForPatient } from "@/lib/patientIdentity";
+import {
+  RESERVATION_LOCKS,
+  buildLockDoc,
+  isLockStale,
+  isReservationActive,
+  lockIdForReservation,
+} from "@/lib/reservationLocks";
 
 // 데이터 변경 action — 토큰 폐기 검사 적용
 const WRITE_ACTIONS = new Set([
@@ -24,12 +30,13 @@ const WRITE_ACTIONS = new Set([
 // - 삭제는 delete 액션(admin 전용)으로만
 // - 인보이스 연동 필드는 /api/invoices 경유로만
 // - 작성자/수정자 신원은 서버 ctx로만 강제
+// 일반 예약 update 화이트리스트 — 수술 예약 상태(surgeryReserved/surgeryReservedAt)는
+// 전용 toggleSurgery 액션에서만 변경하므로 여기서 제외한다.
 const ALLOWED_RESERVATION_UPDATE_FIELDS = new Set([
   "name", "patientName", "birth", "birthInput", "gender", "phone", "nationality",
   "reservationDate", "reservationTime", "hospital", "appointmentType",
   "completed", "cancelled", "consultArea", "depositAmount", "surgeryCost",
   "coordinators", "doctors",
-  "surgeryReserved", "surgeryReservedAt",
 ]);
 
 const ALLOWED_PATIENT_UPDATE_FIELDS = new Set([
@@ -42,14 +49,15 @@ const ALLOWED_PATIENT_CREATE_FIELDS = new Set([
   "patientId", "name", "birth", "birthInput", "gender", "phone", "nationality",
 ]);
 
+// 일반 예약 create 화이트리스트 — 상태(completed/cancelled/surgeryReserved/surgeryReservedAt)와
+// invoice 필드(invoiceUrl/invoiceId/invoiceSheetName/invoiceDocId/invoiceStatus)는 서버가
+// 기본값을 기록하거나 전용 액션에서만 설정한다. 클라가 주입하면 400(DISALLOWED_FIELD)으로 거부.
 const ALLOWED_RESERVATION_CREATE_FIELDS = new Set([
   "reservationId", "patientId",
   "name", "patientName", "birth", "birthInput", "gender", "phone", "nationality",
-  "reservationDate", "reservationTime", "hospital", "appointmentType", "completed",
-  "surgeryReserved", "surgeryReservedAt",
+  "reservationDate", "reservationTime", "hospital", "appointmentType",
   "depositAmount", "surgeryCost", "consultArea",
   "doctors", "coordinators",
-  "invoiceUrl", "invoiceId", "invoiceSheetName",
 ]);
 
 // 서버가 신원을 강제하는 필드 — 합법 클라이언트가 보낼 수 있어 조용히 무시한다(거부하지 않음).
@@ -81,6 +89,8 @@ function splitPatch(
 
 // create 액션의 중복예약 트랜잭션에서 "중복이라 저장하지 않음"을 알리기 위한 마커 에러.
 class DuplicateReservationError extends Error {}
+// 같은 patientId의 기존 patients 문서가 isDeleted=true일 때 — 조용히 재연결/부활시키지 않고 거부한다.
+class PatientDeletedError extends Error {}
 
 // 의사 목록은 거의 변경되지 않으므로 서버 메모리에 10분 캐싱
 let _doctorsCache: Record<string, unknown>[] | null = null;
@@ -165,6 +175,7 @@ function dedupByIdentity(rows: unknown[]): unknown[] {
   return out;
 }
 
+
 export async function POST(req: NextRequest) {
   try {
     const { idToken, action, payload } = await req.json();
@@ -206,6 +217,52 @@ export async function POST(req: NextRequest) {
         // 상한에 닿으면 더 오래된 예약이 잘렸을 수 있음 → UI가 "일부만 표시" 경고에 사용
         capped: rSnap.docs.length === READ_ALL_CAP,
       });
+    }
+
+    // ── READ: 기간 전체 예약(KPI용) — 서버 cursor pagination으로 500 상한을 넘겨 전체 집계 ──
+    // 대시보드 KPI가 500건 상한에 조용히 잘린 부분집계를 정상 수치처럼 표시하던 문제를 없앤다.
+    // 페이지(500)를 반복 조회해 기간 전체를 모으고, 하드 상한(MAX_KPI_ROWS)을 넘으면
+    // capped=true(KPI_QUERY_LIMIT_EXCEEDED)로 표시해 UI가 "부분 집계/기간 축소"를 안내한다.
+    if (action === "read_range_all") {
+      const { from, to } = (payload || {}) as { from?: string; to?: string };
+      if (!from || !to) {
+        return NextResponse.json({ success: false, message: "조회 기간(from/to)이 필요합니다." }, { status: 400 });
+      }
+      const PAGE = 500;
+      const MAX_KPI_ROWS = 20000; // 하드 상한(약 40페이지) — 초과 시 명시적 제한 오류
+      const all: Record<string, unknown>[] = [];
+      let cursorSnap: FirebaseFirestore.QueryDocumentSnapshot | null = null;
+      let capped = false;
+
+      // orderBy(reservationDate desc) + startAfter(문서 스냅샷)로 안정적 커서 페이지네이션.
+      for (;;) {
+        let q = adminDb
+          .collection("reservations")
+          .where("isDeleted", "==", false)
+          .where("reservationDate", ">=", from)
+          .where("reservationDate", "<=", to)
+          .orderBy("reservationDate", "desc")
+          .limit(PAGE);
+        if (cursorSnap) q = q.startAfter(cursorSnap) as typeof q;
+        const snap = await q.get();
+        if (snap.empty) break;
+        for (const d of snap.docs) all.push(docToObj(d));
+        if (all.length >= MAX_KPI_ROWS) { capped = true; break; }
+        if (snap.docs.length < PAGE) break;
+        cursorSnap = snap.docs[snap.docs.length - 1];
+      }
+
+      if (capped) {
+        // 부분 집계를 정상 KPI로 표시하지 않도록 명시적 제한 오류로 반환.
+        return NextResponse.json({
+          success: false,
+          code: "KPI_QUERY_LIMIT_EXCEEDED",
+          message: `조회 기간의 예약이 ${MAX_KPI_ROWS}건을 초과합니다. 기간을 좁혀 다시 조회해 주세요.`,
+          limit: MAX_KPI_ROWS,
+        }, { status: 413 });
+      }
+
+      return NextResponse.json({ success: true, reservations: all, capped: false });
     }
 
     // ── READ: patient full reservation history (no date limit, cursor pagination) ──
@@ -368,6 +425,7 @@ export async function POST(req: NextRequest) {
       }
 
       // 중복 방지(정책: 연결만·없으면 생성): 같은 patientId 문서가 이미 있으면 그걸 반환.
+      // 단, 삭제된 고객이면 조용히 재연결(부활)하지 않는다 — 자동 복구 기능은 범위 밖.
       const incomingPatientId = String((safePatient as { patientId?: unknown }).patientId || "");
       if (incomingPatientId) {
         const existing = await adminDb
@@ -376,6 +434,13 @@ export async function POST(req: NextRequest) {
           .limit(1)
           .get();
         if (!existing.empty) {
+          if (existing.docs[0].data().isDeleted === true) {
+            return NextResponse.json({
+              success: false,
+              code: "PATIENT_DELETED",
+              message: "삭제된 고객입니다. 관리자 복구 후 다시 시도해 주세요.",
+            }, { status: 409 });
+          }
           return NextResponse.json({ success: true, patientDocId: existing.docs[0].id, linkedExistingPatient: true });
         }
       }
@@ -385,7 +450,9 @@ export async function POST(req: NextRequest) {
         ? adminDb.collection("patients").doc(incomingPatientId)
         : adminDb.collection("patients").doc();
       // 작성자 신원은 검증된 토큰(ctx)으로 강제 → 위조 차단
+      // 요약 기본값을 함께 기록 → 예약 없이 생성돼도 고객관리 목록(list_patients_summary)에 노출된다.
       await ref.set({
+        ...createEmptyPatientSummary(),
         ...safePatient,
         searchTokens: makePatientSearchTokens(String((safePatient as { name?: unknown }).name || "")),
         identityKey,
@@ -481,34 +548,57 @@ export async function POST(req: NextRequest) {
       const createDisallowed = [...patDisallowed, ...resDisallowed];
       if (createDisallowed.length) {
         return NextResponse.json(
-          { success: false, message: `허용되지 않은 필드입니다: ${createDisallowed.join(", ")}` },
+          { success: false, code: "DISALLOWED_FIELD", message: `허용되지 않은 필드입니다: ${createDisallowed.join(", ")}` },
           { status: 400 }
         );
       }
 
-      const dupDate = String(safeReservation.reservationDate || "");
+      // patientId는 환자 문서를 canonical 소스로 삼는다. reservation.patientId가 다르면 거부하고,
+      // 이후 서버가 canonical 값으로 강제한다(예약이 엉뚱한 환자에 붙는 것 차단).
+      const canonicalPatientId = String((safePatient as { patientId?: unknown }).patientId || "");
+      const reservationPatientId = String((safeReservation as { patientId?: unknown }).patientId || "");
+      if (reservationPatientId && canonicalPatientId && reservationPatientId !== canonicalPatientId) {
+        return NextResponse.json(
+          { success: false, code: "PATIENT_ID_MISMATCH", message: "환자 식별자가 일치하지 않습니다." },
+          { status: 400 }
+        );
+      }
+      safeReservation.patientId = canonicalPatientId;
+
+      // 상태·invoice 필드는 서버가 기본값을 기록한다(클라 주입은 위 화이트리스트에서 이미 차단).
+      // surgeryReservedAt은 기록하지 않는다(수술 예약 전용 액션에서만 설정).
+      const reservationDefaults = {
+        completed: false,
+        cancelled: false,
+        surgeryReserved: false,
+        invoiceUrl: "",
+        invoiceId: "",
+        invoiceSheetName: "",
+      };
+
       const dupResId = String(safeReservation.reservationId || "");
-      const dupName = String(safeReservation.name || "");
-      // 같은 날짜+이름 조합 중복키를 해시해 Firestore 문서 ID로 사용(원본 키에 "/" 등 금지문자가
-      // 섞일 수 있어 해시 필수). reservationLocks 문서 존재 여부를 트랜잭션 안에서 원자적으로 검사+생성해
-      // 두 요청이 동시에 들어와도 하나만 통과하도록 한다(query-then-set 레이스 제거).
-      const duplicateKey = dupDate && dupName ? normDupKey(safeReservation) : "";
-      const lockRef = duplicateKey
-        ? adminDb.collection("reservationLocks").doc(createHash("sha1").update(duplicateKey).digest("hex"))
-        : null;
+      // 중복 방지 lock — 이름/날짜/시간/전화/병원/유형/원장 조합의 sha256을 문서 ID로 쓴다.
+      // (공통 helper lib/reservationLocks.ts — create/update/cancel/delete/스크립트가 동일 규칙 사용)
+      const lockId = lockIdForReservation(safeReservation);
+      const lockRef = lockId ? adminDb.collection(RESERVATION_LOCKS).doc(lockId) : null;
 
       const now = FieldValue.serverTimestamp();
       const authorFields = {
         createdBy: ctx.name, createdByUid: ctx.uid,
         updatedBy: ctx.name, updatedByUid: ctx.uid,
       };
+<<<<<<< HEAD
       const incomingPatientId = String((safePatient as { patientId?: unknown }).patientId || "");
       // 신원(이름+생년월일+국적+성별) 키 — patientId로 못 찾을 때 기존 환자 연결에 쓴다.
       const identityKey = identityKeyForPatient(safePatient);
+=======
+      const incomingPatientId = canonicalPatientId;
+>>>>>>> claude/mobilecrm-integrity-stage-1-juvvki
       const reservationRef = adminDb.collection("reservations").doc();
 
       let resultPatientDocId = "";
       let linkedExistingPatient = false;
+      let staleLockRepaired = false;
 
       try {
         await adminDb.runTransaction(async (tx) => {
@@ -521,7 +611,18 @@ export async function POST(req: NextRequest) {
           }
           if (lockRef) {
             const lockSnap = await tx.get(lockRef);
-            if (lockSnap.exists) throw new DuplicateReservationError();
+            if (lockSnap.exists) {
+              // 기존 lock이 가리키는 예약이 아직 "이 lockId를 그대로 갖는" 활성 예약이면 진짜 중복.
+              // 없음/삭제/취소되었거나, 활성이어도 현재 계산한 lockId가 이 문서 ID와 다르면(stale) 정리 후 재사용.
+              const targetDocId = String(lockSnap.data()?.reservationDocId || "");
+              let targetData: Record<string, unknown> | null = null;
+              if (targetDocId) {
+                const targetSnap = await tx.get(adminDb.collection("reservations").doc(targetDocId));
+                targetData = targetSnap.exists ? (targetSnap.data() as Record<string, unknown>) : null;
+              }
+              if (!isLockStale(lockId, targetData)) throw new DuplicateReservationError();
+              staleLockRepaired = true; // 아래 tx.set이 stale lock을 덮어써 self-heal
+            }
           }
           // 기존 환자에 예약 추가(정책: 연결만·없으면 생성):
           // patientId가 있고 patients 문서가 이미 있으면 마스터를 건드리지 않고 예약만 생성한다.
@@ -533,8 +634,15 @@ export async function POST(req: NextRequest) {
               adminDb.collection("patients").where("patientId", "==", incomingPatientId).limit(1)
             );
             if (!pSnap.empty) {
+<<<<<<< HEAD
               existingPatientDocId = pSnap.docs[0].id;
               canonicalPatientId = String(pSnap.docs[0].data().patientId || incomingPatientId);
+=======
+              // 삭제된 고객은 조용히 재연결(부활)하지 않는다 — 관리자 복구 절차 없이 신규 예약만으로
+              // 살아나면 안 된다. 자동 복구 기능은 이번 작업 범위 밖.
+              if (pSnap.docs[0].data().isDeleted === true) throw new PatientDeletedError();
+              existingPatientDocId = pSnap.docs[0].id;
+>>>>>>> claude/mobilecrm-integrity-stage-1-juvvki
             }
           }
           // patientId로 못 찾았으면 신원(이름+생년월일+국적+성별)으로 기존 환자를 찾아 연결한다
@@ -555,10 +663,16 @@ export async function POST(req: NextRequest) {
           if (canonicalPatientId) safeReservation.patientId = canonicalPatientId;
 
           // ── 쓰기(원자적) ──────────────────────────────────────────────
-          if (lockRef) tx.set(lockRef, { duplicateKey, reservationRef: reservationRef.id, createdAt: now });
+          if (lockRef) tx.set(lockRef, buildLockDoc({
+            reservationDocId: reservationRef.id,
+            reservationId: dupResId,
+            patientId: incomingPatientId,
+            lockId: lockId,
+            now,
+          }));
 
           if (existingPatientDocId) {
-            tx.set(reservationRef, { ...safeReservation, isDeleted: false, ...authorFields, createdAt: now, updatedAt: now });
+            tx.set(reservationRef, { ...reservationDefaults, ...safeReservation, isDeleted: false, ...authorFields, createdAt: now, updatedAt: now });
             resultPatientDocId = existingPatientDocId;
             linkedExistingPatient = true;
           } else {
@@ -567,7 +681,10 @@ export async function POST(req: NextRequest) {
             const patientRef = incomingPatientId
               ? adminDb.collection("patients").doc(incomingPatientId)
               : adminDb.collection("patients").doc();
+            // 요약 기본값을 함께 기록 → 예약 없이 생성돼도 고객관리 목록에 노출된다.
+            // (직후 recomputeReservationSummary가 실제 값으로 덮어써도 무해)
             tx.set(patientRef, {
+              ...createEmptyPatientSummary(),
               ...safePatient,
               searchTokens: makePatientSearchTokens(String((safePatient as { name?: unknown }).name || "")),
               identityKey,
@@ -575,7 +692,7 @@ export async function POST(req: NextRequest) {
               ...authorFields,
               createdAt: now, updatedAt: now,
             });
-            tx.set(reservationRef, { ...safeReservation, isDeleted: false, ...authorFields, createdAt: now, updatedAt: now });
+            tx.set(reservationRef, { ...reservationDefaults, ...safeReservation, isDeleted: false, ...authorFields, createdAt: now, updatedAt: now });
             resultPatientDocId = patientRef.id;
           }
         });
@@ -587,7 +704,28 @@ export async function POST(req: NextRequest) {
             duplicate: true,
           });
         }
+        if (e instanceof PatientDeletedError) {
+          return NextResponse.json({
+            success: false,
+            code: "PATIENT_DELETED",
+            message: "삭제된 고객입니다. 관리자 복구 후 다시 시도해 주세요.",
+          }, { status: 409 });
+        }
         throw e;
+      }
+
+      // stale lock을 정리하고 재사용했으면 관측 가능하게 로그를 남긴다(민감정보 없음).
+      if (staleLockRepaired) {
+        await writeReservationLog(ctx, {
+          action: "STALE_LOCK_REPAIRED",
+          targetId: reservationRef.id,
+          patientId: String(safeReservation.patientId || ""),
+          reservationId: dupResId,
+          message: "생성 중 stale reservation lock을 정리하고 재사용했습니다.",
+          before: null,
+          after: { lockId, reservationDocId: reservationRef.id },
+          now,
+        });
       }
 
       // 감사로그(서버 권위 기록) — 클라이언트 createLog 대체
@@ -625,103 +763,163 @@ export async function POST(req: NextRequest) {
 
     // ── UPDATE ────────────────────────────────────────────────────────────
     if (action === "update") {
-      const {
-        reservationDocId,
-        reservationId,
-        patientDocId: explicitPatientDocId,
-        patientId,
-        reservationPatch,
-        patientPatch,
-      } = payload as {
+      // 예약 update는 reservations 문서만 수정한다. 환자 마스터(patients) 정정은
+      // update_patient_profile 전용 액션이 전담한다(책임 분리). 따라서 patientPatch/
+      // patientDocId는 받지 않으며, 식별자(patientId/reservationId)는 클라 값을 신뢰하지 않고
+      // 서버가 reservationDocId로 읽은 기존 문서에서 canonical 값을 파생한다.
+      const { reservationDocId, reservationPatch } = payload as {
         reservationDocId: string;
-        reservationId?: string;
-        patientDocId?: string;
-        patientId?: string;
         reservationPatch: Record<string, unknown>;
-        patientPatch?: Record<string, unknown>;
       };
 
       // 필드 화이트리스트 — 비허용 필드(isDeleted/createdBy*/invoice*/식별자 등)가 하나라도
       // 있으면 "조용히 무시"가 아니라 요청을 거부한다(숨은 버그·악성 payload 노출).
       // (admin SDK는 규칙을 우회하므로 서버가 유일한 방어선)
       const { safe: safeReservationPatch, disallowed: resDisallowed } = splitPatch(reservationPatch, ALLOWED_RESERVATION_UPDATE_FIELDS);
-      const { safe: safePatientPatch, disallowed: patDisallowed } = splitPatch(patientPatch, ALLOWED_PATIENT_UPDATE_FIELDS);
 
-      const disallowed = [...resDisallowed, ...patDisallowed];
-      if (disallowed.length) {
+      if (resDisallowed.length) {
         return NextResponse.json(
-          { success: false, message: `허용되지 않은 필드입니다: ${disallowed.join(", ")}` },
+          { success: false, code: "DISALLOWED_FIELD", message: `허용되지 않은 필드입니다: ${resDisallowed.join(", ")}` },
           { status: 400 }
         );
       }
-      if (!Object.keys(safeReservationPatch).length && !Object.keys(safePatientPatch).length) {
+      if (!Object.keys(safeReservationPatch).length) {
         return NextResponse.json({ success: false, message: "변경할 필드가 없습니다." }, { status: 400 });
       }
 
       const now = FieldValue.serverTimestamp();
-
-      // 감사 before/after: update 직전 값을 1회 읽어 변경 필드의 이전 값을 로그에 남긴다
-      // (예약금·수술비용 등 민감 필드 추적).
       const resRef = adminDb.collection("reservations").doc(reservationDocId);
-      const beforeSnap = await resRef.get();
-      const beforeData = beforeSnap.exists ? (beforeSnap.data() as Record<string, unknown>) : {};
-      const beforeChanged: Record<string, unknown> = {};
-      for (const k of Object.keys(safeReservationPatch)) beforeChanged[k] = beforeData[k] ?? null;
 
-      // 수정자 신원은 검증된 토큰(ctx)으로 강제 → 위조 차단
-      await resRef.update({
-        ...safeReservationPatch,
-        updatedBy: ctx.name,
-        updatedByUid: ctx.uid,
-        updatedAt: now,
-      });
+      // dupKey 구성요소(날짜/시간/신원/병원/유형/원장)나 취소 상태가 바뀌면 lock을 재조정해야
+      // 하므로, 읽기·검증·lock 재배치·update를 한 트랜잭션으로 원자화한다.
+      // 트랜잭션은 내부 충돌 시 콜백을 처음부터 재실행할 수 있으므로, 콜백 밖의 mutable
+      // 변수에 상태를 쌓지 않고 "이번 실행에서 실제로 무슨 일이 있었는지"를 타입드 반환값
+      // 하나로만 전달한다(재시도 시 이전 시도의 flag가 새어나오는 것을 원천 차단).
+      const outcome = await adminDb.runTransaction<
+        | { kind: "not_found" }
+        | { kind: "duplicate" }
+        | { kind: "ownership_mismatch" }
+        | {
+            kind: "ok";
+            canonicalPatientId: string;
+            canonicalReservationId: string;
+            beforeChanged: Record<string, unknown>;
+            staleLockRepaired: boolean;
+          }
+      >(async (tx) => {
+        const beforeSnap = await tx.get(resRef);
+        if (!beforeSnap.exists) return { kind: "not_found" };
+        const beforeData = beforeSnap.data() as Record<string, unknown>;
+        const canonicalPatientId = String(beforeData.patientId || "");
+        const canonicalReservationId = String(beforeData.reservationId || "");
 
-      let resolvedPatientDocId = explicitPatientDocId;
-      if (!resolvedPatientDocId && patientId && Object.keys(safePatientPatch).length) {
-        const pSnap = await adminDb
-          .collection("patients")
-          .where("patientId", "==", patientId)
-          .limit(1)
-          .get();
-        if (!pSnap.empty) resolvedPatientDocId = pSnap.docs[0].id;
-      }
+        const effectiveNew = { ...beforeData, ...safeReservationPatch };
+        const oldLockId = isReservationActive(beforeData) ? lockIdForReservation(beforeData) : "";
+        const newLockId = isReservationActive(effectiveNew) ? lockIdForReservation(effectiveNew) : "";
 
-      if (resolvedPatientDocId && Object.keys(safePatientPatch).length) {
-        await adminDb.collection("patients").doc(resolvedPatientDocId).update({
-          ...safePatientPatch,
-          // 이름이 바뀌면 검색 토큰 재생성
-          ...(safePatientPatch.name !== undefined
-            ? { searchTokens: makePatientSearchTokens(String(safePatientPatch.name || "")) }
-            : {}),
+        // ── 읽기(모든 lock 판단을 쓰기 전에) ──────────────────────────
+        let createNewLock = false;
+        let deleteOldLock = false;
+        let staleLockRepaired = false;
+        const newLockRef = newLockId ? adminDb.collection(RESERVATION_LOCKS).doc(newLockId) : null;
+        const oldLockRef = oldLockId ? adminDb.collection(RESERVATION_LOCKS).doc(oldLockId) : null;
+
+        if (newLockRef && newLockId !== oldLockId) {
+          const newLockSnap = await tx.get(newLockRef);
+          if (newLockSnap.exists) {
+            const owner = String(newLockSnap.data()?.reservationDocId || "");
+            if (owner !== reservationDocId) {
+              // 다른 예약이 이미 이 조합의 lock을 쥐고 있다 — 그 예약이 지금도 이 lockId를
+              // 그대로 갖는 활성 예약이면 진짜 중복, stale이면 정리 후 재사용.
+              let ownerData: Record<string, unknown> | null = null;
+              if (owner) {
+                const ownerSnap = await tx.get(adminDb.collection("reservations").doc(owner));
+                ownerData = ownerSnap.exists ? (ownerSnap.data() as Record<string, unknown>) : null;
+              }
+              if (!isLockStale(newLockId, ownerData)) return { kind: "duplicate" };
+              staleLockRepaired = true;
+            }
+          }
+          createNewLock = true;
+        }
+        if (oldLockRef && oldLockId !== newLockId) {
+          const oldLockSnap = await tx.get(oldLockRef);
+          if (oldLockSnap.exists) {
+            const owner = String(oldLockSnap.data()?.reservationDocId || "");
+            // 자기 소유 lock만 해제한다. 다른 예약 소유 lock은 건드리지 않는다.
+            if (owner === reservationDocId) deleteOldLock = true;
+            else return { kind: "ownership_mismatch" };
+          }
+        }
+
+        // ── 쓰기 ──────────────────────────────────────────────────────
+        const beforeChanged: Record<string, unknown> = {};
+        for (const k of Object.keys(safeReservationPatch)) beforeChanged[k] = beforeData[k] ?? null;
+
+        tx.update(resRef, {
+          ...safeReservationPatch,
           updatedBy: ctx.name,
           updatedByUid: ctx.uid,
           updatedAt: now,
         });
+        if (deleteOldLock && oldLockRef) tx.delete(oldLockRef);
+        if (createNewLock && newLockRef) tx.set(newLockRef, buildLockDoc({
+          reservationDocId,
+          reservationId: canonicalReservationId,
+          patientId: canonicalPatientId,
+          lockId: newLockId,
+          now,
+        }));
+
+        return { kind: "ok", canonicalPatientId, canonicalReservationId, beforeChanged, staleLockRepaired };
+      });
+
+      if (outcome.kind === "not_found") {
+        return NextResponse.json({ success: false, message: "예약을 찾을 수 없습니다." }, { status: 400 });
+      }
+      if (outcome.kind === "duplicate") {
+        return NextResponse.json({ success: false, code: "DUPLICATE_RESERVATION", message: "동일 조합의 활성 예약이 이미 있어 저장하지 않았습니다.", duplicate: true }, { status: 409 });
+      }
+      if (outcome.kind === "ownership_mismatch") {
+        return NextResponse.json({ success: false, code: "LOCK_OWNERSHIP_MISMATCH", message: "예약 lock 소유권이 일치하지 않아 저장하지 않았습니다." }, { status: 409 });
+      }
+
+      const { canonicalPatientId, canonicalReservationId, beforeChanged, staleLockRepaired } = outcome;
+
+      if (staleLockRepaired) {
+        await writeReservationLog(ctx, {
+          action: "STALE_LOCK_REPAIRED",
+          targetId: canonicalReservationId || reservationDocId,
+          patientId: canonicalPatientId,
+          reservationId: canonicalReservationId,
+          message: "수정 중 stale reservation lock을 정리하고 재사용했습니다.",
+          before: null, after: { reservationDocId },
+          now,
+        });
       }
 
       // 감사로그를 서버에서 권위 있게 기록 → 직접 API 호출/우회도 남는다.
-      // (클라이언트 createLog는 중복 방지를 위해 제거됨)
       await adminDb.collection("logs").add({
         action: "reservation_update",
         targetType: "reservation",
-        targetId: reservationId || reservationDocId,
+        targetId: canonicalReservationId || reservationDocId,
         staffUid: ctx.uid,
         staffName: ctx.name,
         staffEmail: ctx.email,
         staffRole: ctx.role,
         staffCode: ctx.staffCode,
-        patientId: patientId || "",
-        reservationId: reservationId || "",
+        patientId: canonicalPatientId,
+        reservationId: canonicalReservationId,
         invoiceId: "",
         message: `${ctx.name}님이 예약 정보를 수정했습니다.`,
         before: beforeChanged,
-        after: { ...safeReservationPatch, ...(Object.keys(safePatientPatch).length ? { patient: safePatientPatch } : {}) },
+        after: { ...safeReservationPatch },
         createdAt: now,
       });
 
       // 예약금·수술비·날짜 등이 바뀔 수 있으므로 예약 파생 요약 재계산 — best-effort
       await safeRecompute(
-        () => recomputeReservationSummary(String(beforeData.patientId || patientId || "")),
+        () => recomputeReservationSummary(canonicalPatientId),
         "update/reservation"
       );
 
@@ -850,15 +1048,26 @@ export async function POST(req: NextRequest) {
 
       const now = FieldValue.serverTimestamp();
       const delRef = adminDb.collection("reservations").doc(reservationDocId);
-      // 감사 대상 식별자를 서버에서 확정하기 위해 1회 읽는다.
-      const delBefore = await delRef.get();
-      const delData = delBefore.exists ? (delBefore.data() as Record<string, unknown>) : {};
-
-      await delRef.update({
-        isDeleted: true,
-        updatedAt: now,
-        updatedBy: ctx.name,
-        updatedByUid: ctx.uid,
+      // soft delete와 lock 정리를 한 트랜잭션으로 원자화한다(부분 실패로 lock만 남는 것 차단).
+      let delData: Record<string, unknown> = {};
+      await adminDb.runTransaction(async (tx) => {
+        const delBefore = await tx.get(delRef);
+        delData = delBefore.exists ? (delBefore.data() as Record<string, unknown>) : {};
+        // 활성 예약이 쥔 lock만, 자기 소유일 때 해제한다.
+        const lockId = isReservationActive(delData) ? lockIdForReservation(delData) : "";
+        if (lockId) {
+          const lockRef = adminDb.collection(RESERVATION_LOCKS).doc(lockId);
+          const lockSnap = await tx.get(lockRef);
+          if (lockSnap.exists && String(lockSnap.data()?.reservationDocId || "") === reservationDocId) {
+            tx.delete(lockRef);
+          }
+        }
+        tx.update(delRef, {
+          isDeleted: true,
+          updatedAt: now,
+          updatedBy: ctx.name,
+          updatedByUid: ctx.uid,
+        });
       });
 
       await writeReservationLog(ctx, {
@@ -904,6 +1113,14 @@ export async function POST(req: NextRequest) {
         .get();
       let deletedReservations = 0;
       const CHUNK = 500;
+      // 삭제 대상 예약이 쥔 lock을 함께 정리한다(자기 소유만). 실패 항목은 기록하고
+      // 부분 성공을 전체 성공으로 표시하지 않는다.
+      const lockRefsToClear: { lockDocId: string; reservationDocId: string }[] = [];
+      for (const d of resSnap.docs) {
+        const rd = d.data() as Record<string, unknown>;
+        const lockId = isReservationActive(rd) ? lockIdForReservation(rd) : "";
+        if (lockId) lockRefsToClear.push({ lockDocId: lockId, reservationDocId: d.id });
+      }
       for (let i = 0; i < resSnap.docs.length; i += CHUNK) {
         const batch = adminDb.batch();
         for (const d of resSnap.docs.slice(i, i + CHUNK)) {
@@ -911,6 +1128,22 @@ export async function POST(req: NextRequest) {
           deletedReservations += 1;
         }
         await batch.commit();
+      }
+
+      // lock 정리 — 소유권 확인 후 삭제. 실패 건수 집계(전체 성공으로 숨기지 않음).
+      let lockCleanupFailures = 0;
+      for (const { lockDocId, reservationDocId } of lockRefsToClear) {
+        try {
+          await adminDb.runTransaction(async (tx) => {
+            const lockRef = adminDb.collection(RESERVATION_LOCKS).doc(lockDocId);
+            const lockSnap = await tx.get(lockRef);
+            if (lockSnap.exists && String(lockSnap.data()?.reservationDocId || "") === reservationDocId) {
+              tx.delete(lockRef);
+            }
+          });
+        } catch {
+          lockCleanupFailures += 1;
+        }
       }
 
       // 환자 문서 soft-delete (동일 patientId 문서가 여러 개일 수 있어 전부 처리)
@@ -935,11 +1168,18 @@ export async function POST(req: NextRequest) {
         patientId, reservationId: "", invoiceId: "",
         message: `${ctx.name}님이 환자와 전체 예약(${deletedReservations}건)을 삭제했습니다.`,
         before: null,
-        after: { deletedReservations, deletedPatients: patSnap.size },
+        after: { deletedReservations, deletedPatients: patSnap.size, lockCleanupFailures },
         createdAt: now,
       });
 
-      return NextResponse.json({ success: true, deletedReservations, deletedPatients: patSnap.size });
+      // lock 정리가 일부 실패했으면 전체 성공으로 표시하지 않는다(관측 가능하게 노출).
+      return NextResponse.json({
+        success: lockCleanupFailures === 0,
+        deletedReservations,
+        deletedPatients: patSnap.size,
+        lockCleanupFailures,
+        ...(lockCleanupFailures > 0 ? { message: `예약 lock ${lockCleanupFailures}건 정리에 실패했습니다. reconcile 스크립트로 정리가 필요합니다.` } : {}),
+      });
     }
 
     return NextResponse.json({ success: false, message: "알 수 없는 action" }, { status: 400 });

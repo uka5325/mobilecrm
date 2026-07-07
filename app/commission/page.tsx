@@ -5,6 +5,7 @@ import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { getInvoices, type InvoiceRecord } from "@/lib/invoices";
 import { getStaffListForSettings, type SettingsStaffRecord } from "@/lib/settings";
 import { paymentMethodLabel } from "@/lib/commissionUtils";
+import { buildCsvContent } from "@/lib/csv";
 import { QuickButton } from "@/components/dashboard/QuickButton";
 
 function formatMoney(value: number | undefined) {
@@ -44,8 +45,9 @@ function downloadCSV(records: InvoiceRecord[]) {
     r.commissionRate ?? "",
     r.commissionAmount ?? "",
   ]);
-  const csv = [header, ...rows].map((row) => row.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(",")).join("\n");
-  const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" });
+  // formula injection 방어 + 안전한 quoting/BOM은 공통 유틸에서 처리.
+  const csv = buildCsvContent([header, ...rows]);
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;

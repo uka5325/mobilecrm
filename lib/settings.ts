@@ -146,10 +146,11 @@ export type SettingsStaffRecord = {
   updatedByUid?: string;
 };
 
+// active는 여기 포함하지 않는다 — 활성화/비활성화는 전용 서버 API
+// (/api/staff/activate, /api/staff/deactivate)로만 처리한다(토큰 revoke 동반).
 export type StaffUpdatePayload = {
   displayName?: string;
   role?: SettingsStaffRole | string;
-  active?: boolean;
   orderNo?: number;
 };
 
@@ -523,7 +524,9 @@ export async function updateConferenceMemo(memoId: string, memoText: string, sta
 ============================================================ */
 
 let _staffListCache: SettingsStaffRecord[] | null = null;
-const _STAFF_CACHE_KEY = "mcrm_staff_list";
+// 앱 통일 prefix(arc_crm_) 사용 — 과거 mcrm_ prefix 키는 clearAllClientCaches()가
+// 레거시 정리 대상으로 당분간 함께 purge한다(lib/clientCache.ts).
+const _STAFF_CACHE_KEY = "arc_crm_staff_list";
 const _STAFF_CACHE_TTL = 5 * 60 * 1000;
 
 export function clearStaffListCache() {
@@ -610,10 +613,6 @@ export async function updateStaffFromSettings(
 
   if (payload.role !== undefined) {
     updatePayload.role = cleanRole(payload.role);
-  }
-
-  if (payload.active !== undefined) {
-    updatePayload.active = Boolean(payload.active);
   }
 
   if (payload.orderNo !== undefined) {
@@ -704,7 +703,60 @@ export async function deactivateStaffFromSettings(
     throw new Error("본인 계정은 비활성화할 수 없습니다.");
   }
 
-  return updateStaffFromSettings(id, { active: false }, actor);
+  // 비활성화는 서버 API로 처리한다 — active:false 직후 refresh token을 revoke해야
+  // 이미 로그인한 세션이 즉시 무력화된다(클라 Firestore 직접 쓰기로는 revoke 불가).
+  const token = await auth.currentUser?.getIdToken();
+  const res = await fetch("/api/staff/deactivate", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify({ uid: id }),
+  });
+  const data = (await res.json()) as {
+    success: boolean;
+    message?: string;
+    tokenRevoked?: boolean;
+    partialSuccess?: boolean;
+    staffDeactivated?: boolean;
+    errorCode?: string;
+  };
+  // staffDeactivated가 true면 active:false 자체는 반영된 부분 성공(토큰 revoke만 실패)이므로
+  // throw하지 않고 그대로 반환한다 — 호출부(UI)가 "재확인 필요" 메시지를 표시할 수 있게.
+  if (!data.success && !data.staffDeactivated) {
+    throw new Error(data.message || "직원 비활성화에 실패했습니다.");
+  }
+  invalidateDoctorsCache();
+  return data;
+}
+
+export async function activateStaffFromSettings(
+  staffId: string,
+  actor: StaffUser
+) {
+  assertCanManageSettings(actor);
+
+  const id = cleanText(staffId);
+  if (!id) throw new Error("직원 ID가 없습니다.");
+
+  // 활성화도 전용 서버 API로 처리한다 — active는 클라 Firestore 직접 쓰기로
+  // 바꿀 수 없다(firestore.rules에서 차단). 활성화는 세션 무력화 대상이 아니므로 token revoke는 없다.
+  const token = await auth.currentUser?.getIdToken();
+  const res = await fetch("/api/staff/activate", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify({ uid: id }),
+  });
+  const data = (await res.json()) as { success: boolean; message?: string };
+  if (!data.success) {
+    throw new Error(data.message || "직원 활성화에 실패했습니다.");
+  }
+  invalidateDoctorsCache();
+  return data;
 }
 
 /* ============================================================

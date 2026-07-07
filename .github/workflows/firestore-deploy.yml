@@ -1,11 +1,11 @@
-name: Deploy Firestore rules & indexes
+name: Deploy Firestore & Storage rules
 
+# 배포 게이트: CI(verify) 워크플로가 main에서 성공한 뒤에만 실행한다.
+# CI(lint/tsc/unit/rules/storage/api/build)가 실패하면 rules 배포도 실행되지 않는다.
 on:
-  push:
-    branches: [main]
-    paths:
-      - "firestore.rules"
-      - "firestore.indexes.json"
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
   workflow_dispatch:
     inputs:
       force_delete_indexes:
@@ -14,10 +14,54 @@ on:
         default: false
 
 jobs:
-  deploy:
+  # 수동 실행(workflow_dispatch)도 배포 전 반드시 검증을 통과해야 한다 — CI 우회 금지.
+  # workflow_run 트리거는 이미 별도 CI 워크플로가 검증을 마친 뒤이므로 이 job은 건너뛴다.
+  verify:
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+      - run: npm run lint
+      - run: npx tsc --noEmit
+      - run: npm test
+      - run: npm run build
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - run: npm run test:rules
+      - run: npm run test:storage
+      - run: npm run test:api
+
+  deploy:
+    needs: verify
+    runs-on: ubuntu-latest
+    # verify가 실행됐다면(workflow_dispatch) 반드시 성공해야 한다. verify가 스킵됐다면
+    # (workflow_run 트리거) CI가 성공 + main 브랜치 + 동일 저장소일 때만 배포한다.
+    # → CI가 검증한 SHA와 실제 배포되는 SHA가 항상 같도록 checkout에서 head_sha로 고정한다.
+    if: |
+      always() && needs.verify.result != 'failure' && needs.verify.result != 'cancelled' &&
+      (
+        github.event_name == 'workflow_dispatch' ||
+        (github.event.workflow_run.conclusion == 'success' &&
+         github.event.workflow_run.head_branch == 'main' &&
+         github.event.workflow_run.head_repository.full_name == github.repository)
+      )
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # workflow_run: CI가 실제로 검증한 커밋으로 고정 배포한다(그 사이 main이 더 진행돼도
+          # 검증되지 않은 최신 커밋이 배포되지 않도록 함). workflow_dispatch: 트리거 시점의 ref 그대로.
+          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
 
       - uses: actions/setup-node@v4
         with:
@@ -28,12 +72,12 @@ jobs:
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
         run: echo "$FIREBASE_SERVICE_ACCOUNT" > "$RUNNER_TEMP/firebase-sa.json"
 
-      - name: Deploy firestore:rules and firestore:indexes
+      - name: Deploy firestore & storage rules + indexes
         env:
           GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/firebase-sa.json
           FIREBASE_PROJECT_ID: ${{ secrets.FIREBASE_PROJECT_ID }}
           FORCE_DELETE: ${{ inputs.force_delete_indexes == true && '--force' || '' }}
-        run: npx firebase-tools@15 deploy --only firestore:rules,firestore:indexes --project "$FIREBASE_PROJECT_ID" --non-interactive $FORCE_DELETE
+        run: npx firebase-tools@15 deploy --only firestore:rules,firestore:indexes,storage --project "$FIREBASE_PROJECT_ID" --non-interactive $FORCE_DELETE
 
       - name: Remove credentials
         if: always()
