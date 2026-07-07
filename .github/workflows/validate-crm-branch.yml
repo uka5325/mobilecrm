@@ -24,6 +24,11 @@ jobs:
           node-version: 20
           cache: npm
 
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
       - name: Run checks and capture output
         shell: bash
         run: |
@@ -46,6 +51,7 @@ jobs:
           run_check typecheck npx tsc --noEmit
           run_check unit-tests npm test
           run_check build npm run build
+          run_check api-tests npm run test:api
 
       - name: Commit validation report
         if: always()
