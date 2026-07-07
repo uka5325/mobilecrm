@@ -98,7 +98,7 @@ export async function POST(req: NextRequest) {
       });
 
       // 고객관리 요약(메모 개수) 재계산 — best-effort
-      await safeRecompute(() => recomputeMemoSummary(String(patientId || "")), "create/memo");
+      await safeRecompute(() => recomputeMemoSummary(String(patientId || "")), "create/memo", String(patientId || ""));
 
       return NextResponse.json({ success: true, id: ref.id });
     }
@@ -194,7 +194,8 @@ export async function POST(req: NextRequest) {
       // 고객관리 요약(메모 개수) 재계산 — note 문서의 patientId 우선(payload 폴백)
       await safeRecompute(
         () => recomputeMemoSummary(String(noteSnap.data()?.patientId || patientId || "")),
-        "delete/memo"
+        "delete/memo",
+        String(noteSnap.data()?.patientId || patientId || "")
       );
 
       return NextResponse.json({ success: true });

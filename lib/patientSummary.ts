@@ -143,12 +143,50 @@ export async function recomputeMemoSummary(patientId: string): Promise<void> {
 }
 
 // 호출부에서 사용하는 best-effort 래퍼 — 요약 갱신 실패가 핵심 mutation을 막지 않게 한다.
-export async function safeRecompute(fn: () => Promise<void>, label: string): Promise<void> {
+// 실패 시 summaryDirty=true 플래그를 기록해 후속 자동 재계산이 가능하게 한다.
+export async function safeRecompute(fn: () => Promise<void>, label: string, patientId?: string): Promise<void> {
   try {
     await fn();
   } catch (e) {
-    // 구조화 오류코드(SUMMARY_RECOMPUTE_FAILED) — best-effort 재계산 실패는 핵심 mutation을 막지 않지만
-    // 관측 가능해야 reconcile 스크립트로 후속 정합성 보정이 가능하다. 민감정보는 남기지 않는다.
     console.warn(`[patientSummary] SUMMARY_RECOMPUTE_FAILED (${label}):`, e instanceof Error ? e.message : String(e));
+    if (patientId) {
+      try {
+        await markSummaryDirty(patientId);
+      } catch {
+        // dirty 플래그 기록도 실패 — 로그만 남긴다
+      }
+    }
   }
+}
+
+// summaryDirty=true 플래그를 환자 문서에 기록. 다음 조회 시 자동 재계산 대상이 된다.
+async function markSummaryDirty(patientId: string): Promise<void> {
+  if (!patientId) return;
+  const snap = await adminDb.collection("patients").where("patientId", "==", patientId).limit(1).get();
+  if (snap.empty) return;
+  await snap.docs[0].ref.update({ summaryDirty: true });
+}
+
+// summaryDirty 환자들을 재계산한다. list_patients_summary 등에서 호출.
+export async function reconcileDirtyPatients(limit = 10): Promise<number> {
+  const snap = await adminDb
+    .collection("patients")
+    .where("summaryDirty", "==", true)
+    .limit(limit)
+    .get();
+  if (snap.empty) return 0;
+
+  let reconciled = 0;
+  for (const doc of snap.docs) {
+    const pid = String(doc.data().patientId || "");
+    if (!pid) continue;
+    try {
+      await recomputeReservationSummary(pid);
+      await doc.ref.update({ summaryDirty: FieldValue.delete() });
+      reconciled += 1;
+    } catch (e) {
+      console.warn(`[patientSummary] DIRTY_RECONCILE_FAILED (${pid}):`, e instanceof Error ? e.message : String(e));
+    }
+  }
+  return reconciled;
 }

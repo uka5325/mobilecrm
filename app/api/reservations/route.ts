@@ -3,7 +3,7 @@ import { adminDb, FieldValue } from "@/lib/firebaseAdmin";
 import { requireActiveStaff, toAuthErrorResponse } from "@/lib/apiAuth";
 import { toSerializable, docToObj } from "@/lib/adminUtils";
 import { makePatientSearchTokens } from "@/lib/searchTokens";
-import { recomputeReservationSummary, safeRecompute, createEmptyPatientSummary } from "@/lib/patientSummary";
+import { recomputeReservationSummary, safeRecompute, createEmptyPatientSummary, reconcileDirtyPatients } from "@/lib/patientSummary";
 import { identityKeyForPatient } from "@/lib/patientIdentity";
 import {
   RESERVATION_LOCKS,
@@ -544,6 +544,10 @@ export async function POST(req: NextRequest) {
 
       const snap = await q.get();
       const nextCursor = snap.docs.length === pageSize ? snap.docs[snap.docs.length - 1].id : null;
+
+      // summaryDirty 환자 자동 재계산 (best-effort, 응답 차단하지 않음)
+      reconcileDirtyPatients(5).catch(() => {});
+
       return NextResponse.json({
         success: true,
         patients: dedupByIdentity(snap.docs.map(docToObj)),
@@ -790,7 +794,8 @@ export async function POST(req: NextRequest) {
       // 고객관리 요약(예약 파생) 재계산 — best-effort
       await safeRecompute(
         () => recomputeReservationSummary(String(safeReservation.patientId || "")),
-        "create/reservation"
+        "create/reservation",
+        String(safeReservation.patientId || "")
       );
 
       return NextResponse.json({
@@ -952,7 +957,8 @@ export async function POST(req: NextRequest) {
       // 예약금·수술비·날짜 등이 바뀔 수 있으므로 예약 파생 요약 재계산 — best-effort
       await safeRecompute(
         () => recomputeReservationSummary(canonicalPatientId),
-        "update/reservation"
+        "update/reservation",
+        canonicalPatientId
       );
 
       return NextResponse.json({ success: true });
@@ -1116,7 +1122,8 @@ export async function POST(req: NextRequest) {
       // 예약 파생 요약 재계산 — best-effort
       await safeRecompute(
         () => recomputeReservationSummary(String(delData.patientId || "")),
-        "delete/reservation"
+        "delete/reservation",
+        String(delData.patientId || "")
       );
 
       return NextResponse.json({ success: true });
@@ -1134,84 +1141,158 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ success: false, message: "patientId가 없습니다." }, { status: 400 });
       }
 
+      const CHUNK = 500;
+      const jobsCol = adminDb.collection("patientDeletionJobs");
+
+      // 기존 미완료 job이 있으면 이어서 진행 (resumable)
+      const existingJob = await jobsCol
+        .where("patientId", "==", patientId)
+        .where("status", "in", ["pending", "in_progress"])
+        .limit(1)
+        .get();
+
+      const jobRef = existingJob.empty
+        ? jobsCol.doc()
+        : existingJob.docs[0].ref;
+
+      if (existingJob.empty) {
+        await jobRef.set({
+          patientId,
+          status: "pending",
+          step: "reservations",
+          staffUid: ctx.uid,
+          staffName: ctx.name,
+          staffEmail: ctx.email,
+          staffRole: ctx.role,
+          staffCode: ctx.staffCode,
+          deletedReservations: 0,
+          deletedPatients: 0,
+          lockCleanupFailures: 0,
+          error: null,
+          createdAt: FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp(),
+        });
+      }
+
+      const jobData = existingJob.empty
+        ? { step: "reservations", deletedReservations: 0, deletedPatients: 0, lockCleanupFailures: 0 }
+        : existingJob.docs[0].data() as Record<string, unknown>;
+      let currentStep = String(jobData.step || "reservations");
+      let deletedReservations = Number(jobData.deletedReservations || 0);
+      let deletedPatients = Number(jobData.deletedPatients || 0);
+      let lockCleanupFailures = Number(jobData.lockCleanupFailures || 0);
+
       const now = FieldValue.serverTimestamp();
       const auditFields = { updatedAt: now, updatedBy: ctx.name, updatedByUid: ctx.uid };
 
-      // 예약 전체 soft-delete (batch 최대 500건 단위)
-      const resSnap = await adminDb
-        .collection("reservations")
-        .where("patientId", "==", patientId)
-        .where("isDeleted", "==", false)
-        .get();
-      let deletedReservations = 0;
-      const CHUNK = 500;
-      // 삭제 대상 예약이 쥔 lock을 함께 정리한다(자기 소유만). 실패 항목은 기록하고
-      // 부분 성공을 전체 성공으로 표시하지 않는다.
-      const lockRefsToClear: { lockDocId: string; reservationDocId: string }[] = [];
-      for (const d of resSnap.docs) {
-        const rd = d.data() as Record<string, unknown>;
-        const lockId = isReservationActive(rd) ? lockIdForReservation(rd) : "";
-        if (lockId) lockRefsToClear.push({ lockDocId: lockId, reservationDocId: d.id });
-      }
-      for (let i = 0; i < resSnap.docs.length; i += CHUNK) {
-        const batch = adminDb.batch();
-        for (const d of resSnap.docs.slice(i, i + CHUNK)) {
-          batch.update(d.ref, { isDeleted: true, ...auditFields });
-          deletedReservations += 1;
-        }
-        await batch.commit();
-      }
+      try {
+        await jobRef.update({ status: "in_progress", updatedAt: now });
 
-      // lock 정리 — 소유권 확인 후 삭제. 실패 건수 집계(전체 성공으로 숨기지 않음).
-      let lockCleanupFailures = 0;
-      for (const { lockDocId, reservationDocId } of lockRefsToClear) {
-        try {
-          await adminDb.runTransaction(async (tx) => {
-            const lockRef = adminDb.collection(RESERVATION_LOCKS).doc(lockDocId);
-            const lockSnap = await tx.get(lockRef);
-            if (lockSnap.exists && String(lockSnap.data()?.reservationDocId || "") === reservationDocId) {
-              tx.delete(lockRef);
+        // Step 1: 예약 전체 soft-delete
+        if (currentStep === "reservations") {
+          const resSnap = await adminDb
+            .collection("reservations")
+            .where("patientId", "==", patientId)
+            .where("isDeleted", "==", false)
+            .get();
+          for (let i = 0; i < resSnap.docs.length; i += CHUNK) {
+            const batch = adminDb.batch();
+            for (const d of resSnap.docs.slice(i, i + CHUNK)) {
+              batch.update(d.ref, { isDeleted: true, ...auditFields });
+              deletedReservations += 1;
             }
-          });
-        } catch {
-          lockCleanupFailures += 1;
+            await batch.commit();
+            await jobRef.update({ deletedReservations, updatedAt: FieldValue.serverTimestamp() });
+          }
+          currentStep = "locks";
+          await jobRef.update({ step: "locks", deletedReservations, updatedAt: FieldValue.serverTimestamp() });
         }
-      }
 
-      // 환자 문서 soft-delete (동일 patientId 문서가 여러 개일 수 있어 전부 처리)
-      const patSnap = await adminDb
-        .collection("patients")
-        .where("patientId", "==", patientId)
-        .get();
-      for (let i = 0; i < patSnap.docs.length; i += CHUNK) {
-        const batch = adminDb.batch();
-        for (const d of patSnap.docs.slice(i, i + CHUNK)) {
-          batch.update(d.ref, { isDeleted: true, ...auditFields });
+        // Step 2: lock 정리
+        if (currentStep === "locks") {
+          const resSnap = await adminDb
+            .collection("reservations")
+            .where("patientId", "==", patientId)
+            .get();
+          for (const d of resSnap.docs) {
+            const rd = d.data() as Record<string, unknown>;
+            const lockId = isReservationActive(rd) ? lockIdForReservation(rd) : "";
+            if (!lockId) continue;
+            try {
+              await adminDb.runTransaction(async (tx) => {
+                const lockRef = adminDb.collection(RESERVATION_LOCKS).doc(lockId);
+                const lockSnap = await tx.get(lockRef);
+                if (lockSnap.exists && String(lockSnap.data()?.reservationDocId || "") === d.id) {
+                  tx.delete(lockRef);
+                }
+              });
+            } catch {
+              lockCleanupFailures += 1;
+            }
+          }
+          currentStep = "patients";
+          await jobRef.update({ step: "patients", lockCleanupFailures, updatedAt: FieldValue.serverTimestamp() });
         }
-        await batch.commit();
+
+        // Step 3: 환자 문서 soft-delete
+        if (currentStep === "patients") {
+          const patSnap = await adminDb
+            .collection("patients")
+            .where("patientId", "==", patientId)
+            .get();
+          for (let i = 0; i < patSnap.docs.length; i += CHUNK) {
+            const batch = adminDb.batch();
+            for (const d of patSnap.docs.slice(i, i + CHUNK)) {
+              batch.update(d.ref, { isDeleted: true, ...auditFields });
+              deletedPatients += 1;
+            }
+            await batch.commit();
+          }
+          currentStep = "done";
+          await jobRef.update({ step: "done", deletedPatients, updatedAt: FieldValue.serverTimestamp() });
+        }
+
+        // Step 4: 감사 로그 + job 완료
+        await adminDb.collection("logs").add({
+          action: "patient_delete",
+          targetType: "patient",
+          targetId: patientId,
+          staffUid: ctx.uid, staffName: ctx.name, staffEmail: ctx.email,
+          staffRole: ctx.role, staffCode: ctx.staffCode,
+          patientId, reservationId: "", invoiceId: "",
+          message: `${ctx.name}님이 환자와 전체 예약(${deletedReservations}건)을 삭제했습니다.`,
+          before: null,
+          after: { deletedReservations, deletedPatients, lockCleanupFailures },
+          createdAt: now,
+        });
+
+        await jobRef.update({
+          status: "completed",
+          step: "done",
+          deletedReservations,
+          deletedPatients,
+          lockCleanupFailures,
+          updatedAt: FieldValue.serverTimestamp(),
+        });
+
+        return NextResponse.json({
+          success: lockCleanupFailures === 0,
+          deletedReservations,
+          deletedPatients,
+          lockCleanupFailures,
+          ...(lockCleanupFailures > 0 ? { message: `예약 lock ${lockCleanupFailures}건 정리에 실패했습니다. reconcile 스크립트로 정리가 필요합니다.` } : {}),
+        });
+      } catch (e) {
+        await jobRef.update({
+          status: "in_progress",
+          error: e instanceof Error ? e.message : String(e),
+          deletedReservations,
+          deletedPatients,
+          lockCleanupFailures,
+          updatedAt: FieldValue.serverTimestamp(),
+        }).catch(() => {});
+        throw e;
       }
-
-      await adminDb.collection("logs").add({
-        action: "patient_delete",
-        targetType: "patient",
-        targetId: patientId,
-        staffUid: ctx.uid, staffName: ctx.name, staffEmail: ctx.email,
-        staffRole: ctx.role, staffCode: ctx.staffCode,
-        patientId, reservationId: "", invoiceId: "",
-        message: `${ctx.name}님이 환자와 전체 예약(${deletedReservations}건)을 삭제했습니다.`,
-        before: null,
-        after: { deletedReservations, deletedPatients: patSnap.size, lockCleanupFailures },
-        createdAt: now,
-      });
-
-      // lock 정리가 일부 실패했으면 전체 성공으로 표시하지 않는다(관측 가능하게 노출).
-      return NextResponse.json({
-        success: lockCleanupFailures === 0,
-        deletedReservations,
-        deletedPatients: patSnap.size,
-        lockCleanupFailures,
-        ...(lockCleanupFailures > 0 ? { message: `예약 lock ${lockCleanupFailures}건 정리에 실패했습니다. reconcile 스크립트로 정리가 필요합니다.` } : {}),
-      });
     }
 
     return NextResponse.json({ success: false, message: "알 수 없는 action" }, { status: 400 });
