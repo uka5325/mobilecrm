@@ -1,0 +1,282 @@
+===== npm-ci =====
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@google-cloud/cloud-sql-connector@1.11.2',
+npm warn EBADENGINE   required: { node: '>=22' },
+npm warn EBADENGINE   current: { node: 'v20.20.2', npm: '10.8.2' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: 'universal-analytics@0.5.4',
+npm warn EBADENGINE   required: { node: '>=22.0.0' },
+npm warn EBADENGINE   current: { node: 'v20.20.2', npm: '10.8.2' }
+npm warn EBADENGINE }
+npm warn deprecated node-domexception@1.0.0: Use your platform's native DOMException instead
+npm warn deprecated uuid@9.0.1: uuid@10 and below is no longer supported.  For ESM codebases, update to uuid@latest.  For CommonJS codebases, use uuid@11 (but be aware this version will likely be deprecated in 2028).
+npm warn deprecated glob@10.5.0: Old versions of glob are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exorbitant rates) by contacting i@izs.me
+npm warn deprecated json-ptr@3.1.1: Package no longer supported. Contact Support at https://www.npmjs.com/support for more info.
+
+added 1040 packages, and audited 1041 packages in 16s
+
+228 packages are looking for funding
+  run `npm fund` for details
+
+13 moderate severity vulnerabilities
+
+To address all issues (including breaking changes), run:
+  npm audit fix --force
+
+Run `npm audit` for details.
+EXIT_CODE=0
+
+===== lint =====
+
+> nextjs@0.1.0 lint
+> eslint
+
+
+/home/runner/work/mobilecrm/mobilecrm/app/api/reservations/route.ts
+  943:59  warning  'beforeChanged' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+✖ 1 problem (0 errors, 1 warning)
+
+EXIT_CODE=0
+
+===== typecheck =====
+app/api/invoices-consistent/handler.ts(30,23): error TS2345: Argument of type 'Request' is not assignable to parameter of type 'NextRequest'.
+  Type 'Request' is missing the following properties from type 'NextRequest': cookies, nextUrl, page, ua
+app/api/reservations-consistent/route.ts(25,40): error TS2345: Argument of type 'Request' is not assignable to parameter of type 'NextRequest'.
+  Type 'Request' is missing the following properties from type 'NextRequest': cookies, nextUrl, page, ua
+components/timeline/tabs/FilesTab.tsx(192,28): error TS2339: Property 'deleted' does not exist on type 'void'.
+components/timeline/tabs/FilesTab.tsx(193,57): error TS2339: Property 'errorCode' does not exist on type 'void'.
+components/timeline/tabs/FilesTab.tsx(195,78): error TS2339: Property 'errorCode' does not exist on type 'void'.
+EXIT_CODE=2
+
+===== unit-tests =====
+
+> nextjs@0.1.0 test
+> tsx --test tests/units.test.ts
+
+TAP version 13
+# Subtest: parseBirthInfo: 주민번호 앞자리+성별코드 (남)
+ok 1 - parseBirthInfo: 주민번호 앞자리+성별코드 (남)
+  ---
+  duration_ms: 0.959982
+  ...
+# Subtest: parseBirthInfo: 2000년대 출생 (성별코드 3 → 남)
+ok 2 - parseBirthInfo: 2000년대 출생 (성별코드 3 → 남)
+  ---
+  duration_ms: 0.279902
+  ...
+# Subtest: parseBirthInfo: 7자리 (여, 코드 4)
+ok 3 - parseBirthInfo: 7자리 (여, 코드 4)
+  ---
+  duration_ms: 0.163651
+  ...
+# Subtest: parseBirthInfo: 8자리 YYYYMMDD, 성별 폴백
+ok 4 - parseBirthInfo: 8자리 YYYYMMDD, 성별 폴백
+  ---
+  duration_ms: 0.160226
+  ...
+# Subtest: parseBirthInfo: 빈 입력
+ok 5 - parseBirthInfo: 빈 입력
+  ---
+  duration_ms: 0.172173
+  ...
+# Subtest: calcCommissionBase: 현금은 전액
+ok 6 - calcCommissionBase: 현금은 전액
+  ---
+  duration_ms: 0.169249
+  ...
+# Subtest: calcCommissionBase: 카드는 VAT 제거
+ok 7 - calcCommissionBase: 카드는 VAT 제거
+  ---
+  duration_ms: 0.120467
+  ...
+# Subtest: calcCommissionBase: 혼합은 카드분만 VAT 제거
+ok 8 - calcCommissionBase: 혼합은 카드분만 VAT 제거
+  ---
+  duration_ms: 0.104885
+  ...
+# Subtest: calcCommission: 비율 계산 반올림
+ok 9 - calcCommission: 비율 계산 반올림
+  ---
+  duration_ms: 0.198953
+  ...
+# Subtest: paymentMethodLabel
+ok 10 - paymentMethodLabel
+  ---
+  duration_ms: 0.215306
+  ...
+# Subtest: cleanText: null/undefined 안전
+ok 11 - cleanText: null/undefined 안전
+  ---
+  duration_ms: 0.15638
+  ...
+# Subtest: toSerializable: Timestamp형(toMillis) 변환
+ok 12 - toSerializable: Timestamp형(toMillis) 변환
+  ---
+  duration_ms: 0.722853
+  ...
+# Subtest: payload: hospital만 전달 → 상태/금액/담당자 키 없음
+ok 13 - payload: hospital만 전달 → 상태/금액/담당자 키 없음
+  ---
+  duration_ms: 0.345348
+  ...
+# Subtest: payload: completed만 전달 → completed 포함, cancelled 없음
+ok 14 - payload: completed만 전달 → completed 포함, cancelled 없음
+  ---
+  duration_ms: 0.21026
+  ...
+# Subtest: payload: coordinators:[] → 빈 배열 포함
+ok 15 - payload: coordinators:[] → 빈 배열 포함
+  ---
+  duration_ms: 0.146886
+  ...
+# Subtest: payload: coordinators:undefined → 키 자체가 없음
+ok 16 - payload: coordinators:undefined → 키 자체가 없음
+  ---
+  duration_ms: 0.156861
+  ...
+# Subtest: payload: depositAmount:'0' → 포함
+ok 17 - payload: depositAmount:'0' → 포함
+  ---
+  duration_ms: 0.187626
+  ...
+# Subtest: payload: depositAmount:undefined → 키 자체가 없음
+ok 18 - payload: depositAmount:undefined → 키 자체가 없음
+  ---
+  duration_ms: 0.220153
+  ...
+# Subtest: payload: cancelled:false → false 포함
+ok 19 - payload: cancelled:false → false 포함
+  ---
+  duration_ms: 0.182148
+  ...
+# Subtest: payload: name/reservationDate는 항상 포함, updatedBy 강제
+ok 20 - payload: name/reservationDate는 항상 포함, updatedBy 강제
+  ---
+  duration_ms: 0.155479
+  ...
+# Subtest: sanitizeCsvCell: 위험 접두(=,+,-,@,tab,CR)는 ' 프리픽스 후 quoting
+ok 21 - sanitizeCsvCell: 위험 접두(=,+,-,@,tab,CR)는 ' 프리픽스 후 quoting
+  ---
+  duration_ms: 0.268304
+  ...
+# Subtest: sanitizeCsvCell: 일반 텍스트/따옴표/줄바꿈/쉼표 처리
+ok 22 - sanitizeCsvCell: 일반 텍스트/따옴표/줄바꿈/쉼표 처리
+  ---
+  duration_ms: 0.172253
+  ...
+# Subtest: buildCsvContent: BOM 포함 + 행/열 조립
+ok 23 - buildCsvContent: BOM 포함 + 행/열 조립
+  ---
+  duration_ms: 0.191402
+  ...
+# Subtest: lock identity: patientId 동일 + name만 다름 → 동일 lockId
+ok 24 - lock identity: patientId 동일 + name만 다름 → 동일 lockId
+  ---
+  duration_ms: 0.483261
+  ...
+# Subtest: lock identity: patientId 동일 + phone만 다름 → 동일 lockId
+ok 25 - lock identity: patientId 동일 + phone만 다름 → 동일 lockId
+  ---
+  duration_ms: 0.170811
+  ...
+# Subtest: lock identity: doctors 순서만 달라도 같은 lockId
+ok 26 - lock identity: doctors 순서만 달라도 같은 lockId
+  ---
+  duration_ms: 0.159014
+  ...
+# Subtest: lock identity: patientId 없는 레거시는 name+phone fallback으로 lockId 산출
+ok 27 - lock identity: patientId 없는 레거시는 name+phone fallback으로 lockId 산출
+  ---
+  duration_ms: 0.293942
+  ...
+# Subtest: lock identity: patientId 있으면 dupKey에 phone이 별도로 들어가지 않는다
+ok 28 - lock identity: patientId 있으면 dupKey에 phone이 별도로 들어가지 않는다
+  ---
+  duration_ms: 0.171883
+  ...
+# Subtest: aggregateReservationPages: 301건이 여러 페이지로 나뉘어도 reservationCount=301
+ok 29 - aggregateReservationPages: 301건이 여러 페이지로 나뉘어도 reservationCount=301
+  ---
+  duration_ms: 1.170372
+  ...
+# Subtest: aggregateReservationPages: 650건 전체 페이지 합계가 정확하다(300건 cap 없음)
+ok 30 - aggregateReservationPages: 650건 전체 페이지 합계가 정확하다(300건 cap 없음)
+  ---
+  duration_ms: 3.678861
+  ...
+# Subtest: aggregateReservationPages: 빈 페이지 배열은 0건으로 집계된다
+ok 31 - aggregateReservationPages: 빈 페이지 배열은 0건으로 집계된다
+  ---
+  duration_ms: 0.140567
+  ...
+# Subtest: APP_CACHE_PREFIXES: mcrm_ 레거시 prefix가 포함되어 있다
+ok 32 - APP_CACHE_PREFIXES: mcrm_ 레거시 prefix가 포함되어 있다
+  ---
+  duration_ms: 0.104614
+  ...
+# Subtest: clearAllClientCaches: mcrm_/arc_crm_ 키는 삭제하고 무관한 키는 유지한다
+ok 33 - clearAllClientCaches: mcrm_/arc_crm_ 키는 삭제하고 무관한 키는 유지한다
+  ---
+  duration_ms: 0.37378
+  ...
+# Subtest: classifyStorageDeleteError: object-not-found는 성공(deleted)으로 분류한다
+ok 34 - classifyStorageDeleteError: object-not-found는 성공(deleted)으로 분류한다
+  ---
+  duration_ms: 0.223889
+  ...
+# Subtest: classifyStorageDeleteError: 그 외 에러는 failed + errorCode로 분류한다
+ok 35 - classifyStorageDeleteError: 그 외 에러는 failed + errorCode로 분류한다
+  ---
+  duration_ms: 0.124093
+  ...
+# Subtest: classifyStorageDeleteError: code가 없는 에러는 unknown으로 분류한다
+ok 36 - classifyStorageDeleteError: code가 없는 에러는 unknown으로 분류한다
+  ---
+  duration_ms: 0.114629
+  ...
+1..36
+# tests 36
+# suites 0
+# pass 36
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 692.753313
+EXIT_CODE=0
+
+===== build =====
+
+> nextjs@0.1.0 build
+> next build
+
+⚠ No build cache found. Please configure build caching for faster rebuilds. Read more: https://nextjs.org/docs/messages/no-cache
+Attention: Next.js now collects completely anonymous telemetry regarding usage.
+This information is used to shape Next.js' roadmap and prioritize features.
+You can learn more, including how to opt-out if you'd not like to participate in this anonymous program, by visiting the following URL:
+https://nextjs.org/telemetry
+
+▲ Next.js 16.2.9 (Turbopack)
+
+⚠ The "middleware" file convention is deprecated. Please use "proxy" instead. Learn more: https://nextjs.org/docs/messages/middleware-to-proxy
+  Creating an optimized production build ...
+✓ Compiled successfully in 6.8s
+  Running TypeScript ...
+Failed to type check.
+
+./app/api/invoices-consistent/handler.ts:30:23
+Type error: Argument of type 'Request' is not assignable to parameter of type 'NextRequest'.
+  Type 'Request' is missing the following properties from type 'NextRequest': cookies, nextUrl, page, ua
+
+  [90m28 |[0m   [36mconst[0m action = [33mString[0m(body.action || [32m""[0m);
+  [90m29 |[0m   [36mif[0m (action !== [32m"create"[0m && action !== [32m"update"[0m && action !== [32m"delete"[0m) {
+[31m[1m>[0m [90m30 |[0m     [36mreturn[0m legacyPost(legacyRequest);
+  [90m   |[0m                       [31m[1m^[0m
+  [90m31 |[0m   }
+  [90m32 |[0m
+  [90m33 |[0m   [36mtry[0m {
+Next.js build worker exited with code: 1 and signal: null
+EXIT_CODE=1
+
