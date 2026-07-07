@@ -14,14 +14,37 @@ type Props = {
 export function NoteCard({ note, compact = false, onUpdate, onDelete }: Props) {
   const [editing, setEditing] = useState(false);
   const [editText, setEditText] = useState(note.memoText);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
 
   async function handleSave() {
-    await onUpdate(note, editText);
-    setEditing(false);
+    setSaving(true);
+    setError("");
+    try {
+      await onUpdate(note, editText);
+      setEditing(false);
+    } catch (saveError) {
+      setError(saveError instanceof Error ? saveError.message : "메모 수정에 실패했습니다.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleDelete() {
+    setSaving(true);
+    setError("");
+    try {
+      await onDelete(note);
+    } catch (deleteError) {
+      setError(deleteError instanceof Error ? deleteError.message : "메모 삭제에 실패했습니다.");
+    } finally {
+      setSaving(false);
+    }
   }
 
   function handleStartEdit() {
     setEditText(note.memoText);
+    setError("");
     setEditing(true);
   }
 
@@ -42,11 +65,11 @@ export function NoteCard({ note, compact = false, onUpdate, onDelete }: Props) {
             className="w-full resize-none rounded-xl border border-[#dfe3e8] bg-white px-3 py-2 text-sm transition focus:border-emerald-500 focus:outline-none"
           />
           <div className="mt-2 flex justify-end gap-3 text-xs">
-            <button onClick={() => setEditing(false)} className="text-gray-500 hover:underline">
+            <button disabled={saving} onClick={() => setEditing(false)} className="text-gray-500 hover:underline disabled:opacity-50">
               취소
             </button>
-            <button onClick={handleSave} className="font-semibold text-blue-600 hover:underline">
-              저장
+            <button disabled={saving} onClick={handleSave} className="font-semibold text-blue-600 hover:underline disabled:opacity-50">
+              {saving ? "저장 중..." : "저장"}
             </button>
           </div>
         </>
@@ -60,15 +83,16 @@ export function NoteCard({ note, compact = false, onUpdate, onDelete }: Props) {
           </div>
           <div className="whitespace-pre-line leading-6 text-gray-700">{note.memoText}</div>
           <div className="mt-2 flex justify-end gap-3 text-xs">
-            <button onClick={handleStartEdit} className="text-blue-500 hover:underline">
+            <button disabled={saving} onClick={handleStartEdit} className="text-blue-500 hover:underline disabled:opacity-50">
               수정
             </button>
-            <button onClick={() => onDelete(note)} className="text-red-500 hover:underline">
+            <button disabled={saving} onClick={handleDelete} className="text-red-500 hover:underline disabled:opacity-50">
               삭제
             </button>
           </div>
         </>
       )}
+      {error && <div className="mt-2 text-xs text-red-500">{error}</div>}
     </div>
   );
 }
