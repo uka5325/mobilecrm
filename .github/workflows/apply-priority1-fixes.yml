@@ -1,0 +1,375 @@
+name: Apply priority 1 fixes
+
+on:
+  push:
+    branches:
+      - claude/crm-data-consistency-uoamow
+    paths:
+      - .github/trigger-priority1-fixes.txt
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: claude/crm-data-consistency-uoamow
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Patch priority 1 code
+        shell: bash
+        run: |
+          python <<'PY'
+          from pathlib import Path
+          import re
+
+          def replace_once(path, old, new):
+              p = Path(path)
+              text = p.read_text()
+              count = text.count(old)
+              if count != 1:
+                  raise RuntimeError(f"{path}: expected 1 match, found {count}")
+              p.write_text(text.replace(old, new, 1))
+
+          # 1) client API: preserve non-2xx JSON code/candidates instead of discarding it.
+          replace_once("lib/reservations.ts",
+          '''    if (!res.ok) {
+              return { success: false as const, message: `서버 오류가 발생했습니다. (${res.status})` };
+            }
+            return res.json() as Promise<Record<string, unknown> & { success: boolean; message?: string }>;''',
+          '''    const body = await res.json().catch(() => ({})) as Record<string, unknown>;
+            if (!res.ok) {
+              return {
+                ...body,
+                success: false as const,
+                message: typeof body.message === "string" ? body.message : `서버 오류가 발생했습니다. (${res.status})`,
+              };
+            }
+            return body as Record<string, unknown> & { success: boolean; message?: string };''')
+
+          # 2) createReservation: connect PATIENT_CANDIDATES flow and retry with explicit choice.
+          replace_once("lib/reservations.ts",
+          '''  const apiResult = await callReservationsApi("create", { patient: patientData, reservation: reservationData });
+            if (!apiResult.success) {
+              return { success: false, message: apiResult.message || "예약 등록에 실패했습니다." };
+            }
+
+            invalidatePatientsCache();
+            invalidatePatientsSummaryCache();
+            const savedReservationId = String(apiResult.reservationDocId || "");''',
+          '''  const basePayload = { patient: patientData, reservation: reservationData };
+            let apiResult = await callReservationsApi("create", basePayload);
+
+            if (apiResult.code === "PATIENT_CANDIDATES" && Array.isArray(apiResult.candidates)) {
+              const candidates = (apiResult.candidates as Record<string, unknown>[])
+                .map((candidate) => ({
+                  patientId: cleanText(candidate.patientId),
+                  name: cleanText(candidate.name),
+                  birth: cleanText(candidate.birth),
+                  phone: cleanText(candidate.phone),
+                  nationality: cleanText(candidate.nationality),
+                }))
+                .filter((candidate) => candidate.patientId);
+
+              if (typeof window === "undefined" || candidates.length === 0) {
+                return { success: false, message: apiResult.message || "유사 환자 확인이 필요합니다." };
+              }
+
+              const choices = candidates.map((candidate, index) =>
+                `${index + 1}. ${candidate.name} / ${candidate.birth || "생년월일 없음"} / ${candidate.phone || "연락처 없음"} / ${candidate.nationality || "국적 없음"}`
+              ).join("\\n");
+              const selected = window.prompt(
+                `유사한 기존 환자가 발견되었습니다.\\n\\n${choices}\\n\\n연결할 번호를 입력하세요. 새 환자로 등록하려면 N, 취소하려면 취소를 누르세요.`,
+                "1"
+              );
+              if (selected === null || !selected.trim()) {
+                return { success: false, message: "예약 등록이 취소되었습니다." };
+              }
+
+              if (selected.trim().toLowerCase() === "n") {
+                apiResult = await callReservationsApi("create", { ...basePayload, confirmNewPatient: true });
+              } else {
+                const candidate = candidates[Number(selected.trim()) - 1];
+                if (!candidate) return { success: false, message: "올바른 환자 번호를 입력해 주세요." };
+                apiResult = await callReservationsApi("create", {
+                  ...basePayload,
+                  confirmNewPatient: true,
+                  linkToPatientId: candidate.patientId,
+                });
+              }
+            }
+
+            if (!apiResult.success) {
+              return { success: false, message: apiResult.message || "예약 등록에 실패했습니다." };
+            }
+
+            invalidatePatientsCache();
+            invalidatePatientsSummaryCache();
+            const savedReservationId = String(apiResult.reservationDocId || "");
+            const savedPatientId = cleanText(apiResult.patientId || patientId);''')
+
+          replace_once("lib/reservations.ts",
+          '''    reservation: mapReservationDoc(savedReservationId, { ...reservationData, createdAt: null, updatedAt: null }),''',
+          '''    reservation: mapReservationDoc(savedReservationId, { ...reservationData, patientId: savedPatientId, createdAt: null, updatedAt: null }),''')
+
+          # 3) create_patient: stop silent identity heuristic merge; return candidates instead.
+          replace_once("app/api/reservations/route.ts",
+          '''      // 신원(이름+생년월일+국적+성별) 기반 중복 방지: 같은 사람이 서로 다른 랜덤 patientId로
+                // 여러 문서로 저장되던 문제를 막는다. 신원 일치 활성 환자가 있으면 그 문서로 연결한다.
+                const identityKey = identityKeyForPatient(safePatient);
+                if (identityKey) {
+                  const existingByIdentity = await adminDb
+                    .collection("patients")
+                    .where("identityKey", "==", identityKey)
+                    .where("isDeleted", "==", false)
+                    .limit(1)
+                    .get();
+                  if (!existingByIdentity.empty) {
+                    const doc = existingByIdentity.docs[0];
+                    return NextResponse.json({
+                      success: true,
+                      patientDocId: doc.id,
+                      patientId: String(doc.data().patientId || ""),
+                      linkedExistingPatient: true,
+                    });
+                  }
+                }''',
+          '''      // 신원(이름+생년월일+국적+성별) 기반 heuristic 자동 병합은 중단한다.
+                // 동일 신원이 있으면 후보를 반환하고, 사용자가 명시 선택한 경우에만 연결해야 한다.
+                const identityKey = identityKeyForPatient(safePatient);
+                if (identityKey) {
+                  const existingByIdentity = await adminDb
+                    .collection("patients")
+                    .where("identityKey", "==", identityKey)
+                    .where("isDeleted", "==", false)
+                    .limit(5)
+                    .get();
+                  if (!existingByIdentity.empty) {
+                    return NextResponse.json({
+                      success: false,
+                      code: "PATIENT_CANDIDATES",
+                      message: "유사한 기존 환자가 있습니다. 기존 환자에 연결하거나 새 환자로 등록할지 선택해 주세요.",
+                      candidates: existingByIdentity.docs.map((doc) => ({ id: doc.id, ...toSerializable(doc.data()) })),
+                    }, { status: 409 });
+                  }
+                }''')
+
+          # 4) DetailDrawer note save/delete result check + message.
+          replace_once("components/timeline/DetailDrawer.tsx",
+          '''  async function handleUpdateNote(note: ReservationNote, newText: string) {
+            if (!selectedReservation) return;
+            const result = await updateReservationNote({
+              noteId: note.id,
+              reservationId: selectedReservation.reservationId,
+              patientId: selectedReservation.patientId || "",
+              memoText: newText,
+              staff: currentUser,
+            });
+            if (!result.success) { setMemoError(result.message || "메모 수정 실패"); return; }
+            await loadNotes(selectedReservation);
+            await loadLogs(selectedReservation);
+            await onRefreshLatestLog(selectedReservation);
+          }
+
+          async function handleDeleteNote(note: ReservationNote) {
+            if (!selectedReservation) return;
+            if (!confirm("메모를 삭제할까요?")) return;
+            await deleteReservationNote({
+              noteId: note.id,
+              reservationId: selectedReservation.reservationId,
+              patientId: selectedReservation.patientId || "",
+              staff: currentUser,
+            });
+            await loadNotes(selectedReservation);
+            await loadLogs(selectedReservation);
+            await onRefreshLatestLog(selectedReservation);
+          }''',
+          '''  async function handleUpdateNote(note: ReservationNote, newText: string) {
+            if (!selectedReservation) return;
+            setMemoError("");
+            const result = await updateReservationNote({
+              noteId: note.id,
+              reservationId: selectedReservation.reservationId,
+              patientId: selectedReservation.patientId || "",
+              memoText: newText,
+              staff: currentUser,
+            });
+            if (!result.success) { setMemoError(result.message || "메모 수정 실패"); return; }
+            await loadNotes(selectedReservation);
+            await loadLogs(selectedReservation);
+            await onRefreshLatestLog(selectedReservation);
+          }
+
+          async function handleDeleteNote(note: ReservationNote) {
+            if (!selectedReservation) return;
+            if (!confirm("메모를 삭제할까요?")) return;
+            setMemoError("");
+            const result = await deleteReservationNote({
+              noteId: note.id,
+              reservationId: selectedReservation.reservationId,
+              patientId: selectedReservation.patientId || "",
+              staff: currentUser,
+            });
+            if (!result.success) { setMemoError(result.message || "메모 삭제 실패"); return; }
+            await loadNotes(selectedReservation);
+            await loadLogs(selectedReservation);
+            await onRefreshLatestLog(selectedReservation);
+          }''')
+
+          # 5) Reservations page inline save and memo popover result checks.
+          replace_once("app/reservations/page.tsx",
+          '''      await updateReservationFull(
+                item.id,
+                item.reservationId,
+                item.patientId,
+                {
+                  name: inlineForm.name,
+                  birthInput: inlineForm.birthInput,
+                  birth: inlineForm.birthInput,
+                  phone: inlineForm.phone,
+                  nationality: inlineForm.nationality,
+                  consultArea: inlineForm.consultArea,
+                  reservationDate: inlineForm.reservationDate,
+                  reservationTime: inlineForm.reservationTime,
+                  hospital: inlineForm.hospital,
+                  appointmentType: inlineForm.appointmentType,
+                  coordinators: inlineForm.coordinators.split(",").map((s) => s.trim()).filter(Boolean),
+                  doctors: inlineForm.doctors.split(",").map((s) => s.trim()).filter(Boolean),
+                  depositAmount: inlineForm.depositAmount,
+                  surgeryCost: inlineForm.surgeryCost,
+                },
+                currentUser
+              );
+              setInlineEditId(null);''',
+          '''      const result = await updateReservationFull(
+                item.id,
+                item.reservationId,
+                item.patientId,
+                {
+                  name: inlineForm.name,
+                  birthInput: inlineForm.birthInput,
+                  birth: inlineForm.birthInput,
+                  phone: inlineForm.phone,
+                  nationality: inlineForm.nationality,
+                  consultArea: inlineForm.consultArea,
+                  reservationDate: inlineForm.reservationDate,
+                  reservationTime: inlineForm.reservationTime,
+                  hospital: inlineForm.hospital,
+                  appointmentType: inlineForm.appointmentType,
+                  coordinators: inlineForm.coordinators.split(",").map((s) => s.trim()).filter(Boolean),
+                  doctors: inlineForm.doctors.split(",").map((s) => s.trim()).filter(Boolean),
+                  depositAmount: inlineForm.depositAmount,
+                  surgeryCost: inlineForm.surgeryCost,
+                },
+                currentUser
+              );
+              if (!result.success) {
+                setPageError(result.message || "예약 수정에 실패했습니다.");
+                return;
+              }
+              setInlineEditId(null);''')
+
+          replace_once("app/reservations/page.tsx",
+          '''    await updateReservationNote({
+              noteId: note.id,
+              reservationId: note.reservationId,
+              patientId: note.patientId || memoPopover.item.patientId || "",
+              memoText: editingNoteText,
+              staff: currentUser,
+            });
+            setEditingNoteId(null);''',
+          '''    const result = await updateReservationNote({
+              noteId: note.id,
+              reservationId: note.reservationId,
+              patientId: note.patientId || memoPopover.item.patientId || "",
+              memoText: editingNoteText,
+              staff: currentUser,
+            });
+            if (!result.success) { setPageError(result.message || "메모 수정 실패"); return; }
+            setEditingNoteId(null);''')
+
+          replace_once("app/reservations/page.tsx",
+          '''    await deleteReservationNote({
+              noteId: note.id,
+              reservationId: note.reservationId,
+              patientId: note.patientId || memoPopover.item.patientId || "",
+              staff: currentUser,
+            });
+            const notes = await getReservationNotes(memoPopover.item.reservationId, memoPopover.item.id, memoPopover.item.patientId);''',
+          '''    const result = await deleteReservationNote({
+              noteId: note.id,
+              reservationId: note.reservationId,
+              patientId: note.patientId || memoPopover.item.patientId || "",
+              staff: currentUser,
+            });
+            if (!result.success) { setPageError(result.message || "메모 삭제 실패"); return; }
+            const notes = await getReservationNotes(memoPopover.item.reservationId, memoPopover.item.id, memoPopover.item.patientId);''')
+
+          replace_once("app/reservations/page.tsx",
+          '''    await addReservationNote({
+              reservationId: item.reservationId,
+              reservationDocId: item.id,
+              patientId: item.patientId || "",
+              memoText: text,
+              staff: currentUser,
+            });
+            const notes = await getReservationNotes(item.reservationId, item.id, item.patientId);''',
+          '''    const result = await addReservationNote({
+              reservationId: item.reservationId,
+              reservationDocId: item.id,
+              patientId: item.patientId || "",
+              memoText: text,
+              staff: currentUser,
+            });
+            if (!result.success) { setPageError(result.message || "메모 저장 실패"); return; }
+            const notes = await getReservationNotes(item.reservationId, item.id, item.patientId);''')
+
+          # 6) Photo cleanup: do not swallow failed compensation delete; caller can warn.
+          replace_once("lib/reservationFiles.ts",
+          '''export async function deleteStorageFile(storagePath: string): Promise<void> {
+            try {
+              await deleteObject(ref(storage, storagePath));
+            } catch {
+              // best-effort cleanup
+            }
+          }''',
+          '''export async function deleteStorageFile(storagePath: string): Promise<void> {
+            await deleteObject(ref(storage, storagePath));
+          }''')
+
+          replace_once("components/timeline/tabs/FilesTab.tsx",
+          '''            .catch(async () => {
+                    URL.revokeObjectURL(objectUrls[i]);
+                    await deleteStorageFile(storagePath);
+                    setPhotos((prev) => prev.filter((p) => p.id !== tempId));
+                    setError("사진 정보 저장에 실패했습니다. 다시 업로드해 주세요.");
+                  });''',
+          '''            .catch(async () => {
+                    URL.revokeObjectURL(objectUrls[i]);
+                    try {
+                      await deleteStorageFile(storagePath);
+                      setError("사진 정보 저장에 실패했습니다. 원본 파일은 삭제했습니다. 다시 업로드해 주세요.");
+                    } catch {
+                      setError("사진 정보 저장에 실패했고 원본 파일 삭제도 실패했습니다. 관리자에게 알려주세요.");
+                    }
+                    setPhotos((prev) => prev.filter((p) => p.id !== tempId));
+                  });''')
+          PY
+      - run: npm run lint
+      - run: npx tsc --noEmit
+      - run: npm test -- --runInBand || npm test
+      - name: Commit priority 1 fixes
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add lib/reservations.ts app/api/reservations/route.ts components/timeline/DetailDrawer.tsx app/reservations/page.tsx lib/reservationFiles.ts components/timeline/tabs/FilesTab.tsx
+          git commit -m "fix: complete priority 1 consistency safeguards"
+          git push origin HEAD:claude/crm-data-consistency-uoamow
