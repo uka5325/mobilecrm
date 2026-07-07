@@ -118,7 +118,23 @@ async function resolveCandidate(
       message: "기존 환자 연결 또는 새 환자 등록을 선택해야 합니다.",
     };
   }
-  return callApi(action, { ...basePayload, ...selected });
+
+  let retryPayload: Record<string, unknown> = { ...basePayload, ...selected };
+  if (action === "create" && selected.linkToPatientId) {
+    const patientId = selected.linkToPatientId;
+    retryPayload = {
+      ...retryPayload,
+      patient: {
+        ...((basePayload.patient as Record<string, unknown> | undefined) || {}),
+        patientId,
+      },
+      reservation: {
+        ...((basePayload.reservation as Record<string, unknown> | undefined) || {}),
+        patientId,
+      },
+    };
+  }
+  return callApi(action, retryPayload);
 }
 
 export async function createReservation(
