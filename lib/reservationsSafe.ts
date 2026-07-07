@@ -3,7 +3,12 @@ import { cleanText } from "./stringUtils";
 import { parseBirthInfo } from "./reservationUtils";
 import type { StaffUser } from "./auth";
 import * as base from "./reservations";
-import type { AppointmentType, CreateReservationParams, UpdateReservationParams } from "./reservations";
+import type {
+  AppointmentType,
+  CreateReservationParams,
+  PatientRecord,
+  UpdateReservationParams,
+} from "./reservations";
 
 export * from "./reservations";
 
@@ -27,6 +32,13 @@ type ApiResult = Record<string, unknown> & {
   code?: string;
 };
 
+type CallApiOptions = {
+  signal?: AbortSignal;
+};
+
+let activePatientSearchController: AbortController | null = null;
+let latestPatientListPromise: Promise<PatientRecord[]> | null = null;
+
 function makeDateBasedId(prefix: "P" | "R") {
   const now = new Date();
   const date = [
@@ -37,7 +49,17 @@ function makeDateBasedId(prefix: "P" | "R") {
   return `${prefix}-${date}-${Math.floor(100000 + Math.random() * 900000)}`;
 }
 
-async function callApi(action: string, payload: Record<string, unknown>): Promise<ApiResult> {
+function isAbortError(error: unknown): boolean {
+  return error instanceof DOMException
+    ? error.name === "AbortError"
+    : (error as { name?: string })?.name === "AbortError";
+}
+
+async function callApi(
+  action: string,
+  payload: Record<string, unknown>,
+  options: CallApiOptions = {}
+): Promise<ApiResult> {
   const user = auth.currentUser;
   if (!user) return { success: false, message: "로그인이 필요합니다." };
   if (typeof navigator !== "undefined" && !navigator.onLine) {
@@ -50,6 +72,7 @@ async function callApi(action: string, payload: Record<string, unknown>): Promis
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ idToken, action, payload }),
+      signal: options.signal,
     });
     const body = await response.json().catch(() => ({})) as Record<string, unknown>;
     if (!response.ok) {
@@ -62,7 +85,8 @@ async function callApi(action: string, payload: Record<string, unknown>): Promis
       };
     }
     return body as ApiResult;
-  } catch {
+  } catch (error) {
+    if (isAbortError(error)) throw error;
     return { success: false, message: "네트워크 오류가 발생했습니다." };
   }
 }
@@ -135,6 +159,80 @@ async function resolveCandidate(
     };
   }
   return callApi(action, retryPayload);
+}
+
+export async function searchPatients(term: string): Promise<PatientRecord[]> {
+  const query = term.trim();
+  if (!query) return [];
+
+  activePatientSearchController?.abort();
+  const controller = new AbortController();
+  activePatientSearchController = controller;
+
+  let ownPromise: Promise<PatientRecord[]>;
+  ownPromise = (async () => {
+    try {
+      const result = await callApi("search_patients", { term: query }, { signal: controller.signal });
+      if (!result.success || !Array.isArray(result.patients)) {
+        throw new Error(result.message ? String(result.message) : "검색에 실패했습니다.");
+      }
+      return (result.patients as Record<string, unknown>[]).map((patient) => ({
+        id: cleanText(patient.id),
+        patientId: cleanText(patient.patientId),
+        name: cleanText(patient.name),
+        birth: cleanText(patient.birth),
+        birthInput: cleanText(patient.birthInput),
+        gender: cleanText(patient.gender),
+        phone: cleanText(patient.phone),
+        nationality: cleanText(patient.nationality),
+        reservationCount: typeof patient.reservationCount === "number" ? patient.reservationCount : undefined,
+        depositCount: typeof patient.depositCount === "number" ? patient.depositCount : undefined,
+        surgeryCostCount: typeof patient.surgeryCostCount === "number" ? patient.surgeryCostCount : undefined,
+        invoiceCount: typeof patient.invoiceCount === "number" ? patient.invoiceCount : undefined,
+        memoCount: typeof patient.memoCount === "number" ? patient.memoCount : undefined,
+        totalDepositAmount: typeof patient.totalDepositAmount === "number" ? patient.totalDepositAmount : undefined,
+        totalSurgeryCost: typeof patient.totalSurgeryCost === "number" ? patient.totalSurgeryCost : undefined,
+        lastReservationDate: cleanText(patient.lastReservationDate),
+        lastReservationTime: cleanText(patient.lastReservationTime),
+        hasMemo: patient.hasMemo === true,
+        hasInvoice: patient.hasInvoice === true,
+        reservationCountCapped: patient.reservationCountCapped === true,
+      }));
+    } catch (error) {
+      if (!isAbortError(error)) throw error;
+      // 새 검색이나 기본 목록 요청이 이전 검색을 취소했다면, 이전 호출도 최신 결과를
+      // 기다렸다가 같은 값을 반환한다. 호출부가 오래된 결과로 화면을 덮어쓰지 못한다.
+      await Promise.resolve();
+      const replacement = latestPatientListPromise;
+      if (replacement && replacement !== ownPromise) return replacement;
+      throw error;
+    }
+  })();
+
+  latestPatientListPromise = ownPromise;
+  try {
+    return await ownPromise;
+  } finally {
+    if (activePatientSearchController === controller) activePatientSearchController = null;
+    if (latestPatientListPromise === ownPromise) latestPatientListPromise = null;
+  }
+}
+
+export async function listPatientsSummary(
+  limit = 30,
+  cursor?: string
+): Promise<{ patients: PatientRecord[]; nextCursor: string | null }> {
+  activePatientSearchController?.abort();
+  activePatientSearchController = null;
+
+  const resultPromise = base.listPatientsSummary(limit, cursor);
+  const listPromise = resultPromise.then((result) => result.patients);
+  latestPatientListPromise = listPromise;
+  try {
+    return await resultPromise;
+  } finally {
+    if (latestPatientListPromise === listPromise) latestPatientListPromise = null;
+  }
 }
 
 export async function createReservation(
