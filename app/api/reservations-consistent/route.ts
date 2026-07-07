@@ -9,20 +9,28 @@ import {
   searchPatientsRaw,
 } from "@/lib/reservationConsistencyServer";
 
-export async function POST(req: NextRequest) {
-  const legacyRequest = req.clone();
-  const body = await req.json() as {
-    idToken?: string;
-    action?: string;
-    payload?: Record<string, unknown>;
-  };
+type Body = {
+  idToken?: string;
+  action?: string;
+  payload?: Record<string, unknown>;
+};
 
+function rebuild(body: Body) {
+  return new NextRequest("http://localhost/api/reservations", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
+export async function POST(req: NextRequest) {
+  const body = await req.json() as Body;
   const customAction = body.action === "create_patient"
     || body.action === "list_patients"
     || body.action === "search_patients"
     || body.action === "list_patients_summary"
     || body.action === "patient_full_history";
-  if (!customAction) return legacyPost(legacyRequest);
+  if (!customAction) return legacyPost(rebuild(body));
 
   try {
     const staff = await requireActiveStaff(
