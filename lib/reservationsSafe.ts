@@ -38,6 +38,7 @@ type CallApiOptions = {
 
 let activePatientSearchController: AbortController | null = null;
 let latestPatientListPromise: Promise<PatientRecord[]> | null = null;
+let patientRequestGeneration = 0;
 
 function makeDateBasedId(prefix: "P" | "R") {
   const now = new Date();
@@ -167,10 +168,10 @@ export async function searchPatients(term: string): Promise<PatientRecord[]> {
 
   activePatientSearchController?.abort();
   const controller = new AbortController();
+  const generation = ++patientRequestGeneration;
   activePatientSearchController = controller;
 
-  let ownPromise: Promise<PatientRecord[]>;
-  ownPromise = (async () => {
+  const ownPromise = (async () => {
     try {
       const result = await callApi("search_patients", { term: query }, { signal: controller.signal });
       if (!result.success || !Array.isArray(result.patients)) {
@@ -200,11 +201,9 @@ export async function searchPatients(term: string): Promise<PatientRecord[]> {
       }));
     } catch (error) {
       if (!isAbortError(error)) throw error;
-      // 새 검색이나 기본 목록 요청이 이전 검색을 취소했다면, 이전 호출도 최신 결과를
-      // 기다렸다가 같은 값을 반환한다. 호출부가 오래된 결과로 화면을 덮어쓰지 못한다.
       await Promise.resolve();
       const replacement = latestPatientListPromise;
-      if (replacement && replacement !== ownPromise) return replacement;
+      if (patientRequestGeneration !== generation && replacement) return replacement;
       throw error;
     }
   })();
@@ -222,6 +221,7 @@ export async function listPatientsSummary(
   limit = 30,
   cursor?: string
 ): Promise<{ patients: PatientRecord[]; nextCursor: string | null }> {
+  patientRequestGeneration += 1;
   activePatientSearchController?.abort();
   activePatientSearchController = null;
 
