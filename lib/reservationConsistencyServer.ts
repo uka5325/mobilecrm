@@ -145,7 +145,7 @@ export async function createPatientWithDecision(
       staffName: ctx.name,
       staffEmail: ctx.email,
       staffRole: ctx.role,
-      staffCode: ctx.staffCode,
+      staffCode: ctx.staffCode || "",
       patientId: incomingPatientId || patientRef.id,
       reservationId: "",
       invoiceId: "",
