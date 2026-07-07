@@ -1,0 +1,58 @@
+name: Validate CRM branch
+
+on:
+  push:
+    branches:
+      - claude/crm-data-consistency-uoamow
+    paths:
+      - .github/trigger-crm-validation.txt
+
+permissions:
+  contents: write
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: claude/crm-data-consistency-uoamow
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Run checks and capture output
+        shell: bash
+        run: |
+          set +e
+          : > crm-validation-result.txt
+
+          run_check() {
+            name="$1"
+            shift
+            echo "===== $name =====" >> crm-validation-result.txt
+            "$@" >> crm-validation-result.txt 2>&1
+            code=$?
+            echo "EXIT_CODE=$code" >> crm-validation-result.txt
+            echo >> crm-validation-result.txt
+            return 0
+          }
+
+          run_check npm-ci npm ci
+          run_check lint npm run lint
+          run_check typecheck npx tsc --noEmit
+          run_check unit-tests npm test
+          run_check build npm run build
+
+      - name: Commit validation report
+        if: always()
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add crm-validation-result.txt
+          git commit -m "chore: record CRM branch validation" || true
+          git push origin HEAD:claude/crm-data-consistency-uoamow
