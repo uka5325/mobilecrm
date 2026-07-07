@@ -40,6 +40,9 @@ ui-debug.log*
 # vercel
 .vercel
 
+# migration reports
+/invoice-link-report-*.json
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts
