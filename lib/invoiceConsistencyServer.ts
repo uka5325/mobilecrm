@@ -24,7 +24,7 @@ function makeInvoiceId(reservation: Record<string, unknown>) {
     String(now.getDate()).padStart(2, "0"),
   ].join("");
   const name = cleanText(reservation.name || reservation.patientName || "고객")
-    .replace(/[\\/#?[\]*.]/g, " ")
+    .replace(/[\/#?[\]*.]/g, " ")
     .replace(/\s+/g, "")
     .slice(0, 20);
   return `INV-${date}-${name}-${Date.now().toString(36)}`;
@@ -75,6 +75,46 @@ function invoiceLog(
     after: params.after ?? null,
     createdAt: now,
   };
+}
+
+function invoiceReservationLinkError(kind: "missing" | "mismatch") {
+  if (kind === "missing") {
+    return NextResponse.json(
+      {
+        success: false,
+        code: "INVOICE_RESERVATION_LINK_MISSING",
+        message: "예약 연결 정보가 없거나 유효하지 않은 인보이스입니다. 관리자에게 백필 검사를 요청해주세요.",
+      },
+      { status: 409 }
+    );
+  }
+  return NextResponse.json(
+    {
+      success: false,
+      code: "INVOICE_RESERVATION_LINK_MISMATCH",
+      message: "인보이스와 예약의 환자 또는 예약 식별자가 일치하지 않습니다. 관리자 검토가 필요합니다.",
+    },
+    { status: 409 }
+  );
+}
+
+function invoiceReservationMatches(
+  invoice: Record<string, unknown>,
+  reservation: Record<string, unknown>
+): boolean {
+  const invoicePatientId = cleanText(invoice.patientId);
+  const reservationPatientId = cleanText(reservation.patientId);
+  if (invoicePatientId && reservationPatientId && invoicePatientId !== reservationPatientId) return false;
+
+  const invoiceReservationId = cleanText(invoice.reservationId);
+  const reservationReservationId = cleanText(reservation.reservationId);
+  if (
+    invoiceReservationId &&
+    reservationReservationId &&
+    invoiceReservationId !== reservationReservationId
+  ) return false;
+
+  return true;
 }
 
 export async function createInvoiceAtomic(
@@ -225,6 +265,14 @@ export async function updateInvoiceAtomic(
     if (!isCoordinatorOf(current, ctx)) return { kind: "forbidden" as const };
     if (current.isDeleted === true) return { kind: "deleted" as const };
 
+    const reservationDocId = cleanText(current.reservationDocId);
+    if (!reservationDocId) return { kind: "linkMissing" as const };
+    const reservationRef = adminDb.collection("reservations").doc(reservationDocId);
+    const reservationSnap = await tx.get(reservationRef);
+    if (!reservationSnap.exists) return { kind: "linkMissing" as const };
+    const reservation = reservationSnap.data() as Record<string, unknown>;
+    if (!invoiceReservationMatches(current, reservation)) return { kind: "linkMismatch" as const };
+
     const now = FieldValue.serverTimestamp();
     const patch: Record<string, unknown> = {
       hospitalName: cleanText(payload.hospitalName),
@@ -250,7 +298,7 @@ export async function updateInvoiceAtomic(
     };
 
     tx.update(invoiceRef, patch);
-    tx.update(adminDb.collection("reservations").doc(cleanText(current.reservationDocId)), {
+    tx.update(reservationRef, {
       invoiceId: current.invoiceId,
       invoiceDocId,
       invoiceStatus: patch.status,
@@ -286,6 +334,9 @@ export async function updateInvoiceAtomic(
       { status: 400 }
     );
   }
+  if (result.kind === "linkMissing") return invoiceReservationLinkError("missing");
+  if (result.kind === "linkMismatch") return invoiceReservationLinkError("mismatch");
+
   const updated = await invoiceRef.get();
   return NextResponse.json({ success: true, invoice: docToObj(updated) });
 }
@@ -309,6 +360,14 @@ export async function deleteInvoiceAtomic(
       return { kind: "alreadyDeleted" as const, patientId: cleanText(current.patientId) };
     }
 
+    const reservationDocId = cleanText(current.reservationDocId);
+    if (!reservationDocId) return { kind: "linkMissing" as const };
+    const reservationRef = adminDb.collection("reservations").doc(reservationDocId);
+    const reservationSnap = await tx.get(reservationRef);
+    if (!reservationSnap.exists) return { kind: "linkMissing" as const };
+    const reservation = reservationSnap.data() as Record<string, unknown>;
+    if (!invoiceReservationMatches(current, reservation)) return { kind: "linkMismatch" as const };
+
     const now = FieldValue.serverTimestamp();
     tx.update(invoiceRef, {
       isDeleted: true,
@@ -316,7 +375,7 @@ export async function deleteInvoiceAtomic(
       updatedBy: ctx.name,
       updatedByUid: ctx.uid,
     });
-    tx.update(adminDb.collection("reservations").doc(cleanText(current.reservationDocId)), {
+    tx.update(reservationRef, {
       invoiceId: "",
       invoiceDocId: "",
       invoiceStatus: "",
@@ -345,6 +404,8 @@ export async function deleteInvoiceAtomic(
   if (result.kind === "alreadyDeleted") {
     return NextResponse.json({ success: true, alreadyDeleted: true });
   }
+  if (result.kind === "linkMissing") return invoiceReservationLinkError("missing");
+  if (result.kind === "linkMismatch") return invoiceReservationLinkError("mismatch");
 
   await safeRecompute(
     () => recomputeInvoiceSummary(result.patientId),
