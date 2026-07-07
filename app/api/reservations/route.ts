@@ -587,13 +587,9 @@ export async function POST(req: NextRequest) {
         createdBy: ctx.name, createdByUid: ctx.uid,
         updatedBy: ctx.name, updatedByUid: ctx.uid,
       };
-<<<<<<< HEAD
       const incomingPatientId = String((safePatient as { patientId?: unknown }).patientId || "");
       // 신원(이름+생년월일+국적+성별) 키 — patientId로 못 찾을 때 기존 환자 연결에 쓴다.
       const identityKey = identityKeyForPatient(safePatient);
-=======
-      const incomingPatientId = canonicalPatientId;
->>>>>>> claude/mobilecrm-integrity-stage-1-juvvki
       const reservationRef = adminDb.collection("reservations").doc();
 
       let resultPatientDocId = "";
@@ -634,15 +630,11 @@ export async function POST(req: NextRequest) {
               adminDb.collection("patients").where("patientId", "==", incomingPatientId).limit(1)
             );
             if (!pSnap.empty) {
-<<<<<<< HEAD
-              existingPatientDocId = pSnap.docs[0].id;
-              canonicalPatientId = String(pSnap.docs[0].data().patientId || incomingPatientId);
-=======
               // 삭제된 고객은 조용히 재연결(부활)하지 않는다 — 관리자 복구 절차 없이 신규 예약만으로
               // 살아나면 안 된다. 자동 복구 기능은 이번 작업 범위 밖.
               if (pSnap.docs[0].data().isDeleted === true) throw new PatientDeletedError();
               existingPatientDocId = pSnap.docs[0].id;
->>>>>>> claude/mobilecrm-integrity-stage-1-juvvki
+              canonicalPatientId = String(pSnap.docs[0].data().patientId || incomingPatientId);
             }
           }
           // patientId로 못 찾았으면 신원(이름+생년월일+국적+성별)으로 기존 환자를 찾아 연결한다
