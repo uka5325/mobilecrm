@@ -60,47 +60,49 @@ export async function POST(req: NextRequest) {
       const { reservationId, reservationDocId, patientId, memoText } = payload as Record<string, string>;
       if (!memoText?.trim()) return NextResponse.json({ success: false, message: "메모 내용을 입력하세요." });
 
-      // 작성자/감사로그 신원은 검증된 토큰(ctx)만 사용 → 위조 차단
       const staffName = ctx.name;
       const staffUid = ctx.uid;
+      const noteRef = adminDb.collection("reservationNotes").doc();
+      const logRef = adminDb.collection("logs").doc();
+      const now = FieldValue.serverTimestamp();
 
-      const ref = await adminDb.collection("reservationNotes").add({
-        reservationId,
-        reservationDocId,
-        patientId,
-        memoText: memoText.trim(),
-        createdAt: FieldValue.serverTimestamp(),
-        createdBy: staffName,
-        createdByUid: staffUid,
-        updatedAt: FieldValue.serverTimestamp(),
-        updatedBy: staffName,
-        updatedByUid: staffUid,
-        isDeleted: false,
-      });
-
-      // Also write a log entry
-      await adminDb.collection("logs").add({
-        action: "memo_create",
-        targetType: "memo",
-        targetId: reservationId,
-        staffUid,
-        staffName,
-        staffEmail: ctx.email,
-        staffRole: ctx.role,
-        staffCode: ctx.staffCode,
-        patientId,
-        reservationId,
-        invoiceId: "",
-        message: `${staffName}님이 메모를 추가했습니다.`,
-        before: null,
-        after: { noteId: ref.id },
-        createdAt: FieldValue.serverTimestamp(),
+      await adminDb.runTransaction(async (tx) => {
+        tx.set(noteRef, {
+          reservationId,
+          reservationDocId,
+          patientId,
+          memoText: memoText.trim(),
+          createdAt: now,
+          createdBy: staffName,
+          createdByUid: staffUid,
+          updatedAt: now,
+          updatedBy: staffName,
+          updatedByUid: staffUid,
+          isDeleted: false,
+        });
+        tx.set(logRef, {
+          action: "memo_create",
+          targetType: "memo",
+          targetId: noteRef.id,
+          staffUid,
+          staffName,
+          staffEmail: ctx.email,
+          staffRole: ctx.role,
+          staffCode: ctx.staffCode,
+          patientId,
+          reservationId,
+          invoiceId: "",
+          message: `${staffName}님이 메모를 추가했습니다.`,
+          before: null,
+          after: { noteId: noteRef.id },
+          createdAt: now,
+        });
       });
 
       // 고객관리 요약(메모 개수) 재계산 — best-effort
       await safeRecompute(() => recomputeMemoSummary(String(patientId || "")), "create/memo", String(patientId || ""));
 
-      return NextResponse.json({ success: true, id: ref.id });
+      return NextResponse.json({ success: true, id: noteRef.id });
     }
 
     // ── UPDATE ─────────────────────────────────────────────────────────────
@@ -110,40 +112,40 @@ export async function POST(req: NextRequest) {
 
       const staffName = ctx.name;
       const staffUid = ctx.uid;
-
-      // 작성자 본인 또는 admin만 수정 가능
       const noteRef = adminDb.collection("reservationNotes").doc(noteId);
-      const noteSnap = await noteRef.get();
-      if (!noteSnap.exists) {
-        return NextResponse.json({ success: false, message: "메모를 찾을 수 없습니다." });
-      }
-      if (ctx.role !== "admin" && String(noteSnap.data()?.createdByUid || "") !== ctx.uid) {
-        return NextResponse.json({ success: false, message: "작성자만 수정할 수 있습니다." }, { status: 403 });
-      }
+      const logRef = adminDb.collection("logs").doc();
+      const now = FieldValue.serverTimestamp();
 
-      await noteRef.update({
-        memoText: memoText.trim(),
-        updatedAt: FieldValue.serverTimestamp(),
-        updatedBy: staffName,
-        updatedByUid: staffUid,
-      });
-
-      await adminDb.collection("logs").add({
-        action: "memo_update",
-        targetType: "memo",
-        targetId: noteId,
-        staffUid,
-        staffName,
-        staffEmail: ctx.email,
-        staffRole: ctx.role,
-        staffCode: ctx.staffCode,
-        patientId,
-        reservationId,
-        invoiceId: "",
-        message: `${staffName}님이 메모를 수정했습니다.`,
-        before: null,
-        after: { noteId },
-        createdAt: FieldValue.serverTimestamp(),
+      await adminDb.runTransaction(async (tx) => {
+        const noteSnap = await tx.get(noteRef);
+        if (!noteSnap.exists) throw new Error("메모를 찾을 수 없습니다.");
+        const note = noteSnap.data() as Record<string, unknown>;
+        if (ctx.role !== "admin" && String(note.createdByUid || "") !== ctx.uid) {
+          throw new Error("작성자만 수정할 수 있습니다.");
+        }
+        tx.update(noteRef, {
+          memoText: memoText.trim(),
+          updatedAt: now,
+          updatedBy: staffName,
+          updatedByUid: staffUid,
+        });
+        tx.set(logRef, {
+          action: "memo_update",
+          targetType: "memo",
+          targetId: noteId,
+          staffUid,
+          staffName,
+          staffEmail: ctx.email,
+          staffRole: ctx.role,
+          staffCode: ctx.staffCode,
+          patientId: String(note.patientId || patientId || ""),
+          reservationId: String(note.reservationId || reservationId || ""),
+          invoiceId: "",
+          message: `${staffName}님이 메모를 수정했습니다.`,
+          before: { noteId },
+          after: { noteId },
+          createdAt: now,
+        });
       });
 
       return NextResponse.json({ success: true });
@@ -155,47 +157,49 @@ export async function POST(req: NextRequest) {
 
       const staffName = ctx.name;
       const staffUid = ctx.uid;
-
-      // 작성자 본인 또는 admin만 삭제 가능
       const noteRef = adminDb.collection("reservationNotes").doc(noteId);
-      const noteSnap = await noteRef.get();
-      if (!noteSnap.exists) {
-        return NextResponse.json({ success: false, message: "메모를 찾을 수 없습니다." });
-      }
-      if (ctx.role !== "admin" && String(noteSnap.data()?.createdByUid || "") !== ctx.uid) {
-        return NextResponse.json({ success: false, message: "작성자만 삭제할 수 있습니다." }, { status: 403 });
-      }
+      const logRef = adminDb.collection("logs").doc();
+      const now = FieldValue.serverTimestamp();
+      let summaryPatientId = patientId;
 
-      await noteRef.update({
-        isDeleted: true,
-        updatedAt: FieldValue.serverTimestamp(),
-        updatedBy: staffName,
-        updatedByUid: staffUid,
-      });
-
-      await adminDb.collection("logs").add({
-        action: "memo_delete",
-        targetType: "memo",
-        targetId: noteId,
-        staffUid,
-        staffName,
-        staffEmail: ctx.email,
-        staffRole: ctx.role,
-        staffCode: ctx.staffCode,
-        patientId,
-        reservationId,
-        invoiceId: "",
-        message: `${staffName}님이 메모를 삭제했습니다.`,
-        before: { noteId },
-        after: null,
-        createdAt: FieldValue.serverTimestamp(),
+      await adminDb.runTransaction(async (tx) => {
+        const noteSnap = await tx.get(noteRef);
+        if (!noteSnap.exists) throw new Error("메모를 찾을 수 없습니다.");
+        const note = noteSnap.data() as Record<string, unknown>;
+        if (ctx.role !== "admin" && String(note.createdByUid || "") !== ctx.uid) {
+          throw new Error("작성자만 삭제할 수 있습니다.");
+        }
+        summaryPatientId = String(note.patientId || patientId || "");
+        tx.update(noteRef, {
+          isDeleted: true,
+          updatedAt: now,
+          updatedBy: staffName,
+          updatedByUid: staffUid,
+        });
+        tx.set(logRef, {
+          action: "memo_delete",
+          targetType: "memo",
+          targetId: noteId,
+          staffUid,
+          staffName,
+          staffEmail: ctx.email,
+          staffRole: ctx.role,
+          staffCode: ctx.staffCode,
+          patientId: summaryPatientId,
+          reservationId: String(note.reservationId || reservationId || ""),
+          invoiceId: "",
+          message: `${staffName}님이 메모를 삭제했습니다.`,
+          before: { noteId },
+          after: null,
+          createdAt: now,
+        });
       });
 
       // 고객관리 요약(메모 개수) 재계산 — note 문서의 patientId 우선(payload 폴백)
       await safeRecompute(
-        () => recomputeMemoSummary(String(noteSnap.data()?.patientId || patientId || "")),
+        () => recomputeMemoSummary(String(summaryPatientId || "")),
         "delete/memo",
-        String(noteSnap.data()?.patientId || patientId || "")
+        String(summaryPatientId || "")
       );
 
       return NextResponse.json({ success: true });
@@ -204,6 +208,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: false, message: "알 수 없는 action" }, { status: 400 });
   } catch (e) {
     console.error("[/api/reservation-notes]", e);
-    return NextResponse.json({ success: false, message: "서버 오류" }, { status: 500 });
+    return NextResponse.json({ success: false, message: e instanceof Error ? e.message : "서버 오류" }, { status: 500 });
   }
 }
