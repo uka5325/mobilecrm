@@ -11,6 +11,7 @@ import { adminDb } from "@/lib/firebaseAdmin";
 import { __resetStaffCacheForTests } from "@/lib/apiAuth";
 import { createTestUser, type TestUser } from "../helpers/testAuth";
 import { POST } from "@/app/api/reservations/route";
+import { identityKeyForPatient } from "@/lib/patientIdentity";
 
 function makeReq(idToken: string, action: string, payload: unknown) {
   return new NextRequest("http://localhost/api/reservations", {
@@ -480,4 +481,95 @@ test("create: 동시에 같은 예약(날짜+이름 등 동일 조합)을 저장
 
   const snap = await adminDb.collection("reservations").where("name", "==", name).get();
   assert.equal(snap.size, 1);
+});
+
+test("create: patientId가 달라도 이름+생년월일+국적+성별이 같으면 같은 환자로 연결된다", async () => {
+  __resetStaffCacheForTests();
+  const name = `신원중복${Date.now()}`;
+  const identity = { name, birth: "19910531", nationality: "몽골", gender: "여" };
+
+  // 1차 등록: 클라이언트가 랜덤 patientId(P-A)를 붙여 보냄.
+  const pidA = `P-IDENT-A-${Date.now()}`;
+  const first = await POST(
+    makeReq(staff.idToken, "create", {
+      patient: { ...identity, patientId: pidA },
+      reservation: { ...identity, patientId: pidA, reservationId: `R-IDENT1-${Date.now()}`, reservationDate: "2026-08-01", doctors: [], isDeleted: false },
+    })
+  );
+  const b1 = await first.json();
+  assert.equal(b1.success, true);
+  createdReservationDocIds.push(b1.reservationDocId);
+  createdPatientDocIds.push(b1.patientDocId);
+
+  // 2차 등록: 같은 사람인데 클라이언트가 "다른" 랜덤 patientId(P-B)를 새로 생성해 보냄(버그 재현).
+  const pidB = `P-IDENT-B-${Date.now()}`;
+  const second = await POST(
+    makeReq(staff.idToken, "create", {
+      patient: { ...identity, patientId: pidB },
+      reservation: { ...identity, patientId: pidB, reservationId: `R-IDENT2-${Date.now()}`, reservationDate: "2026-08-02", doctors: [], isDeleted: false },
+    })
+  );
+  const b2 = await second.json();
+  assert.equal(b2.success, true);
+  assert.equal(b2.linkedExistingPatient, true);            // 신원 일치 → 연결
+  assert.equal(b2.patientDocId, b1.patientDocId);          // 같은 대표 환자 문서
+  createdReservationDocIds.push(b2.reservationDocId);
+
+  // 2차 예약의 patientId가 대표 값(P-A)으로 정합되어야 이력/요약이 한 환자로 모인다.
+  const res2 = await adminDb.collection("reservations").doc(b2.reservationDocId).get();
+  assert.equal(res2.data()?.patientId, b1.patientDocId);
+
+  // 활성 환자 문서는 신원당 1개.
+  const key = identityKeyForPatient(identity);
+  const active = await adminDb.collection("patients")
+    .where("identityKey", "==", key).where("isDeleted", "==", false).get();
+  assert.equal(active.size, 1);
+});
+
+test("create: 성별이 다르면 별도 환자로 생성된다", async () => {
+  __resetStaffCacheForTests();
+  const name = `성별구분${Date.now()}`;
+  const base = { name, birth: "19850409", nationality: "몽골" };
+
+  const female = await POST(
+    makeReq(staff.idToken, "create", {
+      patient: { ...base, gender: "여", patientId: `P-GF-${Date.now()}` },
+      reservation: { ...base, gender: "여", reservationId: `R-GF-${Date.now()}`, reservationDate: "2026-08-05", doctors: [], isDeleted: false },
+    })
+  );
+  const male = await POST(
+    makeReq(staff.idToken, "create", {
+      patient: { ...base, gender: "남", patientId: `P-GM-${Date.now()}` },
+      reservation: { ...base, gender: "남", reservationId: `R-GM-${Date.now()}`, reservationDate: "2026-08-06", doctors: [], isDeleted: false },
+    })
+  );
+  const bf = await female.json();
+  const bm = await male.json();
+  assert.notEqual(bf.patientDocId, bm.patientDocId);       // 성별 다르면 별도 환자
+  assert.notEqual(bm.linkedExistingPatient, true);
+  createdReservationDocIds.push(bf.reservationDocId, bm.reservationDocId);
+  createdPatientDocIds.push(bf.patientDocId, bm.patientDocId);
+
+  const all = await adminDb.collection("patients").where("name", "==", name).get();
+  assert.equal(all.size, 2);
+});
+
+test("create_patient: 이름+생년월일+국적+성별이 같으면 기존 환자로 연결된다", async () => {
+  __resetStaffCacheForTests();
+  const name = `단독신원${Date.now()}`;
+  const identity = { name, birth: "20000829", nationality: "몽골", gender: "여" };
+
+  const first = await POST(makeReq(staff.idToken, "create_patient", { patient: { ...identity, patientId: `P-CP-A-${Date.now()}` } }));
+  const b1 = await first.json();
+  assert.equal(b1.success, true);
+  createdPatientDocIds.push(b1.patientDocId);
+
+  const second = await POST(makeReq(staff.idToken, "create_patient", { patient: { ...identity, patientId: `P-CP-B-${Date.now()}` } }));
+  const b2 = await second.json();
+  assert.equal(b2.success, true);
+  assert.equal(b2.linkedExistingPatient, true);
+  assert.equal(b2.patientDocId, b1.patientDocId);
+
+  const all = await adminDb.collection("patients").where("name", "==", name).get();
+  assert.equal(all.size, 1);
 });

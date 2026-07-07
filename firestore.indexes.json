@@ -110,6 +110,14 @@
       ]
     },
     {
+      "collectionGroup": "patients",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "identityKey", "order": "ASCENDING" },
+        { "fieldPath": "isDeleted", "order": "ASCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "logs",
       "queryScope": "COLLECTION",
       "fields": [

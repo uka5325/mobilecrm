@@ -5,6 +5,7 @@ import { requireActiveStaff, toAuthErrorResponse } from "@/lib/apiAuth";
 import { toSerializable, docToObj } from "@/lib/adminUtils";
 import { makePatientSearchTokens } from "@/lib/searchTokens";
 import { recomputeReservationSummary, safeRecompute } from "@/lib/patientSummary";
+import { identityKeyForPatient } from "@/lib/patientIdentity";
 
 // 데이터 변경 action — 토큰 폐기 검사 적용
 const WRITE_ACTIONS = new Set([
@@ -145,6 +146,23 @@ function normDupKey(r: Record<string, unknown>) {
     String(r.appointmentType || ""),
     docs,
   ].join("__");
+}
+
+// 같은 신원(identityKey)의 첫 문서만 남기는 in-memory dedup — 병합 스크립트 실행 전 과도기
+// 안전망. identityKey가 없는(미backfill) 문서는 dedup하지 않고 그대로 둔다. 근본 정리(중복 문서
+// soft-delete)는 scripts/reconcile-duplicate-patients.ts가 수행한다.
+function dedupByIdentity(rows: unknown[]): unknown[] {
+  const seen = new Set<string>();
+  const out: unknown[] = [];
+  for (const r of rows) {
+    const key = String((r as { identityKey?: unknown })?.identityKey || "");
+    if (key) {
+      if (seen.has(key)) continue;
+      seen.add(key);
+    }
+    out.push(r);
+  }
+  return out;
 }
 
 export async function POST(req: NextRequest) {
@@ -328,6 +346,27 @@ export async function POST(req: NextRequest) {
 
       const now = FieldValue.serverTimestamp();
 
+      // 신원(이름+생년월일+국적+성별) 기반 중복 방지: 같은 사람이 서로 다른 랜덤 patientId로
+      // 여러 문서로 저장되던 문제를 막는다. 신원 일치 활성 환자가 있으면 그 문서로 연결한다.
+      const identityKey = identityKeyForPatient(safePatient);
+      if (identityKey) {
+        const existingByIdentity = await adminDb
+          .collection("patients")
+          .where("identityKey", "==", identityKey)
+          .where("isDeleted", "==", false)
+          .limit(1)
+          .get();
+        if (!existingByIdentity.empty) {
+          const doc = existingByIdentity.docs[0];
+          return NextResponse.json({
+            success: true,
+            patientDocId: doc.id,
+            patientId: String(doc.data().patientId || ""),
+            linkedExistingPatient: true,
+          });
+        }
+      }
+
       // 중복 방지(정책: 연결만·없으면 생성): 같은 patientId 문서가 이미 있으면 그걸 반환.
       const incomingPatientId = String((safePatient as { patientId?: unknown }).patientId || "");
       if (incomingPatientId) {
@@ -349,6 +388,7 @@ export async function POST(req: NextRequest) {
       await ref.set({
         ...safePatient,
         searchTokens: makePatientSearchTokens(String((safePatient as { name?: unknown }).name || "")),
+        identityKey,
         isDeleted: false,
         createdBy: ctx.name, createdByUid: ctx.uid,
         updatedBy: ctx.name, updatedByUid: ctx.uid,
@@ -372,12 +412,12 @@ export async function POST(req: NextRequest) {
         .limit(LIST_PATIENTS_CAP)
         .get();
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const patients = snap.docs.flatMap((d: any) => {
+      const rows = snap.docs.flatMap((d: any) => {
         const data = d.data();
         if (data.isDeleted === true) return [];
         return [toSerializable({ id: d.id, ...data })];
       });
-      return NextResponse.json({ success: true, patients });
+      return NextResponse.json({ success: true, patients: dedupByIdentity(rows) });
     }
 
     // ── SEARCH PATIENTS (검색토큰 array-contains — 매칭만 읽음) ─────────────
@@ -392,12 +432,12 @@ export async function POST(req: NextRequest) {
         .limit(50)
         .get();
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const patients = snap.docs.flatMap((d: any) => {
+      const rows = snap.docs.flatMap((d: any) => {
         const data = d.data();
         if (data.isDeleted === true) return [];
         return [toSerializable({ id: d.id, ...data })];
       });
-      return NextResponse.json({ success: true, patients });
+      return NextResponse.json({ success: true, patients: dedupByIdentity(rows) });
     }
 
     // ── LIST PATIENTS BY SUMMARY (고객관리 첫 화면 — patients만 읽기) ─────────
@@ -423,7 +463,7 @@ export async function POST(req: NextRequest) {
       const nextCursor = snap.docs.length === pageSize ? snap.docs[snap.docs.length - 1].id : null;
       return NextResponse.json({
         success: true,
-        patients: snap.docs.map(docToObj),
+        patients: dedupByIdentity(snap.docs.map(docToObj)),
         nextCursor,
         hasMore: !!nextCursor,
       });
@@ -463,6 +503,8 @@ export async function POST(req: NextRequest) {
         updatedBy: ctx.name, updatedByUid: ctx.uid,
       };
       const incomingPatientId = String((safePatient as { patientId?: unknown }).patientId || "");
+      // 신원(이름+생년월일+국적+성별) 키 — patientId로 못 찾을 때 기존 환자 연결에 쓴다.
+      const identityKey = identityKeyForPatient(safePatient);
       const reservationRef = adminDb.collection("reservations").doc();
 
       let resultPatientDocId = "";
@@ -485,12 +527,32 @@ export async function POST(req: NextRequest) {
           // patientId가 있고 patients 문서가 이미 있으면 마스터를 건드리지 않고 예약만 생성한다.
           // (마스터 정정은 update_patient_profile / savePatientEdit 전용 경로로만)
           let existingPatientDocId = "";
+          let canonicalPatientId = "";
           if (incomingPatientId) {
             const pSnap = await tx.get(
               adminDb.collection("patients").where("patientId", "==", incomingPatientId).limit(1)
             );
-            if (!pSnap.empty) existingPatientDocId = pSnap.docs[0].id;
+            if (!pSnap.empty) {
+              existingPatientDocId = pSnap.docs[0].id;
+              canonicalPatientId = String(pSnap.docs[0].data().patientId || incomingPatientId);
+            }
           }
+          // patientId로 못 찾았으면 신원(이름+생년월일+국적+성별)으로 기존 환자를 찾아 연결한다
+          // → 같은 사람이 매번 새 랜덤 patientId로 별도 문서가 되던 중복을 근본 차단.
+          if (!existingPatientDocId && identityKey) {
+            const iSnap = await tx.get(
+              adminDb.collection("patients")
+                .where("identityKey", "==", identityKey)
+                .where("isDeleted", "==", false)
+                .limit(1)
+            );
+            if (!iSnap.empty) {
+              existingPatientDocId = iSnap.docs[0].id;
+              canonicalPatientId = String(iSnap.docs[0].data().patientId || "");
+            }
+          }
+          // 기존 환자로 연결되면 예약의 patientId도 대표 값으로 맞춘다(랜덤 값 폐기 → 이력/요약 정합).
+          if (canonicalPatientId) safeReservation.patientId = canonicalPatientId;
 
           // ── 쓰기(원자적) ──────────────────────────────────────────────
           if (lockRef) tx.set(lockRef, { duplicateKey, reservationRef: reservationRef.id, createdAt: now });
@@ -508,6 +570,7 @@ export async function POST(req: NextRequest) {
             tx.set(patientRef, {
               ...safePatient,
               searchTokens: makePatientSearchTokens(String((safePatient as { name?: unknown }).name || "")),
+              identityKey,
               isDeleted: false,
               ...authorFields,
               createdAt: now, updatedAt: now,
@@ -690,13 +753,20 @@ export async function POST(req: NextRequest) {
       const audit = { updatedAt: now, updatedBy: ctx.name, updatedByUid: ctx.uid };
       const CHUNK = 500;
 
-      // patients 문서 갱신 (이름 변경 시 검색토큰 재생성)
+      const patSnap = await adminDb.collection("patients").where("patientId", "==", patientId).get();
+
+      // 이름/생년월일/국적/성별이 바뀌면 신원 키를 재계산해 최신 상태로 유지한다
+      // (기존 값과 patch를 병합해 계산 — 구성요소가 없으면 기존 identityKey를 건드리지 않는다).
+      const identityBase = patSnap.empty ? {} : (patSnap.docs[0].data() as Record<string, unknown>);
+      const nextIdentityKey = identityKeyForPatient({ ...identityBase, ...safe });
+
+      // patients 문서 갱신 (이름 변경 시 검색토큰 재생성, 신원 변경 시 identityKey 갱신)
       const patientUpdate = {
         ...safe,
         ...(safe.name !== undefined ? { searchTokens: makePatientSearchTokens(String(safe.name || "")) } : {}),
+        ...(nextIdentityKey ? { identityKey: nextIdentityKey } : {}),
         ...audit,
       };
-      const patSnap = await adminDb.collection("patients").where("patientId", "==", patientId).get();
       for (let i = 0; i < patSnap.docs.length; i += CHUNK) {
         const batch = adminDb.batch();
         for (const d of patSnap.docs.slice(i, i + CHUNK)) batch.update(d.ref, patientUpdate);

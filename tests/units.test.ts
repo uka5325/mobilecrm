@@ -4,6 +4,11 @@ import assert from "node:assert/strict";
 import { parseBirthInfo } from "../lib/invoiceUtils";
 import { calcCommissionBase, calcCommission, paymentMethodLabel } from "../lib/commissionUtils";
 import { cleanText, toSerializable } from "../lib/adminUtils";
+import {
+  computePatientIdentityKey,
+  identityKeyForPatient,
+  normalizeBirth,
+} from "../lib/patientIdentity";
 
 test("parseBirthInfo: 주민번호 앞자리+성별코드 (남)", () => {
   const r = parseBirthInfo("900101-1");
@@ -67,4 +72,34 @@ test("toSerializable: Timestamp형(toMillis) 변환", () => {
   const ts = { toMillis: () => 1234 };
   assert.equal(toSerializable(ts), 1234);
   assert.deepEqual(toSerializable({ a: ts, b: [ts] }), { a: 1234, b: [1234] });
+});
+
+test("computePatientIdentityKey: 대소문자/공백 정규화 후 동일 키", () => {
+  const a = computePatientIdentityKey({ name: "우르체흐(BAYARSAIKHAN)", birth: "19910531", nationality: "몽골", gender: "여" });
+  const b = computePatientIdentityKey({ name: "  우르체흐(bayarsaikhan)  ", birth: "19910531", nationality: " 몽골 ", gender: "여" });
+  assert.notEqual(a, "");
+  assert.equal(a, b);
+});
+
+test("computePatientIdentityKey: 이름/생년월일 없으면 빈 문자열(식별 불가)", () => {
+  assert.equal(computePatientIdentityKey({ name: "", birth: "19910531" }), "");
+  assert.equal(computePatientIdentityKey({ name: "홍길동", birth: "" }), "");
+});
+
+test("computePatientIdentityKey: 성별이 다르면 다른 키", () => {
+  const f = computePatientIdentityKey({ name: "홍길동", birth: "19910531", nationality: "몽골", gender: "여" });
+  const m = computePatientIdentityKey({ name: "홍길동", birth: "19910531", nationality: "몽골", gender: "남" });
+  assert.notEqual(f, m);
+});
+
+test("normalizeBirth: birth 우선, 없으면 birthInput 숫자 앞 8자리", () => {
+  assert.equal(normalizeBirth({ birth: "19910531", birthInput: "무시됨" }), "19910531");
+  assert.equal(normalizeBirth({ birthInput: "1991-05-31-1" }), "19910531");
+  assert.equal(normalizeBirth({}), "");
+});
+
+test("identityKeyForPatient: 해시(sha256 64hex), 구성요소 없으면 빈 문자열", () => {
+  const h = identityKeyForPatient({ name: "홍길동", birth: "19910531", nationality: "몽골", gender: "여" });
+  assert.match(h, /^[0-9a-f]{64}$/);
+  assert.equal(identityKeyForPatient({ name: "", birth: "" }), "");
 });
