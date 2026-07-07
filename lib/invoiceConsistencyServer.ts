@@ -66,7 +66,7 @@ function invoiceLog(
     staffName: ctx.name,
     staffEmail: ctx.email,
     staffRole: ctx.role,
-    staffCode: ctx.staffCode,
+    staffCode: ctx.staffCode || "",
     patientId: params.patientId,
     reservationId: params.reservationId,
     invoiceId: params.targetId,
