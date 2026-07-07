@@ -4,6 +4,7 @@ import { requireActiveStaff, toAuthErrorResponse } from "@/lib/apiAuth";
 import {
   createPatientWithDecision,
   listPatientsRaw,
+  listPatientsSummaryRaw,
   searchPatientsRaw,
 } from "@/lib/reservationConsistencyServer";
 
@@ -17,7 +18,8 @@ export async function POST(req: NextRequest) {
 
   const customAction = body.action === "create_patient"
     || body.action === "list_patients"
-    || body.action === "search_patients";
+    || body.action === "search_patients"
+    || body.action === "list_patients_summary";
   if (!customAction) return legacyPost(legacyRequest);
 
   try {
@@ -27,6 +29,7 @@ export async function POST(req: NextRequest) {
     );
     if (body.action === "list_patients") return listPatientsRaw();
     if (body.action === "search_patients") return searchPatientsRaw(body.payload || {});
+    if (body.action === "list_patients_summary") return listPatientsSummaryRaw(body.payload || {});
     return createPatientWithDecision(body.payload || {}, staff);
   } catch (error) {
     const response = toAuthErrorResponse(error);
