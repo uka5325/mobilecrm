@@ -5,6 +5,7 @@ import {
   createPatientWithDecision,
   listPatientsRaw,
   listPatientsSummaryRaw,
+  patientFullHistoryExact,
   searchPatientsRaw,
 } from "@/lib/reservationConsistencyServer";
 
@@ -19,7 +20,8 @@ export async function POST(req: NextRequest) {
   const customAction = body.action === "create_patient"
     || body.action === "list_patients"
     || body.action === "search_patients"
-    || body.action === "list_patients_summary";
+    || body.action === "list_patients_summary"
+    || body.action === "patient_full_history";
   if (!customAction) return legacyPost(legacyRequest);
 
   try {
@@ -30,6 +32,7 @@ export async function POST(req: NextRequest) {
     if (body.action === "list_patients") return listPatientsRaw();
     if (body.action === "search_patients") return searchPatientsRaw(body.payload || {});
     if (body.action === "list_patients_summary") return listPatientsSummaryRaw(body.payload || {});
+    if (body.action === "patient_full_history") return patientFullHistoryExact(body.payload || {});
     return createPatientWithDecision(body.payload || {}, staff);
   } catch (error) {
     const response = toAuthErrorResponse(error);
