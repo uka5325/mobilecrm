@@ -121,19 +121,14 @@ export default function ReservationsPage() {
     }
   }
 
-  const filteredPatients = useMemo(() => {
-    const keyword = search.trim().toLowerCase();
-    if (!keyword) return patients;
-    return patients.filter((p) =>
-      [p.name, p.phone, p.nationality, p.birth, p.birthInput]
-        .join(" ").toLowerCase().includes(keyword)
-    );
-  }, [patients, search]);
-
   const patientGroups = useMemo<PatientGroup[]>(() => {
     // patients 요약을 단일 소스로 그룹 구성(예약 구독 없음 — 상세는 클릭 시 lazy-load).
+    // NOTE: patients는 이미 서버에서 확정된 목록(검색 시 searchTokens 단어 전체일치,
+    // 미검색 시 최근순 요약)이므로 여기서 부분/글자 단위 클라이언트 필터를 추가로 걸지 않는다.
+    // (과거에 name/phone/birth 등을 includes()로 재필터링했으나, 이는 토큰 전체일치
+    // 설계를 무력화하고 한 글자만 입력해도 매칭되는 부작용이 있어 제거했다.)
     const groups: PatientGroup[] = [];
-    for (const p of filteredPatients) {
+    for (const p of patients) {
       if (!p.patientId) continue;
       groups.push({
         patientKey: p.patientId,
@@ -158,7 +153,7 @@ export default function ReservationsPage() {
     return groups.sort((a, b) =>
       (b.lastReservationDate || "").localeCompare(a.lastReservationDate || "")
     );
-  }, [filteredPatients]);
+  }, [patients]);
 
   useEffect(() => { setGroupPage(1); }, [search]);
 
