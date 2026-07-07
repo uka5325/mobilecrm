@@ -1,0 +1,199 @@
+name: Finalize priority 1 fixes
+
+on:
+  push:
+    branches:
+      - claude/crm-data-consistency-uoamow
+    paths:
+      - .github/trigger-finalize-priority1.txt
+
+permissions:
+  contents: write
+
+jobs:
+  finalize:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: claude/crm-data-consistency-uoamow
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Update policy regression tests
+        shell: bash
+        run: |
+          python <<'PY'
+          from pathlib import Path
+          import re
+
+          path = Path("tests/api/reservations.test.ts")
+          text = path.read_text()
+          text = text.replace(
+              'import { POST } from "@/app/api/reservations/route";',
+              'import { POST } from "@/app/api/reservations-consistent/route";',
+          )
+
+          create_test = r'''test("create: 동일 신원은 후보를 반환하고 명시 선택 시 기존 환자로 연결된다", async () => {
+            __resetStaffCacheForTests();
+            const name = `신원후보${Date.now()}`;
+            const identity = { name, birth: "19910531", nationality: "몽골", gender: "여" };
+            const pidA = `P-IDENT-A-${Date.now()}`;
+            const firstPayload = {
+              patient: { ...identity, patientId: pidA },
+              reservation: {
+                ...identity,
+                patientId: pidA,
+                reservationId: `R-IDENT1-${Date.now()}`,
+                reservationDate: "2026-08-01",
+                doctors: [],
+                isDeleted: false,
+              },
+            };
+
+            const first = await POST(makeReq(staff.idToken, "create", firstPayload));
+            const b1 = await first.json();
+            assert.equal(b1.success, true);
+            assert.equal(b1.patientId, pidA);
+            createdReservationDocIds.push(b1.reservationDocId);
+            createdPatientDocIds.push(b1.patientDocId);
+
+            const pidB = `P-IDENT-B-${Date.now()}`;
+            const secondPayload = {
+              patient: { ...identity, patientId: pidB },
+              reservation: {
+                ...identity,
+                patientId: pidB,
+                reservationId: `R-IDENT2-${Date.now()}`,
+                reservationDate: "2026-08-02",
+                doctors: [],
+                isDeleted: false,
+              },
+            };
+
+            const candidateResponse = await POST(makeReq(staff.idToken, "create", secondPayload));
+            assert.equal(candidateResponse.status, 409);
+            const candidateBody = await candidateResponse.json();
+            assert.equal(candidateBody.success, false);
+            assert.equal(candidateBody.code, "PATIENT_CANDIDATES");
+            assert.ok(candidateBody.candidates.some((candidate: Record<string, unknown>) => candidate.patientId === pidA));
+
+            const linkedResponse = await POST(makeReq(staff.idToken, "create", {
+              ...secondPayload,
+              confirmNewPatient: true,
+              linkToPatientId: pidA,
+            }));
+            const linked = await linkedResponse.json();
+            assert.equal(linked.success, true);
+            assert.equal(linked.linkedExistingPatient, true);
+            assert.equal(linked.patientId, pidA);
+            createdReservationDocIds.push(linked.reservationDocId);
+
+            const reservation = await adminDb.collection("reservations").doc(linked.reservationDocId).get();
+            assert.equal(reservation.data()?.patientId, pidA);
+
+            const key = identityKeyForPatient(identity);
+            const active = await adminDb.collection("patients")
+              .where("identityKey", "==", key)
+              .where("isDeleted", "==", false)
+              .get();
+            assert.equal(active.size, 1);
+          });'''
+
+          text, count = re.subn(
+              r'test\("create: patientId가 달라도 이름\+생년월일\+국적\+성별이 같으면 같은 환자로 연결된다".*?\n\}\);\n\ntest\("create: 성별이 다르면',
+              create_test + '\n\ntest("create: 성별이 다르면',
+              text,
+              count=1,
+              flags=re.S,
+          )
+          if count != 1:
+              raise RuntimeError(f"create identity test replacement count={count}")
+
+          create_patient_test = r'''test("create_patient: 동일 신원은 후보 반환 후 연결 또는 새 환자 선택이 가능하다", async () => {
+            __resetStaffCacheForTests();
+            const name = `단독신원${Date.now()}`;
+            const identity = { name, birth: "20000829", nationality: "몽골", gender: "여" };
+            const pidA = `P-CP-A-${Date.now()}`;
+
+            const first = await POST(makeReq(staff.idToken, "create_patient", {
+              patient: { ...identity, patientId: pidA },
+            }));
+            const b1 = await first.json();
+            assert.equal(b1.success, true);
+            assert.equal(b1.patientId, pidA);
+            createdPatientDocIds.push(b1.patientDocId);
+
+            const pidB = `P-CP-B-${Date.now()}`;
+            const candidateResponse = await POST(makeReq(staff.idToken, "create_patient", {
+              patient: { ...identity, patientId: pidB },
+            }));
+            assert.equal(candidateResponse.status, 409);
+            const candidateBody = await candidateResponse.json();
+            assert.equal(candidateBody.code, "PATIENT_CANDIDATES");
+            assert.ok(candidateBody.candidates.some((candidate: Record<string, unknown>) => candidate.patientId === pidA));
+
+            const linkedResponse = await POST(makeReq(staff.idToken, "create_patient", {
+              patient: { ...identity, patientId: pidB },
+              linkToPatientId: pidA,
+            }));
+            const linked = await linkedResponse.json();
+            assert.equal(linked.success, true);
+            assert.equal(linked.linkedExistingPatient, true);
+            assert.equal(linked.patientId, pidA);
+
+            const pidC = `P-CP-C-${Date.now()}`;
+            const newResponse = await POST(makeReq(staff.idToken, "create_patient", {
+              patient: { ...identity, patientId: pidC },
+              confirmNewPatient: true,
+            }));
+            const createdNew = await newResponse.json();
+            assert.equal(createdNew.success, true);
+            assert.equal(createdNew.patientId, pidC);
+            createdPatientDocIds.push(createdNew.patientDocId);
+
+            const all = await adminDb.collection("patients").where("name", "==", name).get();
+            assert.equal(all.size, 2);
+          });'''
+
+          text, count = re.subn(
+              r'test\("create_patient: 이름\+생년월일\+국적\+성별이 같으면 기존 환자로 연결된다".*?\n\}\);\n\ntest\("update 필드 보존',
+              create_patient_test + '\n\ntest("update 필드 보존',
+              text,
+              count=1,
+              flags=re.S,
+          )
+          if count != 1:
+              raise RuntimeError(f"create_patient identity test replacement count={count}")
+
+          path.write_text(text)
+          PY
+
+      - run: npm ci
+      - run: npm run lint
+      - run: npx tsc --noEmit
+      - run: npm test
+      - run: npm run build
+      - run: npm run test:rules
+      - run: npm run test:storage
+      - run: npm run test:api
+
+      - name: Commit final code and remove temporary validation files
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add tests/api/reservations.test.ts
+          git rm -f .github/workflows/finalize-priority1.yml .github/trigger-finalize-priority1.txt
+          git rm -f .github/workflows/validate-crm-branch.yml .github/trigger-crm-validation.txt crm-validation-result.txt || true
+          git commit -m "test: align identity flows with explicit patient choice"
+          git push origin HEAD:claude/crm-data-consistency-uoamow
