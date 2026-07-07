@@ -8,12 +8,8 @@ import {
   updateDoc,
   where,
 } from "firebase/firestore";
-import {
-  deleteObject,
-  ref,
-  uploadBytes,
-} from "firebase/storage";
-import { db, storage } from "./firebase";
+import { deleteObject, ref, uploadBytes } from "firebase/storage";
+import { auth, db, storage } from "./firebase";
 import type { StaffUser } from "./auth";
 import { cleanText } from "./stringUtils";
 import { toMillis } from "./settingsUtils";
@@ -37,9 +33,15 @@ export type PhotoRecord = {
   storageDeleteErrorCode?: string;
 };
 
-export type StorageCleanupResult =
-  | { deleted: true }
-  | { deleted: false; errorCode: string };
+export type PendingPhoto = {
+  tempId: string;
+  fileName: string;
+  fileSize: number;
+  objectUrl: string;
+  storagePath: string;
+};
+
+const LOCAL_CLEANUP_KEY = "crm_pending_storage_cleanup";
 
 function sanitizeFileName(name: string): string {
   return name.replace(/[^a-zA-Z0-9가-힣._-]/g, "_").slice(0, 80);
@@ -77,9 +79,50 @@ function sortByTime<T extends { uploadedAt?: unknown; createdAt?: unknown }>(ite
   });
 }
 
-export async function getReservationPhotos(
-  reservationDocId: string
-): Promise<PhotoRecord[]> {
+function safeHash(value: string): string {
+  let hash = 5381;
+  for (let i = 0; i < value.length; i += 1) {
+    hash = ((hash << 5) + hash + value.charCodeAt(i)) >>> 0;
+  }
+  return hash.toString(16);
+}
+
+function rememberLocalCleanup(storagePath: string) {
+  if (typeof window === "undefined") return;
+  try {
+    const previous = JSON.parse(localStorage.getItem(LOCAL_CLEANUP_KEY) || "[]") as Array<{
+      storagePath: string;
+      createdAt: number;
+    }>;
+    const next = [
+      ...previous.filter((item) => item.storagePath !== storagePath),
+      { storagePath, createdAt: Date.now() },
+    ].slice(-50);
+    localStorage.setItem(LOCAL_CLEANUP_KEY, JSON.stringify(next));
+  } catch {
+    // localStorage가 차단돼 있어도 아래 사용자 경고는 계속 표시한다.
+  }
+}
+
+async function requestServerCleanup(storagePath: string): Promise<boolean> {
+  const user = auth.currentUser;
+  if (!user) return false;
+  try {
+    const idToken = await user.getIdToken();
+    const response = await fetch("/api/storage-cleanup", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ idToken, storagePath }),
+    });
+    if (!response.ok) return false;
+    const body = await response.json().catch(() => ({})) as Record<string, unknown>;
+    return body.success === true && (body.deleted === true || body.queued === true);
+  } catch {
+    return false;
+  }
+}
+
+export async function getReservationPhotos(reservationDocId: string): Promise<PhotoRecord[]> {
   const snap = await getDocs(
     query(
       collection(db, "reservationPhotos"),
@@ -88,26 +131,8 @@ export async function getReservationPhotos(
     )
   );
   return sortByTime(
-    snap.docs.map((item: { id: string; data: () => Record<string, unknown> }) =>
-      mapPhotoDoc(item.id, item.data())
-    )
+    snap.docs.map((item) => mapPhotoDoc(item.id, item.data() as Record<string, unknown>))
   );
-}
-
-export type PendingPhoto = {
-  tempId: string;
-  fileName: string;
-  fileSize: number;
-  objectUrl: string;
-  storagePath: string;
-};
-
-function safeHash(value: string): string {
-  let hash = 5381;
-  for (let index = 0; index < value.length; index += 1) {
-    hash = ((hash << 5) + hash + value.charCodeAt(index)) >>> 0;
-  }
-  return hash.toString(16);
 }
 
 export async function uploadPhotoToStorage(
@@ -126,14 +151,24 @@ export async function uploadPhotoToStorage(
   return { storagePath, contentType: file.type };
 }
 
-export async function deleteStorageFile(storagePath: string): Promise<StorageCleanupResult> {
+// 사진 메타데이터 저장 실패 시 사용하는 보상 삭제.
+// 클라이언트 삭제 실패 → 서버 관리자 권한 재시도 → 실패 시 storageCleanupJobs 기록 순으로 처리한다.
+export async function deleteStorageFile(storagePath: string): Promise<void> {
   try {
     await deleteObject(ref(storage, storagePath));
-    return { deleted: true };
+    return;
   } catch (error) {
-    const errorCode = (error as { code?: string })?.code || "unknown";
-    if (errorCode === "storage/object-not-found") return { deleted: true };
-    return { deleted: false, errorCode };
+    const code = (error as { code?: string })?.code || "";
+    if (code === "storage/object-not-found") return;
+  }
+
+  if (await requestServerCleanup(storagePath)) return;
+
+  rememberLocalCleanup(storagePath);
+  if (typeof window !== "undefined") {
+    window.alert(
+      "사진 정보 저장에 실패했고 원본 파일 자동 정리도 완료되지 않았습니다. 관리자에게 알려주세요."
+    );
   }
 }
 
@@ -145,7 +180,6 @@ export async function savePhotoRecord(
   storagePath: string,
   staff: StaffUser
 ): Promise<PhotoRecord> {
-  const contentType = file.type;
   const docRef = await addDoc(collection(db, "reservationPhotos"), {
     reservationDocId,
     reservationId,
@@ -153,7 +187,7 @@ export async function savePhotoRecord(
     fileName: file.name,
     fileUrl: "",
     storagePath,
-    contentType,
+    contentType: file.type,
     fileSize: file.size,
     uploadedAt: serverTimestamp(),
     uploadedBy: staff.displayName,
@@ -178,7 +212,7 @@ export async function savePhotoRecord(
     fileName: file.name,
     fileUrl: "",
     storagePath,
-    contentType,
+    contentType: file.type,
     fileSize: file.size,
     uploadedAt: null,
     uploadedBy: staff.displayName,
@@ -205,21 +239,7 @@ export async function uploadReservationPhoto(
       staff
     );
   } catch (error) {
-    const cleanup = await deleteStorageFile(storagePath);
-    if (!cleanup.deleted) {
-      await createLog({
-        action: "STORAGE_DELETE_FAILED",
-        targetType: "file",
-        targetId: reservationDocId,
-        staff,
-        message: `사진 저장 실패 후 보상 삭제 실패 (code=${cleanup.errorCode}, path#${safeHash(storagePath)})`,
-        reservationId,
-        patientId,
-      }).catch(() => {});
-      throw new Error(
-        `사진 정보 저장과 업로드 원본 정리에 모두 실패했습니다. 관리자에게 알려주세요. (${cleanup.errorCode})`
-      );
-    }
+    await deleteStorageFile(storagePath);
     throw error;
   }
 }
