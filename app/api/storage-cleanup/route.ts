@@ -15,6 +15,11 @@ function isAllowedStoragePath(storagePath: string): boolean {
     && !storagePath.includes("../");
 }
 
+function storageErrorCode(error: unknown): number | string {
+  const code = (error as { code?: number | string })?.code;
+  return code ?? "unknown";
+}
+
 export async function POST(req: NextRequest) {
   let body: { idToken?: string; storagePath?: string };
   try {
@@ -43,12 +48,19 @@ export async function POST(req: NextRequest) {
       const file = adminStorage.bucket(bucketName).file(storagePath);
       for (let attempt = 1; attempt <= 3; attempt += 1) {
         try {
-          await file.delete({ ignoreNotFound: true });
+          await file.delete();
           return NextResponse.json({ success: true, deleted: true, queued: false });
         } catch (error) {
+          const code = storageErrorCode(error);
+          // 이미 삭제됐거나 존재하지 않는 파일은 보상 삭제가 완료된 것으로 처리한다.
+          if (code === 404 || code === "404") {
+            return NextResponse.json({ success: true, deleted: true, queued: false });
+          }
           lastError = error instanceof Error ? error.message : String(error);
           if (attempt < 3) {
-            await new Promise((resolve) => setTimeout(resolve, attempt * 150));
+            await new Promise<void>((resolve) => {
+              setTimeout(resolve, attempt * 150);
+            });
           }
         }
       }
@@ -56,7 +68,9 @@ export async function POST(req: NextRequest) {
 
     // 즉시 삭제가 끝내 실패해도 유실되지 않도록 서버 전용 정리 job을 남긴다.
     const jobId = safeJobId(storagePath);
-    await adminDb.collection("storageCleanupJobs").doc(jobId).set({
+    const jobRef = adminDb.collection("storageCleanupJobs").doc(jobId);
+    const existingJob = await jobRef.get();
+    await jobRef.set({
       storagePath,
       status: "pending",
       reason: "photo_record_write_failed",
@@ -65,7 +79,7 @@ export async function POST(req: NextRequest) {
       requestedByUid: ctx.uid,
       requestedByName: ctx.name,
       updatedAt: FieldValue.serverTimestamp(),
-      createdAt: FieldValue.serverTimestamp(),
+      ...(existingJob.exists ? {} : { createdAt: FieldValue.serverTimestamp() }),
     }, { merge: true });
 
     return NextResponse.json(
