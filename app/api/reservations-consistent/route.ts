@@ -8,6 +8,10 @@ import {
   patientFullHistoryExact,
   searchPatientsRaw,
 } from "@/lib/reservationConsistencyServer";
+import {
+  runPatientDeleteJob,
+  runPatientUpdateJob,
+} from "@/lib/patientMutationJobs";
 
 type Body = {
   idToken?: string;
@@ -38,7 +42,16 @@ async function createReservationWithCanonicalResponse(body: Body) {
 }
 
 export async function POST(req: NextRequest) {
-  const body = await req.json() as Body;
+  let body: Body;
+  try {
+    body = await req.json() as Body;
+  } catch {
+    return NextResponse.json(
+      { success: false, message: "요청 형식이 올바르지 않습니다." },
+      { status: 400 }
+    );
+  }
+
   if (body.action === "create") {
     return createReservationWithCanonicalResponse(body);
   }
@@ -47,22 +60,35 @@ export async function POST(req: NextRequest) {
     || body.action === "list_patients"
     || body.action === "search_patients"
     || body.action === "list_patients_summary"
-    || body.action === "patient_full_history";
+    || body.action === "patient_full_history"
+    || body.action === "update_patient_profile"
+    || body.action === "delete_patient";
   if (!customAction) return legacyPost(rebuild(body));
 
   try {
+    const writeAction = body.action === "create_patient"
+      || body.action === "update_patient_profile"
+      || body.action === "delete_patient";
     const staff = await requireActiveStaff(
       String(body.idToken || ""),
-      { checkRevoked: body.action === "create_patient" }
+      { checkRevoked: writeAction }
     );
+    const payload = body.payload || {};
+
     if (body.action === "list_patients") return listPatientsRaw();
-    if (body.action === "search_patients") return searchPatientsRaw(body.payload || {});
-    if (body.action === "list_patients_summary") return listPatientsSummaryRaw(body.payload || {});
-    if (body.action === "patient_full_history") return patientFullHistoryExact(body.payload || {});
-    return createPatientWithDecision(body.payload || {}, staff);
+    if (body.action === "search_patients") return searchPatientsRaw(payload);
+    if (body.action === "list_patients_summary") return listPatientsSummaryRaw(payload);
+    if (body.action === "patient_full_history") return patientFullHistoryExact(payload);
+    if (body.action === "update_patient_profile") return runPatientUpdateJob(payload, staff);
+    if (body.action === "delete_patient") return runPatientDeleteJob(payload, staff);
+    return createPatientWithDecision(payload, staff);
   } catch (error) {
     const response = toAuthErrorResponse(error);
     if (response) return response;
-    throw error;
+    console.error("[/api/reservations-consistent]", error);
+    return NextResponse.json(
+      { success: false, message: error instanceof Error ? error.message : "서버 오류가 발생했습니다." },
+      { status: 500 }
+    );
   }
 }
