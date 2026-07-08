@@ -13,15 +13,12 @@ import {
   invalidatePatientFullHistoryCache,
   searchPatients,
   listPatientsSummary,
-  getPatientSummaryCache,
-  setPatientSummaryCache,
-  invalidatePatientSummaryCache,
-  isPatientSummaryCacheFresh,
   type ReservationRecord,
   type AppointmentType,
   type PatientRecord,
 } from "@/lib/reservations";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
+import { usePatientSummary } from "@/components/PatientSummaryProvider";
 import { getCardStatus } from "@/lib/timelineUtils";
 import { getReservationBirthInfo } from "@/lib/reservationUtils";
 import { todayString } from "@/lib/dateUtils";
@@ -33,41 +30,31 @@ import { ReservationsTable, type PatientGroup, type PatientEditForm } from "@/co
 import { getReservationNotes, addReservationNote, updateReservationNote, deleteReservationNote, type ReservationNote } from "@/lib/reservationNotes";
 import { toDate } from "@/lib/settingsUtils";
 
-
-function initFromCache(uid: string | undefined) {
-  if (!uid) return { patients: [] as PatientRecord[], nextCursor: null as string | null, hasCachedData: false };
-  const cached = getPatientSummaryCache(uid);
-  if (cached) return { patients: cached.patients, nextCursor: cached.nextCursor, hasCachedData: true };
-  return { patients: [] as PatientRecord[], nextCursor: null as string | null, hasCachedData: false };
-}
-
 export default function ReservationsPage() {
   const { currentUser, authReady } = useCurrentUser();
   const uid = currentUser?.uid;
+  const {
+    patients: summaryPatients,
+    nextCursor: summaryNextCursor,
+    loading: summaryLoading,
+    refreshing: summaryRefreshing,
+    error: summaryError,
+    start: startPatientSummary,
+    refresh: refreshPatientSummary,
+  } = usePatientSummary();
 
   const [initialLoading, setInitialLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [listError, setListError] = useState<string | null>(null);
   const searchSeqRef = useRef(0);
+  const extraPatientsRef = useRef<PatientRecord[]>([]);
 
   const [search, setSearch] = useState("");
   const [groupPage, setGroupPage] = useState(1);
   const PAGE_SIZE = 10;
   const [patients, setPatients] = useState<PatientRecord[]>([]);
   const [patientsNextCursor, setPatientsNextCursor] = useState<string | null>(null);
-
-  // UID가 확정되면 캐시에서 즉시 복원
-  const uidInitRef = useRef<string | null>(null);
-  if (uid && uidInitRef.current !== uid) {
-    uidInitRef.current = uid;
-    const init = initFromCache(uid);
-    if (init.hasCachedData && patients.length === 0) {
-      setPatients(init.patients);
-      setPatientsNextCursor(init.nextCursor);
-      setInitialLoading(false);
-    }
-  }
 
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [importDrawerOpen, setImportDrawerOpen] = useState(false);
@@ -150,8 +137,6 @@ export default function ReservationsPage() {
     // patients 요약을 단일 소스로 그룹 구성(예약 구독 없음 — 상세는 클릭 시 lazy-load).
     // NOTE: patients는 이미 서버에서 확정된 목록(검색 시 searchTokens 단어 전체일치,
     // 미검색 시 최근순 요약)이므로 여기서 부분/글자 단위 클라이언트 필터를 추가로 걸지 않는다.
-    // (과거에 name/phone/birth 등을 includes()로 재필터링했으나, 이는 토큰 전체일치
-    // 설계를 무력화하고 한 글자만 입력해도 매칭되는 부작용이 있어 제거했다.)
     const groups: PatientGroup[] = [];
     for (const p of patients) {
       if (!p.patientId) continue;
@@ -165,7 +150,6 @@ export default function ReservationsPage() {
         phone: p.phone || "",
         nationality: p.nationality || "",
         reservations: [],
-        // 배지는 저장된 summary로 표시(추가 조회 없음).
         reservationCount: p.reservationCount,
         reservationCountCapped: p.reservationCountCapped,
         depositCount: p.depositCount,
@@ -175,7 +159,6 @@ export default function ReservationsPage() {
         lastReservationDate: p.lastReservationDate || "",
       });
     }
-    // 최신 예약일 내림차순(요약 lastReservationDate). 서버가 이미 정렬해 주지만 검색 결과도 정렬.
     return groups.sort((a, b) =>
       (b.lastReservationDate || "").localeCompare(a.lastReservationDate || "")
     );
@@ -183,56 +166,59 @@ export default function ReservationsPage() {
 
   useEffect(() => { setGroupPage(1); }, [search]);
 
-  // 검색토큰 기반 서버 검색: 진입 시 환자 전체(최대 2,000)를 읽지 않는다. 기본 화면은 최근 예약 환자(구독 데이터).
-  // 검색어 입력 시(디바운스 300ms) 매칭된 환자만 서버에서 읽는다. 빈 검색이면 환자 목록 비움(예약 기반 유지).
-  // 최소 글자 제한: 이름 2자↑ / 숫자(전화)만이면 4자↑ — 1글자 검색으로 인한 불필요한 서버 호출 방지.
-  // 고객관리 첫 화면: patients 요약 최근순(45일 지난 환자 포함). 배지는 summary 값.
+  // 기본 목록은 AppShell 수명의 Provider가 보관한다. 더보기 결과만 페이지 로컬로 이어 붙인다.
+  useEffect(() => {
+    const t = search.trim();
+    const digitsOnly = t.length > 0 && /^[0-9]+$/.test(t);
+    const longEnough = digitsOnly ? t.length >= 4 : t.length >= 2;
+    if (t && longEnough) return;
+
+    const baseIds = new Set(summaryPatients.map((patient) => patient.patientId));
+    extraPatientsRef.current = extraPatientsRef.current.filter(
+      (patient) => !baseIds.has(patient.patientId)
+    );
+    setPatients([...summaryPatients, ...extraPatientsRef.current]);
+    if (extraPatientsRef.current.length === 0) {
+      setPatientsNextCursor(summaryNextCursor);
+    }
+    setInitialLoading(summaryLoading && summaryPatients.length === 0);
+    setRefreshing(summaryRefreshing);
+    setListError(summaryError);
+  }, [search, summaryPatients, summaryNextCursor, summaryLoading, summaryRefreshing, summaryError]);
+
   const reloadPatients = useCallback(({ force = false }: { force?: boolean } = {}) => {
     if (!uid) return;
-    if (!force) {
-      const cached = getPatientSummaryCache(uid);
-      if (cached && isPatientSummaryCacheFresh(cached)) {
-        setPatients(cached.patients);
-        setPatientsNextCursor(cached.nextCursor);
-        setInitialLoading(false);
-        setRefreshing(false);
-        return;
-      }
+    if (force) {
+      void refreshPatientSummary();
+      return;
     }
-    if (patients.length > 0) {
-      setRefreshing(true);
-    } else {
-      setInitialLoading(true);
-    }
-    setListError(null);
-    listPatientsSummary(30)
-      .then((r) => {
-        setPatients(r.patients);
-        setPatientsNextCursor(r.nextCursor);
-        setListError(null);
-        if (uid) setPatientSummaryCache(uid, r.patients, r.nextCursor);
-      })
-      .catch((e) => { setListError(e instanceof Error ? e.message : "고객 목록을 불러오지 못했습니다."); })
-      .finally(() => { setInitialLoading(false); setRefreshing(false); });
-  }, [uid, patients.length]);
+    startPatientSummary();
+  }, [uid, refreshPatientSummary, startPatientSummary]);
 
   const reloadCurrent = useCallback(() => {
     const t = search.trim();
     const digitsOnly = t.length > 0 && /^[0-9]+$/.test(t);
     const longEnough = digitsOnly ? t.length >= 4 : t.length >= 2;
-    if (patients.length > 0) setRefreshing(true); else setInitialLoading(true);
-    setListError(null);
-    const p = (t && longEnough)
-      ? searchPatients(t).then((list) => { setPatientsNextCursor(null); return list; })
-      : listPatientsSummary(30).then((r) => {
-          setPatientsNextCursor(r.nextCursor);
-          if (uid) setPatientSummaryCache(uid, r.patients, r.nextCursor);
-          return r.patients;
-        });
-    p.then((list) => { setPatients(list); setListError(null); })
-      .catch((e) => { setListError(e instanceof Error ? e.message : "데이터를 불러오지 못했습니다."); })
-      .finally(() => { setInitialLoading(false); setRefreshing(false); });
-  }, [search, uid, patients.length]);
+
+    if (t && longEnough) {
+      if (patients.length > 0) setRefreshing(true); else setInitialLoading(true);
+      setListError(null);
+      searchPatients(t)
+        .then((list) => {
+          setPatientsNextCursor(null);
+          setPatients(list);
+          setListError(null);
+        })
+        .catch((e) => { setListError(e instanceof Error ? e.message : "데이터를 불러오지 못했습니다."); })
+        .finally(() => { setInitialLoading(false); setRefreshing(false); });
+      return;
+    }
+
+    extraPatientsRef.current = [];
+    setPatients(summaryPatients);
+    setPatientsNextCursor(summaryNextCursor);
+    void refreshPatientSummary();
+  }, [search, patients.length, summaryPatients, summaryNextCursor, refreshPatientSummary]);
 
   // 서버 커서로 다음 페이지를 이어붙인다("더보기") — 검색 중에는 사용하지 않음.
   const loadMorePatients = useCallback(async () => {
@@ -240,14 +226,21 @@ export default function ReservationsPage() {
     setLoadingMore(true);
     try {
       const r = await listPatientsSummary(30, patientsNextCursor);
-      setPatients((prev) => [...prev, ...r.patients]);
+      const byId = new Map<string, PatientRecord>();
+      for (const patient of extraPatientsRef.current) byId.set(patient.patientId, patient);
+      for (const patient of r.patients) byId.set(patient.patientId, patient);
+      const baseIds = new Set(summaryPatients.map((patient) => patient.patientId));
+      extraPatientsRef.current = [...byId.values()].filter(
+        (patient) => !baseIds.has(patient.patientId)
+      );
+      setPatients([...summaryPatients, ...extraPatientsRef.current]);
       setPatientsNextCursor(r.nextCursor);
     } catch {
       /* 무시 — 다음 클릭 시 재시도 */
     } finally {
       setLoadingMore(false);
     }
-  }, [patientsNextCursor, loadingMore]);
+  }, [patientsNextCursor, loadingMore, summaryPatients]);
 
   useEffect(() => {
     if (!authReady || !uid) return;
@@ -255,6 +248,7 @@ export default function ReservationsPage() {
     const digitsOnly = t.length > 0 && /^[0-9]+$/.test(t);
     const longEnough = digitsOnly ? t.length >= 4 : t.length >= 2;
     if (!t || !longEnough) {
+      searchSeqRef.current += 1;
       reloadPatients();
       return;
     }
@@ -269,7 +263,7 @@ export default function ReservationsPage() {
         .finally(() => { if (searchSeqRef.current === seq) { setInitialLoading(false); setRefreshing(false); } });
     }, 300);
     return () => clearTimeout(handle);
-  }, [authReady, uid, search, reloadPatients]);
+  }, [authReady, uid, search, reloadPatients, patients.length]);
 
   const pagedGroups = useMemo(() => {
     const start = (groupPage - 1) * PAGE_SIZE;
@@ -547,7 +541,6 @@ export default function ReservationsPage() {
     invalidatePatientFullHistoryCache(item.patientId);
     reloadCurrent();
   }
-
   function handleAddReservation(group: PatientGroup) {
     setAddPatient({
       name: group.name,
