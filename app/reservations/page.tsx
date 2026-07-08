@@ -43,7 +43,9 @@ export default function ReservationsPage() {
     refresh: refreshPatientSummary,
   } = usePatientSummary();
 
-  const [initialLoading, setInitialLoading] = useState(true);
+  const [initialLoading, setInitialLoading] = useState(
+    () => summaryLoading && summaryPatients.length === 0
+  );
   const [refreshing, setRefreshing] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [listError, setListError] = useState<string | null>(null);
@@ -53,8 +55,10 @@ export default function ReservationsPage() {
   const [search, setSearch] = useState("");
   const [groupPage, setGroupPage] = useState(1);
   const PAGE_SIZE = 10;
-  const [patients, setPatients] = useState<PatientRecord[]>([]);
-  const [patientsNextCursor, setPatientsNextCursor] = useState<string | null>(null);
+  const [patients, setPatients] = useState<PatientRecord[]>(() => summaryPatients);
+  const [patientsNextCursor, setPatientsNextCursor] = useState<string | null>(
+    () => summaryNextCursor
+  );
 
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [importDrawerOpen, setImportDrawerOpen] = useState(false);
@@ -133,12 +137,31 @@ export default function ReservationsPage() {
     }
   }
 
+  const isSearchMode = useMemo(() => {
+    const term = search.trim();
+    if (!term) return false;
+    const digitsOnly = /^[0-9]+$/.test(term);
+    return digitsOnly ? term.length >= 4 : term.length >= 2;
+  }, [search]);
+
+  // 기본 목록은 Provider 값을 직접 사용한다. 페이지 로컬 patients는 검색 결과와
+  // 더보기 갱신 트리거에만 사용해 mount 직후 빈 배열/로딩 화면을 거치지 않는다.
+  const visiblePatients = useMemo(() => {
+    if (isSearchMode) return patients;
+
+    const byId = new Map<string, PatientRecord>();
+    for (const patient of summaryPatients) byId.set(patient.patientId, patient);
+    for (const patient of extraPatientsRef.current) {
+      if (!byId.has(patient.patientId)) byId.set(patient.patientId, patient);
+    }
+    return [...byId.values()];
+  }, [isSearchMode, patients, summaryPatients]);
+
   const patientGroups = useMemo<PatientGroup[]>(() => {
     // patients 요약을 단일 소스로 그룹 구성(예약 구독 없음 — 상세는 클릭 시 lazy-load).
-    // NOTE: patients는 이미 서버에서 확정된 목록(검색 시 searchTokens 단어 전체일치,
-    // 미검색 시 최근순 요약)이므로 여기서 부분/글자 단위 클라이언트 필터를 추가로 걸지 않는다.
+    // NOTE: 검색 시에는 서버 검색 결과를, 기본 목록에서는 Provider 데이터를 직접 사용한다.
     const groups: PatientGroup[] = [];
-    for (const p of patients) {
+    for (const p of visiblePatients) {
       if (!p.patientId) continue;
       groups.push({
         patientKey: p.patientId,
@@ -162,29 +185,28 @@ export default function ReservationsPage() {
     return groups.sort((a, b) =>
       (b.lastReservationDate || "").localeCompare(a.lastReservationDate || "")
     );
-  }, [patients]);
+  }, [visiblePatients]);
+
+  const tableLoading = isSearchMode
+    ? initialLoading
+    : summaryLoading && visiblePatients.length === 0;
+  const tableRefreshing = isSearchMode ? refreshing : summaryRefreshing;
+  const tableError = isSearchMode ? listError : summaryError;
 
   useEffect(() => { setGroupPage(1); }, [search]);
 
-  // 기본 목록은 AppShell 수명의 Provider가 보관한다. 더보기 결과만 페이지 로컬로 이어 붙인다.
+  // 기본 목록의 cursor/추가 페이지 상태만 동기화한다. 화면 데이터 자체는 Provider를 직접 표시한다.
   useEffect(() => {
-    const t = search.trim();
-    const digitsOnly = t.length > 0 && /^[0-9]+$/.test(t);
-    const longEnough = digitsOnly ? t.length >= 4 : t.length >= 2;
-    if (t && longEnough) return;
+    if (isSearchMode) return;
 
     const baseIds = new Set(summaryPatients.map((patient) => patient.patientId));
     extraPatientsRef.current = extraPatientsRef.current.filter(
       (patient) => !baseIds.has(patient.patientId)
     );
-    setPatients([...summaryPatients, ...extraPatientsRef.current]);
     if (extraPatientsRef.current.length === 0) {
       setPatientsNextCursor(summaryNextCursor);
     }
-    setInitialLoading(summaryLoading && summaryPatients.length === 0);
-    setRefreshing(summaryRefreshing);
-    setListError(summaryError);
-  }, [search, summaryPatients, summaryNextCursor, summaryLoading, summaryRefreshing, summaryError]);
+  }, [isSearchMode, summaryPatients, summaryNextCursor]);
 
   const reloadPatients = useCallback(({ force = false }: { force?: boolean } = {}) => {
     if (!uid) return;
@@ -196,14 +218,14 @@ export default function ReservationsPage() {
   }, [uid, refreshPatientSummary, startPatientSummary]);
 
   const reloadCurrent = useCallback(() => {
-    const t = search.trim();
-    const digitsOnly = t.length > 0 && /^[0-9]+$/.test(t);
-    const longEnough = digitsOnly ? t.length >= 4 : t.length >= 2;
+    const term = search.trim();
+    const digitsOnly = term.length > 0 && /^[0-9]+$/.test(term);
+    const longEnough = digitsOnly ? term.length >= 4 : term.length >= 2;
 
-    if (t && longEnough) {
+    if (term && longEnough) {
       if (patients.length > 0) setRefreshing(true); else setInitialLoading(true);
       setListError(null);
-      searchPatients(t)
+      searchPatients(term)
         .then((list) => {
           setPatientsNextCursor(null);
           setPatients(list);
@@ -233,6 +255,7 @@ export default function ReservationsPage() {
       extraPatientsRef.current = [...byId.values()].filter(
         (patient) => !baseIds.has(patient.patientId)
       );
+      // visiblePatients가 재계산되도록 로컬 state도 같은 병합 결과로 갱신한다.
       setPatients([...summaryPatients, ...extraPatientsRef.current]);
       setPatientsNextCursor(r.nextCursor);
     } catch {
@@ -244,10 +267,10 @@ export default function ReservationsPage() {
 
   useEffect(() => {
     if (!authReady || !uid) return;
-    const t = search.trim();
-    const digitsOnly = t.length > 0 && /^[0-9]+$/.test(t);
-    const longEnough = digitsOnly ? t.length >= 4 : t.length >= 2;
-    if (!t || !longEnough) {
+    const term = search.trim();
+    const digitsOnly = term.length > 0 && /^[0-9]+$/.test(term);
+    const longEnough = digitsOnly ? term.length >= 4 : term.length >= 2;
+    if (!term || !longEnough) {
       searchSeqRef.current += 1;
       reloadPatients();
       return;
@@ -257,7 +280,7 @@ export default function ReservationsPage() {
       if (patients.length > 0) setRefreshing(true); else setInitialLoading(true);
       setPatientsNextCursor(null);
       setListError(null);
-      searchPatients(t)
+      searchPatients(term)
         .then((list) => { if (searchSeqRef.current === seq) { setPatients(list); setListError(null); } })
         .catch((e) => { if (searchSeqRef.current === seq) { setListError(e instanceof Error ? e.message : "검색에 실패했습니다."); } })
         .finally(() => { if (searchSeqRef.current === seq) { setInitialLoading(false); setRefreshing(false); } });
@@ -295,7 +318,7 @@ export default function ReservationsPage() {
     if (!inlineForm || !currentUser) return;
     setInlineSaving(true);
     try {
-      await updateReservationFull(
+      const result = await updateReservationFull(
         item.id,
         item.reservationId,
         item.patientId,
@@ -317,6 +340,10 @@ export default function ReservationsPage() {
         },
         currentUser
       );
+      if (!result.success) {
+        setPageError(result.message || "예약 수정에 실패했습니다.");
+        return;
+      }
       setInlineEditId(null);
       setInlineForm(null);
       invalidatePatientFullHistoryCache(item.patientId);
@@ -343,13 +370,17 @@ export default function ReservationsPage() {
 
   async function handleMemoUpdate(note: ReservationNote) {
     if (!currentUser || !memoPopover) return;
-    await updateReservationNote({
+    const result = await updateReservationNote({
       noteId: note.id,
       reservationId: note.reservationId,
       patientId: note.patientId || memoPopover.item.patientId || "",
       memoText: editingNoteText,
       staff: currentUser,
     });
+    if (!result.success) {
+      setPageError(result.message || "메모 수정에 실패했습니다.");
+      return;
+    }
     setEditingNoteId(null);
     const notes = await getReservationNotes(memoPopover.item.reservationId, memoPopover.item.id, memoPopover.item.patientId);
     setMemoPopover((prev) => prev ? { ...prev, notes } : prev);
@@ -358,12 +389,16 @@ export default function ReservationsPage() {
   async function handleMemoDelete(note: ReservationNote) {
     if (!currentUser || !memoPopover) return;
     if (!confirm("메모를 삭제할까요?")) return;
-    await deleteReservationNote({
+    const result = await deleteReservationNote({
       noteId: note.id,
       reservationId: note.reservationId,
       patientId: note.patientId || memoPopover.item.patientId || "",
       staff: currentUser,
     });
+    if (!result.success) {
+      setPageError(result.message || "메모 삭제에 실패했습니다.");
+      return;
+    }
     const notes = await getReservationNotes(memoPopover.item.reservationId, memoPopover.item.id, memoPopover.item.patientId);
     setMemoPopover((prev) => prev ? { ...prev, notes } : prev);
   }
@@ -371,17 +406,20 @@ export default function ReservationsPage() {
   async function handleMemoAdd(text: string) {
     if (!currentUser || !memoPopover) return;
     const item = memoPopover.item;
-    await addReservationNote({
+    const result = await addReservationNote({
       reservationId: item.reservationId,
       reservationDocId: item.id,
       patientId: item.patientId || "",
       memoText: text,
       staff: currentUser,
     });
+    if (!result.success) {
+      setPageError(result.message || "메모 등록에 실패했습니다.");
+      return;
+    }
     const notes = await getReservationNotes(item.reservationId, item.id, item.patientId);
     setMemoPopover((prev) => prev ? { ...prev, notes } : prev);
   }
-
 
   function toDateStr(value: unknown): string {
     const d = toDate(value);
@@ -651,7 +689,7 @@ export default function ReservationsPage() {
 
       <div className="px-5 pb-3 flex items-center gap-2 text-sm text-gray-500">
         <span>환자 {patientGroups.length}명</span>
-        {refreshing && (
+        {tableRefreshing && (
           <span className="text-xs text-gray-400">새로고침 중...</span>
         )}
       </div>
@@ -723,7 +761,7 @@ export default function ReservationsPage() {
 
       <ReservationsTable
         patientGroups={pagedGroups}
-        loading={initialLoading}
+        loading={tableLoading}
         inlineEditId={inlineEditId}
         inlineForm={inlineForm}
         inlineSaving={inlineSaving}
@@ -744,7 +782,7 @@ export default function ReservationsPage() {
         onOpenPatientMemo={openPatientMemoPopover}
         onOpenPatientHistory={openPatientHistory}
         onPatientMutated={() => reloadCurrent()}
-        listError={listError}
+        listError={tableError}
         onRetry={reloadCurrent}
       />
 
