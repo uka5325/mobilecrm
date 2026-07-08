@@ -99,7 +99,7 @@ function mapLogDoc(data: Record<string, unknown>): LogRecord {
 
 export async function createLog(params: CreateLogParams) {
   if (!params.staff?.uid) return;
-  callLogsApi("create", {
+  await callLogsApi("create", {
     action: params.action,
     targetType: params.targetType,
     targetId: params.targetId ?? "",
@@ -114,7 +114,7 @@ export async function createLog(params: CreateLogParams) {
     message: params.message,
     before: params.before ?? null,
     after: params.after ?? null,
-  }).catch((e) => console.warn("[createLog]", e));
+  });
 }
 
 export async function getLogsByReservationId(

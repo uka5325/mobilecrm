@@ -10,7 +10,8 @@
     "test": "tsx --test tests/units.test.ts",
     "test:rules": "firebase emulators:exec --only firestore \"tsx --test tests/rules.test.ts\"",
     "test:storage": "firebase emulators:exec --project demo-mobilecrm-rules --only firestore,auth,storage \"tsx --test tests/storage.rules.test.ts\"",
-    "test:api": "firebase emulators:exec --project demo-mobilecrm-rules --only firestore,auth \"tsx --test tests/api/*.test.ts\""
+    "test:api": "firebase emulators:exec --project demo-mobilecrm-rules --only firestore,auth \"tsx --test tests/api/*.test.ts\"",
+    "backfill:invoice-links": "tsx scripts/backfill-invoice-reservation-links.ts"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

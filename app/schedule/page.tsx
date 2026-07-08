@@ -1,10 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import {
   subscribeReservationsByRange,
-  searchReservationsByDateRange,
   type ReservationRecord,
   type AppointmentType,
   APPOINTMENT_TYPE_COLORS,
@@ -135,18 +134,7 @@ function useScheduleData(startDate: string, endDate: string) {
     return () => unsub();
   }, [startDate, endDate]);
 
-  // 실시간 구독이 in-range 변경(생성/수정/삭제)을 자동 반영하므로 보통 불필요하지만,
-  // 명시적 새로고침(예: Drawer 저장 후)은 현재 범위를 1회 재조회해 강제 갱신한다.
-  const refresh = useCallback(async () => {
-    try {
-      const list = await searchReservationsByDateRange(startDate, endDate);
-      setState({ reservations: list, loading: false });
-    } catch {
-      /* 구독이 최신을 유지하므로 실패는 무시 */
-    }
-  }, [startDate, endDate]);
-
-  return { reservations: state.reservations, loading: state.loading, refresh };
+  return { reservations: state.reservations, loading: state.loading };
 }
 
 // ─── DayCard ─────────────────────────────────────────────────────────────────
@@ -554,7 +542,7 @@ export default function SchedulePage() {
     return { startDate: getMonthStart(baseDate), endDate: getMonthEnd(baseDate) };
   }, [viewMode, baseDate]);
 
-  const { reservations, loading, refresh } = useScheduleData(startDate, endDate);
+  const { reservations, loading } = useScheduleData(startDate, endDate);
 
   const kpi = useMemo(() => {
     const counts: Record<string, number> = { 상담: 0, 수술: 0, 시술: 0, 치료: 0, 경과: 0, 진료: 0, 검진: 0 };
@@ -683,7 +671,7 @@ export default function SchedulePage() {
           currentUser={currentUser}
           onClose={() => { setDetailOpen(false); setSelectedReservation(null); }}
           onRefreshLatestLog={async () => {}}
-          onRefresh={refresh}
+          onRefresh={undefined}
         />
       )}
       {currentUser && (
@@ -692,7 +680,7 @@ export default function SchedulePage() {
           onClose={() => setNewOpen(false)}
           currentUser={currentUser}
           initialDate={baseDate}
-          onCreated={refresh}
+          onCreated={undefined}
         />
       )}
     </div>

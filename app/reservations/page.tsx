@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { DetailDrawer } from "@/components/timeline/DetailDrawer";
 import {
   deleteReservation,
@@ -37,6 +37,8 @@ export default function ReservationsPage() {
   // 캐시가 있으면 즉시 렌더 + 백그라운드 갱신, 없을 때만 blocking 로딩.
   const [listLoading, setListLoading] = useState(() => !getCachedPatientsSummary());
   const [loadingMore, setLoadingMore] = useState(false);
+  const [listError, setListError] = useState<string | null>(null);
+  const searchSeqRef = useRef(0);
 
   const [search, setSearch] = useState("");
   const [groupPage, setGroupPage] = useState(1);
@@ -142,6 +144,7 @@ export default function ReservationsPage() {
         reservations: [],
         // 배지는 저장된 summary로 표시(추가 조회 없음).
         reservationCount: p.reservationCount,
+        reservationCountCapped: p.reservationCountCapped,
         depositCount: p.depositCount,
         surgeryCostCount: p.surgeryCostCount,
         invoiceCount: p.invoiceCount,
@@ -163,9 +166,10 @@ export default function ReservationsPage() {
   // 고객관리 첫 화면: patients 요약 최근순(45일 지난 환자 포함). 배지는 summary 값.
   const reloadPatients = useCallback(() => {
     setListLoading(true);
+    setListError(null);
     listPatientsSummary(30)
-      .then((r) => { setPatients(r.patients); setPatientsNextCursor(r.nextCursor); })
-      .catch(() => {})
+      .then((r) => { setPatients(r.patients); setPatientsNextCursor(r.nextCursor); setListError(null); })
+      .catch((e) => { setListError(e instanceof Error ? e.message : "고객 목록을 불러오지 못했습니다."); })
       .finally(() => setListLoading(false));
   }, []);
 
@@ -175,10 +179,13 @@ export default function ReservationsPage() {
     const digitsOnly = t.length > 0 && /^[0-9]+$/.test(t);
     const longEnough = digitsOnly ? t.length >= 4 : t.length >= 2;
     setListLoading(true);
+    setListError(null);
     const p = (t && longEnough)
       ? searchPatients(t).then((list) => { setPatientsNextCursor(null); return list; })
       : listPatientsSummary(30).then((r) => { setPatientsNextCursor(r.nextCursor); return r.patients; });
-    p.then(setPatients).catch(() => {}).finally(() => setListLoading(false));
+    p.then((list) => { setPatients(list); setListError(null); })
+      .catch((e) => { setListError(e instanceof Error ? e.message : "데이터를 불러오지 못했습니다."); })
+      .finally(() => setListLoading(false));
   }, [search]);
 
   // 서버 커서로 다음 페이지를 이어붙인다("더보기") — 검색 중에는 사용하지 않음.
@@ -206,10 +213,15 @@ export default function ReservationsPage() {
       reloadPatients();
       return;
     }
+    const seq = ++searchSeqRef.current;
     const handle = setTimeout(() => {
       setListLoading(true);
       setPatientsNextCursor(null);
-      searchPatients(t).then(setPatients).catch(() => {}).finally(() => setListLoading(false));
+      setListError(null);
+      searchPatients(t)
+        .then((list) => { if (searchSeqRef.current === seq) { setPatients(list); setListError(null); } })
+        .catch((e) => { if (searchSeqRef.current === seq) { setListError(e instanceof Error ? e.message : "검색에 실패했습니다."); } })
+        .finally(() => { if (searchSeqRef.current === seq) setListLoading(false); });
     }, 300);
     return () => clearTimeout(handle);
   }, [authReady, search, reloadPatients]);
@@ -694,6 +706,8 @@ export default function ReservationsPage() {
         onOpenPatientMemo={openPatientMemoPopover}
         onOpenPatientHistory={openPatientHistory}
         onPatientMutated={() => reloadCurrent()}
+        listError={listError}
+        onRetry={reloadCurrent}
       />
 
       {totalPages > 1 && (

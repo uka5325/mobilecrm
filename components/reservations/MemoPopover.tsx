@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import type { ReservationNote } from "@/lib/reservationNotes";
 import type { ReservationRecord } from "@/lib/reservations";
 import { toDate } from "@/lib/settingsUtils";
@@ -10,8 +11,6 @@ export type MemoPopoverState = {
   loading: boolean;
 } | null;
 
-import { useState } from "react";
-
 type Props = {
   memoPopover: MemoPopoverState;
   editingNoteId: string | null;
@@ -20,8 +19,8 @@ type Props = {
   onEditStart: (noteId: string, text: string) => void;
   onEditCancel: () => void;
   onEditTextChange: (text: string) => void;
-  onUpdate: (note: ReservationNote) => void;
-  onDelete: (note: ReservationNote) => void;
+  onUpdate: (note: ReservationNote) => Promise<void>;
+  onDelete: (note: ReservationNote) => Promise<void>;
   onAdd: (text: string) => Promise<void>;
 };
 
@@ -41,6 +40,8 @@ export function MemoPopover({
 }: Props) {
   const [newText, setNewText] = useState("");
   const [adding, setAdding] = useState(false);
+  const [mutatingId, setMutatingId] = useState<string | null>(null);
+  const [mutationError, setMutationError] = useState("");
   const [page, setPage] = useState(1);
 
   if (!memoPopover) return null;
@@ -52,11 +53,38 @@ export function MemoPopover({
   async function handleAdd() {
     if (!newText.trim()) return;
     setAdding(true);
+    setMutationError("");
     try {
       await onAdd(newText.trim());
       setNewText("");
+    } catch (error) {
+      setMutationError(error instanceof Error ? error.message : "메모 저장에 실패했습니다.");
     } finally {
       setAdding(false);
+    }
+  }
+
+  async function handleUpdate(note: ReservationNote) {
+    setMutatingId(note.id);
+    setMutationError("");
+    try {
+      await onUpdate(note);
+    } catch (error) {
+      setMutationError(error instanceof Error ? error.message : "메모 수정에 실패했습니다.");
+    } finally {
+      setMutatingId(null);
+    }
+  }
+
+  async function handleDelete(note: ReservationNote) {
+    setMutatingId(note.id);
+    setMutationError("");
+    try {
+      await onDelete(note);
+    } catch (error) {
+      setMutationError(error instanceof Error ? error.message : "메모 삭제에 실패했습니다.");
+    } finally {
+      setMutatingId(null);
     }
   }
 
@@ -67,9 +95,7 @@ export function MemoPopover({
         <div className="flex items-center justify-between border-b border-[#edf0f3] px-5 py-4 shrink-0">
           <div>
             <div className="font-bold text-gray-800">{memoPopover.item.name} 메모</div>
-            <div className="text-xs text-gray-400">
-              전체 {totalNotes}건
-            </div>
+            <div className="text-xs text-gray-400">전체 {totalNotes}건</div>
           </div>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600">✕</button>
         </div>
@@ -82,9 +108,12 @@ export function MemoPopover({
             placeholder="새 메모 입력..."
             className="w-full resize-none rounded-xl border border-[#dfe3e8] px-3 py-2 text-sm focus:border-emerald-500 focus:outline-none"
           />
+          {mutationError && (
+            <div className="mt-2 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-600">{mutationError}</div>
+          )}
           <button
             onClick={handleAdd}
-            disabled={adding}
+            disabled={adding || mutatingId !== null}
             className="mt-2 w-full rounded-xl bg-emerald-600 py-2 text-sm font-medium text-white transition hover:-translate-y-0.5 disabled:opacity-50"
           >
             {adding ? "추가 중..." : "메모 추가"}
@@ -120,7 +149,11 @@ export function MemoPopover({
                     <div className="flex gap-2">
                       {editingNoteId === note.id ? (
                         <>
-                          <button onClick={() => onUpdate(note)} className="text-xs text-emerald-600 hover:underline">저장</button>
+                          <button
+                            disabled={mutatingId === note.id}
+                            onClick={() => handleUpdate(note)}
+                            className="text-xs text-emerald-600 hover:underline disabled:opacity-50"
+                          >저장</button>
                           <button onClick={onEditCancel} className="text-xs text-gray-400 hover:underline">취소</button>
                         </>
                       ) : (
@@ -129,7 +162,11 @@ export function MemoPopover({
                             onClick={() => onEditStart(note.id, note.memoText)}
                             className="text-xs text-blue-500 hover:underline"
                           >수정</button>
-                          <button onClick={() => onDelete(note)} className="text-xs text-red-400 hover:underline">삭제</button>
+                          <button
+                            disabled={mutatingId === note.id}
+                            onClick={() => handleDelete(note)}
+                            className="text-xs text-red-400 hover:underline disabled:opacity-50"
+                          >삭제</button>
                         </>
                       )}
                     </div>
@@ -158,17 +195,13 @@ export function MemoPopover({
                 onClick={() => setPage((p) => Math.max(1, p - 1))}
                 disabled={page === 1}
                 className="rounded-lg border border-[#dfe3e8] px-3 py-1 text-xs text-gray-600 disabled:opacity-40"
-              >
-                이전
-              </button>
+              >이전</button>
               <span className="text-xs text-gray-500">{page} / {totalPages}</span>
               <button
                 onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                 disabled={page === totalPages}
                 className="rounded-lg border border-[#dfe3e8] px-3 py-1 text-xs text-gray-600 disabled:opacity-40"
-              >
-                다음
-              </button>
+              >다음</button>
             </div>
           )}
         </div>

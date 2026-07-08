@@ -258,7 +258,8 @@ export async function POST(req: NextRequest) {
       // 고객관리 요약(인보이스 개수) 재계산 — best-effort
       await safeRecompute(
         () => recomputeInvoiceSummary(cleanText(reservation.patientId)),
-        "create/invoice"
+        "create/invoice",
+        cleanText(reservation.patientId)
       );
 
       const newSnap = await invoicesCol.doc(txResult.invoiceDocId).get();
@@ -400,7 +401,8 @@ export async function POST(req: NextRequest) {
       // 고객관리 요약(인보이스 개수) 재계산 — best-effort
       await safeRecompute(
         () => recomputeInvoiceSummary(cleanText(current.patientId)),
-        "delete/invoice"
+        "delete/invoice",
+        cleanText(current.patientId)
       );
 
       return NextResponse.json({ success: true });

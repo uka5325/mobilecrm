@@ -554,6 +554,7 @@ export type PatientRecord = {
   lastReservationTime?: string;
   hasMemo?: boolean;
   hasInvoice?: boolean;
+  reservationCountCapped?: boolean;
 };
 
 // patients 문서(요약 포함) → PatientRecord. 숫자 필드는 숫자만 통과(백필 전엔 undefined).
@@ -579,6 +580,7 @@ function mapPatientRecord(p: Record<string, unknown>): PatientRecord {
     lastReservationTime: cleanText(p.lastReservationTime),
     hasMemo: p.hasMemo === true,
     hasInvoice: p.hasInvoice === true,
+    reservationCountCapped: p.reservationCountCapped === true,
   };
 }
 
@@ -603,7 +605,9 @@ export async function listPatientsSummary(
   cursor?: string
 ): Promise<{ patients: PatientRecord[]; nextCursor: string | null }> {
   const result = await callReservationsApi("list_patients_summary", { limit, cursor });
-  if (!result.success || !Array.isArray(result.patients)) return { patients: [], nextCursor: null };
+  if (!result.success || !Array.isArray(result.patients)) {
+    throw new Error(result.message ? String(result.message) : "고객 목록을 불러오지 못했습니다.");
+  }
   const mapped = {
     patients: (result.patients as Record<string, unknown>[]).map(mapPatientRecord),
     nextCursor: (result.nextCursor as string) ?? null,
@@ -689,7 +693,9 @@ export async function searchPatients(term: string): Promise<PatientRecord[]> {
   const t = term.trim();
   if (!t) return [];
   const result = await callReservationsApi("search_patients", { term: t });
-  if (!result.success || !Array.isArray(result.patients)) return [];
+  if (!result.success || !Array.isArray(result.patients)) {
+    throw new Error(result.message ? String(result.message) : "검색에 실패했습니다.");
+  }
   return (result.patients as Record<string, unknown>[]).map(mapPatientRecord);
 }
 

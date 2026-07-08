@@ -6,12 +6,9 @@ import { adminDb, FieldValue } from "@/lib/firebaseAdmin";
 // 모든 함수는 best-effort: 호출부에서 try/catch로 감싸 핵심 mutation을 막지 않는다.
 
 const RESERVATION_CAP = 300;
+type SummaryDomain = "reservation" | "invoice" | "memo";
 
-// 신규 환자 문서에 기록할 요약(summary) 기본값. 필드/타입은 recomputeReservationSummary·
-// recomputeInvoiceSummary·recomputeMemoSummary가 실제로 쓰는 값과 정확히 일치한다.
-// (lastReservationAt은 Timestamp가 아니라 문자열 — 없으면 "".)
-// 목적: 예약 없이 환자만 생성돼도 lastReservationDate 필드가 존재해
-// list_patients_summary(orderBy lastReservationDate)에 노출되고 reservationCount=0으로 보인다.
+// 신규 환자 문서에 기록할 요약(summary) 기본값.
 export function createEmptyPatientSummary(): Record<string, unknown> {
   return {
     reservationCount: 0,
@@ -30,17 +27,26 @@ export function createEmptyPatientSummary(): Record<string, unknown> {
   };
 }
 
-// 금액 문자열("1,000,000", "100만" 등) → 숫자. invoices 라우트의 인라인 파싱과 동일 규칙
-// (숫자/점 외 제거) — 표기 문자는 버린다. 파싱 불가 시 0.
+// 금액 문자열("1,000,000", "100만", "1.5억" 등) → 원 단위 숫자.
 export function parseAmount(v: unknown): number {
-  const cleaned = String(v ?? "").replace(/[^0-9.]/g, "");
-  const n = parseFloat(cleaned);
+  const raw = String(v ?? "").trim().replace(/,/g, "");
+  if (!raw) return 0;
+
+  const unitMatches = [...raw.matchAll(/(-?\d+(?:\.\d+)?)\s*(억|만)/g)];
+  if (unitMatches.length) {
+    return unitMatches.reduce((sum, match) => {
+      const value = Number(match[1]);
+      if (!Number.isFinite(value)) return sum;
+      return sum + value * (match[2] === "억" ? 100_000_000 : 10_000);
+    }, 0);
+  }
+
+  const cleaned = raw.replace(/[^0-9.-]/g, "");
+  const n = Number(cleaned);
   return Number.isFinite(n) ? n : 0;
 }
 
 // 예약금/수술비 "묶음" 기준 키 — 같은 병원+상담부위+원장이면 1건으로 묶는다.
-// components/reservations/ReservationsTable.tsx의 makeKey와 동일 규칙이어야 배지 수치와
-// 팝오버 그룹 수가 일치한다.
 export function reservationGroupKey(r: Record<string, unknown>): string {
   const doctors = Array.isArray(r.doctors) ? (r.doctors as unknown[]) : [];
   return [
@@ -67,13 +73,15 @@ async function mergeIntoPatients(patientId: string, patch: Record<string, unknow
 // 예약 파생 요약: 건수/최근예약/예약금·수술비 카운트 및 합계.
 export async function recomputeReservationSummary(patientId: string): Promise<void> {
   if (!patientId) return;
+  // CAP+1을 읽어 정확히 300건인 경우와 301건 이상인 경우를 구분한다.
   const snap = await adminDb
     .collection("reservations")
     .where("patientId", "==", patientId)
     .where("isDeleted", "==", false)
     .orderBy("reservationDate", "desc")
-    .limit(RESERVATION_CAP)
+    .limit(RESERVATION_CAP + 1)
     .get();
+  const docs = snap.docs.slice(0, RESERVATION_CAP);
 
   let reservationCount = 0;
   let totalDepositAmount = 0;
@@ -81,23 +89,27 @@ export async function recomputeReservationSummary(patientId: string): Promise<vo
   let lastReservationDate = "";
   let lastReservationTime = "";
   let lastComposite = "";
-  // 예약금/수술비는 "묶음(그룹) 수"로 센다(같은 병원+부위+원장 = 1건).
   const depositGroups = new Set<string>();
   const surgeryGroups = new Set<string>();
 
-  for (const d of snap.docs) {
+  for (const d of docs) {
     const r = d.data() as Record<string, unknown>;
     reservationCount += 1;
     const hasDeposit = String(r.depositAmount ?? "").trim() !== "";
     const hasSurgery = String(r.surgeryCost ?? "").trim() !== "";
-    if (hasDeposit) { depositGroups.add(reservationGroupKey(r)); totalDepositAmount += parseAmount(r.depositAmount); }
-    if (hasSurgery) { surgeryGroups.add(reservationGroupKey(r)); totalSurgeryCost += parseAmount(r.surgeryCost); }
-    // 같은 날짜 내 시간 순서는 orderBy로 보장되지 않으므로 "날짜+시간" 합성값으로 최댓값 선택.
+    if (hasDeposit) {
+      depositGroups.add(reservationGroupKey(r));
+      totalDepositAmount += parseAmount(r.depositAmount);
+    }
+    if (hasSurgery) {
+      surgeryGroups.add(reservationGroupKey(r));
+      totalSurgeryCost += parseAmount(r.surgeryCost);
+    }
     const date = String(r.reservationDate || "");
     const time = String(r.reservationTime || "");
-    const comp = `${date} ${time}`;
-    if (comp > lastComposite) {
-      lastComposite = comp;
+    const composite = `${date} ${time}`;
+    if (composite > lastComposite) {
+      lastComposite = composite;
       lastReservationDate = date;
       lastReservationTime = time;
     }
@@ -112,7 +124,7 @@ export async function recomputeReservationSummary(patientId: string): Promise<vo
     lastReservationDate,
     lastReservationTime,
     lastReservationAt: lastReservationDate ? `${lastReservationDate} ${lastReservationTime}`.trim() : "",
-    reservationCountCapped: snap.docs.length === RESERVATION_CAP,
+    reservationCountCapped: snap.docs.length > RESERVATION_CAP,
   });
 }
 
@@ -142,13 +154,83 @@ export async function recomputeMemoSummary(patientId: string): Promise<void> {
   await mergeIntoPatients(patientId, { memoCount, hasMemo: memoCount > 0 });
 }
 
-// 호출부에서 사용하는 best-effort 래퍼 — 요약 갱신 실패가 핵심 mutation을 막지 않게 한다.
-export async function safeRecompute(fn: () => Promise<void>, label: string): Promise<void> {
+function inferDomain(label: string): SummaryDomain {
+  if (label.includes("invoice")) return "invoice";
+  if (label.includes("memo")) return "memo";
+  return "reservation";
+}
+
+// 호출부에서 사용하는 best-effort 래퍼.
+export async function safeRecompute(
+  fn: () => Promise<void>,
+  label: string,
+  patientId?: string,
+  domain: SummaryDomain = inferDomain(label)
+): Promise<void> {
   try {
     await fn();
   } catch (e) {
-    // 구조화 오류코드(SUMMARY_RECOMPUTE_FAILED) — best-effort 재계산 실패는 핵심 mutation을 막지 않지만
-    // 관측 가능해야 reconcile 스크립트로 후속 정합성 보정이 가능하다. 민감정보는 남기지 않는다.
     console.warn(`[patientSummary] SUMMARY_RECOMPUTE_FAILED (${label}):`, e instanceof Error ? e.message : String(e));
+    if (patientId) {
+      try {
+        await markSummaryDirty(patientId, domain, label);
+      } catch {
+        // dirty 플래그 기록 실패도 핵심 mutation을 되돌리지 않는다.
+      }
+    }
   }
+}
+
+async function markSummaryDirty(patientId: string, domain: SummaryDomain, label: string): Promise<void> {
+  if (!patientId) return;
+  const snap = await adminDb.collection("patients").where("patientId", "==", patientId).get();
+  if (snap.empty) return;
+  const batch = adminDb.batch();
+  for (const doc of snap.docs) {
+    batch.update(doc.ref, {
+      summaryDirty: true,
+      summaryDirtyDomains: FieldValue.arrayUnion(domain),
+      summaryDirtyAt: FieldValue.serverTimestamp(),
+      summaryDirtyLastError: label,
+    });
+  }
+  await batch.commit();
+}
+
+// dirty 원인이 어느 도메인이든 완전히 복구되도록 예약·인보이스·메모를 모두 재계산한다.
+export async function reconcileDirtyPatients(limit = 10): Promise<number> {
+  const snap = await adminDb
+    .collection("patients")
+    .where("summaryDirty", "==", true)
+    .limit(limit)
+    .get();
+  if (snap.empty) return 0;
+
+  const patientIds = [...new Set(snap.docs.map((doc) => String(doc.data().patientId || "")).filter(Boolean))];
+  let reconciled = 0;
+  for (const patientId of patientIds) {
+    try {
+      await Promise.all([
+        recomputeReservationSummary(patientId),
+        recomputeInvoiceSummary(patientId),
+        recomputeMemoSummary(patientId),
+      ]);
+
+      const patientSnap = await adminDb.collection("patients").where("patientId", "==", patientId).get();
+      const batch = adminDb.batch();
+      for (const doc of patientSnap.docs) {
+        batch.update(doc.ref, {
+          summaryDirty: FieldValue.delete(),
+          summaryDirtyDomains: FieldValue.delete(),
+          summaryDirtyAt: FieldValue.delete(),
+          summaryDirtyLastError: FieldValue.delete(),
+        });
+      }
+      await batch.commit();
+      reconciled += 1;
+    } catch (e) {
+      console.warn(`[patientSummary] DIRTY_RECONCILE_FAILED (${patientId}):`, e instanceof Error ? e.message : String(e));
+    }
+  }
+  return reconciled;
 }
