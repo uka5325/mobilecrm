@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { logout } from "@/lib/auth";
 import { TodayMemosProvider } from "@/components/TodayMemosProvider";
+import { PatientSummaryProvider } from "@/components/PatientSummaryProvider";
 import { CurrentUserProvider, useCurrentUserContext } from "@/components/CurrentUserProvider";
 
 type AppShellProps = {
@@ -295,9 +296,11 @@ function AppShellContent({ children }: AppShellProps) {
           </p>
         </div>
 
-        {/* 전역 45일 예약 구독은 폐기됨(화면별 범위 조회로 전환) — 홈=오늘, 스케줄=선택 범위,
-            고객관리=patients 요약. 오늘의 메모 구독만 전역 유지. */}
-        <TodayMemosProvider>{children}</TodayMemosProvider>
+        {/* 예약은 화면별 범위 구독(홈=오늘, 스케줄=선택 범위)을 유지한다.
+            고객관리 최근 환자 30명은 AppShell 수명의 PatientSummaryProvider가 첫 방문 이후 유지한다. */}
+        <PatientSummaryProvider>
+          <TodayMemosProvider>{children}</TodayMemosProvider>
+        </PatientSummaryProvider>
       </main>
     </div>
   );
