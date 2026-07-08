@@ -3,7 +3,7 @@ import { adminDb, FieldValue } from "@/lib/firebaseAdmin";
 import { docToObj, toSerializable } from "@/lib/adminUtils";
 import { makePatientSearchTokens } from "@/lib/searchTokens";
 import { identityKeyForPatient } from "@/lib/patientIdentity";
-import { createEmptyPatientSummary, reconcileDirtyPatients } from "@/lib/patientSummary";
+import { createEmptyPatientSummary } from "@/lib/patientSummary";
 import type { requireActiveStaff } from "@/lib/apiAuth";
 
 type StaffContext = Awaited<ReturnType<typeof requireActiveStaff>>;
@@ -202,11 +202,6 @@ export async function searchPatientsRaw(payload: Record<string, unknown>) {
 }
 
 export async function listPatientsSummaryRaw(payload: Record<string, unknown>) {
-  await reconcileDirtyPatients(5).catch((error) => {
-    console.warn("[patient summary reconcile]", error instanceof Error ? error.message : String(error));
-    return 0;
-  });
-
   const cursor = String(payload.cursor || "");
   const pageSize = Math.min(Math.max(Number(payload.limit) || 10, 1), 50);
   let query = adminDb.collection("patients")
