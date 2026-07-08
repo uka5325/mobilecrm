@@ -45,6 +45,7 @@ cp .env.example .env.local
 | `NEXT_PUBLIC_FIREBASE_APP_ID` | 클라이언트 | 〃 |
 | `NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID` | 클라이언트 | Google Analytics 사용 시(선택) |
 | `FIREBASE_SERVICE_ACCOUNT_KEY` | 서버 전용 | Firebase 콘솔 > 프로젝트 설정 > 서비스 계정 > 새 비공개 키 생성. JSON 파일 전체 내용을 한 줄 문자열로 설정. `/api/*` 라우트(firebase-admin)에서 사용하며 **절대 클라이언트에 노출하면 안 됩니다.** |
+| `CRON_SECRET` | 서버 전용 | Vercel Cron 요청 인증용 16자 이상 임의 문자열. Vercel Production 환경변수에 등록하며 클라이언트에 노출하면 안 됩니다. |
 
 `NEXT_PUBLIC_*` 값은 클라이언트 번들에 그대로 포함되므로 비밀값이 아닙니다. 실제 접근 통제는 `firestore.rules`와 서버 API의 `requireActiveStaff` 검증이 담당합니다.
 
@@ -98,4 +99,6 @@ http://localhost:3000 에서 확인합니다.
 - **앱 호스팅**: [Vercel](https://vercel.com/)에 Next.js 앱을 배포합니다(Firebase Hosting은 사용하지 않습니다).
 - **백엔드**: Firebase가 Firestore / Cloud Storage / Authentication만 담당합니다(Cloud Functions 미사용 — 서버 로직은 전부 Next.js API 라우트).
 - Vercel 프로젝트 설정의 환경변수에 위 표의 값을 동일하게 등록합니다.
+- `vercel.json`의 Cron은 매일 UTC 15:00(한국 시간 자정)에 `/api/cron/reconcile-patient-summaries`를 호출해 `summaryDirty` 환자를 최대 5명 복구합니다.
+- Cron 배포 전 Vercel Production 환경에 `CRON_SECRET`을 등록해야 하며, 고객 목록 API는 이 복구 작업을 기다리지 않습니다.
 - CI(`.github/workflows/ci.yml`)가 lint/타입체크/단위테스트/규칙테스트/API 테스트를 push·PR마다 실행합니다.

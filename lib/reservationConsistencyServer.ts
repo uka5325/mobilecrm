@@ -3,7 +3,7 @@ import { adminDb, FieldValue } from "@/lib/firebaseAdmin";
 import { docToObj, toSerializable } from "@/lib/adminUtils";
 import { makePatientSearchTokens } from "@/lib/searchTokens";
 import { identityKeyForPatient } from "@/lib/patientIdentity";
-import { createEmptyPatientSummary, reconcileDirtyPatients } from "@/lib/patientSummary";
+import { createEmptyPatientSummary } from "@/lib/patientSummary";
 import type { requireActiveStaff } from "@/lib/apiAuth";
 
 type StaffContext = Awaited<ReturnType<typeof requireActiveStaff>>;
@@ -202,29 +202,44 @@ export async function searchPatientsRaw(payload: Record<string, unknown>) {
 }
 
 export async function listPatientsSummaryRaw(payload: Record<string, unknown>) {
-  await reconcileDirtyPatients(5).catch((error) => {
-    console.warn("[patient summary reconcile]", error instanceof Error ? error.message : String(error));
-    return 0;
-  });
-
+  const t0 = performance.now();
   const cursor = String(payload.cursor || "");
   const pageSize = Math.min(Math.max(Number(payload.limit) || 10, 1), 50);
-  let query = adminDb.collection("patients")
+  let q = adminDb.collection("patients")
     .where("isDeleted", "==", false)
     .orderBy("lastReservationDate", "desc")
     .limit(pageSize);
+
+  let cursorMs = 0;
   if (cursor) {
+    const ct0 = performance.now();
     const cursorDoc = await adminDb.collection("patients").doc(cursor).get();
-    if (cursorDoc.exists) query = query.startAfter(cursorDoc) as typeof query;
+    cursorMs = performance.now() - ct0;
+    if (cursorDoc.exists) q = q.startAfter(cursorDoc) as typeof q;
   }
-  const snap = await query.get();
+
+  const qt0 = performance.now();
+  const snap = await q.get();
+  const queryMs = performance.now() - qt0;
+
+  const st0 = performance.now();
+  const patients = snap.docs.map(docToObj);
+  const serializeMs = performance.now() - st0;
+
   const nextCursor = snap.docs.length === pageSize ? snap.docs[snap.docs.length - 1].id : null;
-  return NextResponse.json({
-    success: true,
-    patients: snap.docs.map(docToObj),
-    nextCursor,
-    hasMore: Boolean(nextCursor),
-  });
+  const totalMs = performance.now() - t0;
+
+  const timingParts = [
+    `query;dur=${queryMs.toFixed(1)}`,
+    `serialize;dur=${serializeMs.toFixed(1)}`,
+    `total;dur=${totalMs.toFixed(1)}`,
+  ];
+  if (cursorMs > 0) timingParts.unshift(`cursor;dur=${cursorMs.toFixed(1)}`);
+
+  return NextResponse.json(
+    { success: true, patients, nextCursor, hasMore: Boolean(nextCursor) },
+    { headers: { "Server-Timing": timingParts.join(", ") } }
+  );
 }
 
 export async function patientFullHistoryExact(payload: Record<string, unknown>) {

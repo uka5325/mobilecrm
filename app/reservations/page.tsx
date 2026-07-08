@@ -13,7 +13,10 @@ import {
   invalidatePatientFullHistoryCache,
   searchPatients,
   listPatientsSummary,
-  getCachedPatientsSummary,
+  getPatientSummaryCache,
+  setPatientSummaryCache,
+  invalidatePatientSummaryCache,
+  isPatientSummaryCacheFresh,
   type ReservationRecord,
   type AppointmentType,
   type PatientRecord,
@@ -31,11 +34,19 @@ import { getReservationNotes, addReservationNote, updateReservationNote, deleteR
 import { toDate } from "@/lib/settingsUtils";
 
 
+function initFromCache(uid: string | undefined) {
+  if (!uid) return { patients: [] as PatientRecord[], nextCursor: null as string | null, hasCachedData: false };
+  const cached = getPatientSummaryCache(uid);
+  if (cached) return { patients: cached.patients, nextCursor: cached.nextCursor, hasCachedData: true };
+  return { patients: [] as PatientRecord[], nextCursor: null as string | null, hasCachedData: false };
+}
+
 export default function ReservationsPage() {
   const { currentUser, authReady } = useCurrentUser();
-  // 전역 45일 예약 구독 폐기 — 고객관리는 patients 요약만 조회한다.
-  // 캐시가 있으면 즉시 렌더 + 백그라운드 갱신, 없을 때만 blocking 로딩.
-  const [listLoading, setListLoading] = useState(() => !getCachedPatientsSummary());
+  const uid = currentUser?.uid;
+
+  const [initialLoading, setInitialLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [listError, setListError] = useState<string | null>(null);
   const searchSeqRef = useRef(0);
@@ -43,8 +54,20 @@ export default function ReservationsPage() {
   const [search, setSearch] = useState("");
   const [groupPage, setGroupPage] = useState(1);
   const PAGE_SIZE = 10;
-  const [patients, setPatients] = useState<PatientRecord[]>(() => getCachedPatientsSummary()?.patients ?? []);
-  const [patientsNextCursor, setPatientsNextCursor] = useState<string | null>(() => getCachedPatientsSummary()?.nextCursor ?? null);
+  const [patients, setPatients] = useState<PatientRecord[]>([]);
+  const [patientsNextCursor, setPatientsNextCursor] = useState<string | null>(null);
+
+  // UID가 확정되면 캐시에서 즉시 복원
+  const uidInitRef = useRef<string | null>(null);
+  if (uid && uidInitRef.current !== uid) {
+    uidInitRef.current = uid;
+    const init = initFromCache(uid);
+    if (init.hasCachedData && patients.length === 0) {
+      setPatients(init.patients);
+      setPatientsNextCursor(init.nextCursor);
+      setInitialLoading(false);
+    }
+  }
 
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [importDrawerOpen, setImportDrawerOpen] = useState(false);
@@ -164,29 +187,52 @@ export default function ReservationsPage() {
   // 검색어 입력 시(디바운스 300ms) 매칭된 환자만 서버에서 읽는다. 빈 검색이면 환자 목록 비움(예약 기반 유지).
   // 최소 글자 제한: 이름 2자↑ / 숫자(전화)만이면 4자↑ — 1글자 검색으로 인한 불필요한 서버 호출 방지.
   // 고객관리 첫 화면: patients 요약 최근순(45일 지난 환자 포함). 배지는 summary 값.
-  const reloadPatients = useCallback(() => {
-    setListLoading(true);
+  const reloadPatients = useCallback(({ force = false }: { force?: boolean } = {}) => {
+    if (!uid) return;
+    if (!force) {
+      const cached = getPatientSummaryCache(uid);
+      if (cached && isPatientSummaryCacheFresh(cached)) {
+        setPatients(cached.patients);
+        setPatientsNextCursor(cached.nextCursor);
+        setInitialLoading(false);
+        setRefreshing(false);
+        return;
+      }
+    }
+    if (patients.length > 0) {
+      setRefreshing(true);
+    } else {
+      setInitialLoading(true);
+    }
     setListError(null);
     listPatientsSummary(30)
-      .then((r) => { setPatients(r.patients); setPatientsNextCursor(r.nextCursor); setListError(null); })
+      .then((r) => {
+        setPatients(r.patients);
+        setPatientsNextCursor(r.nextCursor);
+        setListError(null);
+        if (uid) setPatientSummaryCache(uid, r.patients, r.nextCursor);
+      })
       .catch((e) => { setListError(e instanceof Error ? e.message : "고객 목록을 불러오지 못했습니다."); })
-      .finally(() => setListLoading(false));
-  }, []);
+      .finally(() => { setInitialLoading(false); setRefreshing(false); });
+  }, [uid, patients.length]);
 
-  // 현재 화면(검색 중이면 검색 결과, 아니면 요약 목록)을 다시 로드 — mutation 후 갱신용.
   const reloadCurrent = useCallback(() => {
     const t = search.trim();
     const digitsOnly = t.length > 0 && /^[0-9]+$/.test(t);
     const longEnough = digitsOnly ? t.length >= 4 : t.length >= 2;
-    setListLoading(true);
+    if (patients.length > 0) setRefreshing(true); else setInitialLoading(true);
     setListError(null);
     const p = (t && longEnough)
       ? searchPatients(t).then((list) => { setPatientsNextCursor(null); return list; })
-      : listPatientsSummary(30).then((r) => { setPatientsNextCursor(r.nextCursor); return r.patients; });
+      : listPatientsSummary(30).then((r) => {
+          setPatientsNextCursor(r.nextCursor);
+          if (uid) setPatientSummaryCache(uid, r.patients, r.nextCursor);
+          return r.patients;
+        });
     p.then((list) => { setPatients(list); setListError(null); })
       .catch((e) => { setListError(e instanceof Error ? e.message : "데이터를 불러오지 못했습니다."); })
-      .finally(() => setListLoading(false));
-  }, [search]);
+      .finally(() => { setInitialLoading(false); setRefreshing(false); });
+  }, [search, uid, patients.length]);
 
   // 서버 커서로 다음 페이지를 이어붙인다("더보기") — 검색 중에는 사용하지 않음.
   const loadMorePatients = useCallback(async () => {
@@ -204,27 +250,26 @@ export default function ReservationsPage() {
   }, [patientsNextCursor, loadingMore]);
 
   useEffect(() => {
-    if (!authReady) return;
+    if (!authReady || !uid) return;
     const t = search.trim();
     const digitsOnly = t.length > 0 && /^[0-9]+$/.test(t);
     const longEnough = digitsOnly ? t.length >= 4 : t.length >= 2;
     if (!t || !longEnough) {
-      // 검색어가 없거나 짧으면 기본 요약 목록.
       reloadPatients();
       return;
     }
     const seq = ++searchSeqRef.current;
     const handle = setTimeout(() => {
-      setListLoading(true);
+      if (patients.length > 0) setRefreshing(true); else setInitialLoading(true);
       setPatientsNextCursor(null);
       setListError(null);
       searchPatients(t)
         .then((list) => { if (searchSeqRef.current === seq) { setPatients(list); setListError(null); } })
         .catch((e) => { if (searchSeqRef.current === seq) { setListError(e instanceof Error ? e.message : "검색에 실패했습니다."); } })
-        .finally(() => { if (searchSeqRef.current === seq) setListLoading(false); });
+        .finally(() => { if (searchSeqRef.current === seq) { setInitialLoading(false); setRefreshing(false); } });
     }, 300);
     return () => clearTimeout(handle);
-  }, [authReady, search, reloadPatients]);
+  }, [authReady, uid, search, reloadPatients]);
 
   const pagedGroups = useMemo(() => {
     const start = (groupPage - 1) * PAGE_SIZE;
@@ -613,7 +658,7 @@ export default function ReservationsPage() {
 
       <div className="px-5 pb-3 flex items-center gap-2 text-sm text-gray-500">
         <span>환자 {patientGroups.length}명</span>
-        {listLoading && patients.length > 0 && (
+        {refreshing && (
           <span className="text-xs text-gray-400">새로고침 중...</span>
         )}
       </div>
@@ -685,7 +730,7 @@ export default function ReservationsPage() {
 
       <ReservationsTable
         patientGroups={pagedGroups}
-        loading={listLoading}
+        loading={initialLoading}
         inlineEditId={inlineEditId}
         inlineForm={inlineForm}
         inlineSaving={inlineSaving}
