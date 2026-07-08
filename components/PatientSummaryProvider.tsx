@@ -101,8 +101,7 @@ const PatientSummaryContext = createContext<PatientSummaryContextValue | null>(n
 export function PatientSummaryProvider({ children }: { children: ReactNode }) {
   const { currentUser, authReady } = useCurrentUserContext();
   const uid = currentUser?.uid || null;
-  const initialCacheRef = useRef(uid ? getPatientSummaryCache(uid) : null);
-  const initialCache = initialCacheRef.current;
+  const [initialCache] = useState(() => uid ? getPatientSummaryCache(uid) : null);
 
   const [patients, setPatients] = useState<PatientRecord[]>(() => initialCache?.patients ?? []);
   const [nextCursor, setNextCursor] = useState<string | null>(() => initialCache?.nextCursor ?? null);

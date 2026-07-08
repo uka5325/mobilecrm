@@ -940,7 +940,7 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ success: false, code: "LOCK_OWNERSHIP_MISMATCH", message: "예약 lock 소유권이 일치하지 않아 저장하지 않았습니다." }, { status: 409 });
       }
 
-      const { canonicalPatientId, canonicalReservationId, beforeChanged, staleLockRepaired } = outcome;
+      const { canonicalPatientId, canonicalReservationId, beforeChanged: _beforeChanged, staleLockRepaired } = outcome;
 
       if (staleLockRepaired) {
         await writeReservationLog(ctx, {
