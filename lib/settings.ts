@@ -450,7 +450,10 @@ export function subscribeConferenceMemos(
     unsubscribeSnapshot = onSnapshot(
       query(collection(db, "conferenceMemos"), where("memoDate", "==", targetDate)),
       (snap) => {
-        if (snap.metadata.fromCache && snap.empty) return;
+        if (snap.metadata.fromCache && snap.empty) {
+          callback([]);
+          return;
+        }
         const memos = snap.docs
           .map((d) => mapConferenceMemoDoc(d.id, d.data() as Record<string, unknown>))
           .filter((m) => !m.deleted)

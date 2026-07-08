@@ -406,8 +406,10 @@ export function subscribeReservationsByRange(
     unsubscribeSnapshot = onSnapshot(
       query(collection(db, "reservations"), ...constraints),
       (snap) => {
-        // 캐시 기반 빈 스냅샷은 무시 (초기 깜빡임 방지)
-        if (snap.metadata.fromCache && snap.empty) return;
+        if (snap.metadata.fromCache && snap.empty) {
+          callback({ reservations: [], doctors: latestDoctors });
+          return;
+        }
         const reservations = sortReservations(
           snap.docs
             .map((d) => mapReservationDoc(d.id, d.data() as Record<string, unknown>))
