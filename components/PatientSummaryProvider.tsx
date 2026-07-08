@@ -211,7 +211,7 @@ export function PatientSummaryProvider({ children }: { children: ReactNode }) {
       patientSummaryQuery(),
       { includeMetadataChanges: true },
       (snapshot) => {
-        resetRetry();
+        if (!snapshot.metadata.fromCache) resetRetry();
         if (snapshot.metadata.fromCache && snapshot.empty) {
           setLoading(false);
           setRefreshing(true);
@@ -236,7 +236,6 @@ export function PatientSummaryProvider({ children }: { children: ReactNode }) {
         unsubscribeRef.current = null;
         startedUidRef.current = null;
         setStarted(false);
-        setLoading(false);
         setRefreshing(false);
 
         const code = (listenerError as FirestoreError).code;
@@ -244,15 +243,24 @@ export function PatientSummaryProvider({ children }: { children: ReactNode }) {
           scheduleRetry();
         }
 
-        if (patientsRef.current.length > 0 || fallbackInFlightRef.current) {
-          setError(listenerError.message || "고객 목록 실시간 연결이 끊겼습니다.");
+        // 이미 화면에 표시할 데이터가 있으면 그대로 유지하고 백그라운드 재연결만 수행한다.
+        if (patientsRef.current.length > 0) {
+          setLoading(false);
+          setError(null);
           return;
         }
 
+        if (fallbackInFlightRef.current) {
+          setLoading(true);
+          return;
+        }
+
+        setLoading(true);
         fallbackInFlightRef.current = true;
         void listPatientsSummary(SUMMARY_LIMIT)
           .then((result) => applyPatients(result.patients, result.nextCursor, uid))
           .catch((fallbackError) => {
+            setLoading(false);
             setError(fallbackError instanceof Error ? fallbackError.message : "고객 목록을 불러오지 못했습니다.");
           })
           .finally(() => {
