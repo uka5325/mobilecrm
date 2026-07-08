@@ -12,15 +12,16 @@ rules_version = '2';
 //
 // 클라이언트 SDK 직접 접근 컬렉션 (이 파일에서 개방):
 //   - reservations         : 실시간 onSnapshot 읽기 + 의사명 일괄변경(admin) 쓰기
+//   - patients             : 고객관리 최근 30명 summary 실시간 onSnapshot 읽기 전용
 //   - staff                : 의사목록/이메일/설정 읽기, 직원관리 쓰기(admin)
-//   - reservationPhotos     : 사진 CRUD
-//   - conferenceMemos       : 실시간 onSnapshot 읽기 전용(쓰기는 /api/settings 경유)
+//   - reservationPhotos    : 사진 CRUD
+//   - conferenceMemos      : 실시간 onSnapshot 읽기 전용(쓰기는 /api/settings 경유)
 // 그 외 컬렉션은 모두 admin API 경유 → 클라이언트 직접 접근 차단.
 //
 // 3. 행(row) 단위 권한 분리는 의도적으로 두지 않았다. isActiveStaff()만 통과하면
 //    role(admin/coordinator/staff/interpreter) 구분 없이 위 컬렉션들을 볼 수 있다.
-//    상담회/병원 운영 특성상 전 직원이 전체 일정·직원목록·사진/메모를 봐야 하므로
-//    버그가 아니라 의도된 설계다. "본인 담당 건만" 같은 요구가 생기면 그때 좁힌다.
+//    상담회/병원 운영 특성상 전 직원이 전체 일정·직원목록·환자 summary·사진/메모를
+//    봐야 하므로 버그가 아니라 의도된 설계다. "본인 담당 건만" 같은 요구가 생기면 그때 좁힌다.
 // ─────────────────────────────────────────────────────────────────────────────
 
 service cloud.firestore {
@@ -67,6 +68,14 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    // ── 환자 summary (고객관리 최근 30명 실시간 읽기 전용) ──────────────────
+    // 환자 생성·수정·삭제와 count/금액/최근예약 summary 갱신은 계속 서버 API만 수행한다.
+    // 클라이언트는 활성 직원에 한해 목록 표시용 문서를 읽을 수 있고 쓰기는 전면 차단한다.
+    match /patients/{id} {
+      allow read: if isActiveStaff();
+      allow write: if false;
+    }
+
     // ── 예약 사진 ──────────────────────────────────────────────────────────
     match /reservationPhotos/{id} {
       allow read: if isActiveStaff();
@@ -100,7 +109,6 @@ service cloud.firestore {
     // admin SDK는 규칙을 우회하므로 아래 차단이 API 동작에 영향을 주지 않는다.
     match /invoices/{id}                  { allow read, write: if false; }
     match /logs/{id}                      { allow read, write: if false; }
-    match /patients/{id}                  { allow read, write: if false; }
     match /reservationNotes/{id}          { allow read, write: if false; }
     match /notes/{id}                     { allow read, write: if false; }
     match /invoiceTemplates/{id}          { allow read, write: if false; }
