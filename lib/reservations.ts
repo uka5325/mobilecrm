@@ -584,22 +584,22 @@ function mapPatientRecord(p: Record<string, unknown>): PatientRecord {
   };
 }
 
-// 고객관리 첫 화면 summary 캐시 — 재진입 시 즉시 렌더 + 백그라운드 갱신.
-// 첫 페이지(cursor 없음) 결과만 캐시한다(더보기로 누적된 페이지는 캐시 대상 아님).
-let _patientsSummaryCache: { at: number; patients: PatientRecord[]; nextCursor: string | null } | null = null;
-const PATIENTS_SUMMARY_CACHE_TTL = 5 * 60 * 1000;
+export {
+  getPatientSummaryCache,
+  setPatientSummaryCache,
+  invalidatePatientSummaryCache,
+  isPatientSummaryCacheFresh,
+} from "./patientSummaryClientCache";
 
+import { invalidatePatientSummaryCache as _invalidatePatientSummaryCache } from "./patientSummaryClientCache";
+// Alias kept for existing callsites in this file and reservationsSafe.ts
+export const invalidatePatientsSummaryCache = _invalidatePatientSummaryCache;
+// Legacy compat — old callers used getCachedPatientsSummary()
 export function getCachedPatientsSummary(): { patients: PatientRecord[]; nextCursor: string | null } | undefined {
-  if (!_patientsSummaryCache || Date.now() - _patientsSummaryCache.at >= PATIENTS_SUMMARY_CACHE_TTL) return undefined;
-  return { patients: _patientsSummaryCache.patients, nextCursor: _patientsSummaryCache.nextCursor };
+  // No UID available here — return undefined so page uses the new UID-aware API
+  return undefined;
 }
 
-export function invalidatePatientsSummaryCache() {
-  _patientsSummaryCache = null;
-}
-
-// 고객관리 첫 화면: patients를 요약(lastReservationDate 내림차순)으로 페이지 조회.
-// 45일 라이브 윈도우와 무관 — 과거 환자도 노출되며 배지는 저장된 summary로 표시.
 export async function listPatientsSummary(
   limit = 30,
   cursor?: string
@@ -608,12 +608,10 @@ export async function listPatientsSummary(
   if (!result.success || !Array.isArray(result.patients)) {
     throw new Error(result.message ? String(result.message) : "고객 목록을 불러오지 못했습니다.");
   }
-  const mapped = {
+  return {
     patients: (result.patients as Record<string, unknown>[]).map(mapPatientRecord),
     nextCursor: (result.nextCursor as string) ?? null,
   };
-  if (!cursor) _patientsSummaryCache = { at: Date.now(), ...mapped };
-  return mapped;
 }
 
 // 예약금/수술비 최소 수정 — 금액 팝오버 저장용. 화이트리스트 필드만 patch하며
