@@ -92,15 +92,17 @@ const PatientSummaryContext = createContext<PatientSummaryContextValue | null>(n
 export function PatientSummaryProvider({ children }: { children: ReactNode }) {
   const { currentUser, authReady } = useCurrentUserContext();
   const uid = currentUser?.uid || null;
+  const initialCacheRef = useRef(uid ? getPatientSummaryCache(uid) : null);
+  const initialCache = initialCacheRef.current;
 
-  const [patients, setPatients] = useState<PatientRecord[]>([]);
-  const [nextCursor, setNextCursor] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [patients, setPatients] = useState<PatientRecord[]>(() => initialCache?.patients ?? []);
+  const [nextCursor, setNextCursor] = useState<string | null>(() => initialCache?.nextCursor ?? null);
+  const [loading, setLoading] = useState(() => Boolean(uid && !initialCache));
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [started, setStarted] = useState(false);
 
-  const patientsRef = useRef<PatientRecord[]>([]);
+  const patientsRef = useRef<PatientRecord[]>(initialCache?.patients ?? []);
   const unsubscribeRef = useRef<(() => void) | null>(null);
   const startedUidRef = useRef<string | null>(null);
 
@@ -135,7 +137,7 @@ export function PatientSummaryProvider({ children }: { children: ReactNode }) {
     patientsRef.current = cachedPatients;
     setPatients(cachedPatients);
     setNextCursor(cached?.nextCursor ?? null);
-    setLoading(false);
+    setLoading(!cached);
 
     return () => {
       unsubscribeRef.current?.();
@@ -196,8 +198,6 @@ export function PatientSummaryProvider({ children }: { children: ReactNode }) {
         startedUidRef.current = null;
         setStarted(false);
 
-        // 배포 순서상 rules/index가 아직 반영되지 않았거나 일시적인 listener 오류가 나도
-        // 고객관리 자체가 막히지 않도록 기존 서버 API를 1회 fallback으로 사용한다.
         void listPatientsSummary(SUMMARY_LIMIT)
           .then((result) => applyPatients(result.patients, result.nextCursor, uid))
           .catch((fallbackError) => {
@@ -208,6 +208,13 @@ export function PatientSummaryProvider({ children }: { children: ReactNode }) {
       }
     );
   }, [applyPatients, authReady, uid]);
+
+  // 고객관리 페이지에 들어간 뒤 구독을 시작하면 진입 로딩이 생긴다.
+  // 인증이 끝나는 즉시 AppShell 수명에서 미리 구독해 페이지 진입 전 데이터를 준비한다.
+  useEffect(() => {
+    if (!authReady || !uid) return;
+    start();
+  }, [authReady, uid, start]);
 
   const refresh = useCallback(async () => {
     if (!authReady || !uid) return;
@@ -225,7 +232,6 @@ export function PatientSummaryProvider({ children }: { children: ReactNode }) {
         : null;
       applyPatients(mapped, cursor, uid);
     } catch (refreshError) {
-      // 직접 조회가 실패하면 서버 API를 한 번 사용해 현재 화면을 유지한다.
       try {
         const result = await listPatientsSummary(SUMMARY_LIMIT);
         applyPatients(result.patients, result.nextCursor, uid);
