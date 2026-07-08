@@ -2,8 +2,8 @@
  * Firestore 보안 규칙 단위 테스트 (allow/deny 매트릭스)
  *
  * 목적: 배포 전 회귀 안전망. firestore.rules가 의도대로
- *   - client SDK 직접 우회(invoices/logs/patients 등)를 차단하고
- *   - 실시간 경로(reservations/staff/photos)는 허용하며 (charts는 기능 제거로 차단)
+ *   - client SDK 직접 우회(invoices/logs 등)를 차단하고
+ *   - 실시간 경로(reservations/patients/staff/photos)는 허용하며 (charts는 기능 제거로 차단)
  *   - 비활성 admin의 권한을 박탈하는지
  * 를 자동 검증한다.
  *
@@ -62,7 +62,7 @@ beforeEach(async () => {
     await setDoc(doc(db, "reservationCharts/ch1"), { createdByUid: "staffA", isDeleted: false, chartUrl: "u", storagePath: "s" });
     await setDoc(doc(db, "invoices/inv1"), { isDeleted: false, totalAmount: 1000 });
     await setDoc(doc(db, "logs/log1"), { action: "x" });
-    await setDoc(doc(db, "patients/p1"), { name: "홍길동", isDeleted: false });
+    await setDoc(doc(db, "patients/p1"), { name: "홍길동", isDeleted: false, lastReservationDate: "2026-07-08" });
     await setDoc(doc(db, "conferenceMemos/m1"), { memoDate: "2026-07-02", memoText: "테스트 메모", deleted: false });
   });
 });
@@ -90,8 +90,16 @@ test("활성 직원이라도 logs 직접 읽기는 차단된다", async () => {
   await assertFails(getDoc(doc(activeStaff(), "logs/log1")));
 });
 
-test("활성 직원이라도 patients 직접 읽기는 차단된다", async () => {
-  await assertFails(getDoc(doc(activeStaff(), "patients/p1")));
+test("활성 직원은 patients summary를 직접 읽을 수 있다", async () => {
+  await assertSucceeds(getDoc(doc(activeStaff(), "patients/p1")));
+});
+
+test("미인증 사용자는 patients summary를 읽을 수 없다", async () => {
+  await assertFails(getDoc(doc(anon(), "patients/p1")));
+});
+
+test("활성 직원이라도 patients 직접 쓰기는 차단된다", async () => {
+  await assertFails(updateDoc(doc(activeStaff(), "patients/p1"), { name: "변조" }));
 });
 
 test("활성 직원이라도 invoices 직접 쓰기는 차단된다", async () => {
@@ -178,6 +186,10 @@ test("비활성화된 admin은 staff 수정 권한을 잃는다 (isAdmin active 
 
 test("비활성화된 admin은 reservations 읽기도 차단된다 (isActiveStaff)", async () => {
   await assertFails(getDoc(doc(inactiveAdmin(), "reservations/r1")));
+});
+
+test("비활성화된 admin은 patients summary 읽기도 차단된다", async () => {
+  await assertFails(getDoc(doc(inactiveAdmin(), "patients/p1")));
 });
 
 // ── P0: staff.active는 클라 SDK로 직접 바꿀 수 없다(admin이어도) ────────────────
