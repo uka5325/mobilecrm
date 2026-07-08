@@ -19,6 +19,7 @@ import {
   query,
   where,
   type DocumentData,
+  type FirestoreError,
   type QueryDocumentSnapshot,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
@@ -31,6 +32,14 @@ import {
 import { listPatientsSummary, type PatientRecord } from "@/lib/reservations";
 
 const SUMMARY_LIMIT = 30;
+const RETRY_BASE_MS = 1_000;
+const RETRY_MAX_MS = 30_000;
+const NON_RETRYABLE_CODES = new Set<FirestoreError["code"]>([
+  "permission-denied",
+  "unauthenticated",
+  "invalid-argument",
+  "failed-precondition",
+]);
 
 function text(value: unknown): string {
   if (value == null) return "";
@@ -105,6 +114,22 @@ export function PatientSummaryProvider({ children }: { children: ReactNode }) {
   const patientsRef = useRef<PatientRecord[]>(initialCache?.patients ?? []);
   const unsubscribeRef = useRef<(() => void) | null>(null);
   const startedUidRef = useRef<string | null>(null);
+  const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const retryAttemptRef = useRef(0);
+  const startRef = useRef<() => void>(() => {});
+  const fallbackInFlightRef = useRef(false);
+
+  const clearRetryTimer = useCallback(() => {
+    if (retryTimerRef.current) {
+      clearTimeout(retryTimerRef.current);
+      retryTimerRef.current = null;
+    }
+  }, []);
+
+  const resetRetry = useCallback(() => {
+    clearRetryTimer();
+    retryAttemptRef.current = 0;
+  }, [clearRetryTimer]);
 
   const applyPatients = useCallback((nextPatients: PatientRecord[], cursor: string | null, cacheUid: string) => {
     patientsRef.current = nextPatients;
@@ -116,10 +141,21 @@ export function PatientSummaryProvider({ children }: { children: ReactNode }) {
     setError(null);
   }, []);
 
+  const scheduleRetry = useCallback(() => {
+    if (retryTimerRef.current || typeof window === "undefined") return;
+    const attempt = retryAttemptRef.current++;
+    const delay = Math.min(RETRY_BASE_MS * 2 ** attempt, RETRY_MAX_MS);
+    retryTimerRef.current = setTimeout(() => {
+      retryTimerRef.current = null;
+      startRef.current();
+    }, delay);
+  }, []);
+
   useEffect(() => {
     unsubscribeRef.current?.();
     unsubscribeRef.current = null;
     startedUidRef.current = null;
+    resetRetry();
     setStarted(false);
     setError(null);
     setRefreshing(false);
@@ -142,12 +178,14 @@ export function PatientSummaryProvider({ children }: { children: ReactNode }) {
     return () => {
       unsubscribeRef.current?.();
       unsubscribeRef.current = null;
+      clearRetryTimer();
     };
-  }, [uid]);
+  }, [uid, clearRetryTimer, resetRetry]);
 
   const start = useCallback(() => {
     if (!authReady || !uid || startedUidRef.current === uid) return;
 
+    clearRetryTimer();
     unsubscribeRef.current?.();
     unsubscribeRef.current = null;
     startedUidRef.current = uid;
@@ -173,6 +211,7 @@ export function PatientSummaryProvider({ children }: { children: ReactNode }) {
       patientSummaryQuery(),
       { includeMetadataChanges: true },
       (snapshot) => {
+        resetRetry();
         if (snapshot.metadata.fromCache && snapshot.empty) {
           setLoading(false);
           setRefreshing(true);
@@ -197,24 +236,54 @@ export function PatientSummaryProvider({ children }: { children: ReactNode }) {
         unsubscribeRef.current = null;
         startedUidRef.current = null;
         setStarted(false);
+        setLoading(false);
+        setRefreshing(false);
 
+        const code = (listenerError as FirestoreError).code;
+        if (!NON_RETRYABLE_CODES.has(code)) {
+          scheduleRetry();
+        }
+
+        if (patientsRef.current.length > 0 || fallbackInFlightRef.current) {
+          setError(listenerError.message || "고객 목록 실시간 연결이 끊겼습니다.");
+          return;
+        }
+
+        fallbackInFlightRef.current = true;
         void listPatientsSummary(SUMMARY_LIMIT)
           .then((result) => applyPatients(result.patients, result.nextCursor, uid))
           .catch((fallbackError) => {
-            setLoading(false);
-            setRefreshing(false);
             setError(fallbackError instanceof Error ? fallbackError.message : "고객 목록을 불러오지 못했습니다.");
+          })
+          .finally(() => {
+            fallbackInFlightRef.current = false;
           });
       }
     );
-  }, [applyPatients, authReady, uid]);
+  }, [applyPatients, authReady, clearRetryTimer, resetRetry, scheduleRetry, uid]);
 
-  // 고객관리 페이지에 들어간 뒤 구독을 시작하면 진입 로딩이 생긴다.
-  // 인증이 끝나는 즉시 AppShell 수명에서 미리 구독해 페이지 진입 전 데이터를 준비한다.
+  useEffect(() => {
+    startRef.current = start;
+  }, [start]);
+
+  // 인증이 끝나는 즉시 AppShell 수명에서 미리 구독해 고객관리 진입 전 데이터를 준비한다.
   useEffect(() => {
     if (!authReady || !uid) return;
     start();
   }, [authReady, uid, start]);
+
+  // 네트워크가 복구됐는데 listener가 끊긴 상태라면 즉시 재연결한다.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const handleOnline = () => {
+      if (!uid || startedUidRef.current === uid) return;
+      retryAttemptRef.current = 0;
+      clearRetryTimer();
+      startRef.current();
+    };
+    window.addEventListener("online", handleOnline);
+    return () => window.removeEventListener("online", handleOnline);
+  }, [uid, clearRetryTimer]);
 
   const refresh = useCallback(async () => {
     if (!authReady || !uid) return;
@@ -255,6 +324,7 @@ export function PatientSummaryProvider({ children }: { children: ReactNode }) {
     unsubscribeRef.current = null;
     startedUidRef.current = null;
     patientsRef.current = [];
+    resetRetry();
     setStarted(false);
     setPatients([]);
     setNextCursor(null);
@@ -262,7 +332,7 @@ export function PatientSummaryProvider({ children }: { children: ReactNode }) {
     setRefreshing(false);
     setError(null);
     invalidatePatientSummaryCache();
-  }, [uid]);
+  }, [uid, resetRetry]);
 
   const value = useMemo<PatientSummaryContextValue>(() => ({
     patients,
