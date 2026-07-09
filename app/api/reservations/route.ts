@@ -349,21 +349,9 @@ export async function POST(req: NextRequest) {
         .orderBy("reservationDate", "desc")
         .limit(queryLimit)
         .get();
-      let rows = buildAmountRowsFromReservations(flagSnap.docs.map(docToObj), type);
-      let source: "flag" | "fallback" = "flag";
+      const rows = buildAmountRowsFromReservations(flagSnap.docs.map(docToObj), type);
 
-      if (expected > 0 && rows.length < expected) {
-        const fallbackSnap = await adminDb.collection("reservations")
-          .where("patientId", "==", patientId)
-          .where("isDeleted", "==", false)
-          .orderBy("reservationDate", "desc")
-          .limit(300)
-          .get();
-        rows = buildAmountRowsFromReservations(fallbackSnap.docs.map(docToObj), type);
-        source = "fallback";
-      }
-
-      return NextResponse.json({ success: true, rows, source });
+      return NextResponse.json({ success: true, rows, source: "flag" });
     }
 
     // ── READ: patient FULL reservation history (no pagination, safety-capped) ──

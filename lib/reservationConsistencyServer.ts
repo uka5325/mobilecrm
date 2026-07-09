@@ -262,23 +262,9 @@ export async function patientAmountRows(payload: Record<string, unknown>) {
     .limit(queryLimit)
     .get();
 
-  let rows = buildAmountRowsFromReservations(flagSnap.docs.map(docToObj), type);
-  let source: "flag" | "fallback" = "flag";
+  const rows = buildAmountRowsFromReservations(flagSnap.docs.map(docToObj), type);
 
-  // 백필/인덱스 배포 직후에는 과거 문서에 boolean flag가 없을 수 있다.
-  // 배지의 예상 그룹 수보다 적게 나오면 기존 full-history 방식으로 1회 보정해 기능 누락을 막는다.
-  if (expectedCount > 0 && rows.length < expectedCount) {
-    const fallbackSnap = await adminDb.collection("reservations")
-      .where("patientId", "==", patientId)
-      .where("isDeleted", "==", false)
-      .orderBy("reservationDate", "desc")
-      .limit(300)
-      .get();
-    rows = buildAmountRowsFromReservations(fallbackSnap.docs.map(docToObj), type);
-    source = "fallback";
-  }
-
-  return NextResponse.json({ success: true, rows, source });
+  return NextResponse.json({ success: true, rows, source: "flag" });
 }
 
 export async function patientFullHistoryExact(payload: Record<string, unknown>) {
