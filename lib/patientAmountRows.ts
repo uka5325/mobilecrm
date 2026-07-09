@@ -23,11 +23,23 @@ function normalizeAmountKeyText(v: unknown): string {
   return String(v ?? "").trim().toLowerCase();
 }
 
+// doctors 필드 정규화 — 배열이거나, 레거시 파이프 구분 문자열("권순범|김서영")일 수 있다.
+// lib/reservationAmountRows.ts:amountGroupKey, lib/reservations.ts 의 읽기 정규화와 동일 규칙.
+// 문자열 케이스를 놓치면 레거시 예약의 원장이 빈 값으로 취급되어 서로 다른 원장 묶음이
+// 하나로 잘못 합쳐진다.
+export function normalizeDoctors(value: unknown): string[] {
+  if (Array.isArray(value)) {
+    return value.map((d) => String(d ?? "").trim()).filter(Boolean);
+  }
+  if (typeof value === "string" && value) {
+    return value.split("|").map((d) => d.trim()).filter(Boolean);
+  }
+  return [];
+}
+
 // 묶음 키 원문 — 병원|부위|정렬된원장 (모두 정규화). 예약 write 액션에서 파생 필드로 저장.
 export function computeAmountGroupKey(r: Record<string, unknown>): string {
-  const doctors = Array.isArray(r.doctors)
-    ? [...(r.doctors as unknown[])].map(normalizeAmountKeyText).filter(Boolean).sort().join(",")
-    : "";
+  const doctors = normalizeDoctors(r.doctors).map(normalizeAmountKeyText).filter(Boolean).sort().join(",");
   return [
     normalizeAmountKeyText(r.hospital),
     normalizeAmountKeyText(r.consultArea),
@@ -105,9 +117,7 @@ export function buildAmountRowDoc(params: {
 }): AmountRowDoc {
   const r = params.reservation;
   const amountField = params.type === "deposit" ? "depositAmount" : "surgeryCost";
-  const doctors = Array.isArray(r.doctors)
-    ? (r.doctors as unknown[]).map((d) => String(d ?? "").trim()).filter(Boolean)
-    : [];
+  const doctors = normalizeDoctors(r.doctors);
   return {
     patientId: params.patientId,
     type: params.type,
@@ -354,6 +364,8 @@ export async function queryPatientAmountRows(
       patientId: String(data.patientId || ""),
       date: String(data.reservationDate || ""),
       hospital: String(data.hospital || ""),
+      consultArea: String(data.consultArea || ""),
+      doctors: Array.isArray(data.doctors) ? (data.doctors as unknown[]).map(String) : [],
       amount: String(data.amount || ""),
     };
   });

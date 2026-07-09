@@ -67,9 +67,13 @@ function normLower(v: unknown): string {
 function hasAmountValue(v: unknown): boolean {
   return cleanTrim(v).length > 0;
 }
+// 배열이거나 레거시 파이프 구분 문자열("권순범|김서영")일 수 있다 — lib/patientAmountRows.ts
+// normalizeDoctors 와 동일 규칙. 문자열 케이스를 놓치면 레거시 예약의 원장이 빈 값으로
+// 취급되어 서로 다른 원장 묶음이 하나로 잘못 합쳐진다.
 function normalizeDoctors(v: unknown): string[] {
-  if (!Array.isArray(v)) return [];
-  return v.map((d) => cleanTrim(d)).filter(Boolean);
+  if (Array.isArray(v)) return v.map((d) => cleanTrim(d)).filter(Boolean);
+  if (typeof v === "string" && v) return v.split("|").map((d) => d.trim()).filter(Boolean);
+  return [];
 }
 function computeGroupKey(r: { hospital: string; consultArea: string; doctors: string[] }): string {
   return [
@@ -175,16 +179,37 @@ async function main() {
     perPatientCounts.set(g.patientId, c);
   }
 
+  // "정답" 문서 ID 집합 — 이번 스캔 결과와 무관하게 (즉 dry-run 에서도) 미리 계산해,
+  // 기존 patientAmountRows 문서 중 어떤 게 stale(더 이상 어떤 예약과도 매치되지 않음)인지
+  // 판단하는 기준으로 쓴다.
+  const groupList = [...groups.values()];
+  const expectedDocIds = new Set<string>();
+  for (const g of groupList) {
+    expectedDocIds.add(amountRowDocIdFor(g.patientId, g.type, g.groupKey));
+  }
+
   console.log(`[amount-rows] planned rows=${groups.size} planned reservation patches=${reservationPatches.length} planned patient count updates=${perPatientCounts.size}`);
 
   if (DRY_RUN) {
+    // 실제 컬렉션을 읽어서(쓰기 없음) stale 문서 개수만 보고한다.
+    let staleCount = 0;
+    let dryLast: admin.firestore.QueryDocumentSnapshot | null = null;
+    for (;;) {
+      let sq = db.collection(COLLECTION).orderBy(admin.firestore.FieldPath.documentId()).limit(BATCH_SIZE);
+      if (dryLast) sq = sq.startAfter(dryLast);
+      const ssnap = await sq.get();
+      if (ssnap.empty) break;
+      staleCount += ssnap.docs.filter((d) => !expectedDocIds.has(d.id)).length;
+      dryLast = ssnap.docs[ssnap.docs.length - 1];
+      if (ssnap.docs.length < BATCH_SIZE) break;
+    }
+    console.log(`[amount-rows] dry-run: would delete ${staleCount} stale patientAmountRows docs`);
     console.log("[amount-rows] dry-run done. no writes performed.");
     return;
   }
 
   // 2) patientAmountRows upsert (chunked batch)
   let rowsCommitted = 0;
-  const groupList = [...groups.values()];
   for (let i = 0; i < groupList.length; i += BATCH_SIZE) {
     const batch = db.batch();
     for (const g of groupList.slice(i, i + BATCH_SIZE)) {
@@ -211,6 +236,32 @@ async function main() {
     await batch.commit();
     rowsCommitted += Math.min(BATCH_SIZE, groupList.length - i);
     console.log(`[amount-rows] committed rows=${rowsCommitted}/${groupList.length}`);
+  }
+
+  // 2b) stale 문서 정리 — 이번 스캔의 "정답" 집합(expectedDocIds)에 없는 기존
+  //     patientAmountRows 문서를 삭제한다. 재실행(이전 버그로 잘못된 groupKey 로 만들어진
+  //     문서, 부분 실행 후 재시작 등) 시 orphan 문서가 뱃지 count()에 계속 잡히는 것을 막는다.
+  let staleDeleted = 0;
+  let staleScanned = 0;
+  let staleLast: admin.firestore.QueryDocumentSnapshot | null = null;
+  for (;;) {
+    let sq = db.collection(COLLECTION).orderBy(admin.firestore.FieldPath.documentId()).limit(BATCH_SIZE);
+    if (staleLast) sq = sq.startAfter(staleLast);
+    const ssnap = await sq.get();
+    if (ssnap.empty) break;
+
+    const staleDocs = ssnap.docs.filter((d) => !expectedDocIds.has(d.id));
+    staleScanned += ssnap.docs.length;
+    if (staleDocs.length) {
+      const batch = db.batch();
+      for (const d of staleDocs) batch.delete(d.ref);
+      await batch.commit();
+      staleDeleted += staleDocs.length;
+    }
+
+    staleLast = ssnap.docs[ssnap.docs.length - 1];
+    console.log(`[amount-rows] stale scan=${staleScanned} deleted=${staleDeleted}`);
+    if (ssnap.docs.length < BATCH_SIZE) break;
   }
 
   // 3) reservation groupKey 필드 정정
@@ -275,7 +326,7 @@ async function main() {
   }
   console.log(`[amount-rows] zeroed patients=${zeroedPatients}`);
 
-  console.log(`[amount-rows] done. rows=${rowsCommitted} reservationPatches=${reservationPatchCommitted} patients=${patientsCommitted} zeroed=${zeroedPatients}`);
+  console.log(`[amount-rows] done. rows=${rowsCommitted} staleDeleted=${staleDeleted} reservationPatches=${reservationPatchCommitted} patients=${patientsCommitted} zeroed=${zeroedPatients}`);
 }
 
 main().catch((error) => {
