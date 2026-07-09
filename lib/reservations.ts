@@ -3,7 +3,7 @@ import { collection, onSnapshot, query, where, getDocs } from "firebase/firestor
 import type { StaffUser } from "./auth";
 import { cleanText } from "./stringUtils";
 import { parseBirthInfo } from "./reservationUtils";
-import type { AmountRow, AmountRowType } from "./reservationAmountRows";
+import { buildAmountRowsFromReservations, type AmountRow, type AmountRowType } from "./reservationAmountRows";
 
 async function callReservationsApi(action: string, payload: Record<string, unknown>) {
   const firebaseUser = auth.currentUser;
@@ -652,9 +652,24 @@ export async function getPatientAmountRowsCached(
     return { rows: cached.rows, source: "cache" };
   }
 
+  const fallbackFromFullHistory = async (source: string) => {
+    const full = await getPatientFullHistoryCached(patientId);
+    const rows = buildAmountRowsFromReservations(full.reservations, type);
+    _patientAmountRowsCache.set(key, { at: Date.now(), rows });
+    return { rows, source };
+  };
+
   const result = await callReservationsApi("patient_amount_rows", { patientId, type, expectedCount });
-  if (!result.success) throw new Error(String(result.message || "금액 내역 조회 실패"));
+  if (!result.success) {
+    if (expectedCount > 0) return fallbackFromFullHistory("client_fallback_error");
+    throw new Error(String(result.message || "금액 내역 조회 실패"));
+  }
+
   const rows = ((result.rows as Record<string, unknown>[] | undefined) || []).map(mapAmountRow);
+  if (expectedCount > 0 && rows.length === 0) {
+    return fallbackFromFullHistory("client_fallback_empty");
+  }
+
   _patientAmountRowsCache.set(key, { at: Date.now(), rows });
   return { rows, source: String(result.source || "flag") };
 }
