@@ -83,6 +83,24 @@ type Props = {
 // 예약금/수술비 팝오버 한 줄(그룹 대표 예약). id=예약 문서 ID.
 type AmountRow = { id: string; reservationId: string; patientId: string; date: string; hospital: string; amount: string };
 
+const AMOUNT_POPOVER_TIMEOUT_MS = 8000;
+
+function withTimeout<T>(promise: Promise<T>, ms: number, message: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(message)), ms);
+    promise.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (error) => {
+        clearTimeout(timer);
+        reject(error);
+      }
+    );
+  });
+}
+
 type AmountPopoverProps = {
   label: string;
   loading?: boolean;
@@ -213,6 +231,7 @@ export function ReservationsTable({
   const [amountPopover, setAmountPopover] = useState<
     { groupKey: string; patientId: string; type: "deposit" | "surgery"; loading: boolean; rows: AmountRow[] } | null
   >(null);
+  const amountRequestSeqRef = useRef(0);
 
   // ReservationsTable/patientSummary의 그룹 키와 동일 규칙(병원+부위+원장).
   const groupKeyOf = useCallback((r: ReservationRecord) => [
@@ -245,11 +264,19 @@ export function ReservationsTable({
       return { groupKey: group.patientKey, patientId, type, loading: true, rows: [] };
     });
     if (!opening) return;
+    const requestSeq = ++amountRequestSeqRef.current;
     try {
-      const { reservations } = await getPatientFullHistoryCached(patientId);
+      const { reservations } = await withTimeout(
+        getPatientFullHistoryCached(patientId),
+        AMOUNT_POPOVER_TIMEOUT_MS,
+        "금액 내역 조회 시간이 초과되었습니다."
+      );
+      if (requestSeq !== amountRequestSeqRef.current) return;
       setAmountPopover((prev) => (prev && prev.groupKey === group.patientKey && prev.type === type
         ? { ...prev, loading: false, rows: buildAmountRows(reservations, type) } : prev));
-    } catch {
+    } catch (error) {
+      if (requestSeq !== amountRequestSeqRef.current) return;
+      console.warn("[ReservationsTable] amount popover load failed:", error);
       setAmountPopover((prev) => (prev && prev.groupKey === group.patientKey && prev.type === type
         ? { ...prev, loading: false, rows: [] } : prev));
     }
