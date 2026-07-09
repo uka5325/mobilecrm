@@ -12,7 +12,7 @@ import type {
   Firestore,
   Transaction,
 } from "firebase-admin/firestore";
-import { hasAmountValue } from "./reservationAmountRows";
+import { hasAmountValue, type AmountRow } from "./reservationAmountRows";
 
 export const PATIENT_AMOUNT_ROWS = "patientAmountRows";
 
@@ -330,4 +330,31 @@ export async function deleteAllAmountRowsForPatient(
     await batch.commit();
   }
   return snap.docs.length;
+}
+
+// 팝오버 조회 공통 구현 — patient_amount_rows 액션을 처리하는 모든 호출부(레거시
+// /api/reservations, /api/reservations-consistent 위임 헬퍼)가 이 함수 하나만 호출하도록
+// 강제해, 조회 로직이 두 곳에서 따로 구현되어 갈라지는 것을 막는다.
+export async function queryPatientAmountRows(
+  db: Firestore,
+  patientId: string,
+  type: PatientAmountRowType
+): Promise<AmountRow[]> {
+  const snap = await db.collection(PATIENT_AMOUNT_ROWS)
+    .where("patientId", "==", patientId)
+    .where("type", "==", type)
+    .orderBy("reservationDate", "desc")
+    .get();
+
+  return snap.docs.map((d) => {
+    const data = d.data() as Record<string, unknown>;
+    return {
+      id: String(data.reservationDocId || d.id),
+      reservationId: String(data.reservationId || ""),
+      patientId: String(data.patientId || ""),
+      date: String(data.reservationDate || ""),
+      hospital: String(data.hospital || ""),
+      amount: String(data.amount || ""),
+    };
+  });
 }

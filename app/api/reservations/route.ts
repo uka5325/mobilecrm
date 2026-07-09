@@ -14,9 +14,9 @@ import {
 } from "@/lib/reservationLocks";
 import { amountTypeFromUnknown, hasAmountValue } from "@/lib/reservationAmountRows";
 import {
-  PATIENT_AMOUNT_ROWS,
   deleteAllAmountRowsForPatient,
   deriveGroupKeysPatch,
+  queryPatientAmountRows,
   syncReservationAmountRowsInTx,
 } from "@/lib/patientAmountRows";
 
@@ -346,24 +346,7 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ success: false, message: "patientId가 없습니다." }, { status: 400 });
       }
       const type = amountTypeFromUnknown((payload || {}).type);
-
-      const snap = await adminDb.collection(PATIENT_AMOUNT_ROWS)
-        .where("patientId", "==", patientId)
-        .where("type", "==", type)
-        .orderBy("reservationDate", "desc")
-        .get();
-
-      const rows = snap.docs.map((d) => {
-        const data = d.data() as Record<string, unknown>;
-        return {
-          id: String(data.reservationDocId || d.id),
-          reservationId: String(data.reservationId || ""),
-          patientId: String(data.patientId || ""),
-          date: String(data.reservationDate || ""),
-          hospital: String(data.hospital || ""),
-          amount: String(data.amount || ""),
-        };
-      });
+      const rows = await queryPatientAmountRows(adminDb, patientId, type);
 
       return NextResponse.json({ success: true, rows });
     }

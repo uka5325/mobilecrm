@@ -192,3 +192,52 @@ test("delete_patient: soft-delete 전에 활성·기삭제 예약 lock을 정리
   assert.equal(logs.size, 1);
   for (const log of logs.docs) cleanupRefs.push(log.ref);
 });
+
+// /api/reservations 는 middleware.ts 가 실제로는 /api/reservations-consistent 로 리라이트한다.
+// 그 라우터는 patient_amount_rows 조회와 delete_patient 를 legacy route.ts 가 아니라
+// reservationConsistencyServer.ts / patientMutationJobs.ts 의 별도 구현으로 위임하므로,
+// 이 파일(reservations-consistent POST 를 직접 호출)에서 검증해야 실제 운영 경로를 커버한다.
+test("delete_patient(운영 경로): patientAmountRows 묶음 문서도 함께 정리되고 팝오버가 빈다", async () => {
+  __resetStaffCacheForTests();
+  const patientId = `P-JOB-AR-${Date.now()}`;
+  const patientRef = adminDb.collection("patients").doc(patientId);
+  const jobRef = adminDb.collection("patientDeletionJobs").doc(patientMutationJobId("delete", patientId));
+  cleanupRefs.push(patientRef, jobRef);
+
+  const create = await POST(makeReq(staff.idToken, "create", {
+    patient: { name: "묶음삭제환자", patientId },
+    reservation: {
+      reservationId: `R-JOB-AR-${Date.now()}`, name: "묶음삭제환자", patientId,
+      reservationDate: "2027-07-01", hospital: "ARC", consultArea: "코수술",
+      doctors: ["원장C"], depositAmount: "900,000",
+      isDeleted: false,
+    },
+  }));
+  const createBody = await create.json();
+  assert.equal(createBody.success, true);
+  cleanupRefs.push(adminDb.collection("reservations").doc(createBody.reservationDocId));
+
+  // 운영 경로(reservations-consistent)로 팝오버 조회 → patientAmountRows 컬렉션 기반으로 1건.
+  const before = await POST(makeReq(staff.idToken, "patient_amount_rows", { patientId, type: "deposit" }));
+  const beforeBody = await before.json();
+  assert.equal(beforeBody.success, true);
+  assert.equal(beforeBody.rows.length, 1);
+  assert.equal(beforeBody.rows[0].amount, "900,000");
+
+  const amountRowsBefore = await adminDb.collection("patientAmountRows").where("patientId", "==", patientId).get();
+  assert.equal(amountRowsBefore.size, 1);
+
+  // 운영 경로(reservations-consistent)로 환자 삭제 → runPatientDeleteJob 이 amountRows 정리까지 수행.
+  const del = await POST(makeReq(admin.idToken, "delete_patient", { patientId }));
+  assert.equal(del.status, 200);
+  assert.equal((await del.json()).success, true);
+
+  const amountRowsAfter = await adminDb.collection("patientAmountRows").where("patientId", "==", patientId).get();
+  assert.equal(amountRowsAfter.size, 0);
+
+  const after = await POST(makeReq(staff.idToken, "patient_amount_rows", { patientId, type: "deposit" }));
+  const afterBody = await after.json();
+  assert.equal(afterBody.rows.length, 0);
+
+  assert.equal((await patientRef.get()).data()?.isDeleted, true);
+});

@@ -5,10 +5,11 @@ import { adminDb, FieldValue } from "@/lib/firebaseAdmin";
 import { makePatientSearchTokens } from "@/lib/searchTokens";
 import { identityKeyForPatient } from "@/lib/patientIdentity";
 import { RESERVATION_LOCKS, lockIdForReservation } from "@/lib/reservationLocks";
+import { deleteAllAmountRowsForPatient } from "@/lib/patientAmountRows";
 import type { requireActiveStaff } from "@/lib/apiAuth";
 
 type StaffContext = Awaited<ReturnType<typeof requireActiveStaff>>;
-type JobStep = "patients" | "reservations" | "locks" | "done";
+type JobStep = "patients" | "reservations" | "locks" | "amountRows" | "done";
 
 const CHUNK = 400;
 const MAX_BATCHES_PER_REQUEST = 20;
@@ -450,13 +451,15 @@ export async function runPatientDeleteJob(
         for (const doc of activeDocs) {
           batch.update(doc.ref, {
             isDeleted: true,
+            depositCount: 0,
+            surgeryCostCount: 0,
             updatedAt: FieldValue.serverTimestamp(),
             updatedBy: ctx.name,
             updatedByUid: ctx.uid,
           });
         }
         const nextCursor = snap.docs.at(-1)?.id || cursor;
-        const nextStep: JobStep = snap.size < CHUNK ? "done" : "patients";
+        const nextStep: JobStep = snap.size < CHUNK ? "amountRows" : "patients";
         batch.update(jobRef, {
           step: nextStep,
           patientCursor: nextCursor,
@@ -464,6 +467,17 @@ export async function runPatientDeleteJob(
           ...leaseFields(workerId),
         });
         await batch.commit();
+        continue;
+      }
+
+      if (step === "amountRows") {
+        // 예약금·수술비 묶음 materialized 문서(patientAmountRows) 정리 — 환자당 그룹 수가
+        // 적어(수십 건 이내) 커서 재개 없이 1회 호출로 처리한다.
+        await deleteAllAmountRowsForPatient(adminDb, patientId);
+        await jobRef.update({
+          step: "done",
+          ...leaseFields(workerId),
+        });
         continue;
       }
 

@@ -4,7 +4,8 @@ import { docToObj, toSerializable } from "@/lib/adminUtils";
 import { makePatientSearchTokens } from "@/lib/searchTokens";
 import { identityKeyForPatient } from "@/lib/patientIdentity";
 import { createEmptyPatientSummary } from "@/lib/patientSummary";
-import { amountFlagFieldForType, amountTypeFromUnknown, buildAmountRowsFromReservations } from "@/lib/reservationAmountRows";
+import { amountTypeFromUnknown } from "@/lib/reservationAmountRows";
+import { queryPatientAmountRows } from "@/lib/patientAmountRows";
 import type { requireActiveStaff } from "@/lib/apiAuth";
 
 type StaffContext = Awaited<ReturnType<typeof requireActiveStaff>>;
@@ -250,21 +251,9 @@ export async function patientAmountRows(payload: Record<string, unknown>) {
   }
 
   const type = amountTypeFromUnknown(payload.type);
-  const expectedCount = Math.max(0, Number(payload.expectedCount) || 0);
-  const flagField = amountFlagFieldForType(type);
-  const queryLimit = Math.min(Math.max(expectedCount || 10, 10), 300);
+  const rows = await queryPatientAmountRows(adminDb, patientId, type);
 
-  const flagSnap = await adminDb.collection("reservations")
-    .where("patientId", "==", patientId)
-    .where("isDeleted", "==", false)
-    .where(flagField, "==", true)
-    .orderBy("reservationDate", "desc")
-    .limit(queryLimit)
-    .get();
-
-  const rows = buildAmountRowsFromReservations(flagSnap.docs.map(docToObj), type);
-
-  return NextResponse.json({ success: true, rows, source: "flag" });
+  return NextResponse.json({ success: true, rows });
 }
 
 export async function patientFullHistoryExact(payload: Record<string, unknown>) {
