@@ -257,14 +257,13 @@ export function ReservationsTable({
 
   const openAmountPopover = useCallback(async (group: PatientGroup, type: "deposit" | "surgery") => {
     const patientId = group.patientId || group.patientKey;
-    let opening = false;
-    setAmountPopover((prev) => {
-      if (prev && prev.groupKey === group.patientKey && prev.type === type) return null; // 재클릭 → 닫기
-      opening = true;
-      return { groupKey: group.patientKey, patientId, type, loading: true, rows: [] };
-    });
-    if (!opening) return;
+    if (amountPopover && amountPopover.groupKey === group.patientKey && amountPopover.type === type) {
+      amountRequestSeqRef.current += 1;
+      setAmountPopover(null); // 재클릭 → 닫기
+      return;
+    }
     const requestSeq = ++amountRequestSeqRef.current;
+    setAmountPopover({ groupKey: group.patientKey, patientId, type, loading: true, rows: [] });
     try {
       const { reservations } = await withTimeout(
         getPatientFullHistoryCached(patientId),
@@ -280,7 +279,7 @@ export function ReservationsTable({
       setAmountPopover((prev) => (prev && prev.groupKey === group.patientKey && prev.type === type
         ? { ...prev, loading: false, rows: [] } : prev));
     }
-  }, [buildAmountRows]);
+  }, [amountPopover, buildAmountRows]);
 
   const saveAmount = useCallback(async (row: AmountRow, value: string) => {
     const type = amountPopover?.type ?? "deposit";
