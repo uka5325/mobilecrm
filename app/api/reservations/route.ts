@@ -12,7 +12,13 @@ import {
   isReservationActive,
   lockIdForReservation,
 } from "@/lib/reservationLocks";
-import { amountFlagFieldForType, amountTypeFromUnknown, buildAmountRowsFromReservations, hasAmountValue } from "@/lib/reservationAmountRows";
+import { amountTypeFromUnknown, hasAmountValue } from "@/lib/reservationAmountRows";
+import {
+  PATIENT_AMOUNT_ROWS,
+  deleteAllAmountRowsForPatient,
+  deriveGroupKeysPatch,
+  syncReservationAmountRowsInTx,
+} from "@/lib/patientAmountRows";
 
 // 데이터 변경 action — 토큰 폐기 검사 적용
 const WRITE_ACTIONS = new Set([
@@ -332,26 +338,34 @@ export async function POST(req: NextRequest) {
 
 
     // ── READ: patient amount rows only (예약금/수술비 팝오버 전용) ──
+    // 예약 원본이 아니라 materialized 컬렉션(patientAmountRows) 만 조회한다.
+    // 예약 write 액션이 이 컬렉션을 트랜잭션 안에서 동기화하므로 배지 카운트와 항상 일치.
     if (action === "patient_amount_rows") {
-      const { patientId, expectedCount } = (payload || {}) as { patientId?: string; expectedCount?: number };
+      const { patientId } = (payload || {}) as { patientId?: string };
       if (!patientId) {
         return NextResponse.json({ success: false, message: "patientId가 없습니다." }, { status: 400 });
       }
       const type = amountTypeFromUnknown((payload || {}).type);
-      const flagField = amountFlagFieldForType(type);
-      const expected = Math.max(0, Number(expectedCount) || 0);
-      const queryLimit = Math.min(Math.max(expected || 10, 10), 300);
 
-      const flagSnap = await adminDb.collection("reservations")
+      const snap = await adminDb.collection(PATIENT_AMOUNT_ROWS)
         .where("patientId", "==", patientId)
-        .where("isDeleted", "==", false)
-        .where(flagField, "==", true)
+        .where("type", "==", type)
         .orderBy("reservationDate", "desc")
-        .limit(queryLimit)
         .get();
-      const rows = buildAmountRowsFromReservations(flagSnap.docs.map(docToObj), type);
 
-      return NextResponse.json({ success: true, rows, source: "flag" });
+      const rows = snap.docs.map((d) => {
+        const data = d.data() as Record<string, unknown>;
+        return {
+          id: String(data.reservationDocId || d.id),
+          reservationId: String(data.reservationId || ""),
+          patientId: String(data.patientId || ""),
+          date: String(data.reservationDate || ""),
+          hospital: String(data.hospital || ""),
+          amount: String(data.amount || ""),
+        };
+      });
+
+      return NextResponse.json({ success: true, rows });
     }
 
     // ── READ: patient FULL reservation history (no pagination, safety-capped) ──
@@ -743,6 +757,23 @@ export async function POST(req: NextRequest) {
           // 기존 환자로 연결되면 예약의 patientId도 대표 값으로 맞춘다(랜덤 값 폐기 → 이력/요약 정합).
           if (canonicalPatientId) safeReservation.patientId = canonicalPatientId;
 
+          // 예약 완성본(after) — 이 시점의 canonical patientId/신원 필드 반영본을 amountRows 동기화에 넘긴다.
+          const afterReservation = {
+            ...reservationDefaults,
+            ...safeReservation,
+            ...deriveGroupKeysPatch(safeReservation),
+            isDeleted: false,
+          };
+
+          // amountRows sync (모든 read 이후, 모든 write 이전)
+          await syncReservationAmountRowsInTx(tx, adminDb, ctx, {
+            patientId: String(safeReservation.patientId || ""),
+            reservationDocId: reservationRef.id,
+            before: null,
+            after: afterReservation,
+            now,
+          });
+
           // ── 쓰기(원자적) ──────────────────────────────────────────────
           if (lockRef) tx.set(lockRef, buildLockDoc({
             reservationDocId: reservationRef.id,
@@ -753,7 +784,7 @@ export async function POST(req: NextRequest) {
           }));
 
           if (existingPatientDocId) {
-            tx.set(reservationRef, withAmountFlags({ ...reservationDefaults, ...safeReservation, isDeleted: false, ...authorFields, createdAt: now, updatedAt: now }));
+            tx.set(reservationRef, withAmountFlags({ ...afterReservation, ...authorFields, createdAt: now, updatedAt: now }));
             resultPatientDocId = existingPatientDocId;
             linkedExistingPatient = true;
           } else {
@@ -773,7 +804,7 @@ export async function POST(req: NextRequest) {
               ...authorFields,
               createdAt: now, updatedAt: now,
             });
-            tx.set(reservationRef, withAmountFlags({ ...reservationDefaults, ...safeReservation, isDeleted: false, ...authorFields, createdAt: now, updatedAt: now }));
+            tx.set(reservationRef, withAmountFlags({ ...afterReservation, ...authorFields, createdAt: now, updatedAt: now }));
             resultPatientDocId = patientRef.id;
           }
 
@@ -941,6 +972,15 @@ export async function POST(req: NextRequest) {
           }
         }
 
+        // amountRows sync (모든 read 이후, 모든 write 이전) — before=예약 원본, after=예약+patch
+        await syncReservationAmountRowsInTx(tx, adminDb, ctx, {
+          patientId: canonicalPatientId,
+          reservationDocId,
+          before: beforeData,
+          after: effectiveNew,
+          now,
+        });
+
         // ── 쓰기 ──────────────────────────────────────────────────────
         const beforeChanged: Record<string, unknown> = {};
         for (const k of Object.keys(safeReservationPatch)) beforeChanged[k] = beforeData[k] ?? null;
@@ -948,6 +988,7 @@ export async function POST(req: NextRequest) {
         tx.update(resRef, {
           ...safeReservationPatch,
           ...deriveAmountFlagPatch(safeReservationPatch),
+          ...deriveGroupKeysPatch(safeReservationPatch, beforeData),
           updatedBy: ctx.name,
           updatedByUid: ctx.uid,
           updatedAt: now,
@@ -1139,13 +1180,28 @@ export async function POST(req: NextRequest) {
         delData = delBefore.exists ? (delBefore.data() as Record<string, unknown>) : {};
         // 활성 예약이 쥔 lock만, 자기 소유일 때 해제한다.
         const lockId = isReservationActive(delData) ? lockIdForReservation(delData) : "";
+        let lockRef: FirebaseFirestore.DocumentReference | null = null;
+        let deleteLock = false;
         if (lockId) {
-          const lockRef = adminDb.collection(RESERVATION_LOCKS).doc(lockId);
+          lockRef = adminDb.collection(RESERVATION_LOCKS).doc(lockId);
           const lockSnap = await tx.get(lockRef);
           if (lockSnap.exists && String(lockSnap.data()?.reservationDocId || "") === reservationDocId) {
-            tx.delete(lockRef);
+            deleteLock = true;
           }
         }
+
+        // amountRows sync — before=예약 원본, after=null (삭제 등가). 모든 read 이후 · 모든 write 이전.
+        if (delBefore.exists) {
+          await syncReservationAmountRowsInTx(tx, adminDb, ctx, {
+            patientId: String(delData.patientId || ""),
+            reservationDocId,
+            before: delData,
+            after: null,
+            now,
+          });
+        }
+
+        if (deleteLock && lockRef) tx.delete(lockRef);
         tx.update(delRef, {
           isDeleted: true,
           updatedAt: now,
@@ -1279,7 +1335,7 @@ export async function POST(req: NextRequest) {
           await jobRef.update({ step: "patients", lockCleanupFailures, updatedAt: FieldValue.serverTimestamp() });
         }
 
-        // Step 3: 환자 문서 soft-delete
+        // Step 3: 환자 문서 soft-delete + patientAmountRows 정리
         if (currentStep === "patients") {
           const patSnap = await adminDb
             .collection("patients")
@@ -1288,11 +1344,13 @@ export async function POST(req: NextRequest) {
           for (let i = 0; i < patSnap.docs.length; i += CHUNK) {
             const batch = adminDb.batch();
             for (const d of patSnap.docs.slice(i, i + CHUNK)) {
-              batch.update(d.ref, { isDeleted: true, ...auditFields });
+              batch.update(d.ref, { isDeleted: true, depositCount: 0, surgeryCostCount: 0, ...auditFields });
               deletedPatients += 1;
             }
             await batch.commit();
           }
+          // 예약 묶음 materialized 문서 일괄 삭제 (예약과 함께 환자 자체가 사라졌으므로).
+          await deleteAllAmountRowsForPatient(adminDb, patientId);
           currentStep = "done";
           await jobRef.update({ step: "done", deletedPatients, updatedAt: FieldValue.serverTimestamp() });
         }
