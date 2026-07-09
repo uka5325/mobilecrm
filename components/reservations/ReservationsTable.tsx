@@ -143,50 +143,58 @@ function AmountPopover({ label, loading, rows, onClose, onSave }: AmountPopoverP
         ) : rows.length === 0 ? (
           <div className="px-4 py-3 text-xs text-gray-400">내역 없음</div>
         ) : (
-          rows.map((row) => (
-            <div key={row.id} className="flex items-center gap-2 border-b border-gray-50 px-3 py-2 last:border-0">
-              <span className="text-xs text-gray-500 w-[70px] shrink-0">{row.date || "—"}</span>
-              <span className="text-xs text-gray-500 truncate flex-1">{row.hospital || "—"}</span>
-              {editingId === row.id ? (
-                <>
-                  <input
-                    autoFocus
-                    className="w-[90px] rounded-lg border border-[#dfe3e8] px-2 py-0.5 text-xs focus:border-[#1d9e75] focus:outline-none"
-                    value={editValue}
-                    onChange={(e) => setEditValue(e.target.value)}
-                  />
-                  <button
-                    disabled={saving}
-                    onClick={() => handleSave(row)}
-                    className="rounded-lg bg-emerald-600 px-2 py-0.5 text-xs text-white disabled:opacity-50"
-                  >
-                    {saving ? "…" : "저장"}
-                  </button>
-                  <button onClick={() => setEditingId(null)} className="text-xs text-gray-400 hover:text-gray-600">
-                    ✕
-                  </button>
-                </>
-              ) : (
-                <>
-                  <span className="text-xs font-medium text-gray-800 w-[80px] text-right">{row.amount || "—"}</span>
-                  <button
-                    onClick={() => { setEditingId(row.id); setEditValue(row.amount); }}
-                    className="text-xs text-blue-500 hover:underline shrink-0"
-                  >
-                    {row.amount ? "수정" : "입력"}
-                  </button>
-                  {row.amount && (
+          rows.map((row) => {
+            const groupLabel = [row.consultArea, row.doctors.join(", ")].filter(Boolean).join(" · ");
+            return (
+            <div key={row.id} className="border-b border-gray-50 px-3 py-2 last:border-0">
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-gray-500 w-[70px] shrink-0">{row.date || "—"}</span>
+                <span className="text-xs text-gray-500 truncate flex-1">{row.hospital || "—"}</span>
+                {editingId === row.id ? (
+                  <>
+                    <input
+                      autoFocus
+                      className="w-[90px] rounded-lg border border-[#dfe3e8] px-2 py-0.5 text-xs focus:border-[#1d9e75] focus:outline-none"
+                      value={editValue}
+                      onChange={(e) => setEditValue(e.target.value)}
+                    />
                     <button
-                      onClick={async () => { setSaving(true); try { await onSave(row, ""); setEditingId(null); } finally { setSaving(false); } }}
-                      className="text-xs text-red-400 hover:underline shrink-0"
+                      disabled={saving}
+                      onClick={() => handleSave(row)}
+                      className="rounded-lg bg-emerald-600 px-2 py-0.5 text-xs text-white disabled:opacity-50"
                     >
-                      삭제
+                      {saving ? "…" : "저장"}
                     </button>
-                  )}
-                </>
+                    <button onClick={() => setEditingId(null)} className="text-xs text-gray-400 hover:text-gray-600">
+                      ✕
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <span className="text-xs font-medium text-gray-800 w-[80px] text-right">{row.amount || "—"}</span>
+                    <button
+                      onClick={() => { setEditingId(row.id); setEditValue(row.amount); }}
+                      className="text-xs text-blue-500 hover:underline shrink-0"
+                    >
+                      {row.amount ? "수정" : "입력"}
+                    </button>
+                    {row.amount && (
+                      <button
+                        onClick={async () => { setSaving(true); try { await onSave(row, ""); setEditingId(null); } finally { setSaving(false); } }}
+                        className="text-xs text-red-400 hover:underline shrink-0"
+                      >
+                        삭제
+                      </button>
+                    )}
+                  </>
+                )}
+              </div>
+              {groupLabel && (
+                <div className="mt-0.5 pl-[78px] text-[11px] text-gray-400 truncate">{groupLabel}</div>
               )}
             </div>
-          ))
+            );
+          })
         )}
       </div>
     </div>

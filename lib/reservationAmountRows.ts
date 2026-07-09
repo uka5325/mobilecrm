@@ -8,6 +8,8 @@ export type AmountRow = {
   patientId: string;
   date: string;
   hospital: string;
+  consultArea: string;
+  doctors: string[];
   amount: string;
 };
 
@@ -69,12 +71,19 @@ export function buildAmountRowsFromReservations(
     })
     .map((row) => {
       const id = cleanText(row.id);
+      const doctors = Array.isArray(row.doctors)
+        ? row.doctors
+        : typeof row.doctors === "string" && row.doctors
+          ? row.doctors.split("|")
+          : [];
       return {
         id,
         reservationId: cleanText(row.reservationId) || id,
         patientId: cleanText(row.patientId),
         date: cleanText(row.reservationDate),
         hospital: cleanText(row.hospital),
+        consultArea: cleanText(row.consultArea),
+        doctors: doctors.map((d) => cleanText(d)).filter(Boolean),
         amount: cleanText(row[field]),
       };
     });

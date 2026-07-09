@@ -637,6 +637,8 @@ function mapAmountRow(raw: Record<string, unknown>): AmountRow {
     patientId: cleanText(raw.patientId),
     date: cleanText(raw.date),
     hospital: cleanText(raw.hospital),
+    consultArea: cleanText(raw.consultArea),
+    doctors: Array.isArray(raw.doctors) ? (raw.doctors as unknown[]).map((d) => cleanText(d)).filter(Boolean) : [],
     amount: cleanText(raw.amount),
   };
 }
