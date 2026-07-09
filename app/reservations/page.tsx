@@ -11,6 +11,7 @@ import {
   getPatientFullHistoryPage,
   getPatientFullHistoryCached,
   invalidatePatientFullHistoryCache,
+  invalidatePatientAmountRowsCache,
   searchPatients,
   listPatientsSummary,
   type ReservationRecord,
@@ -109,7 +110,10 @@ export default function ReservationsPage() {
     const result = await deleteReservation(r.id, r.reservationId, currentUser);
     if (result.success) {
       setHistoryList((prev) => prev.filter((x) => x.id !== r.id));
-      if (historyPatientId) invalidatePatientFullHistoryCache(historyPatientId);
+      if (historyPatientId) {
+        invalidatePatientFullHistoryCache(historyPatientId);
+        invalidatePatientAmountRowsCache(historyPatientId);
+      }
     } else {
       alert(result.message || "삭제 실패");
     }
@@ -363,6 +367,7 @@ export default function ReservationsPage() {
       setInlineEditId(null);
       setInlineForm(null);
       invalidatePatientFullHistoryCache(item.patientId);
+      invalidatePatientAmountRowsCache(item.patientId);
       reloadCurrent();
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -535,6 +540,7 @@ export default function ReservationsPage() {
       setPatientEditId(null);
       setPatientEditForm(null);
       invalidatePatientFullHistoryCache(group.patientId);
+      invalidatePatientAmountRowsCache(group.patientId);
       reloadCurrent();
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -564,6 +570,7 @@ export default function ReservationsPage() {
       return;
     }
     invalidatePatientFullHistoryCache(group.patientId);
+      invalidatePatientAmountRowsCache(group.patientId);
     reloadCurrent();
   }
 
@@ -593,6 +600,7 @@ export default function ReservationsPage() {
       return;
     }
     invalidatePatientFullHistoryCache(item.patientId);
+      invalidatePatientAmountRowsCache(item.patientId);
     reloadCurrent();
   }
   function handleAddReservation(group: PatientGroup) {
@@ -787,6 +795,7 @@ export default function ReservationsPage() {
           onRefresh={() => {
             if (historyPatientId) {
               invalidatePatientFullHistoryCache(historyPatientId);
+              invalidatePatientAmountRowsCache(historyPatientId);
               openPatientHistory(historyPatientId, historyPatientName, historyPage, historyCursors);
               reloadCurrent(); // 이력 편집 후 summary 배지 갱신
             }
@@ -816,7 +825,7 @@ export default function ReservationsPage() {
         onDeletePatient={handleDeletePatient}
         onOpenPatientMemo={openPatientMemoPopover}
         onOpenPatientHistory={openPatientHistory}
-        onPatientMutated={() => reloadCurrent()}
+        onPatientMutated={(patientId) => { invalidatePatientFullHistoryCache(patientId); invalidatePatientAmountRowsCache(patientId); reloadCurrent(); }}
         listError={tableError}
         onRetry={reloadCurrent}
       />
@@ -858,7 +867,7 @@ export default function ReservationsPage() {
           initialPatient={addPatient}
           mode={addPatient ? "reservation" : "register"}
           onCreated={addPatient
-            ? () => { invalidatePatientFullHistoryCache(addPatient.patientId); reloadCurrent(); }
+            ? () => { invalidatePatientFullHistoryCache(addPatient.patientId); invalidatePatientAmountRowsCache(addPatient.patientId); reloadCurrent(); }
             : () => { reloadCurrent(); }
           }
         />

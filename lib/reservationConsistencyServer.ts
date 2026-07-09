@@ -4,6 +4,7 @@ import { docToObj, toSerializable } from "@/lib/adminUtils";
 import { makePatientSearchTokens } from "@/lib/searchTokens";
 import { identityKeyForPatient } from "@/lib/patientIdentity";
 import { createEmptyPatientSummary } from "@/lib/patientSummary";
+import { amountFlagFieldForType, amountTypeFromUnknown, buildAmountRowsFromReservations } from "@/lib/reservationAmountRows";
 import type { requireActiveStaff } from "@/lib/apiAuth";
 
 type StaffContext = Awaited<ReturnType<typeof requireActiveStaff>>;
@@ -240,6 +241,44 @@ export async function listPatientsSummaryRaw(payload: Record<string, unknown>) {
     { success: true, patients, nextCursor, hasMore: Boolean(nextCursor) },
     { headers: { "Server-Timing": timingParts.join(", ") } }
   );
+}
+
+export async function patientAmountRows(payload: Record<string, unknown>) {
+  const patientId = String(payload.patientId || "");
+  if (!patientId) {
+    return NextResponse.json({ success: false, message: "patientId가 없습니다." }, { status: 400 });
+  }
+
+  const type = amountTypeFromUnknown(payload.type);
+  const expectedCount = Math.max(0, Number(payload.expectedCount) || 0);
+  const flagField = amountFlagFieldForType(type);
+  const queryLimit = Math.min(Math.max(expectedCount || 10, 10), 300);
+
+  const flagSnap = await adminDb.collection("reservations")
+    .where("patientId", "==", patientId)
+    .where("isDeleted", "==", false)
+    .where(flagField, "==", true)
+    .orderBy("reservationDate", "desc")
+    .limit(queryLimit)
+    .get();
+
+  let rows = buildAmountRowsFromReservations(flagSnap.docs.map(docToObj), type);
+  let source: "flag" | "fallback" = "flag";
+
+  // 백필/인덱스 배포 직후에는 과거 문서에 boolean flag가 없을 수 있다.
+  // 배지의 예상 그룹 수보다 적게 나오면 기존 full-history 방식으로 1회 보정해 기능 누락을 막는다.
+  if (expectedCount > 0 && rows.length < expectedCount) {
+    const fallbackSnap = await adminDb.collection("reservations")
+      .where("patientId", "==", patientId)
+      .where("isDeleted", "==", false)
+      .orderBy("reservationDate", "desc")
+      .limit(300)
+      .get();
+    rows = buildAmountRowsFromReservations(fallbackSnap.docs.map(docToObj), type);
+    source = "fallback";
+  }
+
+  return NextResponse.json({ success: true, rows, source });
 }
 
 export async function patientFullHistoryExact(payload: Record<string, unknown>) {

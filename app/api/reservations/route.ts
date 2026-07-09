@@ -12,6 +12,7 @@ import {
   isReservationActive,
   lockIdForReservation,
 } from "@/lib/reservationLocks";
+import { amountFlagFieldForType, amountTypeFromUnknown, buildAmountRowsFromReservations, hasAmountValue } from "@/lib/reservationAmountRows";
 
 // 데이터 변경 action — 토큰 폐기 검사 적용
 const WRITE_ACTIONS = new Set([
@@ -85,6 +86,25 @@ function splitPatch(
     else disallowed.push(k);
   }
   return { safe, disallowed };
+}
+
+function withAmountFlags<T extends Record<string, unknown>>(data: T): T & { hasDepositAmount: boolean; hasSurgeryCost: boolean } {
+  return {
+    ...data,
+    hasDepositAmount: hasAmountValue(data.depositAmount),
+    hasSurgeryCost: hasAmountValue(data.surgeryCost),
+  };
+}
+
+function deriveAmountFlagPatch(patch: Record<string, unknown>): Record<string, boolean> {
+  const flags: Record<string, boolean> = {};
+  if (Object.prototype.hasOwnProperty.call(patch, "depositAmount")) {
+    flags.hasDepositAmount = hasAmountValue(patch.depositAmount);
+  }
+  if (Object.prototype.hasOwnProperty.call(patch, "surgeryCost")) {
+    flags.hasSurgeryCost = hasAmountValue(patch.surgeryCost);
+  }
+  return flags;
 }
 
 // create 액션의 중복예약 트랜잭션에서 "중복이라 저장하지 않음"을 알리기 위한 마커 에러.
@@ -308,6 +328,42 @@ export async function POST(req: NextRequest) {
         nextCursor: hasMore ? snap.docs[snap.docs.length - 1].id : null,
         hasMore,
       });
+    }
+
+
+    // ── READ: patient amount rows only (예약금/수술비 팝오버 전용) ──
+    if (action === "patient_amount_rows") {
+      const { patientId, expectedCount } = (payload || {}) as { patientId?: string; expectedCount?: number };
+      if (!patientId) {
+        return NextResponse.json({ success: false, message: "patientId가 없습니다." }, { status: 400 });
+      }
+      const type = amountTypeFromUnknown((payload || {}).type);
+      const flagField = amountFlagFieldForType(type);
+      const expected = Math.max(0, Number(expectedCount) || 0);
+      const queryLimit = Math.min(Math.max(expected || 10, 10), 300);
+
+      const flagSnap = await adminDb.collection("reservations")
+        .where("patientId", "==", patientId)
+        .where("isDeleted", "==", false)
+        .where(flagField, "==", true)
+        .orderBy("reservationDate", "desc")
+        .limit(queryLimit)
+        .get();
+      let rows = buildAmountRowsFromReservations(flagSnap.docs.map(docToObj), type);
+      let source: "flag" | "fallback" = "flag";
+
+      if (expected > 0 && rows.length < expected) {
+        const fallbackSnap = await adminDb.collection("reservations")
+          .where("patientId", "==", patientId)
+          .where("isDeleted", "==", false)
+          .orderBy("reservationDate", "desc")
+          .limit(300)
+          .get();
+        rows = buildAmountRowsFromReservations(fallbackSnap.docs.map(docToObj), type);
+        source = "fallback";
+      }
+
+      return NextResponse.json({ success: true, rows, source });
     }
 
     // ── READ: patient FULL reservation history (no pagination, safety-capped) ──
@@ -709,7 +765,7 @@ export async function POST(req: NextRequest) {
           }));
 
           if (existingPatientDocId) {
-            tx.set(reservationRef, { ...reservationDefaults, ...safeReservation, isDeleted: false, ...authorFields, createdAt: now, updatedAt: now });
+            tx.set(reservationRef, withAmountFlags({ ...reservationDefaults, ...safeReservation, isDeleted: false, ...authorFields, createdAt: now, updatedAt: now }));
             resultPatientDocId = existingPatientDocId;
             linkedExistingPatient = true;
           } else {
@@ -729,7 +785,7 @@ export async function POST(req: NextRequest) {
               ...authorFields,
               createdAt: now, updatedAt: now,
             });
-            tx.set(reservationRef, { ...reservationDefaults, ...safeReservation, isDeleted: false, ...authorFields, createdAt: now, updatedAt: now });
+            tx.set(reservationRef, withAmountFlags({ ...reservationDefaults, ...safeReservation, isDeleted: false, ...authorFields, createdAt: now, updatedAt: now }));
             resultPatientDocId = patientRef.id;
           }
 
@@ -903,6 +959,7 @@ export async function POST(req: NextRequest) {
 
         tx.update(resRef, {
           ...safeReservationPatch,
+          ...deriveAmountFlagPatch(safeReservationPatch),
           updatedBy: ctx.name,
           updatedByUid: ctx.uid,
           updatedAt: now,

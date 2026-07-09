@@ -2,7 +2,8 @@
 
 import { useState, useRef, useEffect, useCallback, type ReactNode } from "react";
 import type { ReservationRecord, AppointmentType } from "@/lib/reservations";
-import { APPOINTMENT_TYPES, getPatientFullHistoryCached, invalidatePatientFullHistoryCache, updateReservationAmount } from "@/lib/reservations";
+import { APPOINTMENT_TYPES, getPatientAmountRowsCached, invalidatePatientAmountRowsCache, invalidatePatientFullHistoryCache, updateReservationAmount } from "@/lib/reservations";
+import type { AmountRow, AmountRowType } from "@/lib/reservationAmountRows";
 import { getReservationBirthInfo } from "@/lib/reservationUtils";
 import { PatientInvoiceModal } from "./PatientInvoiceModal";
 
@@ -79,9 +80,6 @@ type Props = {
   listError?: string | null;
   onRetry?: () => void;
 };
-
-// 예약금/수술비 팝오버 한 줄(그룹 대표 예약). id=예약 문서 ID.
-type AmountRow = { id: string; reservationId: string; patientId: string; date: string; hospital: string; amount: string };
 
 const AMOUNT_POPOVER_TIMEOUT_MS = 8000;
 
@@ -229,33 +227,11 @@ export function ReservationsTable({
   // 예약금/수술비 팝오버 — 배지 클릭 시 해당 환자 예약만 lazy-load해 그룹 팝오버로 표시.
   // (기존: 보이는 환자 전원의 전체 이력/인보이스 count를 미리 warm → summary 배지로 대체.)
   const [amountPopover, setAmountPopover] = useState<
-    { groupKey: string; patientId: string; type: "deposit" | "surgery"; loading: boolean; rows: AmountRow[] } | null
+    { groupKey: string; patientId: string; type: AmountRowType; loading: boolean; rows: AmountRow[] } | null
   >(null);
   const amountRequestSeqRef = useRef(0);
 
-  // ReservationsTable/patientSummary의 그룹 키와 동일 규칙(병원+부위+원장).
-  const groupKeyOf = useCallback((r: ReservationRecord) => [
-    (r.hospital || "").trim().toLowerCase(),
-    (r.consultArea || "").trim().toLowerCase(),
-    (r.doctors || []).map((d) => d.trim().toLowerCase()).sort().join(","),
-  ].join("|"), []);
-
-  const buildAmountRows = useCallback((list: ReservationRecord[], type: "deposit" | "surgery"): AmountRow[] => {
-    const pick = (r: ReservationRecord) => (type === "deposit" ? r.depositAmount : r.surgeryCost) || "";
-    const seen = new Set<string>();
-    return [...list]
-      .sort((a, b) => (pick(b) ? 1 : 0) - (pick(a) ? 1 : 0))
-      .filter((r) => {
-        if (!pick(r).trim()) return false;
-        const key = groupKeyOf(r);
-        if (seen.has(key)) return false;
-        seen.add(key);
-        return true;
-      })
-      .map((r) => ({ id: r.id, reservationId: r.reservationId, patientId: r.patientId, date: r.reservationDate || "", hospital: r.hospital || "", amount: pick(r) }));
-  }, [groupKeyOf]);
-
-  const openAmountPopover = useCallback(async (group: PatientGroup, type: "deposit" | "surgery") => {
+  const openAmountPopover = useCallback(async (group: PatientGroup, type: AmountRowType) => {
     const patientId = group.patientId || group.patientKey;
     if (amountPopover && amountPopover.groupKey === group.patientKey && amountPopover.type === type) {
       amountRequestSeqRef.current += 1;
@@ -265,21 +241,22 @@ export function ReservationsTable({
     const requestSeq = ++amountRequestSeqRef.current;
     setAmountPopover({ groupKey: group.patientKey, patientId, type, loading: true, rows: [] });
     try {
-      const { reservations } = await withTimeout(
-        getPatientFullHistoryCached(patientId),
+      const expectedCount = type === "deposit" ? group.depositCount : group.surgeryCostCount;
+      const { rows } = await withTimeout(
+        getPatientAmountRowsCached(patientId, type, expectedCount || 0),
         AMOUNT_POPOVER_TIMEOUT_MS,
         "금액 내역 조회 시간이 초과되었습니다."
       );
       if (requestSeq !== amountRequestSeqRef.current) return;
       setAmountPopover((prev) => (prev && prev.groupKey === group.patientKey && prev.type === type
-        ? { ...prev, loading: false, rows: buildAmountRows(reservations, type) } : prev));
+        ? { ...prev, loading: false, rows } : prev));
     } catch (error) {
       if (requestSeq !== amountRequestSeqRef.current) return;
       console.warn("[ReservationsTable] amount popover load failed:", error);
       setAmountPopover((prev) => (prev && prev.groupKey === group.patientKey && prev.type === type
         ? { ...prev, loading: false, rows: [] } : prev));
     }
-  }, [amountPopover, buildAmountRows]);
+  }, [amountPopover]);
 
   const saveAmount = useCallback(async (row: AmountRow, value: string) => {
     const type = amountPopover?.type ?? "deposit";
@@ -290,12 +267,13 @@ export function ReservationsTable({
       return;
     }
     invalidatePatientFullHistoryCache(row.patientId);
+    invalidatePatientAmountRowsCache(row.patientId);
     onPatientMutated?.(row.patientId);
     try {
-      const { reservations } = await getPatientFullHistoryCached(row.patientId);
-      setAmountPopover((prev) => (prev ? { ...prev, rows: buildAmountRows(reservations, prev.type) } : prev));
+      const { rows } = await getPatientAmountRowsCached(row.patientId, type);
+      setAmountPopover((prev) => (prev ? { ...prev, rows } : prev));
     } catch { /* 무시 */ }
-  }, [amountPopover, buildAmountRows, onPatientMutated]);
+  }, [amountPopover, onPatientMutated]);
 
   // 행 단위 인라인 편집 렌더러 — 현재 화면에서 호출되지 않는 레거시 경로(환자 헤더 편집으로 대체됨).
   // 부모의 inline-edit 상태 체인과 함께 별도 정리 예정. (3단계 범위 밖 — 다중 파일 정리 리스크)
