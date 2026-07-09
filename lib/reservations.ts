@@ -913,6 +913,32 @@ export async function getPatientFullHistory(
   };
 }
 
+export async function getPatientFullHistoryPage(
+  patientId: string,
+  options: { cursor?: string | null; limit?: number } = {}
+): Promise<{
+  reservations: ReservationRecord[];
+  nextCursor: string | null;
+  hasMore: boolean;
+  capped: boolean;
+}> {
+  const result = await callReservationsApi("patient_full_history_page", {
+    patientId,
+    cursor: options.cursor || "",
+    limit: options.limit || 10,
+  });
+  if (!result.success) throw new Error(String(result.message || "이력 조회 실패"));
+  const raw = (result.reservations as Record<string, unknown>[] | undefined) || [];
+  return {
+    reservations: raw
+      .map((r) => mapReservationDoc(String(r.id || ""), r))
+      .sort((a, b) => `${b.reservationDate} ${b.reservationTime}`.localeCompare(`${a.reservationDate} ${a.reservationTime}`)),
+    nextCursor: result.nextCursor ? String(result.nextCursor) : null,
+    hasMore: result.hasMore === true,
+    capped: Boolean(result.capped),
+  };
+}
+
 export function getCachedPatientFullHistory(
   patientId: string
 ): { reservations: ReservationRecord[]; capped: boolean } | undefined {
