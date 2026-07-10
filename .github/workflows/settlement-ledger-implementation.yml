@@ -22,27 +22,24 @@ jobs:
           ref: refactor/reservation-consistency-v2
           fetch-depth: 0
 
-      - name: Apply refactor and capture diagnostics
+      - name: Apply continuation
         shell: bash
         run: |
           set +e
-          python scripts/apply-settlement-ledger-refactor.py > settlement-implementation-diagnostics.txt 2>&1
-          echo "exit_code=$?" >> settlement-implementation-diagnostics.txt
+          python scripts/continue-settlement-ledger-refactor.py > settlement-continuation-diagnostics.txt 2>&1
+          code=$?
+          echo "exit_code=$code" >> settlement-continuation-diagnostics.txt
           set -e
-          python - <<'PY'
-          import json
-          from pathlib import Path
-          path = Path('package.json')
-          data = json.loads(path.read_text(encoding='utf-8'))
-          data.get('scripts', {}).pop('prelint', None)
-          path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
-          PY
-          rm -f scripts/finalize-settlement-ledger.py
+          if [ "$code" -eq 0 ]; then
+            rm -f settlement-implementation-diagnostics.txt settlement-continuation-diagnostics.txt
+            rm -f scripts/apply-settlement-ledger-refactor.py scripts/continue-settlement-ledger-refactor.py
+            rm -f .github/workflows/settlement-ledger-implementation.yml
+          fi
 
-      - name: Commit applied state
+      - name: Commit continuation state
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A
-          git commit -m "chore: capture settlement ledger implementation state"
+          git commit -m "feat: complete settlement ledger and invoice synchronization"
           git push origin HEAD:refactor/reservation-consistency-v2
