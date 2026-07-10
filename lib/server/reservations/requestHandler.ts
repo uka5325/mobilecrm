@@ -1,6 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireActiveStaff, toAuthErrorResponse } from "@/lib/apiAuth";
 import {
+  isReservationApiAction,
+  type JsonRecord,
+  type ReservationApiAction,
+  type ReservationApiPayload,
+} from "@/lib/reservationApiContracts";
+import {
   createPatientWithDecision,
   listPatientsRaw,
   listPatientsSummaryRaw,
@@ -22,13 +28,13 @@ import {
   isReservationReadAction,
 } from "./queries/readReservations";
 
-type Body = {
-  idToken?: string;
-  action?: string;
-  payload?: Record<string, unknown>;
+type RawBody = {
+  idToken?: unknown;
+  action?: unknown;
+  payload?: unknown;
 };
 
-const WRITE_ACTIONS = new Set([
+const WRITE_ACTIONS: ReadonlySet<ReservationApiAction> = new Set([
   "create",
   "create_patient",
   "update",
@@ -38,24 +44,35 @@ const WRITE_ACTIONS = new Set([
   "delete_patient",
 ]);
 
+function isRecord(value: unknown): value is JsonRecord {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
 export async function handleReservationRequest(req: NextRequest) {
-  let body: Body;
+  let body: RawBody;
   try {
-    body = await req.json() as Body;
+    body = await req.json() as RawBody;
   } catch {
     return NextResponse.json(
-      { success: false, message: "요청 형식이 올바르지 않습니다." },
+      { success: false, code: "INVALID_PAYLOAD", message: "요청 형식이 올바르지 않습니다." },
       { status: 400 }
     );
   }
 
+  const action = body.action;
+  if (!isReservationApiAction(action)) {
+    return NextResponse.json(
+      { success: false, code: "UNKNOWN_ACTION", message: "알 수 없는 action" },
+      { status: 400 }
+    );
+  }
+  const payload = isRecord(body.payload) ? body.payload : {};
+
   try {
-    const action = body.action;
     const staff = await requireActiveStaff(
       String(body.idToken || ""),
-      { checkRevoked: typeof action === "string" && WRITE_ACTIONS.has(action) }
+      { checkRevoked: WRITE_ACTIONS.has(action) }
     );
-    const payload = body.payload || {};
 
     if (isReservationReadAction(action)) {
       return handleReservationReadAction(action, payload);
@@ -67,18 +84,21 @@ export async function handleReservationRequest(req: NextRequest) {
     if (action === "patient_amount_rows") return patientAmountRows(payload);
     if (action === "patient_full_history_page") return patientFullHistoryPage(payload);
     if (action === "patient_full_history") return patientFullHistoryExact(payload);
-    if (action === "create") return createReservationCommand(payload, staff);
-    if (action === "update") return updateReservationCommand(payload, staff);
-    if (action === "toggleSurgery") return toggleSurgeryCommand(payload, staff);
-    if (action === "delete") return deleteReservationCommand(payload, staff);
+    if (action === "create") {
+      return createReservationCommand(payload as ReservationApiPayload<"create">, staff);
+    }
+    if (action === "update") {
+      return updateReservationCommand(payload as ReservationApiPayload<"update">, staff);
+    }
+    if (action === "toggleSurgery") {
+      return toggleSurgeryCommand(payload as ReservationApiPayload<"toggleSurgery">, staff);
+    }
+    if (action === "delete") {
+      return deleteReservationCommand(payload as ReservationApiPayload<"delete">, staff);
+    }
     if (action === "update_patient_profile") return runPatientUpdateJob(payload, staff);
     if (action === "delete_patient") return runPatientDeleteJob(payload, staff);
-    if (action === "create_patient") return createPatientWithDecision(payload, staff);
-
-    return NextResponse.json(
-      { success: false, message: "알 수 없는 action" },
-      { status: 400 }
-    );
+    return createPatientWithDecision(payload, staff);
   } catch (error) {
     const response = toAuthErrorResponse(error);
     if (response) return response;
