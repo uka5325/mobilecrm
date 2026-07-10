@@ -27,6 +27,15 @@ export type InvoiceRecord = {
   paymentMethod?: "card" | "cash" | "mixed";
   cardAmount?: number;
   cashAmount?: number;
+  bankTransferAmount?: number;
+  foreignCardAmount?: number;
+  otherAmount?: number;
+  settlementPaidAmount?: number;
+  settlementRefundAmount?: number;
+  settlementCount?: number;
+  invoiceRevision?: number;
+  updatedAfterConfirmation?: boolean;
+  lastSettlementSyncedAt?: unknown;
   commissionRate?: number;
   commissionStaffUid?: string;
   commissionStaffName?: string;
@@ -157,6 +166,15 @@ function mapInvoiceDoc(data: Record<string, unknown>): InvoiceRecord {
       : undefined) as "card" | "cash" | "mixed" | undefined,
     cardAmount: data.cardAmount != null ? toNumber(data.cardAmount) : undefined,
     cashAmount: data.cashAmount != null ? toNumber(data.cashAmount) : undefined,
+    bankTransferAmount: data.bankTransferAmount != null ? toNumber(data.bankTransferAmount) : undefined,
+    foreignCardAmount: data.foreignCardAmount != null ? toNumber(data.foreignCardAmount) : undefined,
+    otherAmount: data.otherAmount != null ? toNumber(data.otherAmount) : undefined,
+    settlementPaidAmount: data.settlementPaidAmount != null ? toNumber(data.settlementPaidAmount) : undefined,
+    settlementRefundAmount: data.settlementRefundAmount != null ? toNumber(data.settlementRefundAmount) : undefined,
+    settlementCount: data.settlementCount != null ? toNumber(data.settlementCount) : undefined,
+    invoiceRevision: data.invoiceRevision != null ? toNumber(data.invoiceRevision) : undefined,
+    updatedAfterConfirmation: data.updatedAfterConfirmation === true,
+    lastSettlementSyncedAt: data.lastSettlementSyncedAt,
     commissionRate: data.commissionRate != null ? toNumber(data.commissionRate) : undefined,
     commissionStaffUid: data.commissionStaffUid ? cleanText(data.commissionStaffUid) : undefined,
     commissionStaffName: data.commissionStaffName ? cleanText(data.commissionStaffName) : undefined,

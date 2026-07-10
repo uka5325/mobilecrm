@@ -1,7 +1,0 @@
-Traceback (most recent call last):
-  File "/home/runner/work/mobilecrm/mobilecrm/scripts/apply-settlement-ledger-refactor.py", line 1378, in <module>
-    replace(
-  File "/home/runner/work/mobilecrm/mobilecrm/scripts/apply-settlement-ledger-refactor.py", line 18, in replace
-    raise RuntimeError(f"{path}: expected {count} exact matches, found {actual}: {old[:100]!r}")
-RuntimeError: lib/invoices.ts: expected 1 exact matches, found 2: '  cashAmount?: number;\n  commissionRate?: number;\n'
-exit_code=1

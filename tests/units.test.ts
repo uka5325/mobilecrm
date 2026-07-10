@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import { parseBirthInfo } from "../lib/invoiceUtils";
 import { calcCommissionBase, calcCommission, paymentMethodLabel } from "../lib/commissionUtils";
 import { cleanText, toSerializable } from "../lib/adminUtils";
+import { aggregateSettlementRows } from "../lib/settlementMath";
 
 test("parseBirthInfo: 주민번호 앞자리+성별코드 (남)", () => {
   const r = parseBirthInfo("900101-1");
@@ -56,6 +57,31 @@ test("calcCommission: 비율 계산 반올림", () => {
 test("paymentMethodLabel", () => {
   assert.equal(paymentMethodLabel("card"), "카드");
   assert.equal(paymentMethodLabel(undefined), "-");
+});
+
+test("settlement aggregate: 실제 결제-환불 및 결제수단별 합계", () => {
+  const result = aggregateSettlementRows([
+    { direction: "payment", amount: 550000, paymentMethod: "card", status: "active", paidAt: "2026-07-01" },
+    { direction: "payment", amount: 500000, paymentMethod: "cash", status: "active", paidAt: "2026-07-02" },
+    { direction: "refund", amount: 50000, paymentMethod: "cash", status: "active", paidAt: "2026-07-03" },
+  ]);
+  assert.equal(result.totalPaid, 1050000);
+  assert.equal(result.totalRefunded, 50000);
+  assert.equal(result.netAmount, 1000000);
+  assert.equal(result.cardAmount, 550000);
+  assert.equal(result.cashAmount, 450000);
+  assert.equal(result.paymentMethod, "mixed");
+  assert.equal(result.commissionBase, 950000);
+});
+
+test("settlement aggregate: void 기록 제외", () => {
+  const result = aggregateSettlementRows([
+    { direction: "payment", amount: 100000, paymentMethod: "cash", status: "void" },
+    { direction: "payment", amount: 200000, paymentMethod: "bank_transfer", status: "active" },
+  ]);
+  assert.equal(result.count, 1);
+  assert.equal(result.netAmount, 200000);
+  assert.equal(result.methodTotals.bank_transfer, 200000);
 });
 
 test("cleanText: null/undefined 안전", () => {
