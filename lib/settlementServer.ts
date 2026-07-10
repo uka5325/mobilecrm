@@ -1,4 +1,3 @@
-
 import { NextResponse } from "next/server";
 import { adminDb, FieldValue } from "@/lib/firebaseAdmin";
 import { cleanText, toSerializable } from "@/lib/adminUtils";
@@ -153,9 +152,9 @@ export async function listSettlements(payload: Record<string, unknown>) {
     return error("정산 내역이 너무 많아 한 번에 처리할 수 없습니다.", 409, "SETTLEMENT_LIMIT_EXCEEDED");
   }
 
-  const settlements = settlementSnap.docs
-    .map((doc) => ({ id: doc.id, ...(doc.data() as Record<string, unknown>) }))
-    .sort((a, b) => `${String(b.paidAt || "")}\u0000${b.id}`.localeCompare(`${String(a.paidAt || "")}\u0000${a.id}`));
+  const settlements: SettlementDoc[] = settlementSnap.docs
+    .map((doc): SettlementDoc => ({ id: doc.id, ...(doc.data() as Record<string, unknown>) }))
+    .sort((a, b) => `${String(b.paidAt || "")}\u0000${String(b.id || "")}`.localeCompare(`${String(a.paidAt || "")}\u0000${String(a.id || "")}`));
   const appointments = reservationSnap.docs
     .flatMap((doc) => {
       const data = doc.data() as Record<string, unknown>;
