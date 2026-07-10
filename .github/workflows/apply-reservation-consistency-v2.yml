@@ -31,7 +31,16 @@ jobs:
       - name: Lint
         run: npm run lint
       - name: Typecheck
-        run: npx tsc --noEmit
+        run: |
+          set +e
+          npx tsc --noEmit 2>&1 | tee typecheck.log
+          exit ${PIPESTATUS[0]}
+      - name: Upload typecheck diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: reservation-consistency-v2-typecheck
+          path: typecheck.log
       - name: Unit tests
         run: npm test
       - name: Build
