@@ -11,7 +11,24 @@ export const ALLOWED_RESERVATION_UPDATE_FIELDS = new Set([
   "coordinators", "doctors",
 ]);
 
+export const ALLOWED_PATIENT_CREATE_FIELDS = new Set([
+  "patientId", "name", "birth", "birthInput", "gender", "phone", "nationality",
+]);
+
+export const ALLOWED_RESERVATION_CREATE_FIELDS = new Set([
+  "reservationId", "patientId",
+  "name", "patientName", "birth", "birthInput", "gender", "phone", "nationality",
+  "reservationDate", "reservationTime", "hospital", "appointmentType",
+  "depositAmount", "surgeryCost", "consultArea",
+  "doctors", "coordinators",
+]);
+
 const SERVER_MANAGED_IGNORE = new Set(["updatedBy", "updatedByUid", "updatedAt"]);
+
+export const CREATE_SERVER_MANAGED_IGNORE = new Set([
+  "createdBy", "createdByUid", "updatedBy", "updatedByUid",
+  "createdAt", "updatedAt", "isDeleted", "searchTokens",
+]);
 
 export function splitPatch(
   patch: Record<string, unknown> | undefined | null,
@@ -26,6 +43,16 @@ export function splitPatch(
     else if (!ignore.has(key)) disallowed.push(key);
   }
   return { safe, disallowed };
+}
+
+export function withAmountFlags<T extends Record<string, unknown>>(
+  data: T
+): T & { hasDepositAmount: boolean; hasSurgeryCost: boolean } {
+  return {
+    ...data,
+    hasDepositAmount: hasAmountValue(data.depositAmount),
+    hasSurgeryCost: hasAmountValue(data.surgeryCost),
+  };
 }
 
 export function deriveAmountFlagPatch(patch: Record<string, unknown>): Record<string, boolean> {
