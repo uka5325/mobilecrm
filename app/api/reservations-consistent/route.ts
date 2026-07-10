@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { POST as legacyPost } from "../reservations/legacy";
+import { POST as legacyPost } from "../reservations/route";
 import { requireActiveStaff, toAuthErrorResponse } from "@/lib/apiAuth";
 import {
   createPatientWithDecision,
