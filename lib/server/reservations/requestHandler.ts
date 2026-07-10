@@ -14,10 +14,6 @@ import {
   runPatientDeleteJob,
   runPatientUpdateJob,
 } from "@/lib/patientMutationJobs";
-import { createReservationCommand } from "./commands/createReservation";
-import { updateReservationCommand } from "./commands/updateReservation";
-import { deleteReservationCommand } from "./commands/deleteReservation";
-import { toggleSurgeryCommand } from "./commands/toggleSurgery";
 
 type Body = {
   idToken?: string;
@@ -33,6 +29,20 @@ function rebuild(body: Body) {
   });
 }
 
+async function createReservationWithCanonicalResponse(body: Body) {
+  const response = await legacyPost(rebuild(body));
+  const result = await response.json().catch(() => ({})) as Record<string, unknown>;
+  if (!response.ok || result.success !== true) {
+    return NextResponse.json(result, { status: response.status });
+  }
+
+  const reservation = (body.payload?.reservation || {}) as Record<string, unknown>;
+  return NextResponse.json({
+    ...result,
+    patientId: String(reservation.patientId || ""),
+  }, { status: response.status });
+}
+
 export async function handleReservationRequest(req: NextRequest) {
   let body: Body;
   try {
@@ -44,27 +54,23 @@ export async function handleReservationRequest(req: NextRequest) {
     );
   }
 
-  const customAction = body.action === "create"
-    || body.action === "create_patient"
+  if (body.action === "create") {
+    return createReservationWithCanonicalResponse(body);
+  }
+
+  const customAction = body.action === "create_patient"
     || body.action === "list_patients"
     || body.action === "search_patients"
     || body.action === "list_patients_summary"
     || body.action === "patient_amount_rows"
     || body.action === "patient_full_history_page"
     || body.action === "patient_full_history"
-    || body.action === "update"
-    || body.action === "toggleSurgery"
-    || body.action === "delete"
     || body.action === "update_patient_profile"
     || body.action === "delete_patient";
   if (!customAction) return legacyPost(rebuild(body));
 
   try {
-    const writeAction = body.action === "create"
-      || body.action === "create_patient"
-      || body.action === "update"
-      || body.action === "toggleSurgery"
-      || body.action === "delete"
+    const writeAction = body.action === "create_patient"
       || body.action === "update_patient_profile"
       || body.action === "delete_patient";
     const staff = await requireActiveStaff(
@@ -79,10 +85,6 @@ export async function handleReservationRequest(req: NextRequest) {
     if (body.action === "patient_amount_rows") return patientAmountRows(payload);
     if (body.action === "patient_full_history_page") return patientFullHistoryPage(payload);
     if (body.action === "patient_full_history") return patientFullHistoryExact(payload);
-    if (body.action === "create") return createReservationCommand(payload, staff);
-    if (body.action === "update") return updateReservationCommand(payload, staff);
-    if (body.action === "toggleSurgery") return toggleSurgeryCommand(payload, staff);
-    if (body.action === "delete") return deleteReservationCommand(payload, staff);
     if (body.action === "update_patient_profile") return runPatientUpdateJob(payload, staff);
     if (body.action === "delete_patient") return runPatientDeleteJob(payload, staff);
     return createPatientWithDecision(payload, staff);
