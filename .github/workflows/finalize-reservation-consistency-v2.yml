@@ -1,0 +1,55 @@
+name: Finalize reservation consistency v2
+
+on:
+  push:
+    branches:
+      - refactor/reservation-consistency-v2
+
+permissions:
+  contents: write
+
+jobs:
+  finalize:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: refactor/reservation-consistency-v2
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - name: Apply final fixes
+        run: python3 scripts/finalize-reservation-consistency-v2.py
+      - name: Install dependencies
+        run: npm ci
+      - name: Lint
+        run: npm run lint
+      - name: Typecheck
+        run: npx tsc --noEmit
+      - name: Unit tests
+        run: npm test
+      - name: Build
+        run: npm run build
+      - name: Firestore rules tests
+        run: npm run test:rules
+      - name: Storage rules tests
+        run: npm run test:storage
+      - name: API emulator tests
+        run: npm run test:api
+      - name: Commit final implementation
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm scripts/finalize-reservation-consistency-v2.py
+          git rm .github/workflows/finalize-reservation-consistency-v2.yml
+          git rm .github/workflows/diagnose-reservation-consistency-v2-api.yml
+          git add -A
+          git commit -m "fix: finalize reservation consistency v2"
+          git push origin HEAD:refactor/reservation-consistency-v2
