@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { adminDb, FieldValue } from "@/lib/firebaseAdmin";
 import { recomputeReservationSummary, safeRecompute } from "@/lib/patientSummary";
+import type { ReservationApiPayload } from "@/lib/reservationApiContracts";
 import {
   RESERVATION_LOCKS,
   isReservationActive,
@@ -13,7 +14,7 @@ import {
 } from "./support";
 
 export async function deleteReservationCommand(
-  payload: Record<string, unknown>,
+  payload: ReservationApiPayload<"delete">,
   ctx: ReservationCommandContext
 ) {
   if (ctx.role !== "admin") {
@@ -23,19 +24,24 @@ export async function deleteReservationCommand(
     );
   }
 
-  const { reservationDocId } = payload as { reservationDocId: string };
+  const reservationDocId = String(payload.reservationDocId || "").trim();
+  if (!reservationDocId) {
+    return NextResponse.json(
+      { success: false, code: "RESERVATION_ID_REQUIRED", message: "reservationDocId가 필요합니다." },
+      { status: 400 }
+    );
+  }
+
   const now = FieldValue.serverTimestamp();
   const reservationRef = adminDb.collection("reservations").doc(reservationDocId);
-  let deletedData: Record<string, unknown> = {};
 
-  await adminDb.runTransaction(async (tx) => {
+  const deletedData = await adminDb.runTransaction<Record<string, unknown> | null>(async (tx) => {
     const beforeSnap = await tx.get(reservationRef);
-    deletedData = beforeSnap.exists
-      ? (beforeSnap.data() as Record<string, unknown>)
-      : {};
+    if (!beforeSnap.exists) return null;
 
-    const lockId = isReservationActive(deletedData)
-      ? lockIdForReservation(deletedData)
+    const beforeData = beforeSnap.data() as Record<string, unknown>;
+    const lockId = isReservationActive(beforeData)
+      ? lockIdForReservation(beforeData)
       : "";
     let lockRef: FirebaseFirestore.DocumentReference | null = null;
     let deleteLock = false;
@@ -51,15 +57,13 @@ export async function deleteReservationCommand(
       }
     }
 
-    if (beforeSnap.exists) {
-      await syncReservationAmountRowsInTx(tx, adminDb, ctx, {
-        patientId: String(deletedData.patientId || ""),
-        reservationDocId,
-        before: deletedData,
-        after: null,
-        now,
-      });
-    }
+    await syncReservationAmountRowsInTx(tx, adminDb, ctx, {
+      patientId: String(beforeData.patientId || ""),
+      reservationDocId,
+      before: beforeData,
+      after: null,
+      now,
+    });
 
     if (deleteLock && lockRef) tx.delete(lockRef);
     tx.update(reservationRef, {
@@ -70,21 +74,31 @@ export async function deleteReservationCommand(
     });
     writeReservationLogInTx(tx, ctx, {
       action: "reservation_delete",
-      targetId: String(deletedData.reservationId || reservationDocId),
-      patientId: String(deletedData.patientId || ""),
-      reservationId: String(deletedData.reservationId || ""),
+      targetId: String(beforeData.reservationId || reservationDocId),
+      patientId: String(beforeData.patientId || ""),
+      reservationId: String(beforeData.reservationId || ""),
       message: `${ctx.name}님이 예약을 삭제 처리했습니다.`,
-      before: { isDeleted: deletedData.isDeleted ?? false },
+      before: { isDeleted: beforeData.isDeleted ?? false },
       after: { isDeleted: true },
       now,
     });
+
+    return beforeData;
   });
 
+  if (!deletedData) {
+    return NextResponse.json(
+      { success: false, code: "RESERVATION_NOT_FOUND", message: "예약을 찾을 수 없습니다." },
+      { status: 404 }
+    );
+  }
+
+  const patientId = String(deletedData.patientId || "");
   await safeRecompute(
-    () => recomputeReservationSummary(String(deletedData.patientId || "")),
+    () => recomputeReservationSummary(patientId),
     "delete/reservation",
-    String(deletedData.patientId || "")
+    patientId
   );
 
-  return NextResponse.json({ success: true });
+  return NextResponse.json({ success: true, patientId });
 }
