@@ -1017,3 +1017,244 @@ test("create: 신규 patientId는 정상 생성된다", async () => {
   createdReservationDocIds.push(body.reservationDocId);
   createdPatientDocIds.push(body.patientDocId);
 });
+
+// ── patientAmountRows 동기화 ──────────────────────────────────────────────
+// 배지 카운트(patients.depositCount/surgeryCostCount) 와 팝오버 rows(patient_amount_rows action) 가
+// 하나의 진실 소스(patientAmountRows 컬렉션) 를 공유하도록 만든 리팩터의 회귀 방지.
+
+async function getAmountRows(patientId: string, type: "deposit" | "surgery") {
+  const res = await POST(makeReq(staff.idToken, "patient_amount_rows", { patientId, type }));
+  return await res.json();
+}
+
+test("amount rows: 예약 생성 시 예약금 groupKey 로 문서 생성 + 팝오버 조회 반영", async () => {
+  __resetStaffCacheForTests();
+  const patientId = `P-AR-CREATE-${Date.now()}`;
+  const c = await POST(makeReq(staff.idToken, "create", {
+    patient: { name: "금액테스트A", patientId },
+    reservation: {
+      reservationId: `R-AR-1-${Date.now()}`, name: "금액테스트A", patientId,
+      reservationDate: "2027-05-01", hospital: "본원", consultArea: "코수술",
+      doctors: ["김원장"], depositAmount: "500,000",
+      isDeleted: false,
+    },
+  }));
+  const cb = await c.json();
+  assert.equal(cb.success, true);
+  createdReservationDocIds.push(cb.reservationDocId);
+  createdPatientDocIds.push(cb.patientDocId);
+
+  const rows = await getAmountRows(patientId, "deposit");
+  assert.equal(rows.success, true);
+  assert.equal(rows.rows.length, 1);
+  assert.equal(rows.rows[0].amount, "500,000");
+  assert.equal(rows.rows[0].hospital, "본원");
+
+  const surgery = await getAmountRows(patientId, "surgery");
+  assert.equal(surgery.rows.length, 0);
+});
+
+test("amount rows: 같은 묶음 두 번째 예약(더 최신) 이 rep 를 교체하고 count 는 유지", async () => {
+  __resetStaffCacheForTests();
+  const patientId = `P-AR-REP-${Date.now()}`;
+  const c1 = await POST(makeReq(staff.idToken, "create", {
+    patient: { name: "금액테스트B", patientId },
+    reservation: {
+      reservationId: `R-AR-B1-${Date.now()}`, name: "금액테스트B", patientId,
+      reservationDate: "2027-05-01", hospital: "본원", consultArea: "눈성형",
+      doctors: ["이원장"], depositAmount: "300,000",
+      isDeleted: false,
+    },
+  }));
+  const c1b = await c1.json();
+  createdReservationDocIds.push(c1b.reservationDocId);
+  createdPatientDocIds.push(c1b.patientDocId);
+
+  const c2 = await POST(makeReq(staff.idToken, "create", {
+    patient: { name: "금액테스트B", patientId },
+    reservation: {
+      reservationId: `R-AR-B2-${Date.now()}`, name: "금액테스트B", patientId,
+      reservationDate: "2027-05-15", hospital: "본원", consultArea: "눈성형",
+      doctors: ["이원장"], depositAmount: "800,000",
+      isDeleted: false,
+    },
+  }));
+  const c2b = await c2.json();
+  createdReservationDocIds.push(c2b.reservationDocId);
+
+  const rows = await getAmountRows(patientId, "deposit");
+  assert.equal(rows.rows.length, 1); // 같은 묶음 = 1 rep
+  assert.equal(rows.rows[0].amount, "800,000"); // 더 최신 예약이 rep
+  assert.equal(rows.rows[0].date, "2027-05-15");
+});
+
+test("amount rows: 다른 병원 예약은 별도 묶음 → count 2 로 증가", async () => {
+  __resetStaffCacheForTests();
+  const patientId = `P-AR-MULTI-${Date.now()}`;
+  const c1 = await POST(makeReq(staff.idToken, "create", {
+    patient: { name: "금액테스트C", patientId },
+    reservation: {
+      reservationId: `R-AR-C1-${Date.now()}`, name: "금액테스트C", patientId,
+      reservationDate: "2027-05-01", hospital: "본원", consultArea: "코수술",
+      doctors: ["김원장"], depositAmount: "100,000",
+      isDeleted: false,
+    },
+  }));
+  const c1b = await c1.json();
+  createdReservationDocIds.push(c1b.reservationDocId);
+  createdPatientDocIds.push(c1b.patientDocId);
+
+  const c2 = await POST(makeReq(staff.idToken, "create", {
+    patient: { name: "금액테스트C", patientId },
+    reservation: {
+      reservationId: `R-AR-C2-${Date.now()}`, name: "금액테스트C", patientId,
+      reservationDate: "2027-05-02", hospital: "강남점", consultArea: "코수술",
+      doctors: ["김원장"], depositAmount: "200,000",
+      isDeleted: false,
+    },
+  }));
+  const c2b = await c2.json();
+  createdReservationDocIds.push(c2b.reservationDocId);
+
+  const rows = await getAmountRows(patientId, "deposit");
+  assert.equal(rows.rows.length, 2);
+});
+
+test("amount rows: 금액을 클리어하면 해당 묶음 rep 가 교체되고 후보 없으면 문서 삭제", async () => {
+  __resetStaffCacheForTests();
+  const patientId = `P-AR-CLEAR-${Date.now()}`;
+  const c1 = await POST(makeReq(staff.idToken, "create", {
+    patient: { name: "금액테스트D", patientId },
+    reservation: {
+      reservationId: `R-AR-D1-${Date.now()}`, name: "금액테스트D", patientId,
+      reservationDate: "2027-05-01", hospital: "본원", consultArea: "지방흡입",
+      doctors: ["박원장"], depositAmount: "1,000,000",
+      isDeleted: false,
+    },
+  }));
+  const c1b = await c1.json();
+  createdReservationDocIds.push(c1b.reservationDocId);
+  createdPatientDocIds.push(c1b.patientDocId);
+
+  // 초기 상태: 1건.
+  let rows = await getAmountRows(patientId, "deposit");
+  assert.equal(rows.rows.length, 1);
+
+  // 금액 클리어.
+  const u = await POST(makeReq(admin.idToken, "update", {
+    reservationDocId: c1b.reservationDocId,
+    reservationPatch: { depositAmount: "" },
+  }));
+  assert.equal(u.status, 200);
+
+  rows = await getAmountRows(patientId, "deposit");
+  assert.equal(rows.rows.length, 0);
+});
+
+test("amount rows: 예약 삭제 시 rep 교체 후보가 없으면 문서 삭제", async () => {
+  __resetStaffCacheForTests();
+  const patientId = `P-AR-DEL-${Date.now()}`;
+  const c1 = await POST(makeReq(staff.idToken, "create", {
+    patient: { name: "금액테스트E", patientId },
+    reservation: {
+      reservationId: `R-AR-E1-${Date.now()}`, name: "금액테스트E", patientId,
+      reservationDate: "2027-05-01", hospital: "본원", consultArea: "가슴수술",
+      doctors: ["최원장"], surgeryCost: "5,000,000",
+      isDeleted: false,
+    },
+  }));
+  const c1b = await c1.json();
+  createdReservationDocIds.push(c1b.reservationDocId);
+  createdPatientDocIds.push(c1b.patientDocId);
+
+  let rows = await getAmountRows(patientId, "surgery");
+  assert.equal(rows.rows.length, 1);
+
+  const d = await POST(makeReq(admin.idToken, "delete", { reservationDocId: c1b.reservationDocId }));
+  assert.equal(d.status, 200);
+
+  rows = await getAmountRows(patientId, "surgery");
+  assert.equal(rows.rows.length, 0);
+});
+
+test("amount rows: 예약 삭제 후 같은 묶음의 다른 예약이 rep 를 이어받는다", async () => {
+  __resetStaffCacheForTests();
+  const patientId = `P-AR-REPLACE-${Date.now()}`;
+  const c1 = await POST(makeReq(staff.idToken, "create", {
+    patient: { name: "금액테스트F", patientId },
+    reservation: {
+      reservationId: `R-AR-F1-${Date.now()}`, name: "금액테스트F", patientId,
+      reservationDate: "2027-06-15", hospital: "본원", consultArea: "코수술",
+      doctors: ["김원장"], depositAmount: "700,000",
+      isDeleted: false,
+    },
+  }));
+  const c1b = await c1.json();
+  createdReservationDocIds.push(c1b.reservationDocId);
+  createdPatientDocIds.push(c1b.patientDocId);
+
+  const c2 = await POST(makeReq(staff.idToken, "create", {
+    patient: { name: "금액테스트F", patientId },
+    reservation: {
+      reservationId: `R-AR-F2-${Date.now()}`, name: "금액테스트F", patientId,
+      reservationDate: "2027-06-01", hospital: "본원", consultArea: "코수술",
+      doctors: ["김원장"], depositAmount: "300,000",
+      isDeleted: false,
+    },
+  }));
+  const c2b = await c2.json();
+  createdReservationDocIds.push(c2b.reservationDocId);
+
+  // 초기 rep = 더 최신인 F1(6/15).
+  let rows = await getAmountRows(patientId, "deposit");
+  assert.equal(rows.rows.length, 1);
+  assert.equal(rows.rows[0].amount, "700,000");
+
+  // 최신 예약(rep) 삭제 → F2 가 새 rep.
+  await POST(makeReq(admin.idToken, "delete", { reservationDocId: c1b.reservationDocId }));
+
+  rows = await getAmountRows(patientId, "deposit");
+  assert.equal(rows.rows.length, 1);
+  assert.equal(rows.rows[0].amount, "300,000");
+  assert.equal(rows.rows[0].date, "2027-06-01");
+});
+
+test("amount rows: 레거시 파이프 문자열 doctors도 배열과 동일하게 원장별로 묶인다", async () => {
+  __resetStaffCacheForTests();
+  const patientId = `P-AR-LEGACY-DOCS-${Date.now()}`;
+  // doctors가 배열이 아니라 "김원장|최원장" 같은 파이프 구분 문자열로 저장된 레거시 예약을
+  // 직접 .set() 으로 재현(create 액션을 거치지 않은 과거 데이터 시뮬레이션). 이 두 예약은
+  // 서로 다른 원장 문자열을 갖고 있어, doctors 정규화가 문자열을 처리하지 못하면 둘 다
+  // "" 로 계산되어 하나의 묶음으로 잘못 합쳐진다.
+  const docA = adminDb.collection("reservations").doc();
+  const docB = adminDb.collection("reservations").doc();
+  createdReservationDocIds.push(docA.id, docB.id);
+  createdPatientDocIds.push(patientId);
+
+  await adminDb.collection("patients").doc(patientId).set({
+    patientId, name: "레거시원장테스트", isDeleted: false,
+    depositCount: 0, surgeryCostCount: 0, reservationCount: 0,
+  });
+  await docA.set({
+    patientId, reservationId: `R-LEGACY-A-${Date.now()}`, name: "레거시원장테스트",
+    reservationDate: "2027-08-01", hospital: "ARC", consultArea: "코수술",
+    doctors: "김원장", depositAmount: "100,000", isDeleted: false, cancelled: false,
+  });
+  await docB.set({
+    patientId, reservationId: `R-LEGACY-B-${Date.now()}`, name: "레거시원장테스트",
+    reservationDate: "2027-08-02", hospital: "ARC", consultArea: "코수술",
+    doctors: "최원장", depositAmount: "200,000", isDeleted: false, cancelled: false,
+  });
+
+  // 두 문서 모두 create 액션을 거치지 않았으므로 groupKey/patientAmountRows 동기화가
+  // 아직 없다 — no-op에 가까운 update(같은 hospital 값 재기록)로 동기화를 트리거한다.
+  const ua = await POST(makeReq(staff.idToken, "update", { reservationDocId: docA.id, reservationPatch: { hospital: "ARC" } }));
+  assert.equal(ua.status, 200);
+  const ub = await POST(makeReq(staff.idToken, "update", { reservationDocId: docB.id, reservationPatch: { hospital: "ARC" } }));
+  assert.equal(ub.status, 200);
+
+  const rows = await getAmountRows(patientId, "deposit");
+  assert.equal(rows.rows.length, 2);
+  const amounts = rows.rows.map((r: { amount: string }) => r.amount).sort();
+  assert.deepEqual(amounts, ["100,000", "200,000"]);
+});

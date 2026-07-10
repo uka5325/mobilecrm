@@ -123,10 +123,11 @@ export async function POST(req: NextRequest) {
           const chunk = ids.slice(i, i + CHUNK);
           const snap = await adminDb.collection("invoices")
             .where("patientId", "in", chunk)
+            .where("isDeleted", "==", false)
             .get();
           for (const d of snap.docs) {
             const obj = docToObj(d);
-            if (obj.isDeleted || !isCoordinatorOf(obj)) continue;
+            if (!isCoordinatorOf(obj)) continue;
             const pid = String(obj.patientId || "");
             if (pid in counts) counts[pid] += 1;
           }

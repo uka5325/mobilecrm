@@ -4,6 +4,8 @@ import { docToObj, toSerializable } from "@/lib/adminUtils";
 import { makePatientSearchTokens } from "@/lib/searchTokens";
 import { identityKeyForPatient } from "@/lib/patientIdentity";
 import { createEmptyPatientSummary } from "@/lib/patientSummary";
+import { amountTypeFromUnknown } from "@/lib/reservationAmountRows";
+import { queryPatientAmountRows } from "@/lib/patientAmountRows";
 import type { requireActiveStaff } from "@/lib/apiAuth";
 
 type StaffContext = Awaited<ReturnType<typeof requireActiveStaff>>;
@@ -242,6 +244,18 @@ export async function listPatientsSummaryRaw(payload: Record<string, unknown>) {
   );
 }
 
+export async function patientAmountRows(payload: Record<string, unknown>) {
+  const patientId = String(payload.patientId || "");
+  if (!patientId) {
+    return NextResponse.json({ success: false, message: "patientId가 없습니다." }, { status: 400 });
+  }
+
+  const type = amountTypeFromUnknown(payload.type);
+  const rows = await queryPatientAmountRows(adminDb, patientId, type);
+
+  return NextResponse.json({ success: true, rows });
+}
+
 export async function patientFullHistoryExact(payload: Record<string, unknown>) {
   const patientId = String(payload.patientId || "");
   if (!patientId) {
@@ -258,5 +272,36 @@ export async function patientFullHistoryExact(payload: Record<string, unknown>) 
     success: true,
     reservations: snap.docs.slice(0, cap).map(docToObj),
     capped: snap.docs.length > cap,
+  });
+}
+
+export async function patientFullHistoryPage(payload: Record<string, unknown>) {
+  const patientId = String(payload.patientId || "");
+  if (!patientId) {
+    return NextResponse.json({ success: false, message: "patientId가 없습니다." }, { status: 400 });
+  }
+
+  const pageSize = Math.min(Math.max(Number(payload.limit) || 10, 1), 50);
+  const cursor = String(payload.cursor || "");
+  let q = adminDb.collection("reservations")
+    .where("patientId", "==", patientId)
+    .where("isDeleted", "==", false)
+    .orderBy("reservationDate", "desc")
+    .limit(pageSize + 1);
+
+  if (cursor) {
+    const cursorDoc = await adminDb.collection("reservations").doc(cursor).get();
+    if (cursorDoc.exists) q = q.startAfter(cursorDoc) as typeof q;
+  }
+
+  const snap = await q.get();
+  const docs = snap.docs.slice(0, pageSize);
+  const last = docs[docs.length - 1];
+  return NextResponse.json({
+    success: true,
+    reservations: docs.map(docToObj),
+    nextCursor: snap.docs.length > pageSize && last ? last.id : null,
+    hasMore: snap.docs.length > pageSize,
+    capped: false,
   });
 }

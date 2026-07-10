@@ -32,15 +32,16 @@ export function __resetStaffCacheForTests() {
 }
 
 async function lookupStaff(uid: string, email: string): Promise<StaffContext> {
-  // uid 필드 우선 → 문서 ID fallback (기존 라우트들과 동일한 조회 규칙 유지)
+  // 신규 staff 문서는 doc id == uid로 생성된다. 직접 조회를 먼저 해 읽기 비용을 줄이고,
+  // 과거 uid 필드 기반 문서는 fallback으로만 지원한다.
   let data: FirebaseFirestore.DocumentData | null = null;
 
-  const snap = await adminDb.collection("staff").where("uid", "==", uid).limit(1).get();
-  if (!snap.empty) {
-    data = snap.docs[0].data();
+  const byId = await adminDb.collection("staff").doc(uid).get();
+  if (byId.exists) {
+    data = byId.data() ?? null;
   } else {
-    const byId = await adminDb.collection("staff").doc(uid).get();
-    if (byId.exists) data = byId.data() ?? null;
+    const snap = await adminDb.collection("staff").where("uid", "==", uid).limit(1).get();
+    if (!snap.empty) data = snap.docs[0].data();
   }
 
   if (!data) {

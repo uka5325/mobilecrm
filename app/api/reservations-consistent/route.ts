@@ -5,6 +5,8 @@ import {
   createPatientWithDecision,
   listPatientsRaw,
   listPatientsSummaryRaw,
+  patientAmountRows,
+  patientFullHistoryPage,
   patientFullHistoryExact,
   searchPatientsRaw,
 } from "@/lib/reservationConsistencyServer";
@@ -60,6 +62,8 @@ export async function POST(req: NextRequest) {
     || body.action === "list_patients"
     || body.action === "search_patients"
     || body.action === "list_patients_summary"
+    || body.action === "patient_amount_rows"
+    || body.action === "patient_full_history_page"
     || body.action === "patient_full_history"
     || body.action === "update_patient_profile"
     || body.action === "delete_patient";
@@ -78,6 +82,8 @@ export async function POST(req: NextRequest) {
     if (body.action === "list_patients") return listPatientsRaw();
     if (body.action === "search_patients") return searchPatientsRaw(payload);
     if (body.action === "list_patients_summary") return listPatientsSummaryRaw(payload);
+    if (body.action === "patient_amount_rows") return patientAmountRows(payload);
+    if (body.action === "patient_full_history_page") return patientFullHistoryPage(payload);
     if (body.action === "patient_full_history") return patientFullHistoryExact(payload);
     if (body.action === "update_patient_profile") return runPatientUpdateJob(payload, staff);
     if (body.action === "delete_patient") return runPatientDeleteJob(payload, staff);

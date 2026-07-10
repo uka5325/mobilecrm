@@ -5,6 +5,7 @@ import {
   summaryRetryDelayMs,
   type SummaryDomain,
 } from "@/lib/patientSummaryPolicy";
+import { PATIENT_AMOUNT_ROWS } from "@/lib/patientAmountRows";
 
 // 고객관리 첫 화면을 patients 문서만으로 그리기 위한 요약(summary) 재계산 헬퍼.
 // 전략: recompute-on-write — 쓰기 경로에서 "바뀐 도메인 슬라이스"만 짧게 재조회해
@@ -77,6 +78,8 @@ async function mergeIntoPatients(patientId: string, patch: Record<string, unknow
 }
 
 // 예약 파생 요약: 건수/최근예약/예약금·수술비 카운트 및 합계.
+// 카운트(depositCount/surgeryCostCount)는 patientAmountRows count() 집계로,
+// 나머지 총합/최근예약은 reservations 스캔으로 계산한다.
 export async function recomputeReservationSummary(patientId: string): Promise<void> {
   if (!patientId) return;
   // CAP+1을 읽어 정확히 300건인 경우와 301건 이상인 경우를 구분한다.
@@ -95,20 +98,14 @@ export async function recomputeReservationSummary(patientId: string): Promise<vo
   let lastReservationDate = "";
   let lastReservationTime = "";
   let lastComposite = "";
-  const depositGroups = new Set<string>();
-  const surgeryGroups = new Set<string>();
 
   for (const d of docs) {
     const r = d.data() as Record<string, unknown>;
     reservationCount += 1;
-    const hasDeposit = String(r.depositAmount ?? "").trim() !== "";
-    const hasSurgery = String(r.surgeryCost ?? "").trim() !== "";
-    if (hasDeposit) {
-      depositGroups.add(reservationGroupKey(r));
+    if (String(r.depositAmount ?? "").trim() !== "") {
       totalDepositAmount += parseAmount(r.depositAmount);
     }
-    if (hasSurgery) {
-      surgeryGroups.add(reservationGroupKey(r));
+    if (String(r.surgeryCost ?? "").trim() !== "") {
       totalSurgeryCost += parseAmount(r.surgeryCost);
     }
     const date = String(r.reservationDate || "");
@@ -121,10 +118,23 @@ export async function recomputeReservationSummary(patientId: string): Promise<vo
     }
   }
 
+  const [depositCountSnap, surgeryCountSnap] = await Promise.all([
+    adminDb.collection(PATIENT_AMOUNT_ROWS)
+      .where("patientId", "==", patientId)
+      .where("type", "==", "deposit")
+      .count()
+      .get(),
+    adminDb.collection(PATIENT_AMOUNT_ROWS)
+      .where("patientId", "==", patientId)
+      .where("type", "==", "surgery")
+      .count()
+      .get(),
+  ]);
+
   await mergeIntoPatients(patientId, {
     reservationCount,
-    depositCount: depositGroups.size,
-    surgeryCostCount: surgeryGroups.size,
+    depositCount: depositCountSnap.data().count,
+    surgeryCostCount: surgeryCountSnap.data().count,
     totalDepositAmount,
     totalSurgeryCost,
     lastReservationDate,

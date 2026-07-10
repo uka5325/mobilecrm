@@ -3,6 +3,7 @@ import { collection, onSnapshot, query, where, getDocs } from "firebase/firestor
 import type { StaffUser } from "./auth";
 import { cleanText } from "./stringUtils";
 import { parseBirthInfo } from "./reservationUtils";
+import type { AmountRow, AmountRowType } from "./reservationAmountRows";
 
 async function callReservationsApi(action: string, payload: Record<string, unknown>) {
   const firebaseUser = auth.currentUser;
@@ -616,6 +617,51 @@ export async function listPatientsSummary(
   };
 }
 
+const _patientAmountRowsCache = new Map<string, { at: number; rows: AmountRow[] }>();
+const PATIENT_AMOUNT_ROWS_TTL = 3 * 60 * 1000;
+
+function amountRowsCacheKey(patientId: string, type: AmountRowType) {
+  return `${patientId}:${type}`;
+}
+
+export function invalidatePatientAmountRowsCache(patientId: string) {
+  _patientAmountRowsCache.delete(amountRowsCacheKey(patientId, "deposit"));
+  _patientAmountRowsCache.delete(amountRowsCacheKey(patientId, "surgery"));
+}
+
+function mapAmountRow(raw: Record<string, unknown>): AmountRow {
+  const id = cleanText(raw.id);
+  return {
+    id,
+    reservationId: cleanText(raw.reservationId) || id,
+    patientId: cleanText(raw.patientId),
+    date: cleanText(raw.date),
+    hospital: cleanText(raw.hospital),
+    consultArea: cleanText(raw.consultArea),
+    doctors: Array.isArray(raw.doctors) ? (raw.doctors as unknown[]).map((d) => cleanText(d)).filter(Boolean) : [],
+    amount: cleanText(raw.amount),
+  };
+}
+
+export async function getPatientAmountRowsCached(
+  patientId: string,
+  type: AmountRowType,
+  expectedCount = 0
+): Promise<{ rows: AmountRow[]; source: string }> {
+  const key = amountRowsCacheKey(patientId, type);
+  const cached = _patientAmountRowsCache.get(key);
+  if (cached && Date.now() - cached.at < PATIENT_AMOUNT_ROWS_TTL) {
+    return { rows: cached.rows, source: "cache" };
+  }
+
+  const result = await callReservationsApi("patient_amount_rows", { patientId, type, expectedCount });
+  if (!result.success) throw new Error(String(result.message || "금액 내역 조회 실패"));
+
+  const rows = ((result.rows as Record<string, unknown>[] | undefined) || []).map(mapAmountRow);
+  _patientAmountRowsCache.set(key, { at: Date.now(), rows });
+  return { rows, source: String(result.source || "flag") };
+}
+
 // 예약금/수술비 최소 수정 — 금액 팝오버 저장용. 화이트리스트 필드만 patch하며
 // 신원/감사로그/요약 재계산은 서버가 처리한다.
 export async function updateReservationAmount(
@@ -913,6 +959,32 @@ export async function getPatientFullHistory(
   };
 }
 
+export async function getPatientFullHistoryPage(
+  patientId: string,
+  options: { cursor?: string | null; limit?: number } = {}
+): Promise<{
+  reservations: ReservationRecord[];
+  nextCursor: string | null;
+  hasMore: boolean;
+  capped: boolean;
+}> {
+  const result = await callReservationsApi("patient_full_history_page", {
+    patientId,
+    cursor: options.cursor || "",
+    limit: options.limit || 10,
+  });
+  if (!result.success) throw new Error(String(result.message || "이력 조회 실패"));
+  const raw = (result.reservations as Record<string, unknown>[] | undefined) || [];
+  return {
+    reservations: raw
+      .map((r) => mapReservationDoc(String(r.id || ""), r))
+      .sort((a, b) => `${b.reservationDate} ${b.reservationTime}`.localeCompare(`${a.reservationDate} ${a.reservationTime}`)),
+    nextCursor: result.nextCursor ? String(result.nextCursor) : null,
+    hasMore: result.hasMore === true,
+    capped: Boolean(result.capped),
+  };
+}
+
 export function getCachedPatientFullHistory(
   patientId: string
 ): { reservations: ReservationRecord[]; capped: boolean } | undefined {
@@ -934,6 +1006,7 @@ export async function getPatientFullHistoryCached(
 export function invalidatePatientFullHistoryCache(patientId: string) {
   _patientFullHistoryCache.delete(patientId);
 }
+
 
 // 여러 환자의 전체 이력 캐시를 "1번의 배치 쿼리"로 데운다. 고객관리 카드 배지가
 // 환자마다 getPatientFullHistoryCached를 따로 부르면 서버 왕복이 N번 생기므로,

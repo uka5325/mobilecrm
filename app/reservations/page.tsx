@@ -8,9 +8,10 @@ import {
   updatePatientProfile,
   fetchReservationsForExport,
   updateReservationFull,
+  getPatientFullHistoryPage,
   getPatientFullHistoryCached,
-  getCachedPatientFullHistory,
   invalidatePatientFullHistoryCache,
+  invalidatePatientAmountRowsCache,
   searchPatients,
   listPatientsSummary,
   type ReservationRecord,
@@ -97,6 +98,11 @@ export default function ReservationsPage() {
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState("");
   const [historyEditTarget, setHistoryEditTarget] = useState<ReservationRecord | null>(null);
+  const [historyPage, setHistoryPage] = useState(1);
+  const [historyCursors, setHistoryCursors] = useState<(string | null)[]>([null]);
+  const [historyHasNext, setHistoryHasNext] = useState(false);
+  const historySeqRef = useRef(0);
+  const HISTORY_PAGE_SIZE = 10;
 
   async function handleHistoryDelete(r: ReservationRecord) {
     if (!currentUser) return;
@@ -104,37 +110,51 @@ export default function ReservationsPage() {
     const result = await deleteReservation(r.id, r.reservationId, currentUser);
     if (result.success) {
       setHistoryList((prev) => prev.filter((x) => x.id !== r.id));
-      if (historyPatientId) invalidatePatientFullHistoryCache(historyPatientId);
+      if (historyPatientId) {
+        invalidatePatientFullHistoryCache(historyPatientId);
+        invalidatePatientAmountRowsCache(historyPatientId);
+      }
     } else {
       alert(result.message || "삭제 실패");
     }
   }
 
-  async function openPatientHistory(patientId: string, name: string) {
+  async function openPatientHistory(patientId: string, name: string, page = 1, cursors: (string | null)[] = [null]) {
+    const seq = ++historySeqRef.current;
     setHistoryPatientId(patientId);
     setHistoryPatientName(name);
     setHistoryError("");
-
-    const cached = getCachedPatientFullHistory(patientId);
-    if (cached) {
-      setHistoryList(cached.reservations);
-      setHistoryCapped(cached.capped);
-      setHistoryLoading(false);
-      return;
-    }
+    setHistoryPage(page);
 
     setHistoryList([]);
     setHistoryCapped(false);
+    setHistoryHasNext(false);
     setHistoryLoading(true);
     try {
-      const result = await getPatientFullHistoryCached(patientId);
+      const result = await getPatientFullHistoryPage(patientId, {
+        cursor: cursors[page - 1] || null,
+        limit: HISTORY_PAGE_SIZE,
+      });
+      if (seq !== historySeqRef.current) return;
       setHistoryList(result.reservations);
       setHistoryCapped(result.capped);
+      setHistoryHasNext(result.hasMore);
+      setHistoryCursors((prev) => {
+        const next = page === 1 ? [null] : [...prev];
+        if (result.nextCursor) next[page] = result.nextCursor;
+        return next;
+      });
     } catch (e) {
+      if (seq !== historySeqRef.current) return;
       setHistoryError(e instanceof Error ? e.message : "이력 조회 중 오류가 발생했습니다.");
     } finally {
-      setHistoryLoading(false);
+      if (seq === historySeqRef.current) setHistoryLoading(false);
     }
+  }
+
+  function goHistoryPage(nextPage: number) {
+    if (!historyPatientId || nextPage < 1) return;
+    void openPatientHistory(historyPatientId, historyPatientName, nextPage, historyCursors);
   }
 
   const isSearchMode = useMemo(() => {
@@ -347,6 +367,7 @@ export default function ReservationsPage() {
       setInlineEditId(null);
       setInlineForm(null);
       invalidatePatientFullHistoryCache(item.patientId);
+      invalidatePatientAmountRowsCache(item.patientId);
       reloadCurrent();
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -519,6 +540,7 @@ export default function ReservationsPage() {
       setPatientEditId(null);
       setPatientEditForm(null);
       invalidatePatientFullHistoryCache(group.patientId);
+      invalidatePatientAmountRowsCache(group.patientId);
       reloadCurrent();
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -548,6 +570,7 @@ export default function ReservationsPage() {
       return;
     }
     invalidatePatientFullHistoryCache(group.patientId);
+      invalidatePatientAmountRowsCache(group.patientId);
     reloadCurrent();
   }
 
@@ -577,6 +600,7 @@ export default function ReservationsPage() {
       return;
     }
     invalidatePatientFullHistoryCache(item.patientId);
+      invalidatePatientAmountRowsCache(item.patientId);
     reloadCurrent();
   }
   function handleAddReservation(group: PatientGroup) {
@@ -713,30 +737,49 @@ export default function ReservationsPage() {
             ) : historyList.length === 0 ? (
               <div className="py-8 text-center text-sm text-gray-400">예약 이력이 없습니다.</div>
             ) : (
-              <div className="max-h-[60vh] divide-y divide-gray-100 overflow-y-auto rounded-xl border border-gray-100">
-                {historyList.map((r) => (
-                  <div key={r.id} className="flex items-center gap-2 px-4 py-2.5 text-sm">
-                    <span className="w-20 shrink-0 text-xs text-gray-400">{r.reservationDate}</span>
-                    {r.reservationTime && <span className="shrink-0 text-xs text-gray-400">{r.reservationTime}</span>}
-                    <span className="shrink-0 text-gray-700">{r.appointmentType}</span>
-                    {r.consultArea && <span className="shrink-0 text-xs text-gray-500">{r.consultArea}</span>}
-                    <span className="shrink-0 text-xs text-gray-400">{r.hospital}</span>
-                    <span className="shrink-0 text-xs text-gray-400">
-                      {getCardStatus(r)}
-                    </span>
-                    <div className="ml-auto flex shrink-0 gap-1.5">
-                      <button
-                        onClick={() => setHistoryEditTarget(r)}
-                        className="rounded border border-blue-200 px-2 py-0.5 text-xs text-blue-600 hover:bg-blue-50"
-                      >수정</button>
-                      <button
-                        onClick={() => handleHistoryDelete(r)}
-                        className="rounded border border-red-200 px-2 py-0.5 text-xs text-red-500 hover:bg-red-50"
-                      >삭제</button>
+              <>
+                <div className="max-h-[60vh] divide-y divide-gray-100 overflow-y-auto rounded-xl border border-gray-100">
+                  {historyList.map((r) => (
+                    <div key={r.id} className="flex items-center gap-2 px-4 py-2.5 text-sm">
+                      <span className="w-20 shrink-0 text-xs text-gray-400">{r.reservationDate}</span>
+                      {r.reservationTime && <span className="shrink-0 text-xs text-gray-400">{r.reservationTime}</span>}
+                      <span className="shrink-0 text-gray-700">{r.appointmentType}</span>
+                      {r.consultArea && <span className="shrink-0 text-xs text-gray-500">{r.consultArea}</span>}
+                      <span className="shrink-0 text-xs text-gray-400">{r.hospital}</span>
+                      <span className="shrink-0 text-xs text-gray-400">
+                        {getCardStatus(r)}
+                      </span>
+                      <div className="ml-auto flex shrink-0 gap-1.5">
+                        <button
+                          onClick={() => setHistoryEditTarget(r)}
+                          className="rounded border border-blue-200 px-2 py-0.5 text-xs text-blue-600 hover:bg-blue-50"
+                        >수정</button>
+                        <button
+                          onClick={() => handleHistoryDelete(r)}
+                          className="rounded border border-red-200 px-2 py-0.5 text-xs text-red-500 hover:bg-red-50"
+                        >삭제</button>
+                      </div>
                     </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+                <div className="mt-3 flex items-center justify-center gap-3 text-sm">
+                  <button
+                    onClick={() => goHistoryPage(historyPage - 1)}
+                    disabled={historyPage <= 1 || historyLoading}
+                    className="rounded-lg border border-gray-200 bg-white px-3 py-1 text-xs text-gray-500 disabled:opacity-40"
+                  >
+                    ← 이전
+                  </button>
+                  <span className="text-xs text-gray-500">{historyPage}</span>
+                  <button
+                    onClick={() => goHistoryPage(historyPage + 1)}
+                    disabled={!historyHasNext || historyLoading}
+                    className="rounded-lg border border-gray-200 bg-white px-3 py-1 text-xs text-gray-700 disabled:opacity-40"
+                  >
+                    다음 →
+                  </button>
+                </div>
+              </>
             )}
           </div>
         </div>
@@ -752,7 +795,8 @@ export default function ReservationsPage() {
           onRefresh={() => {
             if (historyPatientId) {
               invalidatePatientFullHistoryCache(historyPatientId);
-              openPatientHistory(historyPatientId, historyPatientName);
+              invalidatePatientAmountRowsCache(historyPatientId);
+              openPatientHistory(historyPatientId, historyPatientName, historyPage, historyCursors);
               reloadCurrent(); // 이력 편집 후 summary 배지 갱신
             }
           }}
@@ -781,7 +825,7 @@ export default function ReservationsPage() {
         onDeletePatient={handleDeletePatient}
         onOpenPatientMemo={openPatientMemoPopover}
         onOpenPatientHistory={openPatientHistory}
-        onPatientMutated={() => reloadCurrent()}
+        onPatientMutated={(patientId) => { invalidatePatientFullHistoryCache(patientId); invalidatePatientAmountRowsCache(patientId); reloadCurrent(); }}
         listError={tableError}
         onRetry={reloadCurrent}
       />
@@ -823,7 +867,7 @@ export default function ReservationsPage() {
           initialPatient={addPatient}
           mode={addPatient ? "reservation" : "register"}
           onCreated={addPatient
-            ? () => { invalidatePatientFullHistoryCache(addPatient.patientId); reloadCurrent(); }
+            ? () => { invalidatePatientFullHistoryCache(addPatient.patientId); invalidatePatientAmountRowsCache(addPatient.patientId); reloadCurrent(); }
             : () => { reloadCurrent(); }
           }
         />
