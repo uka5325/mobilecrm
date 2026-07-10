@@ -15,6 +15,7 @@ export type ReservationApiPayloadMap = {
   update: {
     reservationDocId: string;
     reservationId?: string;
+    patientId?: string;
     reservationPatch: JsonRecord;
   };
   toggleSurgery: {

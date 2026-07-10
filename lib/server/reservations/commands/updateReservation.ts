@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { adminDb, FieldValue } from "@/lib/firebaseAdmin";
-import { recomputeReservationSummary, safeRecompute } from "@/lib/patientSummary";
+import { safeRecompute, updateReservationSummaryIncrementally } from "@/lib/patientSummary";
+import type { ReservationApiPayload } from "@/lib/reservationApiContracts";
 import {
   RESERVATION_LOCKS,
   buildLockDoc,
@@ -22,13 +23,10 @@ import {
 } from "./support";
 
 export async function updateReservationCommand(
-  payload: Record<string, unknown>,
+  payload: ReservationApiPayload<"update">,
   ctx: ReservationCommandContext
 ) {
-  const { reservationDocId, reservationPatch } = payload as {
-    reservationDocId: string;
-    reservationPatch: Record<string, unknown>;
-  };
+  const { reservationDocId, reservationPatch } = payload;
 
   const { safe: safeReservationPatch, disallowed } = splitPatch(
     reservationPatch,
@@ -64,6 +62,8 @@ export async function updateReservationCommand(
         canonicalPatientId: string;
         canonicalReservationId: string;
         staleLockRepaired: boolean;
+        beforeData: Record<string, unknown>;
+        afterData: Record<string, unknown>;
       }
   >(async (tx) => {
     const beforeSnap = await tx.get(reservationRef);
@@ -172,6 +172,8 @@ export async function updateReservationCommand(
       canonicalPatientId,
       canonicalReservationId,
       staleLockRepaired,
+      beforeData,
+      afterData: effectiveNew,
     };
   });
 
@@ -217,7 +219,12 @@ export async function updateReservationCommand(
   }
 
   await safeRecompute(
-    () => recomputeReservationSummary(outcome.canonicalPatientId),
+    () => updateReservationSummaryIncrementally({
+      patientId: outcome.canonicalPatientId,
+      reservationDocId,
+      before: outcome.beforeData,
+      after: outcome.afterData,
+    }),
     "update/reservation",
     outcome.canonicalPatientId
   );

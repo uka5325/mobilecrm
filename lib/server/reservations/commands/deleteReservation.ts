@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { adminDb, FieldValue } from "@/lib/firebaseAdmin";
-import { recomputeReservationSummary, safeRecompute } from "@/lib/patientSummary";
+import { safeRecompute, updateReservationSummaryIncrementally } from "@/lib/patientSummary";
 import type { ReservationApiPayload } from "@/lib/reservationApiContracts";
 import {
   RESERVATION_LOCKS,
@@ -95,7 +95,12 @@ export async function deleteReservationCommand(
 
   const patientId = String(deletedData.patientId || "");
   await safeRecompute(
-    () => recomputeReservationSummary(patientId),
+    () => updateReservationSummaryIncrementally({
+      patientId,
+      reservationDocId,
+      before: deletedData,
+      after: null,
+    }),
     "delete/reservation",
     patientId
   );

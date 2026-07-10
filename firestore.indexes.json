@@ -405,6 +405,28 @@
           "order": "DESCENDING"
         }
       ]
+    },
+    {
+      "collectionGroup": "reservations",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "patientId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "isDeleted",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "reservationDate",
+          "order": "DESCENDING"
+        },
+        {
+          "fieldPath": "reservationTime",
+          "order": "DESCENDING"
+        }
+      ]
     }
   ],
   "fieldOverrides": []
