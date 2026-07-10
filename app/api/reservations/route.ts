@@ -1,1 +1,1 @@
-export { POST } from "../reservations-consistent/route";
+export { handleReservationRequest as POST } from "@/lib/server/reservations/requestHandler";
