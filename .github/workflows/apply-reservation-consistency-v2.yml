@@ -25,7 +25,9 @@ jobs:
           node-version: 20
           cache: npm
       - name: Apply transformations
-        run: python3 scripts/apply-reservation-consistency-v2.py
+        run: |
+          python3 scripts/apply-reservation-consistency-v2.py
+          python3 scripts/fix-reservation-consistency-v2.py
       - name: Install dependencies
         run: npm ci
       - name: Lint
@@ -49,7 +51,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git rm scripts/apply-reservation-consistency-v2.py .github/workflows/apply-reservation-consistency-v2.yml
+          git rm scripts/apply-reservation-consistency-v2.py scripts/fix-reservation-consistency-v2.py .github/workflows/apply-reservation-consistency-v2.yml
           git add -A
           git commit -m "refactor: implement reservation consistency v2"
           git push origin HEAD:refactor/reservation-consistency-v2
