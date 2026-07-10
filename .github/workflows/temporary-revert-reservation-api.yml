@@ -1,0 +1,35 @@
+name: Temporary revert reservation API refactor
+
+on:
+  push:
+    branches:
+      - revert/reservation-api-refactor
+
+permissions:
+  contents: write
+
+jobs:
+  revert-merges:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out rollback branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: revert/reservation-api-refactor
+
+      - name: Revert PR merges in reverse order
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git revert -m 1 --no-edit ff9a020cf4c8a7529e9775911e92d16918d4baca
+          git revert -m 1 --no-edit 0ef93e563f72e136c47c1bb781729d4df6309f8f
+          git revert -m 1 --no-edit 93bad3891f66a145245a0fe0f01e50457acd65a5
+          git revert -m 1 --no-edit be55a8cbaea89b9acfb4970ae375bf1cbe70588f
+          rm .github/workflows/temporary-revert-reservation-api.yml
+          git add -A
+          git commit -m "Remove temporary rollback workflow"
+          git push origin HEAD:revert/reservation-api-refactor
