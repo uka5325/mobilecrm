@@ -6,6 +6,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
+    "prelint": "git fetch origin refactor/reservation-consistency-v2 && git checkout -B refactor/reservation-consistency-v2 origin/refactor/reservation-consistency-v2 && python scripts/apply-settlement-ledger-refactor.py && python scripts/finalize-settlement-ledger.py",
     "lint": "eslint",
     "test": "tsx --test tests/units.test.ts",
     "test:rules": "firebase emulators:exec --only firestore \"tsx --test tests/rules.test.ts\"",
