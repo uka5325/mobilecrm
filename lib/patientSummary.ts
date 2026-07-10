@@ -286,7 +286,10 @@ export async function updateReservationSummaryIncrementally(
       const wasCapped = data.reservationCountCapped === true;
       const rawNextCount = Math.max(0, currentCount + countDelta);
       const nextCapped = wasCapped || rawNextCount > RESERVATION_CAP;
-      const nextCount = nextCapped ? Math.min(RESERVATION_CAP, rawNextCount || RESERVATION_CAP) : rawNextCount;
+      // 이미 capped인 환자는 정확한 실제 건수를 모르므로 reconcile 전까지 표시값 300을 유지한다.
+      const nextCount = wasCapped
+        ? RESERVATION_CAP
+        : Math.min(RESERVATION_CAP, rawNextCount);
       const patch: Record<string, unknown> = {
         reservationCount: nextCount,
         reservationCountCapped: nextCapped,

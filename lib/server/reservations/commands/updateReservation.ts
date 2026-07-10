@@ -229,5 +229,5 @@ export async function updateReservationCommand(
     outcome.canonicalPatientId
   );
 
-  return NextResponse.json({ success: true });
+  return NextResponse.json({ success: true, patientId: outcome.canonicalPatientId });
 }

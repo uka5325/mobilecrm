@@ -611,7 +611,7 @@ export {
 } from "./patientSummaryClientCache";
 
 import { invalidatePatientSummaryCache as _invalidatePatientSummaryCache } from "./patientSummaryClientCache";
-// Alias kept for existing callsites in this file and reservationsSafe.ts
+// Backward-compatible export name retained for existing callsites.
 export const invalidatePatientsSummaryCache = _invalidatePatientSummaryCache;
 // Legacy compat — old callers used getCachedPatientsSummary()
 export function getCachedPatientsSummary(): { patients: PatientRecord[]; nextCursor: string | null } | undefined {
@@ -706,7 +706,8 @@ export async function updateReservationAmount(
   if (!apiResult.success) {
     return { success: false, message: cleanText(apiResult.message) || "금액 저장에 실패했습니다." };
   }
-  invalidateReservationDerivedCaches(patientId);
+  const canonicalPatientId = cleanText(apiResult.patientId) || cleanText(patientId);
+  invalidateReservationDerivedCaches(canonicalPatientId);
   return { success: true };
 }
 
@@ -823,6 +824,8 @@ export async function toggleSurgeryReserved(
   }
 
   // 감사로그는 서버(/api/reservations toggleSurgery)에서 권위 있게 기록됨 → 클라 createLog 제거.
+  const canonicalPatientId = cleanText(apiResult.patientId);
+  if (canonicalPatientId) invalidateReservationDerivedCaches(canonicalPatientId);
 
   return { success: true };
 }
@@ -935,7 +938,8 @@ export async function updateReservationFull(
     return { success: false, message: apiResult.message || "예약 수정에 실패했습니다." };
   }
 
-  invalidateReservationDerivedCaches(patientId);
+  const canonicalPatientId = cleanText(apiResult.patientId) || cleanText(patientId);
+  invalidateReservationDerivedCaches(canonicalPatientId);
   return { success: true };
 }
 

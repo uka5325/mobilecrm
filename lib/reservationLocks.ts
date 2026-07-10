@@ -28,8 +28,12 @@ export function normalizePhone(v: unknown): string {
 // 않게 하기 위함). patientId가 없는 레거시 예약만 name+phone으로 fallback한다.
 // prefix("pid:"/"legacy:")로 두 경로의 값이 우연히 충돌하지 않게 한다.
 function computeIdentityKey(r: Record<string, unknown>): string {
-  const patientId = normalizeText(r.patientId);
-  if (patientId) return `pid:${patientId}`;
+  // 서버가 빈 patientId를 보완해 생성한 환자는 원 요청의 name+phone identity를 유지한다.
+  // 그렇지 않으면 동시에 들어온 동일 예약이 서로 다른 무작위 patientId lock을 사용하게 된다.
+  if (r.patientIdGenerated !== true) {
+    const patientId = normalizeText(r.patientId);
+    if (patientId) return `pid:${patientId}`;
+  }
   const name = normalizeText(r.name ?? r.patientName);
   if (!name) return "";
   return `legacy:${name}__${normalizePhone(r.phone)}`;

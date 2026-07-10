@@ -101,9 +101,12 @@ export async function createReservationCommand(
       { status: 400 }
     );
   }
+  const patientIdGenerated = !patientPatientId && !reservationPatientId;
   const canonicalPatientId = patientPatientId || reservationPatientId || makeGeneratedPatientId();
   safePatient.patientId = canonicalPatientId;
+  safePatient.patientIdGenerated = patientIdGenerated;
   safeReservation.patientId = canonicalPatientId;
+  safeReservation.patientIdGenerated = patientIdGenerated;
 
   const reservationDefaults = {
     completed: false,
@@ -115,10 +118,6 @@ export async function createReservationCommand(
   };
 
   const reservationId = String(safeReservation.reservationId || "");
-  const lockId = lockIdForReservation(safeReservation);
-  const lockRef = lockId
-    ? adminDb.collection(RESERVATION_LOCKS).doc(lockId)
-    : null;
   const now = FieldValue.serverTimestamp();
   const authorFields = {
     createdBy: ctx.name,
@@ -135,6 +134,7 @@ export async function createReservationCommand(
   let createdReservationData: Record<string, unknown> | null = null;
   let linkedExistingPatient = false;
   let staleLockRepaired = false;
+  let resultLockId = "";
 
   try {
     await adminDb.runTransaction(async (tx) => {
@@ -148,26 +148,6 @@ export async function createReservationCommand(
         if (!existingReservation.empty) throw new DuplicateReservationError();
       }
 
-      if (lockRef) {
-        const lockSnap = await tx.get(lockRef);
-        if (lockSnap.exists) {
-          const targetDocId = String(lockSnap.data()?.reservationDocId || "");
-          let targetData: Record<string, unknown> | null = null;
-          if (targetDocId) {
-            const targetSnap = await tx.get(
-              adminDb.collection("reservations").doc(targetDocId)
-            );
-            targetData = targetSnap.exists
-              ? (targetSnap.data() as Record<string, unknown>)
-              : null;
-          }
-          if (!isLockStale(lockId, targetData)) {
-            throw new DuplicateReservationError();
-          }
-          staleLockRepaired = true;
-        }
-      }
-
       let existingPatientDocId = "";
       let linkedPatientId = "";
       if (incomingPatientId) {
@@ -178,13 +158,16 @@ export async function createReservationCommand(
             .limit(1)
         );
         if (!patientSnap.empty) {
-          if (patientSnap.docs[0].data().isDeleted === true) {
+          const existingPatientData = patientSnap.docs[0].data() as Record<string, unknown>;
+          if (existingPatientData.isDeleted === true) {
             throw new PatientDeletedError();
           }
           existingPatientDocId = patientSnap.docs[0].id;
-          linkedPatientId = String(
-            patientSnap.docs[0].data().patientId || incomingPatientId
-          );
+          linkedPatientId = String(existingPatientData.patientId || incomingPatientId);
+          if (existingPatientData.patientIdGenerated === true) {
+            safePatient.patientIdGenerated = true;
+            safeReservation.patientIdGenerated = true;
+          }
         }
       }
 
@@ -227,15 +210,47 @@ export async function createReservationCommand(
               .limit(1)
           );
           if (!linkedPatient.empty) {
+            const linkedPatientData = linkedPatient.docs[0].data() as Record<string, unknown>;
             existingPatientDocId = linkedPatient.docs[0].id;
             linkedPatientId = linkToPatientId;
+            if (linkedPatientData.patientIdGenerated === true) {
+              safePatient.patientIdGenerated = true;
+              safeReservation.patientIdGenerated = true;
+            }
           }
         }
       }
 
       if (linkedPatientId) {
+        safePatient.patientId = linkedPatientId;
         safeReservation.patientId = linkedPatientId;
         resultPatientId = linkedPatientId;
+      }
+
+      // canonical 환자 연결과 generated-ID 정책이 결정된 뒤 중복 lock을 계산한다.
+      const lockId = lockIdForReservation(safeReservation);
+      resultLockId = lockId;
+      const lockRef = lockId
+        ? adminDb.collection(RESERVATION_LOCKS).doc(lockId)
+        : null;
+      if (lockRef) {
+        const lockSnap = await tx.get(lockRef);
+        if (lockSnap.exists) {
+          const targetDocId = String(lockSnap.data()?.reservationDocId || "");
+          let targetData: Record<string, unknown> | null = null;
+          if (targetDocId) {
+            const targetSnap = await tx.get(
+              adminDb.collection("reservations").doc(targetDocId)
+            );
+            targetData = targetSnap.exists
+              ? (targetSnap.data() as Record<string, unknown>)
+              : null;
+          }
+          if (!isLockStale(lockId, targetData)) {
+            throw new DuplicateReservationError();
+          }
+          staleLockRepaired = true;
+        }
       }
 
       const afterReservation = {
@@ -260,7 +275,7 @@ export async function createReservationCommand(
           buildLockDoc({
             reservationDocId: reservationRef.id,
             reservationId,
-            patientId: incomingPatientId,
+            patientId: resultPatientId,
             lockId,
             now,
           })
@@ -363,7 +378,7 @@ export async function createReservationCommand(
       reservationId,
       message: "생성 중 stale reservation lock을 정리하고 재사용했습니다.",
       before: null,
-      after: { lockId, reservationDocId: reservationRef.id },
+      after: { lockId: resultLockId, reservationDocId: reservationRef.id },
       now,
     });
   }
