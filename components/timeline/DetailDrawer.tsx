@@ -24,9 +24,10 @@ import { FilesTab } from "@/components/timeline/tabs/FilesTab";
 import { NotesTab } from "@/components/timeline/tabs/NotesTab";
 import { LogsTab } from "@/components/timeline/tabs/LogsTab";
 import { InvoiceTab } from "@/components/timeline/tabs/InvoiceTab";
+import { SettlementPanel } from "@/components/settlements/SettlementPanel";
 import { CreateDrawer } from "@/components/reservations/CreateDrawer";
 
-type DetailTab = "info" | "files" | "notes" | "logs" | "invoice";
+type DetailTab = "info" | "settlement" | "files" | "notes" | "logs" | "invoice";
 
 type DetailForm = {
   name: string;
@@ -39,8 +40,6 @@ type DetailForm = {
   hospital: string;
   appointmentType: AppointmentType;
   coordinators: string;
-  depositAmount: string;
-  surgeryCost: string;
   doctors: string;
   completed: boolean;
   cancelled: boolean;
@@ -69,7 +68,7 @@ export function DetailDrawer({ open, reservation, currentUser, onClose, onRefres
     name: "", birthInput: "", phone: "", nationality: "",
     consultArea: "", reservationDate: todayString(),
     reservationTime: "", hospital: "", appointmentType: "상담",
-    coordinators: "", depositAmount: "", surgeryCost: "", doctors: "", completed: false, cancelled: false,
+    coordinators: "", doctors: "", completed: false, cancelled: false,
   });
 
   const [logs, setLogs] = useState<LogRecord[]>([]);
@@ -106,8 +105,6 @@ export function DetailDrawer({ open, reservation, currentUser, onClose, onRefres
       hospital: reservation.hospital || "",
       appointmentType: reservation.appointmentType || "상담",
       coordinators: (reservation.coordinators || []).join(", "),
-      depositAmount: reservation.depositAmount || "",
-      surgeryCost: reservation.surgeryCost || "",
       doctors: (reservation.doctors || []).join(", "),
       completed: reservation.completed === true,
       cancelled: (reservation as unknown as Record<string, unknown>).cancelled === true,
@@ -182,8 +179,6 @@ export function DetailDrawer({ open, reservation, currentUser, onClose, onRefres
           hospital: detailForm.hospital,
           appointmentType: detailForm.appointmentType,
           coordinators: splitComma(detailForm.coordinators),
-          depositAmount: detailForm.depositAmount,
-          surgeryCost: detailForm.surgeryCost,
           doctors: splitComma(detailForm.doctors),
           completed: detailForm.completed,
         },
@@ -206,8 +201,6 @@ export function DetailDrawer({ open, reservation, currentUser, onClose, onRefres
         hospital: detailForm.hospital,
         appointmentType: detailForm.appointmentType,
         coordinators: splitComma(detailForm.coordinators),
-        depositAmount: detailForm.depositAmount,
-        surgeryCost: detailForm.surgeryCost,
         doctors: splitComma(detailForm.doctors),
         completed: detailForm.completed,
       };
@@ -251,8 +244,6 @@ export function DetailDrawer({ open, reservation, currentUser, onClose, onRefres
           appointmentType: detailForm.appointmentType,
           coordinators: splitComma(detailForm.coordinators),
           doctors: splitComma(detailForm.doctors),
-          depositAmount: detailForm.depositAmount,
-          surgeryCost: detailForm.surgeryCost,
           completed: next,
         },
         currentUser
@@ -295,8 +286,6 @@ export function DetailDrawer({ open, reservation, currentUser, onClose, onRefres
           appointmentType: detailForm.appointmentType,
           coordinators: splitComma(detailForm.coordinators),
           doctors: splitComma(detailForm.doctors),
-          depositAmount: detailForm.depositAmount,
-          surgeryCost: detailForm.surgeryCost,
           completed: detailForm.completed,
           cancelled: next,
         },
@@ -405,8 +394,6 @@ export function DetailDrawer({ open, reservation, currentUser, onClose, onRefres
     appointmentType: selectedReservation.appointmentType,
     coordinators: (selectedReservation.coordinators || []).join(", "),
     doctors: (selectedReservation.doctors || []).join(", "),
-    depositAmount: selectedReservation.depositAmount,
-    surgeryCost: selectedReservation.surgeryCost,
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedReservation?.id]);
 
@@ -492,8 +479,8 @@ export function DetailDrawer({ open, reservation, currentUser, onClose, onRefres
         </div>
 
         <div className="flex shrink-0 border-b border-[#edf0f3]">
-          {(["info", "files", "notes", "logs", "invoice"] as const).map((key) => {
-            const label = { info: "기본정보", files: "파일", notes: "메모", logs: "로그", invoice: "인보이스" }[key];
+          {(["info", "settlement", "files", "notes", "logs", "invoice"] as const).map((key) => {
+            const label = { info: "기본정보", settlement: "정산", files: "파일", notes: "메모", logs: "로그", invoice: "인보이스" }[key];
             return (
               <button
                 key={key}
@@ -529,6 +516,23 @@ export function DetailDrawer({ open, reservation, currentUser, onClose, onRefres
               onUpdateNote={handleUpdateNote}
               onDeleteNote={handleDeleteNote}
               onShowAllNotes={() => setActiveTab("notes")}
+            />
+          )}
+
+          {activeTab === "settlement" && selectedReservation && (
+            <SettlementPanel
+              patientId={selectedReservation.patientId}
+              patientName={selectedReservation.name}
+              currentReservation={{
+                id: selectedReservation.id,
+                reservationId: selectedReservation.reservationId,
+                reservationDate: selectedReservation.reservationDate,
+                reservationTime: selectedReservation.reservationTime,
+                appointmentType: selectedReservation.appointmentType,
+                hospital: selectedReservation.hospital,
+                consultArea: selectedReservation.consultArea,
+              }}
+              onMutated={onRefresh}
             />
           )}
 

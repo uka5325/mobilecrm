@@ -17,8 +17,6 @@ type DetailForm = {
   doctors: string;
   appointmentType: AppointmentType;
   coordinators: string;
-  depositAmount: string;
-  surgeryCost: string;
 };
 
 type BirthPreview = {
@@ -177,18 +175,6 @@ export function InfoTab({
         />
       </div>
 
-      <div className="mt-3 grid grid-cols-2 gap-3">
-        <EditField
-          label="예약금"
-          value={detailForm.depositAmount}
-          onChange={(value) => onFormChange({ depositAmount: value })}
-        />
-        <EditField
-          label="수술비용"
-          value={detailForm.surgeryCost}
-          onChange={(value) => onFormChange({ surgeryCost: value })}
-        />
-      </div>
 
       {detailError && (
         <div className="mt-3 rounded-xl bg-red-50 px-3 py-2 text-sm text-red-600">{detailError}</div>

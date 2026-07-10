@@ -1,11 +1,11 @@
 "use client";
 
-import { useState, useRef, useEffect, useCallback, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import type { ReservationRecord, AppointmentType } from "@/lib/reservations";
-import { APPOINTMENT_TYPES, getPatientAmountRowsCached, invalidatePatientAmountRowsCache, invalidatePatientFullHistoryCache, updateReservationAmount } from "@/lib/reservations";
-import type { AmountRow, AmountRowType } from "@/lib/reservationAmountRows";
+import { APPOINTMENT_TYPES } from "@/lib/reservations";
 import { getReservationBirthInfo } from "@/lib/reservationUtils";
 import { PatientInvoiceModal } from "./PatientInvoiceModal";
+import { SettlementModal } from "@/components/settlements/SettlementModal";
 
 export type PatientGroup = {
   patientKey: string;
@@ -22,6 +22,8 @@ export type PatientGroup = {
   reservationCountCapped?: boolean;
   depositCount?: number;
   surgeryCostCount?: number;
+  settlementCount?: number;
+  netSettlementAmount?: number;
   invoiceCount?: number;
   memoCount?: number;
   lastReservationDate?: string;
@@ -48,7 +50,7 @@ const APPT_TYPE_COLORS: Record<AppointmentType, string> = {
 type InlineForm = {
   name: string; birthInput: string; phone: string; nationality: string;
   consultArea: string; reservationDate: string; reservationTime: string;
-  coordinators: string; depositAmount: string; surgeryCost: string; hospital: string;
+  coordinators: string; hospital: string;
   doctors: string;
   appointmentType: AppointmentType;
 } | null;
@@ -81,126 +83,6 @@ type Props = {
   onRetry?: () => void;
 };
 
-const AMOUNT_POPOVER_TIMEOUT_MS = 8000;
-
-function withTimeout<T>(promise: Promise<T>, ms: number, message: string): Promise<T> {
-  return new Promise<T>((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error(message)), ms);
-    promise.then(
-      (value) => {
-        clearTimeout(timer);
-        resolve(value);
-      },
-      (error) => {
-        clearTimeout(timer);
-        reject(error);
-      }
-    );
-  });
-}
-
-type AmountPopoverProps = {
-  label: string;
-  loading?: boolean;
-  rows: AmountRow[];
-  onClose: () => void;
-  onSave: (row: AmountRow, newAmount: string) => Promise<void>;
-};
-
-function AmountPopover({ label, loading, rows, onClose, onSave }: AmountPopoverProps) {
-  const ref = useRef<HTMLDivElement>(null);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editValue, setEditValue] = useState("");
-  const [saving, setSaving] = useState(false);
-
-  useEffect(() => {
-    function handleClick(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) onClose();
-    }
-    document.addEventListener("mousedown", handleClick);
-    return () => document.removeEventListener("mousedown", handleClick);
-  }, [onClose]);
-
-  async function handleSave(row: AmountRow) {
-    setSaving(true);
-    try {
-      await onSave(row, editValue);
-      setEditingId(null);
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  return (
-    <div
-      ref={ref}
-      className="absolute z-50 mt-1 min-w-[300px] rounded-xl border border-gray-200 bg-white shadow-xl"
-    >
-      <div className="border-b border-gray-100 px-4 py-2.5 text-xs font-bold text-gray-700">{label} 내역</div>
-      <div className="max-h-60 overflow-y-auto">
-        {loading ? (
-          <div className="px-4 py-3 text-xs text-gray-400">불러오는 중...</div>
-        ) : rows.length === 0 ? (
-          <div className="px-4 py-3 text-xs text-gray-400">내역 없음</div>
-        ) : (
-          rows.map((row) => {
-            const groupLabel = [row.consultArea, row.doctors.join(", ")].filter(Boolean).join(" · ");
-            return (
-            <div key={row.id} className="border-b border-gray-50 px-3 py-2 last:border-0">
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-gray-500 w-[70px] shrink-0">{row.date || "—"}</span>
-                <span className="text-xs text-gray-500 truncate flex-1">{row.hospital || "—"}</span>
-                {editingId === row.id ? (
-                  <>
-                    <input
-                      autoFocus
-                      className="w-[90px] rounded-lg border border-[#dfe3e8] px-2 py-0.5 text-xs focus:border-[#1d9e75] focus:outline-none"
-                      value={editValue}
-                      onChange={(e) => setEditValue(e.target.value)}
-                    />
-                    <button
-                      disabled={saving}
-                      onClick={() => handleSave(row)}
-                      className="rounded-lg bg-emerald-600 px-2 py-0.5 text-xs text-white disabled:opacity-50"
-                    >
-                      {saving ? "…" : "저장"}
-                    </button>
-                    <button onClick={() => setEditingId(null)} className="text-xs text-gray-400 hover:text-gray-600">
-                      ✕
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    <span className="text-xs font-medium text-gray-800 w-[80px] text-right">{row.amount || "—"}</span>
-                    <button
-                      onClick={() => { setEditingId(row.id); setEditValue(row.amount); }}
-                      className="text-xs text-blue-500 hover:underline shrink-0"
-                    >
-                      {row.amount ? "수정" : "입력"}
-                    </button>
-                    {row.amount && (
-                      <button
-                        onClick={async () => { setSaving(true); try { await onSave(row, ""); setEditingId(null); } finally { setSaving(false); } }}
-                        className="text-xs text-red-400 hover:underline shrink-0"
-                      >
-                        삭제
-                      </button>
-                    )}
-                  </>
-                )}
-              </div>
-              {groupLabel && (
-                <div className="mt-0.5 pl-[78px] text-[11px] text-gray-400 truncate">{groupLabel}</div>
-              )}
-            </div>
-            );
-          })
-        )}
-      </div>
-    </div>
-  );
-}
-
 export function ReservationsTable({
   patientGroups,
   loading,
@@ -231,57 +113,7 @@ export function ReservationsTable({
   const inputCls = "w-full rounded-lg border border-[#dfe3e8] px-2 py-1 text-xs focus:border-[#1d9e75] focus:outline-none";
 
   const [invoiceModal, setInvoiceModal] = useState<{ patientId: string; patientName: string } | null>(null);
-
-  // 예약금/수술비 팝오버 — 배지 클릭 시 해당 환자 예약만 lazy-load해 그룹 팝오버로 표시.
-  // (기존: 보이는 환자 전원의 전체 이력/인보이스 count를 미리 warm → summary 배지로 대체.)
-  const [amountPopover, setAmountPopover] = useState<
-    { groupKey: string; patientId: string; type: AmountRowType; loading: boolean; rows: AmountRow[] } | null
-  >(null);
-  const amountRequestSeqRef = useRef(0);
-
-  const openAmountPopover = useCallback(async (group: PatientGroup, type: AmountRowType) => {
-    const patientId = group.patientId || group.patientKey;
-    if (amountPopover && amountPopover.groupKey === group.patientKey && amountPopover.type === type) {
-      amountRequestSeqRef.current += 1;
-      setAmountPopover(null); // 재클릭 → 닫기
-      return;
-    }
-    const requestSeq = ++amountRequestSeqRef.current;
-    setAmountPopover({ groupKey: group.patientKey, patientId, type, loading: true, rows: [] });
-    try {
-      const expectedCount = type === "deposit" ? group.depositCount : group.surgeryCostCount;
-      const { rows } = await withTimeout(
-        getPatientAmountRowsCached(patientId, type, expectedCount || 0),
-        AMOUNT_POPOVER_TIMEOUT_MS,
-        "금액 내역 조회 시간이 초과되었습니다."
-      );
-      if (requestSeq !== amountRequestSeqRef.current) return;
-      setAmountPopover((prev) => (prev && prev.groupKey === group.patientKey && prev.type === type
-        ? { ...prev, loading: false, rows } : prev));
-    } catch (error) {
-      if (requestSeq !== amountRequestSeqRef.current) return;
-      console.warn("[ReservationsTable] amount popover load failed:", error);
-      setAmountPopover((prev) => (prev && prev.groupKey === group.patientKey && prev.type === type
-        ? { ...prev, loading: false, rows: [] } : prev));
-    }
-  }, [amountPopover]);
-
-  const saveAmount = useCallback(async (row: AmountRow, value: string) => {
-    const type = amountPopover?.type ?? "deposit";
-    const field = type === "deposit" ? "depositAmount" as const : "surgeryCost" as const;
-    const result = await updateReservationAmount(row.id, row.reservationId, row.patientId, field, value);
-    if (!result.success) {
-      alert(result.message || "금액 저장에 실패했습니다.");
-      return;
-    }
-    invalidatePatientFullHistoryCache(row.patientId);
-    invalidatePatientAmountRowsCache(row.patientId);
-    onPatientMutated?.(row.patientId);
-    try {
-      const { rows } = await getPatientAmountRowsCached(row.patientId, type);
-      setAmountPopover((prev) => (prev ? { ...prev, rows } : prev));
-    } catch { /* 무시 */ }
-  }, [amountPopover, onPatientMutated]);
+  const [settlementModal, setSettlementModal] = useState<{ patientId: string; patientName: string } | null>(null);
 
   // 행 단위 인라인 편집 렌더러 — 현재 화면에서 호출되지 않는 레거시 경로(환자 헤더 편집으로 대체됨).
   // 부모의 inline-edit 상태 체인과 함께 별도 정리 예정. (3단계 범위 밖 — 다중 파일 정리 리스크)
@@ -402,12 +234,8 @@ export function ReservationsTable({
     // 배지는 patients 문서의 저장된 summary로 표시(추가 조회 없음). 상세는 클릭 시 lazy-load.
     const pid = group.patientId || group.patientKey;
     const reservationCount = group.reservationCount ?? group.reservations.length;
-    const depositCount = group.depositCount ?? 0;
-    const surgeryCostCount = group.surgeryCostCount ?? 0;
+    const settlementCount = group.settlementCount ?? 0;
     const invoiceCount = group.invoiceCount ?? 0;
-
-    const depositPopoverOpen = amountPopover?.groupKey === group.patientKey && amountPopover.type === "deposit";
-    const surgeryPopoverOpen = amountPopover?.groupKey === group.patientKey && amountPopover.type === "surgery";
 
     if (isEditing && pf) {
       return (
@@ -481,43 +309,13 @@ export function ReservationsTable({
 
           {/* 2행: summary 배지 + 버튼 (상세는 클릭 시 조회) */}
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-            {/* 예약금 (묶음 그룹 수) — 클릭 시 해당 환자 예약 lazy-load */}
-            <div className="relative">
-              <button
-                onClick={() => openAmountPopover(group, "deposit")}
-                className={`rounded-md border px-2 py-0.5 text-xs transition ${depositCount > 0 ? "border-blue-200 bg-white text-blue-600 hover:bg-blue-50" : "border-gray-200 bg-white text-gray-400"}`}
-              >
-                예약금{depositCount > 0 ? ` (${depositCount})` : ""}
-              </button>
-              {depositPopoverOpen && amountPopover && (
-                <AmountPopover
-                  label="예약금"
-                  loading={amountPopover.loading}
-                  rows={amountPopover.rows}
-                  onClose={() => setAmountPopover(null)}
-                  onSave={saveAmount}
-                />
-              )}
-            </div>
-
-            {/* 수술비용 (묶음 그룹 수) */}
-            <div className="relative">
-              <button
-                onClick={() => openAmountPopover(group, "surgery")}
-                className={`rounded-md border px-2 py-0.5 text-xs transition ${surgeryCostCount > 0 ? "border-orange-200 bg-white text-orange-600 hover:bg-orange-50" : "border-gray-200 bg-white text-gray-400"}`}
-              >
-                수술비용{surgeryCostCount > 0 ? ` (${surgeryCostCount})` : ""}
-              </button>
-              {surgeryPopoverOpen && amountPopover && (
-                <AmountPopover
-                  label="수술비용"
-                  loading={amountPopover.loading}
-                  rows={amountPopover.rows}
-                  onClose={() => setAmountPopover(null)}
-                  onSave={saveAmount}
-                />
-              )}
-            </div>
+            {/* 정산 원장 — patients.settlementCount 배지, 상세는 공용 모달 */}
+            <button
+              onClick={() => setSettlementModal({ patientId: pid, patientName: group.name })}
+              className={`rounded-md border px-2 py-0.5 text-xs transition ${settlementCount > 0 ? "border-blue-200 bg-white text-blue-600 hover:bg-blue-50" : "border-gray-200 bg-white text-gray-400 hover:bg-gray-50"}`}
+            >
+              정산{settlementCount > 0 ? ` (${settlementCount})` : ""}
+            </button>
 
             {/* 인보이스 (건수) — summary */}
             <button
@@ -610,6 +408,14 @@ export function ReservationsTable({
 
   return (
     <>
+    {settlementModal && (
+      <SettlementModal
+        patientId={settlementModal.patientId}
+        patientName={settlementModal.patientName}
+        onClose={() => setSettlementModal(null)}
+        onMutated={() => onPatientMutated?.(settlementModal.patientId)}
+      />
+    )}
     {invoiceModal && (
       <PatientInvoiceModal
         patientId={invoiceModal.patientId}

@@ -569,6 +569,11 @@ export type PatientRecord = {
   memoCount?: number;
   totalDepositAmount?: number;
   totalSurgeryCost?: number;
+  settlementCount?: number;
+  totalSettlementPaid?: number;
+  totalSettlementRefunded?: number;
+  netSettlementAmount?: number;
+  lastSettlementAt?: string;
   lastReservationDate?: string;
   lastReservationTime?: string;
   hasMemo?: boolean;
@@ -595,6 +600,11 @@ function mapPatientRecord(p: Record<string, unknown>): PatientRecord {
     memoCount: num(p.memoCount),
     totalDepositAmount: num(p.totalDepositAmount),
     totalSurgeryCost: num(p.totalSurgeryCost),
+    settlementCount: num(p.settlementCount),
+    totalSettlementPaid: num(p.totalSettlementPaid),
+    totalSettlementRefunded: num(p.totalSettlementRefunded),
+    netSettlementAmount: num(p.netSettlementAmount),
+    lastSettlementAt: cleanText(p.lastSettlementAt),
     lastReservationDate: cleanText(p.lastReservationDate),
     lastReservationTime: cleanText(p.lastReservationTime),
     hasMemo: p.hasMemo === true,

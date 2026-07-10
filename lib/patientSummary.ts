@@ -30,6 +30,11 @@ export function createEmptyPatientSummary(): Record<string, unknown> {
     reservationCountCapped: false,
     invoiceCount: 0,
     hasInvoice: false,
+    settlementCount: 0,
+    totalSettlementPaid: 0,
+    totalSettlementRefunded: 0,
+    netSettlementAmount: 0,
+    lastSettlementAt: "",
     memoCount: 0,
     hasMemo: false,
   };

@@ -70,7 +70,7 @@ export default function ReservationsPage() {
   const [inlineForm, setInlineForm] = useState<{
     name: string; birthInput: string; phone: string; nationality: string;
     consultArea: string; reservationDate: string; reservationTime: string;
-    coordinators: string; depositAmount: string; surgeryCost: string; hospital: string;
+    coordinators: string; hospital: string;
     doctors: string;
     appointmentType: AppointmentType;
   } | null>(null);
@@ -197,6 +197,8 @@ export default function ReservationsPage() {
         reservationCountCapped: p.reservationCountCapped,
         depositCount: p.depositCount,
         surgeryCostCount: p.surgeryCostCount,
+        settlementCount: p.settlementCount,
+        netSettlementAmount: p.netSettlementAmount,
         invoiceCount: p.invoiceCount,
         memoCount: p.memoCount,
         lastReservationDate: p.lastReservationDate || "",
@@ -326,8 +328,6 @@ export default function ReservationsPage() {
       reservationDate: item.reservationDate || "",
       reservationTime: item.reservationTime || "",
       coordinators: item.coordinators.join(", "),
-      depositAmount: item.depositAmount || "",
-      surgeryCost: item.surgeryCost || "",
       hospital: item.hospital || "",
       doctors: (item.doctors || []).join(", "),
       appointmentType: item.appointmentType || "상담",
@@ -355,8 +355,6 @@ export default function ReservationsPage() {
           appointmentType: inlineForm.appointmentType,
           coordinators: inlineForm.coordinators.split(",").map((s) => s.trim()).filter(Boolean),
           doctors: inlineForm.doctors.split(",").map((s) => s.trim()).filter(Boolean),
-          depositAmount: inlineForm.depositAmount,
-          surgeryCost: inlineForm.surgeryCost,
         },
         currentUser
       );

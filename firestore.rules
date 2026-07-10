@@ -116,6 +116,7 @@ service cloud.firestore {
     match /invoiceItems/{id}              { allow read, write: if false; }
     match /invoiceCategories/{id}         { allow read, write: if false; }
     match /patientAmountRows/{id}         { allow read, write: if false; }
+    match /settlements/{id}                    { allow read, write: if false; }
     match /appSettings/{id}/{document=**} { allow read, write: if false; }
     match /settings/{id}/{document=**}    { allow read, write: if false; }
 
