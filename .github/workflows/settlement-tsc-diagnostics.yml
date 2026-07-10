@@ -1,0 +1,43 @@
+name: Settlement TypeScript diagnostics
+
+on:
+  push:
+    branches:
+      - refactor/reservation-consistency-v2
+    paths:
+      - .github/workflows/settlement-tsc-diagnostics.yml
+
+permissions:
+  contents: write
+
+jobs:
+  diagnose:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: refactor/reservation-consistency-v2
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Capture TypeScript diagnostics
+        shell: bash
+        run: |
+          set +e
+          npx tsc --noEmit > settlement-tsc-errors.txt 2>&1
+          code=$?
+          echo "exit_code=$code" >> settlement-tsc-errors.txt
+          set -e
+          rm .github/workflows/settlement-tsc-diagnostics.yml
+      - name: Commit diagnostics
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "chore: capture settlement TypeScript diagnostics"
+          git push origin HEAD:refactor/reservation-consistency-v2
