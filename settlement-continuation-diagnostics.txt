@@ -1,0 +1,7 @@
+Traceback (most recent call last):
+  File "/home/runner/work/mobilecrm/mobilecrm/scripts/continue-settlement-ledger-refactor.py", line 23, in <module>
+    replace(
+  File "/home/runner/work/mobilecrm/mobilecrm/scripts/continue-settlement-ledger-refactor.py", line 10, in replace
+    raise RuntimeError(f"{path}: expected {count} matches, found {actual}: {old[:100]!r}")
+RuntimeError: lib/invoices.ts: expected 1 matches, found 2: '  paymentMethod?: "card" | "cash" | "mixed";\n  cardAmount?: number;\n  cashAmount?: number;\n  commiss'
+exit_code=1
