@@ -1,0 +1,66 @@
+name: Fix settlement TypeScript
+
+on:
+  push:
+    branches:
+      - refactor/reservation-consistency-v2
+    paths:
+      - .github/workflows/fix-settlement-tsc.yml
+
+permissions:
+  contents: write
+
+jobs:
+  fix-and-validate:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: refactor/reservation-consistency-v2
+          fetch-depth: 0
+
+      - name: Fix settlement list typing
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('lib/settlementServer.ts')
+          text = path.read_text(encoding='utf-8')
+          old = '''  const settlements = settlementSnap.docs
+            .map((doc) => ({ id: doc.id, ...(doc.data() as Record<string, unknown>) }))
+            .sort((a, b) => `${String(b.paidAt || "")}\\u0000${b.id}`.localeCompare(`${String(a.paidAt || "")}\\u0000${a.id}`));'''
+          new = '''  const settlements: SettlementDoc[] = settlementSnap.docs
+            .map((doc): SettlementDoc => ({ id: doc.id, ...(doc.data() as Record<string, unknown>) }))
+            .sort((a, b) => `${String(a.paidAt || "")}\\u0000${String(a.id || "")}` < `${String(b.paidAt || "")}\\u0000${String(b.id || "")}` ? 1 : -1);'''
+          if text.count(old) != 1:
+              raise SystemExit(f'expected one settlement list block, found {text.count(old)}')
+          path.write_text(text.replace(old, new), encoding='utf-8')
+          PY
+          rm -f settlement-tsc-errors.txt
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npx tsc --noEmit
+      - run: npm test
+      - run: npm run build
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - run: npm run test:rules
+      - run: npm run test:storage
+      - run: npm run test:api
+
+      - name: Commit validated fix
+        run: |
+          rm .github/workflows/fix-settlement-tsc.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "fix: type settlement ledger list and validate workflow"
+          git push origin HEAD:refactor/reservation-consistency-v2
