@@ -14,6 +14,9 @@ import {
   runPatientDeleteJob,
   runPatientUpdateJob,
 } from "@/lib/patientMutationJobs";
+import { updateReservationCommand } from "./commands/updateReservation";
+import { deleteReservationCommand } from "./commands/deleteReservation";
+import { toggleSurgeryCommand } from "./commands/toggleSurgery";
 
 type Body = {
   idToken?: string;
@@ -65,12 +68,18 @@ export async function handleReservationRequest(req: NextRequest) {
     || body.action === "patient_amount_rows"
     || body.action === "patient_full_history_page"
     || body.action === "patient_full_history"
+    || body.action === "update"
+    || body.action === "toggleSurgery"
+    || body.action === "delete"
     || body.action === "update_patient_profile"
     || body.action === "delete_patient";
   if (!customAction) return legacyPost(rebuild(body));
 
   try {
     const writeAction = body.action === "create_patient"
+      || body.action === "update"
+      || body.action === "toggleSurgery"
+      || body.action === "delete"
       || body.action === "update_patient_profile"
       || body.action === "delete_patient";
     const staff = await requireActiveStaff(
@@ -85,6 +94,9 @@ export async function handleReservationRequest(req: NextRequest) {
     if (body.action === "patient_amount_rows") return patientAmountRows(payload);
     if (body.action === "patient_full_history_page") return patientFullHistoryPage(payload);
     if (body.action === "patient_full_history") return patientFullHistoryExact(payload);
+    if (body.action === "update") return updateReservationCommand(payload, staff);
+    if (body.action === "toggleSurgery") return toggleSurgeryCommand(payload, staff);
+    if (body.action === "delete") return deleteReservationCommand(payload, staff);
     if (body.action === "update_patient_profile") return runPatientUpdateJob(payload, staff);
     if (body.action === "delete_patient") return runPatientDeleteJob(payload, staff);
     return createPatientWithDecision(payload, staff);
