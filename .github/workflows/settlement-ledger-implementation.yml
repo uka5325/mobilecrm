@@ -22,17 +22,17 @@ jobs:
           ref: refactor/reservation-consistency-v2
           fetch-depth: 0
 
-      - name: Apply continuation
+      - name: Apply continuation v2
         shell: bash
         run: |
           set +e
-          python scripts/continue-settlement-ledger-refactor.py > settlement-continuation-diagnostics.txt 2>&1
+          python scripts/continue-settlement-ledger-refactor-2.py > settlement-continuation-v2-diagnostics.txt 2>&1
           code=$?
-          echo "exit_code=$code" >> settlement-continuation-diagnostics.txt
+          echo "exit_code=$code" >> settlement-continuation-v2-diagnostics.txt
           set -e
           if [ "$code" -eq 0 ]; then
-            rm -f settlement-implementation-diagnostics.txt settlement-continuation-diagnostics.txt
-            rm -f scripts/apply-settlement-ledger-refactor.py scripts/continue-settlement-ledger-refactor.py
+            rm -f settlement-implementation-diagnostics.txt settlement-continuation-diagnostics.txt settlement-continuation-v2-diagnostics.txt
+            rm -f scripts/apply-settlement-ledger-refactor.py scripts/continue-settlement-ledger-refactor.py scripts/continue-settlement-ledger-refactor-2.py
             rm -f .github/workflows/settlement-ledger-implementation.yml
           fi
 
