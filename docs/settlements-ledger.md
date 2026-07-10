@@ -1,4 +1,3 @@
-
 # Settlement ledger
 
 ## Source of truth
@@ -29,6 +28,10 @@ The patient document stores exact list-view summary values:
 - `lastSettlementAt`
 
 The customer-management page reads these fields for its settlement badge and opens the ledger only on demand.
+
+## Validation and audit
+
+Settlement writes require an active staff session, a valid linked reservation, a positive amount, and a payment method. A refund cannot make the linked reservation's net actual payment negative. Create, update, void, and invoice auto-sync actions are written to the audit log.
 
 ## Legacy reservation amounts
 
