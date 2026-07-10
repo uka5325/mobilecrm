@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - refactor/reservation-consistency-v2
+  pull_request:
+    branches:
+      - main
 
 permissions:
   contents: write
