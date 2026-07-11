@@ -6,7 +6,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from "react";
 import type { ReservationRecord } from "@/lib/reservations";
-import { getPatientFullHistoryCached } from "@/lib/reservations";
+import { getCachedPatientFullHistory, getPatientFullHistoryCached } from "@/lib/reservations";
 import type { InvoiceRecord } from "@/lib/invoices";
 import {
   getInvoicesByPatientId,
@@ -33,13 +33,15 @@ type PatientInvoiceModalProps = {
 
 export function PatientInvoiceModal({ patientId, patientName, onClose, onCountLoaded }: PatientInvoiceModalProps) {
   const cached = getInvoicesByPatientCache(patientId);
+  const cachedHistory = getCachedPatientFullHistory(patientId);
   const [invoices, setInvoices] = useState<InvoiceRecord[]>(cached ?? []);
   const [loading, setLoading] = useState(!cached);
   // 고객관리가 summary 구조로 바뀌면서 patientGroup.reservations가 비어 있으므로,
   // 모달 내부에서 전체 이력을 lazy-load(getPatientFullHistoryCached는 세션 캐시가 있어
   // 금액 팝오버 등과 중복 호출해도 추가 read가 거의 없다).
-  const [reservations, setReservations] = useState<ReservationRecord[]>([]);
-  const [reservationsLoading, setReservationsLoading] = useState(true);
+  const [reservations, setReservations] = useState<ReservationRecord[]>(cachedHistory?.reservations ?? []);
+  const [reservationsLoaded, setReservationsLoaded] = useState(Boolean(cachedHistory));
+  const [reservationsLoading, setReservationsLoading] = useState(false);
   const [creating, setCreating] = useState<string | null>(null);
   const [editingInvoice, setEditingInvoice] = useState<InvoiceRecord | null>(null);
   const [viewingInvoice, setViewingInvoice] = useState<InvoiceRecord | null>(null);
@@ -58,19 +60,21 @@ export function PatientInvoiceModal({ patientId, patientName, onClose, onCountLo
   }, [patientId, onCountLoaded]);
 
   const loadReservations = useCallback(async () => {
-    setReservationsLoading(true);
+    if (reservationsLoaded || reservationsLoading) return;
+    if (!getCachedPatientFullHistory(patientId)) setReservationsLoading(true);
     try {
       const { reservations: full } = await getPatientFullHistoryCached(patientId);
       setReservations(full);
+      setReservationsLoaded(true);
     } catch {
       setReservations([]);
+      setReservationsLoaded(true);
     } finally {
       setReservationsLoading(false);
     }
-  }, [patientId]);
+  }, [patientId, reservationsLoaded, reservationsLoading]);
 
   useEffect(() => { load(); }, [load]);
-  useEffect(() => { loadReservations(); }, [loadReservations]);
 
   async function handleDelete(inv: InvoiceRecord) {
     if (!confirm(`인보이스를 삭제할까요?`)) return;
@@ -318,21 +322,28 @@ export function PatientInvoiceModal({ patientId, patientName, onClose, onCountLo
                   </div>
                 </div>
               ))}
-              {!reservationsLoading && surgeryReservationsWithoutInvoice.length > 0 && (
-                <div className="mt-1">
-                  <button
-                    onClick={() => setShowCreatePanel((v) => !v)}
-                    className="w-full rounded-xl border border-[#1d9e75] px-3 py-2 text-sm font-medium text-[#1d9e75] hover:bg-emerald-50"
-                  >
-                    {showCreatePanel ? "닫기" : "+ 인보이스 생성"}
-                  </button>
-                  {showCreatePanel && (
-                    <div className="mt-2 space-y-2">
-                      {surgeryReservationsWithoutInvoice.map((res) => (
+              <div className="mt-1">
+                <button
+                  onClick={() => {
+                    if (!showCreatePanel) void loadReservations();
+                    setShowCreatePanel((v) => !v);
+                  }}
+                  className="w-full rounded-xl border border-[#1d9e75] px-3 py-2 text-sm font-medium text-[#1d9e75] hover:bg-emerald-50"
+                >
+                  {showCreatePanel ? "닫기" : "+ 인보이스 생성"}
+                </button>
+                {showCreatePanel && (
+                  <div className="mt-2 space-y-2">
+                    {reservationsLoading ? (
+                      <div className="rounded-xl bg-gray-50 p-3 text-center text-xs text-gray-400">생성 가능한 일정을 불러오는 중...</div>
+                    ) : surgeryReservationsWithoutInvoice.length === 0 ? (
+                      <div className="rounded-xl bg-gray-50 p-3 text-center text-xs text-gray-400">생성 가능한 수술/시술 일정이 없습니다.</div>
+                    ) : (
+                      surgeryReservationsWithoutInvoice.map((res) => (
                         <div key={res.id} className="flex items-center justify-between rounded-xl border border-dashed border-[#dfe3e8] p-3">
                           <div>
                             <div className="text-xs font-medium text-gray-700">{res.reservationDate} {res.reservationTime}</div>
-                            <div className="text-xs text-gray-500">{res.hospital || "병원명 없음"} · 수술</div>
+                            <div className="text-xs text-gray-500">{res.hospital || "병원명 없음"} · {res.appointmentType}</div>
                           </div>
                           <button
                             onClick={() => { handleCreate(res.id); setShowCreatePanel(false); }}
@@ -342,11 +353,11 @@ export function PatientInvoiceModal({ patientId, patientName, onClose, onCountLo
                             {creating === res.id ? "생성 중..." : "생성"}
                           </button>
                         </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
+                      ))
+                    )}
+                  </div>
+                )}
+              </div>
             </>
           )}
         </div>
