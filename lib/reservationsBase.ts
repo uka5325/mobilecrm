@@ -285,14 +285,6 @@ export function invalidateDoctorsCache() {
   _doctorsCachedAt = 0;
 }
 
-// ── 공용 read 헬퍼 (목록/타임라인/구독에서 매핑·정렬·45일 계산을 단일화) ──────────
-// 기본 조회 범위: 45일 전(약 1.5개월) — 6개월 전체 스캔 방지.
-export function get45DaysAgo(): string {
-  const d = new Date();
-  d.setDate(d.getDate() - 45);
-  return d.toISOString().slice(0, 10);
-}
-
 // 예약 정렬: 목록(date)=날짜+시간+이름, 타임라인(time)=시간+이름. 정렬 키 차이를 보존.
 function sortReservations(
   list: ReservationRecord[],
@@ -307,51 +299,6 @@ function sortReservations(
       : `${b.reservationTime} ${b.name}`;
     return aa.localeCompare(bb);
   });
-}
-
-function mapReservationsFromApi(
-  raw: Record<string, unknown>[] | undefined,
-  sortKey: "date" | "time"
-): ReservationRecord[] {
-  const mapped = (raw || [])
-    .map((r) => mapReservationDoc(String(r.id || ""), r))
-    .filter((item) => !item.isDeleted);
-  return sortReservations(mapped, sortKey);
-}
-
-function mapDoctorsFromApi(raw: Record<string, unknown>[] | undefined): DoctorOption[] {
-  return (raw || [])
-    .map((d) => ({
-      uid: String(d.id || ""),
-      displayName: cleanText(d.displayName || d["display_name"] || d.name),
-      email: cleanText(d.email),
-      orderNo: cleanNumber(d.orderNo ?? d["order_no"]),
-    }))
-    .filter((d) => d.displayName)
-    .sort((a, b) => a.orderNo - b.orderNo || a.displayName.localeCompare(b.displayName));
-}
-
-function withDoctorFallback(
-  doctors: DoctorOption[],
-  reservations: ReservationRecord[]
-): DoctorOption[] {
-  return doctors.length ? doctors : makeDoctorOptionsFromReservations(reservations);
-}
-
-export async function getAllReservations(): Promise<{
-  reservations: ReservationRecord[];
-  doctors: DoctorOption[];
-}> {
-  const result = await callReservationsApi("read_all", { from: get45DaysAgo() });
-  const reservations = mapReservationsFromApi(
-    result.reservations as Record<string, unknown>[] | undefined,
-    "date"
-  );
-  const doctors = withDoctorFallback(
-    mapDoctorsFromApi(result.doctors as Record<string, unknown>[] | undefined),
-    reservations
-  );
-  return { reservations, doctors };
 }
 
 // 클라이언트 SDK로 의사 목록 조회 (세션 내 캐싱)
@@ -382,9 +329,6 @@ async function getClientDoctors(): Promise<DoctorOption[]> {
   _clientDoctorsCacheAt = Date.now();
   return doctors;
 }
-
-// getAllReservations와 동일 동작(45일 1회 조회). 호출부 호환을 위해 별칭 유지.
-export const fetchAllReservationsOnce = getAllReservations;
 
 // 예약을 [from, to] 날짜 범위로 실시간 구독한다. to가 null이면 from 이후 전체.
 // 화면별 필요한 범위만 구독하는 구조의 기반(홈=오늘, 스케줄=선택 범위).
@@ -441,17 +385,6 @@ export function subscribeReservationsByRange(
     unsubscribeAuth();
     unsubscribeSnapshot?.();
   };
-}
-
-// 최근 45일 전체 구독(하위호환) — 범위 구독의 특수 케이스.
-export function subscribeAllReservations(
-  callback: (data: {
-    reservations: ReservationRecord[];
-    doctors: DoctorOption[];
-  }) => void,
-  onError?: (error: Error) => void
-) {
-  return subscribeReservationsByRange(get45DaysAgo(), null, callback, onError);
 }
 
 export async function createReservation(
@@ -606,12 +539,6 @@ export {
 import { invalidatePatientSummaryCache as _invalidatePatientSummaryCache } from "./patientSummaryClientCache";
 // Backward-compatible export name retained for existing callsites.
 export const invalidatePatientsSummaryCache = _invalidatePatientSummaryCache;
-// Legacy compat — old callers used getCachedPatientsSummary()
-export function getCachedPatientsSummary(): { patients: PatientRecord[]; nextCursor: string | null } | undefined {
-  // No UID available here — return undefined so page uses the new UID-aware API
-  return undefined;
-}
-
 export async function listPatientsSummary(
   limit = 30,
   cursor?: string
@@ -630,7 +557,6 @@ export async function listPatientsSummary(
 export function invalidateReservationDerivedCaches(patientId: string) {
   const id = cleanText(patientId);
   if (!id) return;
-  invalidatePatientsCache();
   invalidatePatientsSummaryCache();
   invalidatePatientFullHistoryCache(id);
 }
@@ -660,30 +586,10 @@ export async function createPatientOnly(
   };
 
   const result = await callReservationsApi("create_patient", { patient });
-  if (result.success) { invalidatePatientsCache(); invalidatePatientsSummaryCache(); }
+  if (result.success) invalidatePatientsSummaryCache();
   return result.success
     ? { success: true, patientDocId: String(result.patientDocId || "") }
     : { success: false, message: cleanText(result.message) || "등록 실패" };
-}
-
-// 환자 목록 인메모리 캐시 (반복 500건 스캔 억제). 생성 시 무효화.
-// 누락 방지: 서버는 isDeleted!==true만 반환하므로 캐시는 그 결과를 그대로 보관.
-let _patientsCache: { at: number; data: PatientRecord[] } | null = null;
-const PATIENTS_CACHE_TTL = 10 * 60 * 1000;
-
-export function invalidatePatientsCache() {
-  _patientsCache = null;
-}
-
-export async function listPatients(force = false): Promise<PatientRecord[]> {
-  if (!force && _patientsCache && Date.now() - _patientsCache.at < PATIENTS_CACHE_TTL) {
-    return _patientsCache.data;
-  }
-  const result = await callReservationsApi("list_patients", {});
-  if (!result.success || !Array.isArray(result.patients)) return _patientsCache?.data ?? [];
-  const data = (result.patients as Record<string, unknown>[]).map(mapPatientRecord);
-  _patientsCache = { at: Date.now(), data };
-  return data;
 }
 
 // 검색토큰 기반 환자 검색(매칭만 읽음). 단어 단위 전체일치(한글 이름 전체/영문 단어).
@@ -878,20 +784,6 @@ export async function searchReservationsByDateRange(
     .sort((a, b) => `${b.reservationDate} ${b.reservationTime}`.localeCompare(`${a.reservationDate} ${a.reservationTime}`));
 }
 
-export async function getPatientReservationHistory(
-  patientId: string,
-  cursor?: string
-): Promise<{ reservations: ReservationRecord[]; nextCursor: string | null; hasMore: boolean }> {
-  const result = await callReservationsApi("patient_history", { patientId, cursor });
-  if (!result.success) throw new Error(String(result.message || "이력 조회 실패"));
-  const raw = (result.reservations as Record<string, unknown>[] | undefined) || [];
-  return {
-    reservations: raw.map((r) => mapReservationDoc(String(r.id || ""), r)),
-    nextCursor: (result.nextCursor as string | null) ?? null,
-    hasMore: Boolean(result.hasMore),
-  };
-}
-
 // 환자별 "전체 예약 이력" 결과 캐시 — 라이브 구독 윈도우(45일)와 무관하게 정확한
 // 고객관리 배지("총 건수"/예약금/수술비용/부위)와 "전체 이력" 모달이 공유한다.
 // 금액 정보를 포함하므로 localStorage가 아닌 세션 메모리(Map)에만 유지(로그아웃/새로고침 시 자연 소멸).
@@ -960,41 +852,6 @@ export function invalidatePatientFullHistoryCache(patientId: string) {
   _patientFullHistoryCache.delete(patientId);
 }
 
-
-// 여러 환자의 전체 이력 캐시를 "1번의 배치 쿼리"로 데운다. 고객관리 카드 배지가
-// 환자마다 getPatientFullHistoryCached를 따로 부르면 서버 왕복이 N번 생기므로,
-// 아직 캐시가 없는 환자만 모아 patient_full_history_batch(45일보다 오래된 것만)로
-// 한 번에 받고, 라이브 구독이 이미 갖고 있는 45일치 데이터와 합쳐서 캐시에 채운다.
-// 이후 getPatientFullHistoryCached(pid) 호출은 이 캐시를 그대로 재사용한다.
-export async function warmPatientFullHistoryCache(
-  patientIds: string[],
-  liveWindowByPatientId: Record<string, ReservationRecord[]>
-): Promise<void> {
-  const stale = [...new Set(patientIds.filter(Boolean))].filter(
-    (pid) => !getCachedPatientFullHistory(pid)
-  );
-  if (!stale.length) return;
-
-  const CHUNK = 30; // Firestore where(...,"in",[...]) 최대 30개
-  const before = get45DaysAgo();
-
-  for (let i = 0; i < stale.length; i += CHUNK) {
-    const chunk = stale.slice(i, i + CHUNK);
-    const result = await callReservationsApi("patient_full_history_batch", { patientIds: chunk, before });
-    if (!result.success) continue;
-
-    const byPatient = (result.byPatient as Record<string, Record<string, unknown>[]> | undefined) || {};
-    for (const pid of chunk) {
-      const older = (byPatient[pid] || []).map((r) => mapReservationDoc(String(r.id || ""), r));
-      const live = liveWindowByPatientId[pid] || [];
-      const merged = [...live, ...older]
-        .filter((r, idx, arr) => arr.findIndex((x) => x.id === r.id) === idx)
-        .sort((a, b) => `${b.reservationDate} ${b.reservationTime}`.localeCompare(`${a.reservationDate} ${a.reservationTime}`))
-        .slice(0, 300);
-      _patientFullHistoryCache.set(pid, { at: Date.now(), reservations: merged, capped: merged.length >= 300 });
-    }
-  }
-}
 
 export async function deleteReservation(
   reservationDocId: string,

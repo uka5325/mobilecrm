@@ -433,7 +433,7 @@ function mapConferenceMemoDoc(id: string, data: Record<string, unknown>): Confer
 }
 
 // 오늘의 전체 메모 실시간 구독 — 클라이언트 onSnapshot(conferenceMemos는 read 전용으로
-// 개방됨, firestore.rules 참고). subscribeAllReservations(lib/reservations.ts)와 동일한
+// 개방됨, firestore.rules 참고). 예약 범위 구독(lib/reservations.ts)과 동일한
 // 게이팅/정리 패턴: auth 상태가 바뀌면 재구독하고, unsubscribe로 정리한다.
 export function subscribeConferenceMemos(
   memoDate: string,

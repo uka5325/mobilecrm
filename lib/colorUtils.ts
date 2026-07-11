@@ -1,38 +1,3 @@
-import {
-  DEFAULT_VISIT_STATUS_COLORS,
-  VISIT_STATUS_LIST,
-  type VisitStatus,
-  type VisitStatusColorMap,
-} from "@/lib/settings";
-
-export function getStatusColor(status: string, colors: VisitStatusColorMap) {
-  if (VISIT_STATUS_LIST.includes(status as VisitStatus)) {
-    return colors[status as VisitStatus] || DEFAULT_VISIT_STATUS_COLORS.내원전;
-  }
-
-  return DEFAULT_VISIT_STATUS_COLORS.내원전;
-}
-
-export function getSoftStatusColor(hex: string) {
-  const color = String(hex || "").trim();
-
-  if (/^#[0-9a-fA-F]{6}$/.test(color)) {
-    return `${color}2E`;
-  }
-
-  return "#f3f4f6";
-}
-
-export function getStatusSelectStyle(status: string, colors: VisitStatusColorMap) {
-  const color = getStatusColor(status, colors);
-
-  return {
-    backgroundColor: getSoftStatusColor(color),
-    color,
-    borderColor: `${color}33`,
-  };
-}
-
 export function getReadableTextColor(hex: string) {
   const clean = String(hex || "").replace("#", "");
 

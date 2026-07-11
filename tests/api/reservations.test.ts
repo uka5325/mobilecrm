@@ -11,7 +11,6 @@ import { adminDb } from "@/lib/firebaseAdmin";
 import { __resetStaffCacheForTests } from "@/lib/apiAuth";
 import { createTestUser, type TestUser } from "../helpers/testAuth";
 import { POST } from "@/app/api/reservations/route";
-import { POST as CONSISTENT_POST } from "@/app/api/reservations-consistent/route";
 import { identityKeyForPatient } from "@/lib/patientIdentity";
 import { RESERVATION_LOCKS, lockIdForReservation } from "@/lib/reservationLocks";
 
@@ -491,21 +490,21 @@ test("create_patient: 동일 신원은 후보 반환 후 명시적으로 연결�
   const identity = { name, birth: "20000829", nationality: "몽골", gender: "여" };
   const pidA = `P-CP-A-${Date.now()}`;
 
-  const first = await CONSISTENT_POST(makeReq(staff.idToken, "create_patient", {
+  const first = await POST(makeReq(staff.idToken, "create_patient", {
     patient: { ...identity, patientId: pidA },
   }));
   const firstBody = await first.json();
   assert.equal(firstBody.success, true);
   createdPatientDocIds.push(firstBody.patientDocId);
 
-  const candidate = await CONSISTENT_POST(makeReq(staff.idToken, "create_patient", {
+  const candidate = await POST(makeReq(staff.idToken, "create_patient", {
     patient: { ...identity, patientId: `P-CP-B-${Date.now()}` },
   }));
   assert.equal(candidate.status, 409);
   const candidateBody = await candidate.json();
   assert.equal(candidateBody.code, "PATIENT_CANDIDATES");
 
-  const linked = await CONSISTENT_POST(makeReq(staff.idToken, "create_patient", {
+  const linked = await POST(makeReq(staff.idToken, "create_patient", {
     patient: { ...identity, patientId: `P-CP-C-${Date.now()}` },
     linkToPatientId: pidA,
   }));
@@ -515,7 +514,7 @@ test("create_patient: 동일 신원은 후보 반환 후 명시적으로 연결�
   assert.equal(linkedBody.patientId, pidA);
 
   const newPatientId = `P-CP-NEW-${Date.now()}`;
-  const newPatient = await CONSISTENT_POST(makeReq(staff.idToken, "create_patient", {
+  const newPatient = await POST(makeReq(staff.idToken, "create_patient", {
     patient: { ...identity, patientId: newPatientId },
     confirmNewPatient: true,
   }));
@@ -972,5 +971,4 @@ for (const action of ["read_one", "read_by_date", "not_a_real_action"]) {
     assert.equal((await res.json()).code, "UNKNOWN_ACTION");
   });
 }
-
 

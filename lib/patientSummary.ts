@@ -35,35 +35,6 @@ export function createEmptyPatientSummary(): Record<string, unknown> {
   };
 }
 
-// 금액 문자열("1,000,000", "100만", "1.5억" 등) → 원 단위 숫자.
-export function parseAmount(v: unknown): number {
-  const raw = String(v ?? "").trim().replace(/,/g, "");
-  if (!raw) return 0;
-
-  const unitMatches = [...raw.matchAll(/(-?\d+(?:\.\d+)?)\s*(억|만)/g)];
-  if (unitMatches.length) {
-    return unitMatches.reduce((sum, match) => {
-      const value = Number(match[1]);
-      if (!Number.isFinite(value)) return sum;
-      return sum + value * (match[2] === "억" ? 100_000_000 : 10_000);
-    }, 0);
-  }
-
-  const cleaned = raw.replace(/[^0-9.-]/g, "");
-  const n = Number(cleaned);
-  return Number.isFinite(n) ? n : 0;
-}
-
-// 예약금/수술비 "묶음" 기준 키 — 같은 병원+상담부위+원장이면 1건으로 묶는다.
-export function reservationGroupKey(r: Record<string, unknown>): string {
-  const doctors = Array.isArray(r.doctors) ? (r.doctors as unknown[]) : [];
-  return [
-    String(r.hospital || "").trim().toLowerCase(),
-    String(r.consultArea || "").trim().toLowerCase(),
-    doctors.map((d) => String(d).trim().toLowerCase()).sort().join(","),
-  ].join("|");
-}
-
 // 동일 patientId 문서(들)에 patch를 병합 update. summaryUpdatedAt 함께 기록.
 async function mergeIntoPatients(patientId: string, patch: Record<string, unknown>) {
   if (!patientId) return;
