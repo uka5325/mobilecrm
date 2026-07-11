@@ -12,6 +12,9 @@ import {
 } from "@/lib/invoices";
 import { getStaffListForSettings, type SettingsStaffRecord } from "@/lib/settings";
 import { calcCommissionBase, calcCommission } from "@/lib/commissionUtils";
+import { InvoiceDetailView } from "./InvoiceDetailView";
+import { InvoiceList } from "./InvoiceList";
+import { formatMoney, INVOICE_STATUS_CLASS, INVOICE_STATUS_LABEL } from "./invoiceTabUi";
 
 type Props = {
   reservationDocId: string;
@@ -19,18 +22,6 @@ type Props = {
   currentUser: StaffUser;
   appointmentType?: string;
   coordinators?: string[];
-};
-
-function formatMoney(v: number | undefined) {
-  if (v === undefined || v === null) return "-";
-  return Number(v).toLocaleString("ko-KR");
-}
-
-const STATUS_LABEL: Record<string, string> = { draft: "임시저장", confirmed: "확정", void: "취소" };
-const STATUS_CLS: Record<string, string> = {
-  draft: "bg-gray-100 text-gray-500",
-  confirmed: "bg-emerald-50 text-emerald-700",
-  void: "bg-red-50 text-red-500",
 };
 
 function InvoiceEditPanel({
@@ -107,8 +98,8 @@ function InvoiceEditPanel({
     <div className="space-y-3">
       <div className="flex items-center justify-between">
         <button onClick={onCancel} className="text-xs text-gray-500 hover:underline">← 목록</button>
-        <span className={`rounded-lg px-2.5 py-1 text-xs font-semibold ${STATUS_CLS[invoice.status] || "bg-gray-100 text-gray-500"}`}>
-          {STATUS_LABEL[invoice.status] || invoice.status}
+        <span className={`rounded-lg px-2.5 py-1 text-xs font-semibold ${INVOICE_STATUS_CLASS[invoice.status] || "bg-gray-100 text-gray-500"}`}>
+          {INVOICE_STATUS_LABEL[invoice.status] || invoice.status}
         </span>
         <span className="text-xs text-gray-400">{invoice.invoiceId}</span>
       </div>
@@ -245,56 +236,6 @@ function InvoiceEditPanel({
   );
 }
 
-function InvoiceDetailView({
-  invoice,
-  onEdit,
-  onBack,
-}: {
-  invoice: InvoiceRecord;
-  onEdit: () => void;
-  onBack: () => void;
-}) {
-  const PAY_LABEL: Record<string, string> = { cash: "현금", card: "카드", mixed: "혼합" };
-  return (
-    <div className="space-y-3">
-      <div className="flex items-center justify-between">
-        <button onClick={onBack} className="text-xs text-gray-500 hover:underline">← 목록</button>
-        <span className={`rounded-lg px-2.5 py-1 text-xs font-semibold ${STATUS_CLS[invoice.status] || "bg-gray-100 text-gray-500"}`}>
-          {STATUS_LABEL[invoice.status] || invoice.status}
-        </span>
-        <span className="text-xs text-gray-400">{invoice.invoiceId}</span>
-      </div>
-
-      <div className="rounded-xl border border-[#edf0f3] bg-white p-4 space-y-2 text-sm">
-        {([
-          ["병원명", invoice.hospitalName || "-"],
-          ["수술날짜", invoice.surgeryDate || "-"],
-          ["수술/시술명", invoice.surgeryItems || "-"],
-          ["담당원장", invoice.doctors?.join(", ") || "-"],
-          ["담당자", invoice.coordinators?.join(", ") || "-"],
-          ["수술비", invoice.totalAmount ? `₩${Number(invoice.totalAmount).toLocaleString("ko-KR")}` : "-"],
-          ["결제방법", PAY_LABEL[invoice.paymentMethod ?? ""] || "-"],
-          ["커미션율", invoice.commissionRate !== undefined ? `${invoice.commissionRate}%` : "-"],
-          ["커미션액", invoice.commissionAmount ? `₩${Number(invoice.commissionAmount).toLocaleString("ko-KR")}` : "-"],
-          ["메모", invoice.memo || "-"],
-        ] as [string, string][]).map(([label, value]) => (
-          <div key={label} className="flex gap-2">
-            <span className="w-24 shrink-0 text-xs text-gray-500">{label}</span>
-            <span className="text-xs font-medium text-gray-800">{value}</span>
-          </div>
-        ))}
-      </div>
-
-      <button
-        onClick={onEdit}
-        className="w-full rounded-xl bg-[#1d9e75] px-4 py-2.5 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:shadow-md active:scale-95"
-      >
-        수정하기
-      </button>
-    </div>
-  );
-}
-
 export function InvoiceTab({ reservationDocId, patientId, currentUser, appointmentType, coordinators }: Props) {
   const [allInvoices, setAllInvoices] = useState<InvoiceRecord[]>([]);
   const [loading, setLoading] = useState(true);
@@ -399,114 +340,19 @@ export function InvoiceTab({ reservationDocId, patientId, currentUser, appointme
     );
   }
 
-  // 이 예약에 대한 인보이스가 있는지 확인
-  const thisReservationInvoice = allInvoices.find((inv) => inv.reservationDocId === reservationDocId);
-
   return (
-    <div className="space-y-3">
-      {error && <div className="rounded-lg bg-red-50 px-3 py-2 text-center text-xs text-red-600">{error}</div>}
-
-      {/* 이 예약 인보이스 없으면 생성 버튼 */}
-      {!thisReservationInvoice && (
-        <div className="rounded-2xl border-2 border-dashed border-[#dfe3e8] p-4 text-center">
-          {(appointmentType === "수술" || appointmentType === "시술") ? (() => {
-            const canCreate = currentUser.role === "admin" ||
-              (coordinators ?? []).includes(currentUser.displayName);
-            return canCreate ? (
-              <>
-                <div className="text-sm text-gray-400">이 예약에 대한 인보이스가 없습니다.</div>
-                <button
-                  onClick={handleCreate}
-                  disabled={creating}
-                  className="mt-3 w-full rounded-xl bg-black px-5 py-2.5 text-sm font-medium text-white transition hover:-translate-y-0.5 hover:shadow-md active:scale-95 disabled:opacity-50"
-                >
-                  {creating ? "생성 중..." : "이 예약으로 인보이스 생성"}
-                </button>
-              </>
-            ) : (
-              <div className="text-sm text-gray-400">담당 코디네이터만 인보이스를 생성할 수 있습니다.</div>
-            );
-          })() : (
-            <div className="text-sm text-gray-400">수술·시술 예약 건만 인보이스를 생성할 수 있습니다.</div>
-          )}
-        </div>
-      )}
-
-      {/* 인보이스 목록 */}
-      {allInvoices.length > 0 && (
-        <div className="space-y-2">
-          {allInvoices.length > 1 && (
-            <div className="text-xs font-semibold text-gray-500">
-              이 환자의 인보이스 {allInvoices.length}건
-            </div>
-          )}
-          {allInvoices.map((inv) => {
-            const isThis = inv.reservationDocId === reservationDocId;
-            return (
-              <div
-                key={inv.id}
-                className={`rounded-xl border p-3 ${isThis ? "border-[#1d9e75] bg-emerald-50/30" : "border-[#edf0f3] bg-white"}`}
-              >
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-sm font-semibold truncate">{inv.hospitalName || "병원명 미입력"}</span>
-                      {inv.doctors?.length > 0 && (
-                        <span className="text-xs text-gray-500">{inv.doctors.join(", ")}</span>
-                      )}
-                      {isThis && (
-                        <span className="rounded-full bg-[#1d9e75] px-1.5 py-0.5 text-[10px] font-bold text-white">이 예약</span>
-                      )}
-                    </div>
-                    {inv.surgeryItems && (
-                      <div className="mt-0.5 text-xs text-gray-500 truncate">{inv.surgeryItems}</div>
-                    )}
-                    {inv.surgeryDate && (
-                      <div className="mt-0.5 text-xs text-gray-400">수술일: {inv.surgeryDate}</div>
-                    )}
-                    <div className="mt-1 flex items-center gap-2 flex-wrap">
-                      <span className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ${STATUS_CLS[inv.status] || "bg-gray-100 text-gray-500"}`}>
-                        {STATUS_LABEL[inv.status] || inv.status}
-                      </span>
-                      {inv.totalAmount > 0 && (
-                        <span className="text-xs text-gray-600">₩{formatMoney(inv.totalAmount)}</span>
-                      )}
-                      {inv.commissionAmount && (
-                        <span className="text-xs text-[#1d9e75]">커미션 ₩{formatMoney(inv.commissionAmount)}</span>
-                      )}
-                    </div>
-                    <div className="mt-0.5 text-[10px] text-gray-400">{inv.invoiceId}</div>
-                  </div>
-                  <div className="flex shrink-0 gap-1">
-                    <button
-                      onClick={() => setViewingInvoice(inv)}
-                      className="rounded-lg bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-600 hover:bg-blue-100"
-                    >
-                      보기
-                    </button>
-                    <button
-                      onClick={() => setEditingInvoice(inv)}
-                      className="rounded-lg bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-600 hover:bg-gray-200"
-                    >
-                      수정
-                    </button>
-                    <button
-                      onClick={() => handleDeleteFromList(inv)}
-                      className="rounded-lg bg-red-50 px-2.5 py-1 text-xs font-medium text-red-600 hover:bg-red-100"
-                    >
-                      삭제
-                    </button>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
-
-      {allInvoices.length === 0 && thisReservationInvoice === undefined && (
-        <div className="text-center text-xs text-gray-400 py-4">인보이스가 없습니다.</div>
-      )}
-    </div>
+    <InvoiceList
+      invoices={allInvoices}
+      reservationDocId={reservationDocId}
+      appointmentType={appointmentType}
+      coordinators={coordinators}
+      currentUser={currentUser}
+      creating={creating}
+      error={error}
+      onCreate={handleCreate}
+      onView={setViewingInvoice}
+      onEdit={setEditingInvoice}
+      onDelete={handleDeleteFromList}
+    />
   );
 }
