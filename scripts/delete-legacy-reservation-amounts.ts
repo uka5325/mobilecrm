@@ -13,11 +13,27 @@
  * - patients: depositCount, surgeryCostCount, totalDepositAmount, totalSurgeryCost
  * - patientAmountRows: all documents
  */
-import { adminDb, FieldValue } from "@/lib/firebaseAdmin";
+import * as admin from "firebase-admin";
 import { FieldPath } from "firebase-admin/firestore";
 
 const COMMIT = process.argv.includes("--commit");
 const BATCH_LIMIT = 450;
+
+if (!admin.apps.length) {
+  const rawServiceAccount = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
+  admin.initializeApp({
+    credential: rawServiceAccount
+      ? admin.credential.cert(JSON.parse(rawServiceAccount) as admin.ServiceAccount)
+      : admin.credential.applicationDefault(),
+    projectId:
+      process.env.GOOGLE_CLOUD_PROJECT ||
+      process.env.GCLOUD_PROJECT ||
+      process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+  });
+}
+
+const adminDb = admin.firestore();
+const FieldValue = admin.firestore.FieldValue;
 
 async function deleteFieldsFromCollection(
   collectionName: string,
