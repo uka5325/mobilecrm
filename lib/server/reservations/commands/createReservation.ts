@@ -1,11 +1,13 @@
+import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { adminDb, FieldValue } from "@/lib/firebaseAdmin";
 import { makePatientSearchTokens } from "@/lib/searchTokens";
 import {
   createEmptyPatientSummary,
-  recomputeReservationSummary,
   safeRecompute,
+  updateReservationSummaryIncrementally,
 } from "@/lib/patientSummary";
+import type { ReservationApiPayload } from "@/lib/reservationApiContracts";
 import { identityKeyForPatient } from "@/lib/patientIdentity";
 import {
   RESERVATION_LOCKS,
@@ -14,15 +16,10 @@ import {
   lockIdForReservation,
 } from "@/lib/reservationLocks";
 import {
-  deriveGroupKeysPatch,
-  syncReservationAmountRowsInTx,
-} from "@/lib/patientAmountRows";
-import {
   ALLOWED_PATIENT_CREATE_FIELDS,
   ALLOWED_RESERVATION_CREATE_FIELDS,
   CREATE_SERVER_MANAGED_IGNORE,
   splitPatch,
-  withAmountFlags,
   writeReservationLog,
   writeReservationLogInTx,
   type ReservationCommandContext,
@@ -30,6 +27,11 @@ import {
 
 class DuplicateReservationError extends Error {}
 class PatientDeletedError extends Error {}
+
+function makeGeneratedPatientId(): string {
+  const date = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+  return `P-${date}-${randomUUID().replace(/-/g, "").slice(0, 10)}`;
+}
 class PatientCandidatesError extends Error {
   candidates: Array<{
     patientDocId: string;
@@ -47,14 +49,17 @@ class PatientCandidatesError extends Error {
 }
 
 export async function createReservationCommand(
-  payload: Record<string, unknown>,
+  payload: ReservationApiPayload<"create">,
   ctx: ReservationCommandContext
 ) {
-  const { patient, reservation } = payload as {
-    patient: Record<string, unknown>;
-    reservation: Record<string, unknown>;
-  };
-  const responsePatientId = String(reservation?.patientId || "");
+  const patient = payload.patient;
+  const reservation = payload.reservation;
+  if (!patient || typeof patient !== "object" || !reservation || typeof reservation !== "object") {
+    return NextResponse.json(
+      { success: false, code: "INVALID_PAYLOAD", message: "patient/reservation 객체가 필요합니다." },
+      { status: 400 }
+    );
+  }
 
   const { safe: safePatient, disallowed: patientDisallowed } = splitPatch(
     patient,
@@ -79,9 +84,9 @@ export async function createReservationCommand(
     );
   }
 
-  const patientId = String(safePatient.patientId || "");
-  const reservationPatientId = String(safeReservation.patientId || "");
-  if (reservationPatientId && patientId && reservationPatientId !== patientId) {
+  const patientPatientId = String(safePatient.patientId || "").trim();
+  const reservationPatientId = String(safeReservation.patientId || "").trim();
+  if (reservationPatientId && patientPatientId && reservationPatientId !== patientPatientId) {
     return NextResponse.json(
       {
         success: false,
@@ -91,7 +96,12 @@ export async function createReservationCommand(
       { status: 400 }
     );
   }
-  safeReservation.patientId = patientId;
+  const patientIdGenerated = !patientPatientId && !reservationPatientId;
+  const canonicalPatientId = patientPatientId || reservationPatientId || makeGeneratedPatientId();
+  safePatient.patientId = canonicalPatientId;
+  safePatient.patientIdGenerated = patientIdGenerated;
+  safeReservation.patientId = canonicalPatientId;
+  safeReservation.patientIdGenerated = patientIdGenerated;
 
   const reservationDefaults = {
     completed: false,
@@ -103,10 +113,6 @@ export async function createReservationCommand(
   };
 
   const reservationId = String(safeReservation.reservationId || "");
-  const lockId = lockIdForReservation(safeReservation);
-  const lockRef = lockId
-    ? adminDb.collection(RESERVATION_LOCKS).doc(lockId)
-    : null;
   const now = FieldValue.serverTimestamp();
   const authorFields = {
     createdBy: ctx.name,
@@ -119,8 +125,11 @@ export async function createReservationCommand(
   const reservationRef = adminDb.collection("reservations").doc();
 
   let resultPatientDocId = "";
+  let resultPatientId = canonicalPatientId;
+  let createdReservationData: Record<string, unknown> | null = null;
   let linkedExistingPatient = false;
   let staleLockRepaired = false;
+  let resultLockId = "";
 
   try {
     await adminDb.runTransaction(async (tx) => {
@@ -134,28 +143,8 @@ export async function createReservationCommand(
         if (!existingReservation.empty) throw new DuplicateReservationError();
       }
 
-      if (lockRef) {
-        const lockSnap = await tx.get(lockRef);
-        if (lockSnap.exists) {
-          const targetDocId = String(lockSnap.data()?.reservationDocId || "");
-          let targetData: Record<string, unknown> | null = null;
-          if (targetDocId) {
-            const targetSnap = await tx.get(
-              adminDb.collection("reservations").doc(targetDocId)
-            );
-            targetData = targetSnap.exists
-              ? (targetSnap.data() as Record<string, unknown>)
-              : null;
-          }
-          if (!isLockStale(lockId, targetData)) {
-            throw new DuplicateReservationError();
-          }
-          staleLockRepaired = true;
-        }
-      }
-
       let existingPatientDocId = "";
-      let canonicalPatientId = "";
+      let linkedPatientId = "";
       if (incomingPatientId) {
         const patientSnap = await tx.get(
           adminDb
@@ -164,13 +153,16 @@ export async function createReservationCommand(
             .limit(1)
         );
         if (!patientSnap.empty) {
-          if (patientSnap.docs[0].data().isDeleted === true) {
+          const existingPatientData = patientSnap.docs[0].data() as Record<string, unknown>;
+          if (existingPatientData.isDeleted === true) {
             throw new PatientDeletedError();
           }
           existingPatientDocId = patientSnap.docs[0].id;
-          canonicalPatientId = String(
-            patientSnap.docs[0].data().patientId || incomingPatientId
-          );
+          linkedPatientId = String(existingPatientData.patientId || incomingPatientId);
+          if (existingPatientData.patientIdGenerated === true) {
+            safePatient.patientIdGenerated = true;
+            safeReservation.patientIdGenerated = true;
+          }
         }
       }
 
@@ -213,28 +205,55 @@ export async function createReservationCommand(
               .limit(1)
           );
           if (!linkedPatient.empty) {
+            const linkedPatientData = linkedPatient.docs[0].data() as Record<string, unknown>;
             existingPatientDocId = linkedPatient.docs[0].id;
-            canonicalPatientId = linkToPatientId;
+            linkedPatientId = linkToPatientId;
+            if (linkedPatientData.patientIdGenerated === true) {
+              safePatient.patientIdGenerated = true;
+              safeReservation.patientIdGenerated = true;
+            }
           }
         }
       }
 
-      if (canonicalPatientId) safeReservation.patientId = canonicalPatientId;
+      if (linkedPatientId) {
+        safePatient.patientId = linkedPatientId;
+        safeReservation.patientId = linkedPatientId;
+        resultPatientId = linkedPatientId;
+      }
+
+      // canonical 환자 연결과 generated-ID 정책이 결정된 뒤 중복 lock을 계산한다.
+      const lockId = lockIdForReservation(safeReservation);
+      resultLockId = lockId;
+      const lockRef = lockId
+        ? adminDb.collection(RESERVATION_LOCKS).doc(lockId)
+        : null;
+      if (lockRef) {
+        const lockSnap = await tx.get(lockRef);
+        if (lockSnap.exists) {
+          const targetDocId = String(lockSnap.data()?.reservationDocId || "");
+          let targetData: Record<string, unknown> | null = null;
+          if (targetDocId) {
+            const targetSnap = await tx.get(
+              adminDb.collection("reservations").doc(targetDocId)
+            );
+            targetData = targetSnap.exists
+              ? (targetSnap.data() as Record<string, unknown>)
+              : null;
+          }
+          if (!isLockStale(lockId, targetData)) {
+            throw new DuplicateReservationError();
+          }
+          staleLockRepaired = true;
+        }
+      }
 
       const afterReservation = {
         ...reservationDefaults,
         ...safeReservation,
-        ...deriveGroupKeysPatch(safeReservation),
         isDeleted: false,
       };
-
-      await syncReservationAmountRowsInTx(tx, adminDb, ctx, {
-        patientId: String(safeReservation.patientId || ""),
-        reservationDocId: reservationRef.id,
-        before: null,
-        after: afterReservation,
-        now,
-      });
+      createdReservationData = afterReservation;
 
       if (lockRef) {
         tx.set(
@@ -242,7 +261,7 @@ export async function createReservationCommand(
           buildLockDoc({
             reservationDocId: reservationRef.id,
             reservationId,
-            patientId: incomingPatientId,
+            patientId: resultPatientId,
             lockId,
             now,
           })
@@ -252,12 +271,12 @@ export async function createReservationCommand(
       if (existingPatientDocId) {
         tx.set(
           reservationRef,
-          withAmountFlags({
+          {
             ...afterReservation,
             ...authorFields,
             createdAt: now,
             updatedAt: now,
-          })
+          }
         );
         resultPatientDocId = existingPatientDocId;
         linkedExistingPatient = true;
@@ -277,12 +296,12 @@ export async function createReservationCommand(
         });
         tx.set(
           reservationRef,
-          withAmountFlags({
+          {
             ...afterReservation,
             ...authorFields,
             createdAt: now,
             updatedAt: now,
-          })
+          }
         );
         resultPatientDocId = patientRef.id;
       }
@@ -345,22 +364,27 @@ export async function createReservationCommand(
       reservationId,
       message: "생성 중 stale reservation lock을 정리하고 재사용했습니다.",
       before: null,
-      after: { lockId, reservationDocId: reservationRef.id },
+      after: { lockId: resultLockId, reservationDocId: reservationRef.id },
       now,
     });
   }
 
   await safeRecompute(
-    () => recomputeReservationSummary(String(safeReservation.patientId || "")),
+    () => updateReservationSummaryIncrementally({
+      patientId: resultPatientId,
+      reservationDocId: reservationRef.id,
+      before: null,
+      after: createdReservationData,
+    }),
     "create/reservation",
-    String(safeReservation.patientId || "")
+    resultPatientId
   );
 
   return NextResponse.json({
     success: true,
     patientDocId: resultPatientDocId,
     reservationDocId: reservationRef.id,
-    patientId: responsePatientId,
+    patientId: resultPatientId,
     ...(linkedExistingPatient ? { linkedExistingPatient: true } : {}),
   });
 }

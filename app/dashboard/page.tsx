@@ -20,7 +20,6 @@ import {
   accumulate,
   finalizeCounter,
   pctText,
-  formatDepositMap,
   setQuickRange,
 } from "@/lib/dashboardUtils";
 import { QuickButton } from "@/components/dashboard/QuickButton";
@@ -311,28 +310,26 @@ export default function DashboardPage() {
       {/* 병원별 KPI */}
       <Panel title="병원별 KPI">
         <KpiTable
-          headers={["병원명", "상담", "수술예약", "완료", "전환율", "예약금"]}
+          headers={["병원명", "상담", "수술예약", "완료", "전환율"]}
           rows={dashboard.hospitalRows.map((row) => [
             row.name || "미지정",
             row.consultCount.toLocaleString("ko-KR"),
             row.surgery.toLocaleString("ko-KR"),
             row.completedCount.toLocaleString("ko-KR"),
             pctText(row.surgeryRate),
-            formatDepositMap(row.depositByCurrency).join(" / "),
           ])}
         />
       </Panel>
 
       <Panel title="상담부위별 KPI">
         <KpiTable
-          headers={["상담부위", "상담", "수술예약", "전환율", "비중", "예약금"]}
+          headers={["상담부위", "상담", "수술예약", "전환율", "비중"]}
           rows={dashboard.areaRows.map((row) => [
             row.name || "미지정",
             row.consultCount.toLocaleString("ko-KR"),
             row.surgery.toLocaleString("ko-KR"),
             pctText(row.surgeryRate),
             pctText(row.shareRate || 0),
-            formatDepositMap(row.depositByCurrency).join(" / "),
           ])}
         />
       </Panel>
@@ -355,7 +352,7 @@ export default function DashboardPage() {
         rightText={`${filteredRows.length.toLocaleString("ko-KR")}건 표시`}
       >
         <KpiTable
-          headers={["날짜", "시간", "이름", "병원", "유형", "상담부위", "담당자", "상태", "예약금"]}
+          headers={["날짜", "시간", "이름", "병원", "유형", "상담부위", "담당자", "상태"]}
           rows={filteredRows
             .slice()
             .sort((a, b) => {
@@ -373,7 +370,6 @@ export default function DashboardPage() {
               getConsultArea(row),
               getManagers(row).join(", ") || "-",
               row.cancelled === true ? "취소" : isCompleted(row) ? "완료" : "미완료",
-              cleanText(row.depositAmount || row.deposit_amount || row.deposit || "-") || "-",
             ])}
         />
       </Panel>

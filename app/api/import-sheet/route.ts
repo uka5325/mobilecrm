@@ -14,7 +14,6 @@ type ImportPayload = {
   reservationTime: string;
   doctors: string[];
   coordinators: string[];
-  depositAmount: string;
 };
 
 function extractSheetId(url: string) {
@@ -240,7 +239,6 @@ export async function POST(req: NextRequest) {
       time: findCol(headers, ["예약시간", "시간", "time", "reservationtime"]),
       doctor: findCol(headers, ["원장", "doctor", "지정원장", "의사"]),
       coordinator: findCol(headers, ["실장", "coordinator", "담당", "상담실장"]),
-      deposit: findCol(headers, ["예약금", "deposit", "금액"]),
     };
 
     if (colMap.name === -1) {
@@ -279,7 +277,6 @@ export async function POST(req: NextRequest) {
                 .map((item) => item.trim())
                 .filter(Boolean)
             : [],
-          depositAmount: getCell(row, colMap.deposit),
         };
       })
       .filter((item) => item.name);

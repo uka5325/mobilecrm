@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import { parseBirthInfo } from "../lib/invoiceUtils";
 import { calcCommissionBase, calcCommission, paymentMethodLabel } from "../lib/commissionUtils";
 import { cleanText, toSerializable } from "../lib/adminUtils";
+import { aggregateSettlementRows } from "../lib/settlementMath";
 
 test("parseBirthInfo: 주민번호 앞자리+성별코드 (남)", () => {
   const r = parseBirthInfo("900101-1");
@@ -58,6 +59,31 @@ test("paymentMethodLabel", () => {
   assert.equal(paymentMethodLabel(undefined), "-");
 });
 
+test("settlement aggregate: 실제 결제-환불 및 결제수단별 합계", () => {
+  const result = aggregateSettlementRows([
+    { direction: "payment", amount: 550000, paymentMethod: "card", status: "active", paidAt: "2026-07-01" },
+    { direction: "payment", amount: 500000, paymentMethod: "cash", status: "active", paidAt: "2026-07-02" },
+    { direction: "refund", amount: 50000, paymentMethod: "cash", status: "active", paidAt: "2026-07-03" },
+  ]);
+  assert.equal(result.totalPaid, 1050000);
+  assert.equal(result.totalRefunded, 50000);
+  assert.equal(result.netAmount, 1000000);
+  assert.equal(result.cardAmount, 550000);
+  assert.equal(result.cashAmount, 450000);
+  assert.equal(result.paymentMethod, "mixed");
+  assert.equal(result.commissionBase, 950000);
+});
+
+test("settlement aggregate: void 기록 제외", () => {
+  const result = aggregateSettlementRows([
+    { direction: "payment", amount: 100000, paymentMethod: "cash", status: "void" },
+    { direction: "payment", amount: 200000, paymentMethod: "bank_transfer", status: "active" },
+  ]);
+  assert.equal(result.count, 1);
+  assert.equal(result.netAmount, 200000);
+  assert.equal(result.methodTotals.bank_transfer, 200000);
+});
+
 test("cleanText: null/undefined 안전", () => {
   assert.equal(cleanText(null), "");
   assert.equal(cleanText("  hi "), "hi");
@@ -75,14 +101,12 @@ import { buildReservationUpdatePayload } from "../lib/reservations";
 const _staff = { uid: "u1", displayName: "Tester" } as unknown as Parameters<typeof buildReservationUpdatePayload>[1];
 const _base = { name: "홍길동", reservationDate: "2026-07-06" };
 
-test("payload: hospital만 전달 → 상태/금액/담당자 키 없음", () => {
+test("payload: hospital만 전달 → 상태/담당자 키 없음", () => {
   const { reservationPatch: p } = buildReservationUpdatePayload({ ..._base, hospital: "ARC" }, _staff);
   assert.equal(p.hospital, "ARC");
   assert.ok(!("completed" in p));
   assert.ok(!("cancelled" in p));
   assert.ok(!("coordinators" in p));
-  assert.ok(!("depositAmount" in p));
-  assert.ok(!("surgeryCost" in p));
 });
 
 test("payload: completed만 전달 → completed 포함, cancelled 없음", () => {
@@ -100,17 +124,6 @@ test("payload: coordinators:[] → 빈 배열 포함", () => {
 test("payload: coordinators:undefined → 키 자체가 없음", () => {
   const { reservationPatch: p } = buildReservationUpdatePayload({ ..._base, coordinators: undefined }, _staff);
   assert.ok(!("coordinators" in p));
-});
-
-test("payload: depositAmount:'0' → 포함", () => {
-  const { reservationPatch: p } = buildReservationUpdatePayload({ ..._base, depositAmount: "0" }, _staff);
-  assert.ok("depositAmount" in p);
-  assert.equal(p.depositAmount, "0");
-});
-
-test("payload: depositAmount:undefined → 키 자체가 없음", () => {
-  const { reservationPatch: p } = buildReservationUpdatePayload({ ..._base, depositAmount: undefined }, _staff);
-  assert.ok(!("depositAmount" in p));
 });
 
 test("payload: cancelled:false → false 포함", () => {
@@ -216,7 +229,6 @@ function makeReservations(n: number, offset = 0): Record<string, unknown>[] {
     return {
       reservationDate: `2027-01-${String((idx % 28) + 1).padStart(2, "0")}`,
       reservationTime: "10:00",
-      depositAmount: "10000",
       hospital: "H1",
       consultArea: "코",
       doctors: ["김원장"],
@@ -234,15 +246,11 @@ test("aggregateReservationPages: 650건 전체 페이지 합계가 정확하다(
   const pages = [makeReservations(500, 0), makeReservations(150, 500)];
   const agg = aggregateReservationPages(pages);
   assert.equal(agg.reservationCount, 650);
-  // 모두 같은 그룹(H1+코+김원장)의 예약금이므로 depositCount는 그룹 수(1)로 묶인다.
-  assert.equal(agg.depositCount, 1);
-  assert.equal(agg.totalDepositAmount, 650 * 10000);
 });
 
 test("aggregateReservationPages: 빈 페이지 배열은 0건으로 집계된다", () => {
   const agg = aggregateReservationPages([]);
   assert.equal(agg.reservationCount, 0);
-  assert.equal(agg.totalDepositAmount, 0);
 });
 
 // ── clientCache: mcrm_ 레거시 prefix도 purge 대상에 포함 (P0 후속) ────────────────

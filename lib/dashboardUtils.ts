@@ -48,9 +48,6 @@ export type ReservationDoc = {
   surgery_reserved?: boolean;
   surgeryStatus?: string;
   surgery_status?: string;
-  depositAmount?: string;
-  deposit_amount?: string;
-  deposit?: string | number;
   nationality?: string;
   phone?: string;
   cancelled?: boolean;
@@ -65,7 +62,6 @@ export type Counter = {
   treatmentCount: number;
   followUpCount: number;
   completedCount: number;
-  depositByCurrency: Record<string, number>;
 };
 
 export type KpiRow = Counter & {
@@ -240,14 +236,7 @@ function parseDepositParts(value: unknown) {
 }
 
 export function emptyCounter(name?: string): Counter {
-  return { name, total: 0, surgery: 0, consultCount: 0, surgeryTypeCount: 0, treatmentCount: 0, followUpCount: 0, completedCount: 0, depositByCurrency: {} };
-}
-
-function addDeposit(counter: Counter, item: ReservationDoc) {
-  const raw = item.depositAmount || item.deposit_amount || item.deposit || "";
-  parseDepositParts(raw).forEach((part) => {
-    counter.depositByCurrency[part.currency] = (counter.depositByCurrency[part.currency] || 0) + part.amount;
-  });
+  return { name, total: 0, surgery: 0, consultCount: 0, surgeryTypeCount: 0, treatmentCount: 0, followUpCount: 0, completedCount: 0 };
 }
 
 export function accumulate(counter: Counter, item: ReservationDoc) {
@@ -259,7 +248,6 @@ export function accumulate(counter: Counter, item: ReservationDoc) {
   if (apptType === "치료") counter.treatmentCount += 1;
   if (apptType === "경과") counter.followUpCount += 1;
   if (isCompleted(item)) counter.completedCount += 1;
-  addDeposit(counter, item);
 }
 
 export function rate(a: number, b: number) {

@@ -7,8 +7,6 @@ export type ReservationReadAction =
   | "read_range_all"
   | "patient_history"
   | "patient_full_history_batch"
-  | "read_by_date"
-  | "read_one"
   | "read_doctors";
 
 const READ_ACTIONS = new Set<ReservationReadAction>([
@@ -16,8 +14,6 @@ const READ_ACTIONS = new Set<ReservationReadAction>([
   "read_range_all",
   "patient_history",
   "patient_full_history_batch",
-  "read_by_date",
-  "read_one",
   "read_doctors",
 ]);
 
@@ -91,7 +87,7 @@ export async function handleReservationReadAction(
     const to = typeof payload.to === "string" ? payload.to : "";
     if (!from || !to) {
       return NextResponse.json(
-        { success: false, message: "조회 기간(from/to)이 필요합니다." },
+        { success: false, code: "INVALID_PAYLOAD", message: "조회 기간(from/to)이 필요합니다." },
         { status: 400 }
       );
     }
@@ -142,7 +138,7 @@ export async function handleReservationReadAction(
     const cursorId = typeof payload.cursor === "string" ? payload.cursor : "";
     if (!patientId) {
       return NextResponse.json(
-        { success: false, message: "patientId가 없습니다." },
+        { success: false, code: "INVALID_PAYLOAD", message: "patientId가 없습니다." },
         { status: 400 }
       );
     }
@@ -176,7 +172,7 @@ export async function handleReservationReadAction(
     const before = typeof payload.before === "string" ? payload.before : "";
     if (!patientIds.length || !before) {
       return NextResponse.json(
-        { success: false, message: "patientIds/before가 없습니다." },
+        { success: false, code: "INVALID_PAYLOAD", message: "patientIds/before가 없습니다." },
         { status: 400 }
       );
     }
@@ -199,35 +195,6 @@ export async function handleReservationReadAction(
     }
 
     return NextResponse.json({ success: true, byPatient });
-  }
-
-  if (action === "read_by_date") {
-    const date = typeof payload.date === "string" ? payload.date : "";
-    const [reservationSnapshot, doctors] = await Promise.all([
-      adminDb
-        .collection("reservations")
-        .where("isDeleted", "==", false)
-        .where("reservationDate", "==", date)
-        .get(),
-      getCachedDoctors(),
-    ]);
-
-    return NextResponse.json({
-      success: true,
-      reservations: reservationSnapshot.docs.map(docToObj),
-      doctors,
-    });
-  }
-
-  if (action === "read_one") {
-    const reservationDocId = typeof payload.reservationDocId === "string"
-      ? payload.reservationDocId
-      : "";
-    const snapshot = await adminDb.collection("reservations").doc(reservationDocId).get();
-    if (!snapshot.exists) {
-      return NextResponse.json({ success: false, message: "예약을 찾을 수 없습니다." });
-    }
-    return NextResponse.json({ success: true, reservation: docToObj(snapshot) });
   }
 
   const doctors = await getCachedDoctors();

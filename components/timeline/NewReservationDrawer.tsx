@@ -35,8 +35,6 @@ const EMPTY_FORM = (date: string, patient?: InitialPatient) => ({
   doctors: "",
   appointmentType: "상담" as AppointmentType,
   coordinators: "",
-  depositAmount: "",
-  surgeryCost: "",
 });
 
 export function NewReservationDrawer({ open, onClose, currentUser, initialDate, initialPatient, onCreated }: Props) {
@@ -76,8 +74,6 @@ export function NewReservationDrawer({ open, onClose, currentUser, initialDate, 
           doctors: form.doctors.split(",").map((s) => s.trim()).filter(Boolean),
           appointmentType: form.appointmentType,
           coordinators: form.coordinators.split(",").map((s) => s.trim()).filter(Boolean),
-          depositAmount: form.depositAmount,
-          surgeryCost: form.surgeryCost,
           patientId: initialPatient?.patientId,
         },
         currentUser
@@ -241,26 +237,6 @@ export function NewReservationDrawer({ open, onClose, currentUser, initialDate, 
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-xs text-gray-500">예약금</label>
-              <input
-                value={form.depositAmount}
-                onChange={(e) => setForm((p) => ({ ...p, depositAmount: e.target.value }))}
-                placeholder="100,000원"
-                className="mt-1 w-full rounded-xl border border-[#dfe3e8] px-3 py-2 text-sm transition focus:border-[#1d9e75] focus:outline-none"
-              />
-            </div>
-            <div>
-              <label className="text-xs text-gray-500">수술비용</label>
-              <input
-                value={form.surgeryCost}
-                onChange={(e) => setForm((p) => ({ ...p, surgeryCost: e.target.value }))}
-                placeholder="5,000,000원"
-                className="mt-1 w-full rounded-xl border border-[#dfe3e8] px-3 py-2 text-sm transition focus:border-[#1d9e75] focus:outline-none"
-              />
-            </div>
-          </div>
 
           {errorMessage && (
             <div className="text-sm text-red-500">{errorMessage}</div>

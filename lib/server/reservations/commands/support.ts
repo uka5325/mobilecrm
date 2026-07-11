@@ -1,13 +1,12 @@
 import { adminDb } from "@/lib/firebaseAdmin";
 import type { requireActiveStaff } from "@/lib/apiAuth";
-import { hasAmountValue } from "@/lib/reservationAmountRows";
 
 export type ReservationCommandContext = Awaited<ReturnType<typeof requireActiveStaff>>;
 
 export const ALLOWED_RESERVATION_UPDATE_FIELDS = new Set([
   "name", "patientName", "birth", "birthInput", "gender", "phone", "nationality",
   "reservationDate", "reservationTime", "hospital", "appointmentType",
-  "completed", "cancelled", "consultArea", "depositAmount", "surgeryCost",
+  "completed", "cancelled", "consultArea",
   "coordinators", "doctors",
 ]);
 
@@ -19,7 +18,7 @@ export const ALLOWED_RESERVATION_CREATE_FIELDS = new Set([
   "reservationId", "patientId",
   "name", "patientName", "birth", "birthInput", "gender", "phone", "nationality",
   "reservationDate", "reservationTime", "hospital", "appointmentType",
-  "depositAmount", "surgeryCost", "consultArea",
+  "consultArea",
   "doctors", "coordinators",
 ]);
 
@@ -43,27 +42,6 @@ export function splitPatch(
     else if (!ignore.has(key)) disallowed.push(key);
   }
   return { safe, disallowed };
-}
-
-export function withAmountFlags<T extends Record<string, unknown>>(
-  data: T
-): T & { hasDepositAmount: boolean; hasSurgeryCost: boolean } {
-  return {
-    ...data,
-    hasDepositAmount: hasAmountValue(data.depositAmount),
-    hasSurgeryCost: hasAmountValue(data.surgeryCost),
-  };
-}
-
-export function deriveAmountFlagPatch(patch: Record<string, unknown>): Record<string, boolean> {
-  const flags: Record<string, boolean> = {};
-  if (Object.prototype.hasOwnProperty.call(patch, "depositAmount")) {
-    flags.hasDepositAmount = hasAmountValue(patch.depositAmount);
-  }
-  if (Object.prototype.hasOwnProperty.call(patch, "surgeryCost")) {
-    flags.hasSurgeryCost = hasAmountValue(patch.surgeryCost);
-  }
-  return flags;
 }
 
 type ReservationLogParams = {

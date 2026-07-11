@@ -4,6 +4,8 @@ import { cleanText, docToObj } from "@/lib/adminUtils";
 import { parseBirthInfo } from "@/lib/invoiceUtils";
 import { recomputeInvoiceSummary, safeRecompute } from "@/lib/patientSummary";
 import type { requireActiveStaff } from "@/lib/apiAuth";
+import { aggregateSettlementRows } from "@/lib/settlementMath";
+import { calcCommission } from "@/lib/commissionUtils";
 
 type StaffContext = Awaited<ReturnType<typeof requireActiveStaff>>;
 
@@ -138,6 +140,12 @@ export async function createInvoiceAtomic(
       invoices.where("reservationDocId", "==", reservationDocId)
     );
     const existing = existingSnap.docs.find((doc) => doc.data().isDeleted !== true);
+    const settlementSnap = await tx.get(
+      adminDb.collection("settlements").where("reservationDocId", "==", reservationDocId).limit(501)
+    );
+    const settlementAggregate = aggregateSettlementRows(
+      settlementSnap.docs.map((doc) => doc.data() as Record<string, unknown>)
+    );
     if (existing) {
       return {
         kind: "existing" as const,
@@ -174,11 +182,20 @@ export async function createInvoiceAtomic(
       hospitalName: cleanText(reservation.hospital),
       surgeryItems: cleanText(reservation.consultArea),
       surgeryDate: cleanText(reservation.reservationDate),
-      totalAmount: (() => {
-        const raw = cleanText(reservation.surgeryCost).replace(/[^0-9.]/g, "");
-        const numberValue = Number.parseFloat(raw);
-        return Number.isFinite(numberValue) ? numberValue : 0;
-      })(),
+      totalAmount: settlementAggregate.netAmount,
+      paymentMethod: settlementAggregate.paymentMethod ?? null,
+      cardAmount: settlementAggregate.cardAmount,
+      cashAmount: settlementAggregate.cashAmount,
+      bankTransferAmount: settlementAggregate.methodTotals.bank_transfer,
+      foreignCardAmount: settlementAggregate.methodTotals.foreign_card,
+      otherAmount: settlementAggregate.methodTotals.other,
+      settlementPaidAmount: settlementAggregate.totalPaid,
+      settlementRefundAmount: settlementAggregate.totalRefunded,
+      settlementCount: settlementAggregate.count,
+      commissionBase: settlementAggregate.commissionBase,
+      commissionAmount: null,
+      invoiceRevision: 0,
+      updatedAfterConfirmation: false,
       memo: "",
       status: "draft",
       createdAt: now,
@@ -272,21 +289,41 @@ export async function updateInvoiceAtomic(
     if (!reservationSnap.exists) return { kind: "linkMissing" as const };
     const reservation = reservationSnap.data() as Record<string, unknown>;
     if (!invoiceReservationMatches(current, reservation)) return { kind: "linkMismatch" as const };
+    const settlementSnap = await tx.get(
+      adminDb.collection("settlements").where("reservationDocId", "==", reservationDocId).limit(501)
+    );
+    const settlementAggregate = aggregateSettlementRows(
+      settlementSnap.docs.map((doc) => doc.data() as Record<string, unknown>)
+    );
+    const hasSettlements = settlementAggregate.count > 0;
+    const commissionRate = payload.commissionRate !== undefined
+      ? toNumber(payload.commissionRate)
+      : current.commissionRate !== undefined && current.commissionRate !== null
+        ? toNumber(current.commissionRate)
+        : null;
 
     const now = FieldValue.serverTimestamp();
     const patch: Record<string, unknown> = {
       hospitalName: cleanText(payload.hospitalName),
       surgeryItems: cleanText(payload.surgeryItems),
       surgeryDate: cleanText(payload.surgeryDate ?? ""),
-      totalAmount: toNumber(payload.totalAmount),
-      paymentMethod: payload.paymentMethod ?? null,
-      cardAmount: payload.cardAmount !== undefined ? toNumber(payload.cardAmount) : null,
-      cashAmount: payload.cashAmount !== undefined ? toNumber(payload.cashAmount) : null,
-      commissionRate: payload.commissionRate !== undefined ? toNumber(payload.commissionRate) : null,
+      totalAmount: hasSettlements ? settlementAggregate.netAmount : toNumber(payload.totalAmount),
+      paymentMethod: hasSettlements ? (settlementAggregate.paymentMethod ?? null) : (payload.paymentMethod ?? null),
+      cardAmount: hasSettlements ? settlementAggregate.cardAmount : (payload.cardAmount !== undefined ? toNumber(payload.cardAmount) : null),
+      cashAmount: hasSettlements ? settlementAggregate.cashAmount : (payload.cashAmount !== undefined ? toNumber(payload.cashAmount) : null),
+      bankTransferAmount: hasSettlements ? settlementAggregate.methodTotals.bank_transfer : (current.bankTransferAmount ?? null),
+      foreignCardAmount: hasSettlements ? settlementAggregate.methodTotals.foreign_card : (current.foreignCardAmount ?? null),
+      otherAmount: hasSettlements ? settlementAggregate.methodTotals.other : (current.otherAmount ?? null),
+      settlementPaidAmount: hasSettlements ? settlementAggregate.totalPaid : (current.settlementPaidAmount ?? null),
+      settlementRefundAmount: hasSettlements ? settlementAggregate.totalRefunded : (current.settlementRefundAmount ?? null),
+      settlementCount: hasSettlements ? settlementAggregate.count : (current.settlementCount ?? 0),
+      commissionRate,
       commissionStaffUid: payload.commissionStaffUid ?? null,
       commissionStaffName: payload.commissionStaffName ?? null,
-      commissionBase: payload.commissionBase !== undefined ? toNumber(payload.commissionBase) : null,
-      commissionAmount: payload.commissionAmount !== undefined ? toNumber(payload.commissionAmount) : null,
+      commissionBase: hasSettlements ? settlementAggregate.commissionBase : (payload.commissionBase !== undefined ? toNumber(payload.commissionBase) : null),
+      commissionAmount: hasSettlements
+        ? (commissionRate === null ? null : calcCommission(settlementAggregate.commissionBase, commissionRate))
+        : (payload.commissionAmount !== undefined ? toNumber(payload.commissionAmount) : null),
       memo: cleanText(payload.memo),
       doctors: Array.isArray(payload.doctors)
         ? payload.doctors

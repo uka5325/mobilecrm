@@ -19,8 +19,6 @@ type InitialPatient = {
   appointmentType?: AppointmentType;
   coordinators?: string;
   doctors?: string;
-  depositAmount?: string;
-  surgeryCost?: string;
 };
 
 type Props = {
@@ -52,8 +50,6 @@ const RESERVATION_FORM = (date: string, patient?: InitialPatient) => ({
   consultArea: patient?.consultArea || "",
   coordinators: patient?.coordinators || "",
   doctors: patient?.doctors || "",
-  depositAmount: patient?.depositAmount || "",
-  surgeryCost: patient?.surgeryCost || "",
 });
 
 export function CreateDrawer({ open, onClose, currentUser, initialDate, initialPatient, onCreated, mode = "register" }: Props) {
@@ -111,8 +107,6 @@ export function CreateDrawer({ open, onClose, currentUser, initialDate, initialP
             doctors: resForm.doctors ? resForm.doctors.split(",").map((s) => s.trim()).filter(Boolean) : [],
             appointmentType: resForm.appointmentType,
             coordinators: resForm.coordinators ? resForm.coordinators.split(",").map((s) => s.trim()).filter(Boolean) : [],
-            depositAmount: resForm.depositAmount,
-            surgeryCost: resForm.surgeryCost,
             patientId: initialPatient?.patientId,
           },
           currentUser
@@ -290,25 +284,6 @@ export function CreateDrawer({ open, onClose, currentUser, initialDate, initialP
                 />
               </div>
 
-              {/* 예약금 + 수술비용 */}
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-xs text-gray-500">예약금</label>
-                  <input
-                    value={resForm.depositAmount}
-                    onChange={(e) => setResForm((p) => ({ ...p, depositAmount: e.target.value }))}
-                    className="mt-1 w-full rounded-xl border border-[#dfe3e8] px-3 py-2 text-sm transition focus:border-[#1d9e75] focus:outline-none"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs text-gray-500">수술비용</label>
-                  <input
-                    value={resForm.surgeryCost}
-                    onChange={(e) => setResForm((p) => ({ ...p, surgeryCost: e.target.value }))}
-                    className="mt-1 w-full rounded-xl border border-[#dfe3e8] px-3 py-2 text-sm transition focus:border-[#1d9e75] focus:outline-none"
-                  />
-                </div>
-              </div>
             </>
           )}
 

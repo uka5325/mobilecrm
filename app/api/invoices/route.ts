@@ -4,6 +4,7 @@ import { requireActiveStaff, toAuthErrorResponse } from "@/lib/apiAuth";
 import { docToObj, cleanText } from "@/lib/adminUtils";
 import { parseBirthInfo } from "@/lib/invoiceUtils";
 import { recomputeInvoiceSummary, safeRecompute } from "@/lib/patientSummary";
+import { aggregateSettlementRows } from "@/lib/settlementMath";
 
 // 데이터 변경 action — 토큰 폐기 검사 적용
 const WRITE_ACTIONS = new Set(["create", "update", "delete"]);
@@ -169,6 +170,14 @@ export async function POST(req: NextRequest) {
       const rawBirth = cleanText(reservation.birthInput || reservation.birth);
       const birthInfo = parseBirthInfo(rawBirth, cleanText(reservation.gender));
       const invoiceId = makeInvoiceId(reservation);
+      const settlementSnap = await adminDb
+        .collection("settlements")
+        .where("reservationDocId", "==", reservationDocId)
+        .limit(501)
+        .get();
+      const settlementAggregate = aggregateSettlementRows(
+        settlementSnap.docs.map((doc) => doc.data() as Record<string, unknown>)
+      );
 
       const invoicePayload = {
         invoiceId,
@@ -188,11 +197,17 @@ export async function POST(req: NextRequest) {
         hospitalName: cleanText(reservation.hospital),
         surgeryItems: cleanText(reservation.consultArea) || "",
         surgeryDate: cleanText(reservation.reservationDate) || "",
-        totalAmount: (() => {
-          const raw = cleanText(reservation.surgeryCost).replace(/[^0-9.]/g, "");
-          const n = parseFloat(raw);
-          return Number.isFinite(n) ? n : 0;
-        })(),
+        totalAmount: settlementAggregate.netAmount,
+        paymentMethod: settlementAggregate.paymentMethod ?? null,
+        cardAmount: settlementAggregate.cardAmount,
+        cashAmount: settlementAggregate.cashAmount,
+        bankTransferAmount: settlementAggregate.methodTotals.bank_transfer,
+        foreignCardAmount: settlementAggregate.methodTotals.foreign_card,
+        otherAmount: settlementAggregate.methodTotals.other,
+        settlementPaidAmount: settlementAggregate.totalPaid,
+        settlementRefundAmount: settlementAggregate.totalRefunded,
+        settlementCount: settlementAggregate.count,
+        commissionBase: settlementAggregate.commissionBase,
         memo: "",
         status: "draft",
         createdAt: FieldValue.serverTimestamp(),

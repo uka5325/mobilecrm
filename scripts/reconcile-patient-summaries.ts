@@ -1,5 +1,5 @@
 /**
- * 정합성 점검/보정: patients 문서의 고객관리 요약(summary)이 실제 예약/인보이스/메모
+ * 정합성 점검/보정: patients 문서의 고객관리 요약(summary)이 실제 예약/인보이스/메모/정산
  * 집계와 일치하는지 검사하고, 드리프트가 있으면 최신 값으로 보정한다.
  *
  * backfill-patient-summary.ts가 "1회 채우기"라면, 이 스크립트는 "차이 검출 + 선택적 보정"이다.
@@ -21,6 +21,7 @@
  */
 import * as admin from "firebase-admin";
 import { readFileSync } from "node:fs";
+import { aggregateSettlementRows, type SettlementMathRow } from "../lib/settlementMath";
 
 const APPLY = process.argv.includes("--apply");
 const DRY_RUN = !APPLY; // 기본 dry-run
@@ -51,29 +52,8 @@ function init() {
   admin.initializeApp(projectId ? { projectId } : undefined);
 }
 
-// lib/patientSummary.ts와 동일 규칙(금액 파싱).
-function parseAmount(v: unknown): number {
-  const cleaned = String(v ?? "").replace(/[^0-9.]/g, "");
-  const n = parseFloat(cleaned);
-  return Number.isFinite(n) ? n : 0;
-}
-
-// lib/patientSummary.ts reservationGroupKey와 동일 규칙(병원+부위+원장).
-function reservationGroupKey(r: Record<string, unknown>): string {
-  const doctors = Array.isArray(r.doctors) ? (r.doctors as unknown[]) : [];
-  return [
-    String(r.hospital || "").trim().toLowerCase(),
-    String(r.consultArea || "").trim().toLowerCase(),
-    doctors.map((d) => String(d).trim().toLowerCase()).sort().join(","),
-  ].join("|");
-}
-
 type Summary = {
   reservationCount: number;
-  depositCount: number;
-  surgeryCostCount: number;
-  totalDepositAmount: number;
-  totalSurgeryCost: number;
   lastReservationDate: string;
   lastReservationTime: string;
   lastReservationAt: string;
@@ -82,14 +62,15 @@ type Summary = {
   hasInvoice: boolean;
   memoCount: number;
   hasMemo: boolean;
+  settlementCount: number;
+  totalSettlementPaid: number;
+  totalSettlementRefunded: number;
+  netSettlementAmount: number;
+  lastSettlementAt: string;
 };
 
 type ReservationAggregate = {
   reservationCount: number;
-  depositCount: number;
-  surgeryCostCount: number;
-  totalDepositAmount: number;
-  totalSurgeryCost: number;
   lastReservationDate: string;
   lastReservationTime: string;
 };
@@ -99,21 +80,12 @@ type ReservationAggregate = {
 // (여러 페이지에 걸쳐도 합계가 깨지지 않는지) emulator 없이 검증할 수 있도록 분리했다.
 export function aggregateReservationPages(pages: Record<string, unknown>[][]): ReservationAggregate {
   let reservationCount = 0;
-  let totalDepositAmount = 0;
-  let totalSurgeryCost = 0;
   let lastReservationDate = "";
   let lastReservationTime = "";
   let lastComposite = "";
-  const depositGroups = new Set<string>();
-  const surgeryGroups = new Set<string>();
-
   for (const page of pages) {
     for (const r of page) {
       reservationCount += 1;
-      const hasDeposit = String(r.depositAmount ?? "").trim() !== "";
-      const hasSurgery = String(r.surgeryCost ?? "").trim() !== "";
-      if (hasDeposit) { depositGroups.add(reservationGroupKey(r)); totalDepositAmount += parseAmount(r.depositAmount); }
-      if (hasSurgery) { surgeryGroups.add(reservationGroupKey(r)); totalSurgeryCost += parseAmount(r.surgeryCost); }
       const date = String(r.reservationDate || "");
       const time = String(r.reservationTime || "");
       const comp = `${date} ${time}`;
@@ -127,10 +99,6 @@ export function aggregateReservationPages(pages: Record<string, unknown>[][]): R
 
   return {
     reservationCount,
-    depositCount: depositGroups.size,
-    surgeryCostCount: surgeryGroups.size,
-    totalDepositAmount,
-    totalSurgeryCost,
     lastReservationDate,
     lastReservationTime,
   };
@@ -157,12 +125,16 @@ async function computeSummary(db: admin.firestore.Firestore, patientId: string):
 
   const agg = aggregateReservationPages(pages);
 
-  const [invAgg, memoAgg] = await Promise.all([
+  const [invAgg, memoAgg, settlementSnap] = await Promise.all([
     db.collection("invoices").where("patientId", "==", patientId).where("isDeleted", "==", false).count().get(),
     db.collection("reservationNotes").where("patientId", "==", patientId).where("isDeleted", "==", false).count().get(),
+    db.collection("settlements").where("patientId", "==", patientId).get(),
   ]);
   const invoiceCount = invAgg.data().count;
   const memoCount = memoAgg.data().count;
+  const settlementAggregate = aggregateSettlementRows(
+    settlementSnap.docs.map((doc) => doc.data() as SettlementMathRow)
+  );
 
   return {
     ...agg,
@@ -173,6 +145,11 @@ async function computeSummary(db: admin.firestore.Firestore, patientId: string):
     hasInvoice: invoiceCount > 0,
     memoCount,
     hasMemo: memoCount > 0,
+    settlementCount: settlementAggregate.count,
+    totalSettlementPaid: settlementAggregate.totalPaid,
+    totalSettlementRefunded: settlementAggregate.totalRefunded,
+    netSettlementAmount: settlementAggregate.netAmount,
+    lastSettlementAt: settlementAggregate.lastPaidAt,
   };
 }
 
@@ -203,8 +180,8 @@ async function main() {
     updatedPatients: 0,
     missingLastReservationDate: 0,
     reservationCountMismatch: 0,
-    amountMismatch: 0,
     invoiceMismatch: 0,
+    settlementMismatch: 0,
     memoMismatch: 0,
     skippedDeletedPatients: 0,
   };
@@ -239,10 +216,16 @@ async function main() {
 
     // 카테고리별 카운트.
     if (String(data.lastReservationDate ?? "") === "" && computed.lastReservationDate !== "") stats.missingLastReservationDate += 1;
-    if (drift.includes("reservationCount") || drift.includes("depositCount") || drift.includes("surgeryCostCount")) stats.reservationCountMismatch += 1;
-    if (drift.includes("totalDepositAmount") || drift.includes("totalSurgeryCost")) stats.amountMismatch += 1;
+    if (drift.includes("reservationCount")) stats.reservationCountMismatch += 1;
     if (drift.includes("invoiceCount") || drift.includes("hasInvoice")) stats.invoiceMismatch += 1;
     if (drift.includes("memoCount") || drift.includes("hasMemo")) stats.memoMismatch += 1;
+    if (
+      drift.includes("settlementCount") ||
+      drift.includes("totalSettlementPaid") ||
+      drift.includes("totalSettlementRefunded") ||
+      drift.includes("netSettlementAmount") ||
+      drift.includes("lastSettlementAt")
+    ) stats.settlementMismatch += 1;
 
     stats.wouldUpdatePatients += 1;
 

@@ -27,7 +27,6 @@ export function EditDrawer({ open, onClose, reservation, doctors, currentUser }:
     reservationDate: todayString(),
     reservationTime: "",
     coordinators: "",
-    depositAmount: "",
   });
 
   useEffect(() => {
@@ -41,7 +40,6 @@ export function EditDrawer({ open, onClose, reservation, doctors, currentUser }:
         reservationDate: reservation.reservationDate || todayString(),
         reservationTime: reservation.reservationTime || "",
         coordinators: reservation.coordinators.join(", "),
-        depositAmount: reservation.depositAmount || "",
       });
       setDoctorsInput((reservation.doctors || []).join(", "));
       setErrorMessage("");
@@ -78,7 +76,6 @@ export function EditDrawer({ open, onClose, reservation, doctors, currentUser }:
           reservationTime: form.reservationTime,
           doctors: parsedDoctors,
           coordinators: form.coordinators.split(",").map((s) => s.trim()).filter(Boolean),
-          depositAmount: form.depositAmount,
         },
         currentUser
       );
@@ -224,16 +221,6 @@ export function EditDrawer({ open, onClose, reservation, doctors, currentUser }:
               value={form.coordinators}
               onChange={(e) => setForm((p) => ({ ...p, coordinators: e.target.value }))}
               placeholder="쉼표로 구분"
-              className="mt-1 w-full rounded-xl border px-3 py-2 text-sm"
-            />
-          </div>
-
-          <div>
-            <label className="text-xs text-gray-500">예약금</label>
-            <input
-              value={form.depositAmount}
-              onChange={(e) => setForm((p) => ({ ...p, depositAmount: e.target.value }))}
-              placeholder="100,000원 / 10,000엔"
               className="mt-1 w-full rounded-xl border px-3 py-2 text-sm"
             />
           </div>
