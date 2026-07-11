@@ -37,11 +37,6 @@ export type ReservationApiPayloadMap = {
   list_patients: JsonRecord;
   search_patients: { term: string };
   list_patients_summary: { limit?: number; cursor?: string };
-  patient_amount_rows: {
-    patientId: string;
-    type: "deposit" | "surgery";
-    expectedCount?: number;
-  };
   patient_full_history_page: {
     patientId: string;
     cursor?: string;
@@ -99,7 +94,6 @@ const RESERVATION_API_ACTIONS = new Set<ReservationApiAction>([
   "list_patients",
   "search_patients",
   "list_patients_summary",
-  "patient_amount_rows",
   "patient_full_history_page",
   "patient_full_history",
   "read_all",

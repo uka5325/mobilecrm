@@ -20,8 +20,6 @@ export type PatientGroup = {
   // 고객관리 배지 요약(patients 문서 저장값). 백필 전엔 undefined → 배지 미표시/0.
   reservationCount?: number;
   reservationCountCapped?: boolean;
-  depositCount?: number;
-  surgeryCostCount?: number;
   settlementCount?: number;
   netSettlementAmount?: number;
   invoiceCount?: number;

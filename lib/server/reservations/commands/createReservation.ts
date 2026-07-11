@@ -16,15 +16,10 @@ import {
   lockIdForReservation,
 } from "@/lib/reservationLocks";
 import {
-  deriveGroupKeysPatch,
-  syncReservationAmountRowsInTx,
-} from "@/lib/patientAmountRows";
-import {
   ALLOWED_PATIENT_CREATE_FIELDS,
   ALLOWED_RESERVATION_CREATE_FIELDS,
   CREATE_SERVER_MANAGED_IGNORE,
   splitPatch,
-  withAmountFlags,
   writeReservationLog,
   writeReservationLogInTx,
   type ReservationCommandContext,
@@ -256,18 +251,9 @@ export async function createReservationCommand(
       const afterReservation = {
         ...reservationDefaults,
         ...safeReservation,
-        ...deriveGroupKeysPatch(safeReservation),
         isDeleted: false,
       };
       createdReservationData = afterReservation;
-
-      await syncReservationAmountRowsInTx(tx, adminDb, ctx, {
-        patientId: String(safeReservation.patientId || ""),
-        reservationDocId: reservationRef.id,
-        before: null,
-        after: afterReservation,
-        now,
-      });
 
       if (lockRef) {
         tx.set(
@@ -285,12 +271,12 @@ export async function createReservationCommand(
       if (existingPatientDocId) {
         tx.set(
           reservationRef,
-          withAmountFlags({
+          {
             ...afterReservation,
             ...authorFields,
             createdAt: now,
             updatedAt: now,
-          })
+          }
         );
         resultPatientDocId = existingPatientDocId;
         linkedExistingPatient = true;
@@ -310,12 +296,12 @@ export async function createReservationCommand(
         });
         tx.set(
           reservationRef,
-          withAmountFlags({
+          {
             ...afterReservation,
             ...authorFields,
             createdAt: now,
             updatedAt: now,
-          })
+          }
         );
         resultPatientDocId = patientRef.id;
       }

@@ -10,7 +10,6 @@ import {
   createPatientWithDecision,
   listPatientsRaw,
   listPatientsSummaryRaw,
-  patientAmountRows,
   patientFullHistoryPage,
   patientFullHistoryExact,
   searchPatientsRaw,
@@ -81,7 +80,6 @@ export async function handleReservationRequest(req: NextRequest) {
     if (action === "list_patients") return listPatientsRaw();
     if (action === "search_patients") return searchPatientsRaw(payload);
     if (action === "list_patients_summary") return listPatientsSummaryRaw(payload);
-    if (action === "patient_amount_rows") return patientAmountRows(payload);
     if (action === "patient_full_history_page") return patientFullHistoryPage(payload);
     if (action === "patient_full_history") return patientFullHistoryExact(payload);
     if (action === "create") {

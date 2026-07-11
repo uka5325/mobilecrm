@@ -41,8 +41,6 @@ export type SettlementAppointment = {
   appointmentType: string;
   hospital: string;
   consultArea: string;
-  legacyDepositAmount: string;
-  legacySurgeryCost: string;
 };
 
 export type SettlementMutationInput = {
@@ -135,8 +133,6 @@ function mapAppointment(raw: Record<string, unknown>): SettlementAppointment {
     appointmentType: cleanText(raw.appointmentType),
     hospital: cleanText(raw.hospital),
     consultArea: cleanText(raw.consultArea),
-    legacyDepositAmount: cleanText(raw.legacyDepositAmount),
-    legacySurgeryCost: cleanText(raw.legacySurgeryCost),
   };
 }
 

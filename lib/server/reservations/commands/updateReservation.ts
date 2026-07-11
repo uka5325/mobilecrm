@@ -10,12 +10,7 @@ import {
   lockIdForReservation,
 } from "@/lib/reservationLocks";
 import {
-  deriveGroupKeysPatch,
-  syncReservationAmountRowsInTx,
-} from "@/lib/patientAmountRows";
-import {
   ALLOWED_RESERVATION_UPDATE_FIELDS,
-  deriveAmountFlagPatch,
   splitPatch,
   writeReservationLog,
   writeReservationLogInTx,
@@ -120,14 +115,6 @@ export async function updateReservationCommand(
       }
     }
 
-    await syncReservationAmountRowsInTx(tx, adminDb, ctx, {
-      patientId: canonicalPatientId,
-      reservationDocId,
-      before: beforeData,
-      after: effectiveNew,
-      now,
-    });
-
     const beforeChanged: Record<string, unknown> = {};
     for (const key of Object.keys(safeReservationPatch)) {
       beforeChanged[key] = beforeData[key] ?? null;
@@ -135,8 +122,6 @@ export async function updateReservationCommand(
 
     tx.update(reservationRef, {
       ...safeReservationPatch,
-      ...deriveAmountFlagPatch(safeReservationPatch),
-      ...deriveGroupKeysPatch(safeReservationPatch, beforeData),
       updatedBy: ctx.name,
       updatedByUid: ctx.uid,
       updatedAt: now,

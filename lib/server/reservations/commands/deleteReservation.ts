@@ -7,7 +7,6 @@ import {
   isReservationActive,
   lockIdForReservation,
 } from "@/lib/reservationLocks";
-import { syncReservationAmountRowsInTx } from "@/lib/patientAmountRows";
 import {
   writeReservationLogInTx,
   type ReservationCommandContext,
@@ -56,14 +55,6 @@ export async function deleteReservationCommand(
         deleteLock = true;
       }
     }
-
-    await syncReservationAmountRowsInTx(tx, adminDb, ctx, {
-      patientId: String(beforeData.patientId || ""),
-      reservationDocId,
-      before: beforeData,
-      after: null,
-      now,
-    });
 
     if (deleteLock && lockRef) tx.delete(lockRef);
     tx.update(reservationRef, {

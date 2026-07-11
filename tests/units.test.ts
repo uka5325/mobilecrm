@@ -128,10 +128,9 @@ test("payload: coordinators:undefined → 키 자체가 없음", () => {
   assert.ok(!("coordinators" in p));
 });
 
-test("payload: depositAmount:'0' → 포함", () => {
-  const { reservationPatch: p } = buildReservationUpdatePayload({ ..._base, depositAmount: "0" }, _staff);
-  assert.ok("depositAmount" in p);
-  assert.equal(p.depositAmount, "0");
+test("payload: depositAmount:'0' → legacy 금액 필드는 무시", () => {
+  const { reservationPatch: p } = buildReservationUpdatePayload({ ..._base, depositAmount: "0" } as typeof _base, _staff);
+  assert.ok(!("depositAmount" in p));
 });
 
 test("payload: depositAmount:undefined → 키 자체가 없음", () => {

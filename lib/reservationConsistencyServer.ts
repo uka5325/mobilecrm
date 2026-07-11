@@ -4,8 +4,6 @@ import { docToObj, toSerializable } from "@/lib/adminUtils";
 import { makePatientSearchTokens } from "@/lib/searchTokens";
 import { identityKeyForPatient } from "@/lib/patientIdentity";
 import { createEmptyPatientSummary } from "@/lib/patientSummary";
-import { amountTypeFromUnknown } from "@/lib/reservationAmountRows";
-import { queryPatientAmountRows } from "@/lib/patientAmountRows";
 import type { requireActiveStaff } from "@/lib/apiAuth";
 
 type StaffContext = Awaited<ReturnType<typeof requireActiveStaff>>;
@@ -242,18 +240,6 @@ export async function listPatientsSummaryRaw(payload: Record<string, unknown>) {
     { success: true, patients, nextCursor, hasMore: Boolean(nextCursor) },
     { headers: { "Server-Timing": timingParts.join(", ") } }
   );
-}
-
-export async function patientAmountRows(payload: Record<string, unknown>) {
-  const patientId = String(payload.patientId || "");
-  if (!patientId) {
-    return NextResponse.json({ success: false, message: "patientId가 없습니다." }, { status: 400 });
-  }
-
-  const type = amountTypeFromUnknown(payload.type);
-  const rows = await queryPatientAmountRows(adminDb, patientId, type);
-
-  return NextResponse.json({ success: true, rows });
 }
 
 export async function patientFullHistoryExact(payload: Record<string, unknown>) {

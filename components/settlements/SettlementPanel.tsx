@@ -129,10 +129,6 @@ export function SettlementPanel({ patientId, patientName, currentReservation, on
     () => appointments.find((appointment) => appointment.id === form.reservationDocId),
     [appointments, form.reservationDocId]
   );
-  const hasLegacyAmounts = appointments.some(
-    (appointment) => appointment.legacyDepositAmount || appointment.legacySurgeryCost
-  );
-
   function resetForm() {
     setEditingId(null);
     setForm(defaultForm(patientId, currentReservation || appointments[0]));
@@ -219,9 +215,9 @@ export function SettlementPanel({ patientId, patientName, currentReservation, on
         </div>
       </div>
 
-      {hasLegacyAmounts && aggregate.count === 0 && (
-        <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-800">
-          기존 예약의 예약금·수술비 필드가 남아 있습니다. 청구액과 실제 결제액을 구분하기 위해 자동 이전하지 않았으므로, 실제 수납 내역만 정산에 등록해 주세요.
+      {aggregate.count === 0 && (
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs leading-5 text-emerald-800">
+          실제 결제·환불 내역만 정산에 등록해 주세요. 청구금액이나 견적금액은 필요한 경우 메모에 기록할 수 있습니다.
         </div>
       )}
 

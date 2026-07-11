@@ -168,8 +168,6 @@ export async function listSettlements(payload: Record<string, unknown>) {
         appointmentType: cleanText(data.appointmentType) || "상담",
         hospital: cleanText(data.hospital),
         consultArea: cleanText(data.consultArea),
-        legacyDepositAmount: cleanText(data.depositAmount),
-        legacySurgeryCost: cleanText(data.surgeryCost),
       }];
     })
     .sort((a, b) => `${b.reservationDate} ${b.reservationTime}\u0000${b.id}`.localeCompare(`${a.reservationDate} ${a.reservationTime}\u0000${a.id}`));

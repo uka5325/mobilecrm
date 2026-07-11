@@ -11,7 +11,6 @@ import {
   getPatientFullHistoryPage,
   getPatientFullHistoryCached,
   invalidatePatientFullHistoryCache,
-  invalidatePatientAmountRowsCache,
   searchPatients,
   listPatientsSummary,
   type ReservationRecord,
@@ -112,7 +111,6 @@ export default function ReservationsPage() {
       setHistoryList((prev) => prev.filter((x) => x.id !== r.id));
       if (historyPatientId) {
         invalidatePatientFullHistoryCache(historyPatientId);
-        invalidatePatientAmountRowsCache(historyPatientId);
       }
     } else {
       alert(result.message || "삭제 실패");
@@ -195,8 +193,6 @@ export default function ReservationsPage() {
         reservations: [],
         reservationCount: p.reservationCount,
         reservationCountCapped: p.reservationCountCapped,
-        depositCount: p.depositCount,
-        surgeryCostCount: p.surgeryCostCount,
         settlementCount: p.settlementCount,
         netSettlementAmount: p.netSettlementAmount,
         invoiceCount: p.invoiceCount,
@@ -365,7 +361,6 @@ export default function ReservationsPage() {
       setInlineEditId(null);
       setInlineForm(null);
       invalidatePatientFullHistoryCache(item.patientId);
-      invalidatePatientAmountRowsCache(item.patientId);
       reloadCurrent();
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -461,7 +456,7 @@ export default function ReservationsPage() {
       const header = [
         "예약일", "예약시간", "환자명", "생년월일", "성별", "연락처",
         "병원명", "예약유형", "상담부위", "담당자", "수술결정여부",
-        "예약금", "수술비용", "현재상태", "전체메모", "등록일", "최종수정일",
+        "현재상태", "전체메모", "등록일", "최종수정일",
       ];
 
       const csvRows = rows.map((r) => {
@@ -481,8 +476,6 @@ export default function ReservationsPage() {
           r.consultArea || "",
           r.coordinators.join(", "),
           r.surgeryReserved ? "예" : "아니오",
-          r.depositAmount || "",
-          r.surgeryCost || "",
           getCardStatus(r),
           allMemo,
           toDateStr(r.createdAt),
@@ -538,7 +531,6 @@ export default function ReservationsPage() {
       setPatientEditId(null);
       setPatientEditForm(null);
       invalidatePatientFullHistoryCache(group.patientId);
-      invalidatePatientAmountRowsCache(group.patientId);
       reloadCurrent();
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -568,7 +560,6 @@ export default function ReservationsPage() {
       return;
     }
     invalidatePatientFullHistoryCache(group.patientId);
-      invalidatePatientAmountRowsCache(group.patientId);
     reloadCurrent();
   }
 
@@ -598,7 +589,6 @@ export default function ReservationsPage() {
       return;
     }
     invalidatePatientFullHistoryCache(item.patientId);
-      invalidatePatientAmountRowsCache(item.patientId);
     reloadCurrent();
   }
   function handleAddReservation(group: PatientGroup) {
@@ -793,7 +783,6 @@ export default function ReservationsPage() {
           onRefresh={() => {
             if (historyPatientId) {
               invalidatePatientFullHistoryCache(historyPatientId);
-              invalidatePatientAmountRowsCache(historyPatientId);
               openPatientHistory(historyPatientId, historyPatientName, historyPage, historyCursors);
               reloadCurrent(); // 이력 편집 후 summary 배지 갱신
             }
@@ -823,7 +812,7 @@ export default function ReservationsPage() {
         onDeletePatient={handleDeletePatient}
         onOpenPatientMemo={openPatientMemoPopover}
         onOpenPatientHistory={openPatientHistory}
-        onPatientMutated={(patientId) => { invalidatePatientFullHistoryCache(patientId); invalidatePatientAmountRowsCache(patientId); reloadCurrent(); }}
+        onPatientMutated={(patientId) => { invalidatePatientFullHistoryCache(patientId); reloadCurrent(); }}
         listError={tableError}
         onRetry={reloadCurrent}
       />
@@ -865,7 +854,7 @@ export default function ReservationsPage() {
           initialPatient={addPatient}
           mode={addPatient ? "reservation" : "register"}
           onCreated={addPatient
-            ? () => { invalidatePatientFullHistoryCache(addPatient.patientId); invalidatePatientAmountRowsCache(addPatient.patientId); reloadCurrent(); }
+            ? () => { invalidatePatientFullHistoryCache(addPatient.patientId); reloadCurrent(); }
             : () => { reloadCurrent(); }
           }
         />

@@ -3,7 +3,6 @@ import { collection, onSnapshot, query, where, getDocs } from "firebase/firestor
 import type { StaffUser } from "./auth";
 import { cleanText } from "./stringUtils";
 import { parseBirthInfo } from "./reservationUtils";
-import type { AmountRow, AmountRowType } from "./reservationAmountRows";
 import type {
   ReservationApiAction,
   ReservationApiPayload,
@@ -91,8 +90,6 @@ export type ReservationRecord = {
   surgeryReserved: boolean;
   surgeryReservedAt?: string;
 
-  depositAmount: string;
-  surgeryCost: string;
   consultArea: string;
 
   doctors: string[];
@@ -129,8 +126,6 @@ export type CreateReservationParams = {
   completed?: boolean;
   doctors?: string[];
   coordinators?: string[];
-  depositAmount?: string;
-  surgeryCost?: string;
   reservationId?: string;
   patientId?: string;
 };
@@ -185,8 +180,6 @@ export function mapReservationDoc(id: string, data: Record<string, unknown>): Re
     surgeryReserved: data.surgeryReserved === true,
     surgeryReservedAt: cleanText(data.surgeryReservedAt),
 
-    depositAmount: cleanText(data.depositAmount),
-    surgeryCost: cleanText(data.surgeryCost),
     consultArea: cleanText(data.consultArea),
 
     doctors: Array.isArray(data.doctors)
@@ -519,8 +512,6 @@ export async function createReservation(
     // 상태 필드(completed/cancelled/surgeryReserved/surgeryReservedAt)와 invoice 필드는
     // 서버가 기본값을 기록한다(create 화이트리스트에서 제외 → 주입 시 400). 여기서 보내지 않는다.
 
-    depositAmount: cleanText(params.depositAmount),
-    surgeryCost: cleanText(params.surgeryCost),
     consultArea: cleanText(params.consultArea),
 
     doctors,
@@ -563,12 +554,8 @@ export type PatientRecord = {
   nationality?: string;
   // 고객관리 배지용 요약(patients 문서 저장값 — lib/patientSummary.ts). 백필 전 문서는 undefined.
   reservationCount?: number;
-  depositCount?: number;      // 묶음 그룹 수
-  surgeryCostCount?: number;  // 묶음 그룹 수
   invoiceCount?: number;
   memoCount?: number;
-  totalDepositAmount?: number;
-  totalSurgeryCost?: number;
   settlementCount?: number;
   totalSettlementPaid?: number;
   totalSettlementRefunded?: number;
@@ -594,12 +581,8 @@ function mapPatientRecord(p: Record<string, unknown>): PatientRecord {
     phone: cleanText(p.phone),
     nationality: cleanText(p.nationality),
     reservationCount: num(p.reservationCount),
-    depositCount: num(p.depositCount),
-    surgeryCostCount: num(p.surgeryCostCount),
     invoiceCount: num(p.invoiceCount),
     memoCount: num(p.memoCount),
-    totalDepositAmount: num(p.totalDepositAmount),
-    totalSurgeryCost: num(p.totalSurgeryCost),
     settlementCount: num(p.settlementCount),
     totalSettlementPaid: num(p.totalSettlementPaid),
     totalSettlementRefunded: num(p.totalSettlementRefunded),
@@ -643,18 +626,6 @@ export async function listPatientsSummary(
   };
 }
 
-const _patientAmountRowsCache = new Map<string, { at: number; rows: AmountRow[] }>();
-const PATIENT_AMOUNT_ROWS_TTL = 3 * 60 * 1000;
-
-function amountRowsCacheKey(patientId: string, type: AmountRowType) {
-  return `${patientId}:${type}`;
-}
-
-export function invalidatePatientAmountRowsCache(patientId: string) {
-  _patientAmountRowsCache.delete(amountRowsCacheKey(patientId, "deposit"));
-  _patientAmountRowsCache.delete(amountRowsCacheKey(patientId, "surgery"));
-}
-
 // 예약 mutation 뒤 두 화면이 동일한 원본을 다시 읽도록 관련 세션 캐시를 한 번에 비운다.
 export function invalidateReservationDerivedCaches(patientId: string) {
   const id = cleanText(patientId);
@@ -662,63 +633,6 @@ export function invalidateReservationDerivedCaches(patientId: string) {
   invalidatePatientsCache();
   invalidatePatientsSummaryCache();
   invalidatePatientFullHistoryCache(id);
-  invalidatePatientAmountRowsCache(id);
-}
-
-function mapAmountRow(raw: Record<string, unknown>): AmountRow {
-  const id = cleanText(raw.id);
-  return {
-    id,
-    reservationId: cleanText(raw.reservationId) || id,
-    patientId: cleanText(raw.patientId),
-    date: cleanText(raw.date),
-    hospital: cleanText(raw.hospital),
-    consultArea: cleanText(raw.consultArea),
-    doctors: Array.isArray(raw.doctors) ? (raw.doctors as unknown[]).map((d) => cleanText(d)).filter(Boolean) : [],
-    amount: cleanText(raw.amount),
-  };
-}
-
-export async function getPatientAmountRowsCached(
-  patientId: string,
-  type: AmountRowType,
-  expectedCount = 0
-): Promise<{ rows: AmountRow[]; source: string }> {
-  const key = amountRowsCacheKey(patientId, type);
-  const cached = _patientAmountRowsCache.get(key);
-  if (cached && Date.now() - cached.at < PATIENT_AMOUNT_ROWS_TTL) {
-    return { rows: cached.rows, source: "cache" };
-  }
-
-  const result = await callReservationsApi("patient_amount_rows", { patientId, type, expectedCount });
-  if (!result.success) throw new Error(String(result.message || "금액 내역 조회 실패"));
-
-  const rows = ((result.rows as Record<string, unknown>[] | undefined) || []).map(mapAmountRow);
-  _patientAmountRowsCache.set(key, { at: Date.now(), rows });
-  return { rows, source: String(result.source || "flag") };
-}
-
-// 예약금/수술비 최소 수정 — 금액 팝오버 저장용. 화이트리스트 필드만 patch하며
-// 신원/감사로그/요약 재계산은 서버가 처리한다.
-export async function updateReservationAmount(
-  reservationDocId: string,
-  reservationId: string,
-  patientId: string,
-  field: "depositAmount" | "surgeryCost",
-  value: string
-): Promise<{ success: boolean; message?: string }> {
-  const apiResult = await callReservationsApi("update", {
-    reservationDocId,
-    reservationId,
-    patientId,
-    reservationPatch: { [field]: cleanText(value) },
-  });
-  if (!apiResult.success) {
-    return { success: false, message: cleanText(apiResult.message) || "금액 저장에 실패했습니다." };
-  }
-  const canonicalPatientId = cleanText(apiResult.patientId) || cleanText(patientId);
-  invalidateReservationDerivedCaches(canonicalPatientId);
-  return { success: true };
 }
 
 export async function createPatientOnly(
@@ -856,8 +770,6 @@ export type UpdateReservationParams = {
   cancelled?: boolean;
   doctors?: string[];
   coordinators?: string[];
-  depositAmount?: string;
-  surgeryCost?: string;
 };
 
 // 예약 수정 payload(부분 patch) 순수 빌더 — firebase 미의존이라 단위 테스트 가능.
@@ -888,8 +800,6 @@ export function buildReservationUpdatePayload(
   if (params.appointmentType !== undefined) reservationPatch.appointmentType = params.appointmentType;
   if (params.completed !== undefined) reservationPatch.completed = params.completed === true;
   if (params.cancelled !== undefined) reservationPatch.cancelled = params.cancelled === true;
-  if (params.depositAmount !== undefined) reservationPatch.depositAmount = cleanText(params.depositAmount);
-  if (params.surgeryCost !== undefined) reservationPatch.surgeryCost = cleanText(params.surgeryCost);
   if (params.coordinators !== undefined) {
     reservationPatch.coordinators = Array.isArray(params.coordinators)
       ? params.coordinators.map(cleanText).filter(Boolean)

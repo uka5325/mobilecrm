@@ -5,7 +5,6 @@ import {
   summaryRetryDelayMs,
   type SummaryDomain,
 } from "@/lib/patientSummaryPolicy";
-import { PATIENT_AMOUNT_ROWS } from "@/lib/patientAmountRows";
 
 // 고객관리 첫 화면을 patients 문서만으로 그리기 위한 요약(summary) 재계산 헬퍼.
 // 전략: recompute-on-write — 쓰기 경로에서 "바뀐 도메인 슬라이스"만 짧게 재조회해
@@ -19,10 +18,6 @@ const DEFAULT_RECONCILE_LEASE_MS = 5 * 60 * 1000;
 export function createEmptyPatientSummary(): Record<string, unknown> {
   return {
     reservationCount: 0,
-    depositCount: 0,
-    surgeryCostCount: 0,
-    totalDepositAmount: 0,
-    totalSurgeryCost: 0,
     lastReservationDate: "",
     lastReservationTime: "",
     lastReservationAt: "",
@@ -83,9 +78,7 @@ async function mergeIntoPatients(patientId: string, patch: Record<string, unknow
   }
 }
 
-// 예약 파생 요약: 건수/최근예약/예약금·수술비 카운트 및 합계.
-// 카운트(depositCount/surgeryCostCount)는 patientAmountRows count() 집계로,
-// 나머지 총합/최근예약은 reservations 스캔으로 계산한다.
+// 예약 파생 요약: 건수/최근예약.
 export async function recomputeReservationSummary(patientId: string): Promise<void> {
   if (!patientId) return;
   // CAP+1을 읽어 정확히 300건인 경우와 301건 이상인 경우를 구분한다.
@@ -99,8 +92,6 @@ export async function recomputeReservationSummary(patientId: string): Promise<vo
   const docs = snap.docs.slice(0, RESERVATION_CAP);
 
   let reservationCount = 0;
-  let totalDepositAmount = 0;
-  let totalSurgeryCost = 0;
   let lastReservationDate = "";
   let lastReservationTime = "";
   let lastReservationDocId = "";
@@ -109,12 +100,6 @@ export async function recomputeReservationSummary(patientId: string): Promise<vo
   for (const d of docs) {
     const r = d.data() as Record<string, unknown>;
     reservationCount += 1;
-    if (String(r.depositAmount ?? "").trim() !== "") {
-      totalDepositAmount += parseAmount(r.depositAmount);
-    }
-    if (String(r.surgeryCost ?? "").trim() !== "") {
-      totalSurgeryCost += parseAmount(r.surgeryCost);
-    }
     const date = String(r.reservationDate || "");
     const time = String(r.reservationTime || "");
     const composite = `${date} ${time}\u0000${d.id}`;
@@ -126,25 +111,8 @@ export async function recomputeReservationSummary(patientId: string): Promise<vo
     }
   }
 
-  const [depositCountSnap, surgeryCountSnap] = await Promise.all([
-    adminDb.collection(PATIENT_AMOUNT_ROWS)
-      .where("patientId", "==", patientId)
-      .where("type", "==", "deposit")
-      .count()
-      .get(),
-    adminDb.collection(PATIENT_AMOUNT_ROWS)
-      .where("patientId", "==", patientId)
-      .where("type", "==", "surgery")
-      .count()
-      .get(),
-  ]);
-
   await mergeIntoPatients(patientId, {
     reservationCount,
-    depositCount: depositCountSnap.data().count,
-    surgeryCostCount: surgeryCountSnap.data().count,
-    totalDepositAmount,
-    totalSurgeryCost,
     lastReservationDate,
     lastReservationTime,
     lastReservationAt: lastReservationDate ? `${lastReservationDate} ${lastReservationTime}`.trim() : "",
@@ -211,26 +179,6 @@ export async function updateReservationSummaryIncrementally(
   const beforeActive = isActiveReservation(mutation.before);
   const afterActive = isActiveReservation(mutation.after);
   const countDelta = Number(afterActive) - Number(beforeActive);
-  const beforeRecord = beforeActive ? mutation.before : null;
-  const afterRecord = afterActive ? mutation.after : null;
-  const depositDelta = parseAmount(afterRecord?.depositAmount)
-    - parseAmount(beforeRecord?.depositAmount);
-  const surgeryDelta = parseAmount(afterRecord?.surgeryCost)
-    - parseAmount(beforeRecord?.surgeryCost);
-
-  const [depositCountSnap, surgeryCountSnap] = await Promise.all([
-    adminDb.collection(PATIENT_AMOUNT_ROWS)
-      .where("patientId", "==", patientId)
-      .where("type", "==", "deposit")
-      .count()
-      .get(),
-    adminDb.collection(PATIENT_AMOUNT_ROWS)
-      .where("patientId", "==", patientId)
-      .where("type", "==", "surgery")
-      .count()
-      .get(),
-  ]);
-
   const patientQuery = adminDb.collection("patients").where("patientId", "==", patientId);
   const outcome = await adminDb.runTransaction<"ok" | "missing" | "bootstrap">(async (tx) => {
     const patientSnap = await tx.get(patientQuery);
@@ -238,9 +186,7 @@ export async function updateReservationSummaryIncrementally(
 
     const reference = patientSnap.docs[0].data() as Record<string, unknown>;
     if (
-      typeof reference.reservationCount !== "number" ||
-      typeof reference.totalDepositAmount !== "number" ||
-      typeof reference.totalSurgeryCost !== "number"
+      typeof reference.reservationCount !== "number"
     ) {
       return "bootstrap";
     }
@@ -298,10 +244,6 @@ export async function updateReservationSummaryIncrementally(
       const patch: Record<string, unknown> = {
         reservationCount: nextCount,
         reservationCountCapped: nextCapped,
-        depositCount: depositCountSnap.data().count,
-        surgeryCostCount: surgeryCountSnap.data().count,
-        totalDepositAmount: Math.max(0, Number(data.totalDepositAmount || 0) + depositDelta),
-        totalSurgeryCost: Math.max(0, Number(data.totalSurgeryCost || 0) + surgeryDelta),
         summaryUpdatedAt: FieldValue.serverTimestamp(),
       };
 
