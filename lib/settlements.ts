@@ -59,8 +59,23 @@ type SettlementListResult = {
   message?: string;
   settlements?: Record<string, unknown>[];
   appointments?: Record<string, unknown>[];
+  appointmentsLoaded?: boolean;
   aggregate?: SettlementAggregate;
 };
+
+type PatientSettlementsCacheEntry = {
+  at: number;
+  data: {
+    settlements: SettlementRecord[];
+    appointments: SettlementAppointment[];
+    appointmentsLoaded: boolean;
+    aggregate: SettlementAggregate;
+  };
+};
+
+const SETTLEMENTS_BY_PATIENT_TTL = 3 * 60 * 1000;
+const _settlementsByPatientCache = new Map<string, PatientSettlementsCacheEntry>();
+const _settlementsByPatientInflight = new Map<string, Promise<PatientSettlementsCacheEntry["data"]>>();
 
 async function callSettlementsApi(action: string, payload: Record<string, unknown>) {
   const user = auth.currentUser;
@@ -136,40 +151,91 @@ function mapAppointment(raw: Record<string, unknown>): SettlementAppointment {
   };
 }
 
-export async function listPatientSettlements(patientId: string): Promise<{
+const EMPTY_AGGREGATE: SettlementAggregate = {
+  count: 0,
+  paymentCount: 0,
+  refundCount: 0,
+  totalPaid: 0,
+  totalRefunded: 0,
+  netAmount: 0,
+  methodTotals: { card: 0, cash: 0, bank_transfer: 0, foreign_card: 0, other: 0 },
+  cardAmount: 0,
+  cashAmount: 0,
+  commissionBase: 0,
+  lastPaidAt: "",
+};
+
+export function getCachedPatientSettlements(patientId: string) {
+  const cached = _settlementsByPatientCache.get(patientId);
+  if (!cached || Date.now() - cached.at >= SETTLEMENTS_BY_PATIENT_TTL) return undefined;
+  return cached.data;
+}
+
+export function invalidatePatientSettlementsCache(patientId: string) {
+  _settlementsByPatientCache.delete(patientId);
+  for (const key of _settlementsByPatientInflight.keys()) {
+    if (key.startsWith(`${patientId}:`)) _settlementsByPatientInflight.delete(key);
+  }
+}
+
+export async function listPatientSettlements(
+  patientId: string,
+  options: { includeAppointments?: boolean } = {}
+): Promise<{
   settlements: SettlementRecord[];
   appointments: SettlementAppointment[];
+  appointmentsLoaded: boolean;
   aggregate: SettlementAggregate;
 }> {
-  const result = await callSettlementsApi("list", { patientId });
+  const includeAppointments = options.includeAppointments !== false;
+  const cached = getCachedPatientSettlements(patientId);
+  if (cached && (!includeAppointments || cached.appointmentsLoaded)) return cached;
+
+  const inflightKey = `${patientId}:${includeAppointments ? "with-appointments" : "settlements-only"}`;
+  const inflight = _settlementsByPatientInflight.get(inflightKey);
+  if (inflight) return inflight;
+
+  const promise = fetchPatientSettlements(patientId, includeAppointments);
+  _settlementsByPatientInflight.set(inflightKey, promise);
+  try {
+    const data = await promise;
+    _settlementsByPatientCache.set(patientId, { at: Date.now(), data });
+    return data;
+  } finally {
+    _settlementsByPatientInflight.delete(inflightKey);
+  }
+}
+
+async function fetchPatientSettlements(patientId: string, includeAppointments: boolean): Promise<{
+  settlements: SettlementRecord[];
+  appointments: SettlementAppointment[];
+  appointmentsLoaded: boolean;
+  aggregate: SettlementAggregate;
+}> {
+  const result = await callSettlementsApi("list", { patientId, includeAppointments });
   if (!result.success) throw new Error(result.message || "정산 내역을 불러오지 못했습니다.");
   return {
     settlements: (result.settlements || []).map(mapSettlement),
     appointments: (result.appointments || []).map(mapAppointment),
-    aggregate: result.aggregate || {
-      count: 0,
-      paymentCount: 0,
-      refundCount: 0,
-      totalPaid: 0,
-      totalRefunded: 0,
-      netAmount: 0,
-      methodTotals: { card: 0, cash: 0, bank_transfer: 0, foreign_card: 0, other: 0 },
-      cardAmount: 0,
-      cashAmount: 0,
-      commissionBase: 0,
-      lastPaidAt: "",
-    },
+    appointmentsLoaded: result.appointmentsLoaded === true,
+    aggregate: result.aggregate || EMPTY_AGGREGATE,
   };
 }
 
 export async function createSettlement(input: SettlementMutationInput) {
-  return callSettlementsApi("create", input as unknown as Record<string, unknown>);
+  const result = await callSettlementsApi("create", input as unknown as Record<string, unknown>);
+  if (result.success) invalidatePatientSettlementsCache(input.patientId);
+  return result;
 }
 
 export async function updateSettlement(settlementId: string, input: SettlementMutationInput) {
-  return callSettlementsApi("update", { settlementId, ...input });
+  const result = await callSettlementsApi("update", { settlementId, ...input });
+  if (result.success) invalidatePatientSettlementsCache(input.patientId);
+  return result;
 }
 
 export async function voidSettlement(settlementId: string, reason: string) {
-  return callSettlementsApi("void", { settlementId, reason });
+  const result = await callSettlementsApi("void", { settlementId, reason });
+  if (result.success) _settlementsByPatientCache.clear();
+  return result;
 }
