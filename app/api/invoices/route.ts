@@ -5,6 +5,8 @@ import { docToObj, cleanText } from "@/lib/adminUtils";
 import { parseBirthInfo } from "@/lib/invoiceUtils";
 import { recomputeInvoiceSummary, safeRecompute } from "@/lib/patientSummary";
 import { aggregateSettlementRows } from "@/lib/settlementMath";
+import { createInvoiceAccess } from "./invoiceAccess";
+import { handleInvoiceReadAction } from "./invoiceReadActions";
 
 // 데이터 변경 action — 토큰 폐기 검사 적용
 const WRITE_ACTIONS = new Set(["create", "update", "delete"]);
@@ -65,92 +67,11 @@ export async function POST(req: NextRequest) {
     const callerRole = ctx.role;
     const callerName = ctx.name;
     const callerUid = ctx.uid;
+    const access = createInvoiceAccess(ctx);
+    const { isAdmin, canAccess: isCoordinatorOf } = access;
 
-    // admin은 모든 접근 허용. coordinator 이하는 본인 담당 인보이스만 접근.
-    const isAdmin = callerRole === "admin";
-
-    // 권한 판정: coordinatorUids[](UID) 우선 — 동명이인/개명에 안전.
-    // 미배포 데이터를 위해 coordinators[](displayName) 폴백 유지(하위호환).
-    // 백필: scripts/backfill-coordinator-uids.ts 참고.
-    function isCoordinatorOf(inv: Record<string, unknown>): boolean {
-      if (isAdmin) return true;
-      const uids = Array.isArray(inv.coordinatorUids) ? inv.coordinatorUids as string[] : [];
-      if (uids.length) return uids.includes(callerUid);
-      const coords = Array.isArray(inv.coordinators) ? inv.coordinators as string[] : [];
-      return callerName ? coords.includes(callerName) : false;
-    }
-
-    // ── GET_BY_PATIENT ───────────────────────────────────────────────────────
-    if (action === "get_by_patient") {
-      const { patientId } = payload as { patientId: string };
-      const snap = await adminDb.collection("invoices")
-        .where("patientId", "==", patientId)
-        .orderBy("createdAt", "desc")
-        .limit(50)
-        .get();
-      const invoices = snap.docs.map(docToObj)
-        .filter((r) => !r.isDeleted && isCoordinatorOf(r));
-      return NextResponse.json({ success: true, invoices });
-    }
-
-    // ── COUNTS_BY_PATIENTS ───────────────────────────────────────────────────
-    // 고객관리 카드의 "인보이스 개수" 배지 — 환자마다 전체 문서를 읽어(get_by_patient)
-    // 길이만 쓰던 걸, 여러 환자를 한 번에 처리한다.
-    // admin: 환자별 count() 집계(문서 내용을 안 읽고 개수만 셈 → 인보이스 개수와 무관하게 항상 1 읽기).
-    // 그 외 역할: coordinatorUids/coordinators 필터가 문서 단위라 count()로 못 구하므로,
-    //   patientId in [...] 배치 조회 1번 + 메모리 필터로 집계(왕복 횟수만 줄임).
-    if (action === "counts_by_patients") {
-      const { patientIds } = (payload || {}) as { patientIds?: string[] };
-      const ids = Array.isArray(patientIds) ? [...new Set(patientIds.filter(Boolean))] : [];
-      if (!ids.length) return NextResponse.json({ success: true, counts: {} });
-
-      const counts: Record<string, number> = {};
-
-      if (isAdmin) {
-        await Promise.all(
-          ids.map(async (pid) => {
-            const agg = await adminDb.collection("invoices")
-              .where("patientId", "==", pid)
-              .where("isDeleted", "==", false)
-              .count()
-              .get();
-            counts[pid] = agg.data().count;
-          })
-        );
-      } else {
-        for (const id of ids) counts[id] = 0;
-        const CHUNK = 30; // Firestore in 최대 30개
-        for (let i = 0; i < ids.length; i += CHUNK) {
-          const chunk = ids.slice(i, i + CHUNK);
-          const snap = await adminDb.collection("invoices")
-            .where("patientId", "in", chunk)
-            .where("isDeleted", "==", false)
-            .get();
-          for (const d of snap.docs) {
-            const obj = docToObj(d);
-            if (!isCoordinatorOf(obj)) continue;
-            const pid = String(obj.patientId || "");
-            if (pid in counts) counts[pid] += 1;
-          }
-        }
-      }
-
-      return NextResponse.json({ success: true, counts });
-    }
-
-    // ── GET_BY_RESERVATION ───────────────────────────────────────────────────
-    if (action === "get_by_reservation") {
-      const { reservationDocId } = payload as { reservationDocId: string };
-      const snap = await adminDb.collection("invoices")
-        .where("reservationDocId", "==", reservationDocId)
-        .get();
-      for (const d of snap.docs) {
-        const obj = docToObj(d);
-        if (!obj.isDeleted && isCoordinatorOf(obj)) return NextResponse.json({ success: true, invoice: obj });
-        if (!obj.isDeleted && !isAdmin) return NextResponse.json({ success: true, invoice: null });
-      }
-      return NextResponse.json({ success: true, invoice: null });
-    }
+    const readResponse = await handleInvoiceReadAction(action, payload || {}, access);
+    if (readResponse) return readResponse;
 
     // ── CREATE ───────────────────────────────────────────────────────────────
     if (action === "create") {
@@ -422,85 +343,6 @@ export async function POST(req: NextRequest) {
       );
 
       return NextResponse.json({ success: true });
-    }
-
-    // ── LIST ─────────────────────────────────────────────────────────────────
-    if (action === "list") {
-      const { startDate, endDate, status, patientName, commissionStaffUid } =
-        (payload || {}) as Record<string, string>;
-
-      // 권한 스코프를 Firestore 쿼리로 내림 → 빈 페이지/누락/합계 오류 제거.
-      //  - admin           : 전체(isDeleted=false) 최신순.
-      //  - coordinator 이하 : 본인이 담당인 인보이스만. UID(coordinatorUids) 우선,
-      //                       이름(coordinators) 병합으로 백필 전 데이터까지 포함.
-      // 합계/필터를 정확히 계산하기 위해 페이지 단위가 아닌 "상한까지 전체"를 반환한다.
-      // 인덱스: invoices (isDeleted, createdAt) / (coordinatorUids⊃, isDeleted, createdAt)
-      //        / (coordinators⊃, isDeleted, createdAt) — firestore.indexes.json 참고.
-      const HARD_CAP = 1000;
-      const base = adminDb.collection("invoices").where("isDeleted", "==", false);
-
-      // 날짜(기간)가 오면 surgeryDate 범위를 Firestore 쿼리로 내려 "해당 기간 문서만" 읽는다(읽기 절감).
-      // 미전달 시 기존 createdAt 최신순 경로로 폴백. surgeryDate는 "YYYY-MM-DD" 문자열이라 사전식 범위가 날짜순과 일치.
-      // 인덱스: (isDeleted, surgeryDate) / (coordinatorUids⊃, isDeleted, surgeryDate) / (coordinators⊃, isDeleted, surgeryDate)
-      //         + 폴백용 createdAt 인덱스 — firestore.indexes.json 참고.
-      // 주의: surgeryDate가 빈 인보이스는 범위 조회에서 제외됨(생성 시 reservationDate로 채워지므로 정상 케이스엔 영향 없음).
-      const hasRange = !!(startDate || endDate);
-      const sd = startDate || "0000-00-00";
-      const ed = endDate || "9999-99-99";
-      const applyScope = (q: FirebaseFirestore.Query): FirebaseFirestore.Query =>
-        hasRange
-          ? q.where("surgeryDate", ">=", sd).where("surgeryDate", "<=", ed).orderBy("surgeryDate", "desc").limit(HARD_CAP)
-          : q.orderBy("createdAt", "desc").limit(HARD_CAP);
-
-      const docsMap = new Map<string, FirebaseFirestore.DocumentData>();
-      let rawCount = 0;
-      const collect = (snap: FirebaseFirestore.QuerySnapshot) => {
-        rawCount += snap.docs.length;
-        for (const d of snap.docs) if (!docsMap.has(d.id)) docsMap.set(d.id, docToObj(d));
-      };
-
-      if (isAdmin) {
-        collect(await applyScope(base).get());
-      } else {
-        const queries: Promise<FirebaseFirestore.QuerySnapshot>[] = [
-          applyScope(base.where("coordinatorUids", "array-contains", callerUid)).get(),
-        ];
-        if (callerName) {
-          queries.push(applyScope(base.where("coordinators", "array-contains", callerName)).get());
-        }
-        (await Promise.all(queries)).forEach(collect);
-      }
-
-      // 단일 쿼리가 상한에 닿으면 일부 누락 가능 → UI 경고용 플래그.
-      const capped = rawCount >= HARD_CAP;
-
-      // 병합 후 재정렬: 범위 조회면 surgeryDate desc, 폴백이면 createdAt desc.
-      // (날짜 필터는 쿼리로 내렸으므로 메모리 후필터 불필요.)
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      let records = Array.from(docsMap.values()).sort((a: any, b: any) =>
-        hasRange
-          ? String(b.surgeryDate || "").localeCompare(String(a.surgeryDate || ""))
-          : Number(b.createdAt || 0) - Number(a.createdAt || 0)
-      );
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      if (status) records = records.filter((r: any) => r.status === status);
-      if (patientName) {
-        const search = patientName.toLowerCase();
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        records = records.filter((r: any) => cleanText(r.patientName).toLowerCase().includes(search));
-      }
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      if (commissionStaffUid) records = records.filter((r: any) => r.commissionStaffUid === commissionStaffUid);
-
-      // nextCursor/hasMore는 하위호환을 위해 유지(항상 전체 반환이므로 null/false).
-      return NextResponse.json({
-        success: true,
-        invoices: records,
-        total: records.length,
-        capped,
-        nextCursor: null,
-        hasMore: false,
-      });
     }
 
     return NextResponse.json({ success: false, message: "알 수 없는 action" }, { status: 400 });
