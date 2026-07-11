@@ -18,7 +18,9 @@ import {
   type ReservationNote,
 } from "@/lib/reservationNotes";
 import { todayString } from "@/lib/dateUtils";
-import { getBirthGenderText, splitComma } from "@/lib/timelineUtils";
+import { splitComma } from "@/lib/timelineUtils";
+import { DetailDrawerHeader } from "@/components/timeline/DetailDrawerHeader";
+import { DetailDrawerTabs, type DetailTab } from "@/components/timeline/DetailDrawerTabs";
 import { InfoTab } from "@/components/timeline/tabs/InfoTab";
 import { FilesTab } from "@/components/timeline/tabs/FilesTab";
 import { NotesTab } from "@/components/timeline/tabs/NotesTab";
@@ -26,8 +28,6 @@ import { LogsTab } from "@/components/timeline/tabs/LogsTab";
 import { InvoiceTab } from "@/components/timeline/tabs/InvoiceTab";
 import { SettlementPanel } from "@/components/settlements/SettlementPanel";
 import { CreateDrawer } from "@/components/reservations/CreateDrawer";
-
-type DetailTab = "info" | "settlement" | "files" | "notes" | "logs" | "invoice";
 
 type DetailForm = {
   name: string;
@@ -399,103 +399,23 @@ export function DetailDrawer({ open, reservation, currentUser, onClose, onRefres
 
   if (!open || !selectedReservation) return null;
 
-  const birthGenderText = getBirthGenderText(selectedReservation);
-
   return (
     <>
       <div className="fixed inset-0 z-[998] bg-black/35" onClick={onClose} />
 
       <div className="fixed right-0 top-0 z-[999] flex h-screen w-[420px] max-w-[calc(100vw-12px)] flex-col bg-white shadow-[-8px_0_30px_rgba(0,0,0,0.12)]">
-        <div className="shrink-0 border-b border-[#edf0f3] px-5 py-4">
-          <div className="mb-3 flex items-start justify-between">
-            <div className="min-w-0 flex-1">
-              <div className="text-xl font-bold">{selectedReservation.name}</div>
-              {birthGenderText && (
-                <div className="mt-0.5 text-sm text-gray-500">{birthGenderText}</div>
-              )}
-              {(selectedReservation.hospital || selectedReservation.reservationTime || (selectedReservation.doctors && selectedReservation.doctors.length > 0)) && (
-                <div className="mt-0.5 text-sm text-gray-500">
-                  {[
-                    selectedReservation.hospital,
-                    selectedReservation.doctors?.length ? selectedReservation.doctors.join(", ") : null,
-                    selectedReservation.reservationTime,
-                  ].filter(Boolean).join(" · ")}
-                </div>
-              )}
-              {selectedReservation.consultArea && (
-                <div className="mt-0.5 text-xs text-gray-400">
-                  {selectedReservation.appointmentType === "상담" ? "상담부위" : "수술항목"}: {selectedReservation.consultArea}
-                </div>
-              )}
-            </div>
-            <button
-              onClick={onClose}
-              className="ml-3 shrink-0 text-2xl leading-none text-gray-400 transition hover:scale-110 hover:text-gray-700 active:scale-95"
-            >
-              ×
-            </button>
-          </div>
+        <DetailDrawerHeader
+          reservation={selectedReservation}
+          completed={detailForm.completed}
+          cancelled={detailForm.cancelled}
+          onClose={onClose}
+          onCompletedToggle={handleCompletedToggle}
+          onCancelledToggle={handleCancelledToggle}
+          onSurgeryToggle={handleSurgeryToggle}
+          onAddReservation={() => setAddReservationOpen(true)}
+        />
 
-          <div className="flex items-center gap-2 flex-wrap">
-            <button
-              onClick={handleCompletedToggle}
-              className={`rounded-lg border px-3 py-1.5 text-xs font-semibold transition hover:-translate-y-0.5 hover:shadow-md active:scale-95 ${
-                detailForm.completed
-                  ? "border-gray-500 bg-gray-500 text-white"
-                  : "border-gray-300 bg-white text-gray-600"
-              }`}
-            >
-              완료 {detailForm.completed ? "✓" : "—"}
-            </button>
-            <button
-              onClick={handleCancelledToggle}
-              className={`rounded-lg border px-3 py-1.5 text-xs font-semibold transition hover:-translate-y-0.5 hover:shadow-md active:scale-95 ${
-                detailForm.cancelled
-                  ? "border-yellow-400 bg-yellow-100 text-yellow-800"
-                  : "border-gray-300 bg-white text-gray-600"
-              }`}
-            >
-              취소 {detailForm.cancelled ? "✓" : "—"}
-            </button>
-            {selectedReservation.appointmentType === "상담" && (
-              <button
-                onClick={handleSurgeryToggle}
-                className={`rounded-lg border px-3 py-1.5 text-xs font-semibold transition hover:-translate-y-0.5 hover:shadow-md active:scale-95 ${
-                  selectedReservation.surgeryReserved
-                    ? "border-purple-600 bg-purple-600 text-white"
-                    : "border-purple-400 bg-white text-purple-700"
-                }`}
-              >
-                수술예약 {selectedReservation.surgeryReserved ? "✓" : "—"}
-              </button>
-            )}
-            <button
-              onClick={() => setAddReservationOpen(true)}
-              className="rounded-lg border border-emerald-500 bg-white px-3 py-1.5 text-xs font-semibold text-emerald-700 transition hover:-translate-y-0.5 hover:shadow-md active:scale-95"
-            >
-              + 추가 예약
-            </button>
-          </div>
-        </div>
-
-        <div className="flex shrink-0 border-b border-[#edf0f3]">
-          {(["info", "settlement", "files", "notes", "logs", "invoice"] as const).map((key) => {
-            const label = { info: "기본정보", settlement: "정산", files: "파일", notes: "메모", logs: "로그", invoice: "인보이스" }[key];
-            return (
-              <button
-                key={key}
-                onClick={() => setActiveTab(key)}
-                className={`flex-1 border-b-2 py-2 text-center text-xs transition hover:bg-gray-50 active:scale-[0.98] ${
-                  activeTab === key
-                    ? "border-[#1d9e75] font-semibold text-[#1d9e75]"
-                    : "border-transparent text-gray-500"
-                }`}
-              >
-                {label}
-              </button>
-            );
-          })}
-        </div>
+        <DetailDrawerTabs activeTab={activeTab} onTabChange={setActiveTab} />
 
         <div className="flex-1 overflow-y-auto p-5">
           {activeTab === "info" && (
