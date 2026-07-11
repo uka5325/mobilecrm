@@ -43,6 +43,9 @@ ui-debug.log*
 # migration reports
 /invoice-link-report-*.json
 
+# reservation legacy-amount export dumps (환자 정보 포함 — 커밋 금지)
+/exports/
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts
