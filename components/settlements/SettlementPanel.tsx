@@ -4,6 +4,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   createSettlement,
+  getCachedPatientSettlements,
   listPatientSettlements,
   updateSettlement,
   voidSettlement,
@@ -89,28 +90,32 @@ function defaultForm(patientId: string, current?: CurrentReservation): FormState
 }
 
 export function SettlementPanel({ patientId, patientName, currentReservation, onMutated }: Props) {
-  const [settlements, setSettlements] = useState<SettlementRecord[]>([]);
-  const [appointments, setAppointments] = useState<SettlementAppointment[]>([]);
-  const [aggregate, setAggregate] = useState<SettlementAggregate>(EMPTY_AGGREGATE);
+  const cached = getCachedPatientSettlements(patientId);
+  const [settlements, setSettlements] = useState<SettlementRecord[]>(cached?.settlements ?? []);
+  const [appointments, setAppointments] = useState<SettlementAppointment[]>(cached?.appointments ?? []);
+  const [appointmentsLoaded, setAppointmentsLoaded] = useState(cached?.appointmentsLoaded ?? false);
+  const [appointmentsLoading, setAppointmentsLoading] = useState(false);
+  const [aggregate, setAggregate] = useState<SettlementAggregate>(cached?.aggregate ?? EMPTY_AGGREGATE);
   const [form, setForm] = useState<FormState>(() => defaultForm(patientId, currentReservation));
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!cached);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
 
   const load = useCallback(async () => {
-    setLoading(true);
+    if (!getCachedPatientSettlements(patientId)) setLoading(true);
     setError("");
     try {
-      const result = await listPatientSettlements(patientId);
+      const result = await listPatientSettlements(patientId, { includeAppointments: false });
       setSettlements(result.settlements);
       setAppointments(result.appointments);
+      setAppointmentsLoaded(result.appointmentsLoaded);
       setAggregate(result.aggregate);
       setForm((prev) => ({
         ...prev,
         patientId,
-        reservationDocId: prev.reservationDocId || currentReservation?.id || result.appointments[0]?.id || "",
+        reservationDocId: prev.reservationDocId || currentReservation?.id || "",
       }));
     } catch (e) {
       setError(e instanceof Error ? e.message : "정산 내역을 불러오지 못했습니다.");
@@ -123,12 +128,38 @@ export function SettlementPanel({ patientId, patientName, currentReservation, on
     setForm(defaultForm(patientId, currentReservation));
     setEditingId(null);
     void load();
-  }, [patientId, currentReservation?.id, load]);
+  }, [patientId, currentReservation, load]);
 
   const selectedAppointment = useMemo(
-    () => appointments.find((appointment) => appointment.id === form.reservationDocId),
-    [appointments, form.reservationDocId]
+    () => {
+      const fromList = appointments.find((appointment) => appointment.id === form.reservationDocId);
+      if (fromList) return fromList;
+      if (currentReservation?.id === form.reservationDocId) return currentReservation;
+      return undefined;
+    },
+    [appointments, currentReservation, form.reservationDocId]
   );
+
+  async function ensureAppointmentsLoaded() {
+    if (appointmentsLoaded || appointmentsLoading) return;
+    setAppointmentsLoading(true);
+    setError("");
+    try {
+      const result = await listPatientSettlements(patientId, { includeAppointments: true });
+      setSettlements(result.settlements);
+      setAppointments(result.appointments);
+      setAppointmentsLoaded(result.appointmentsLoaded);
+      setAggregate(result.aggregate);
+      setForm((prev) => ({
+        ...prev,
+        reservationDocId: prev.reservationDocId || currentReservation?.id || result.appointments[0]?.id || "",
+      }));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "연결 일정을 불러오지 못했습니다.");
+    } finally {
+      setAppointmentsLoading(false);
+    }
+  }
   function resetForm() {
     setEditingId(null);
     setForm(defaultForm(patientId, currentReservation || appointments[0]));
@@ -167,7 +198,11 @@ export function SettlementPanel({ patientId, patientName, currentReservation, on
       if (!result.success) { setError(result.message || "정산 저장에 실패했습니다."); return; }
       setMessage(editingId ? "정산 내역을 수정했습니다." : "실제 결제 내역을 등록했습니다.");
       resetForm();
-      await load();
+      const refreshed = await listPatientSettlements(patientId);
+      setSettlements(refreshed.settlements);
+      setAppointments(refreshed.appointments);
+      setAppointmentsLoaded(refreshed.appointmentsLoaded);
+      setAggregate(refreshed.aggregate);
       onMutated?.();
     } finally {
       setSaving(false);
@@ -184,7 +219,11 @@ export function SettlementPanel({ patientId, patientName, currentReservation, on
       if (!result.success) { setError(result.message || "무효 처리에 실패했습니다."); return; }
       setMessage("정산 기록을 무효 처리했습니다.");
       if (editingId === row.id) resetForm();
-      await load();
+      const refreshed = await listPatientSettlements(patientId);
+      setSettlements(refreshed.settlements);
+      setAppointments(refreshed.appointments);
+      setAppointmentsLoaded(refreshed.appointmentsLoaded);
+      setAggregate(refreshed.aggregate);
       onMutated?.();
     } finally {
       setSaving(false);
@@ -228,13 +267,21 @@ export function SettlementPanel({ patientId, patientName, currentReservation, on
             <label className="text-xs text-gray-500">연결 일정</label>
             <select
               value={form.reservationDocId}
+              onFocus={() => void ensureAppointmentsLoaded()}
+              onMouseDown={() => void ensureAppointmentsLoaded()}
               onChange={(e) => {
-                const appointment = appointments.find((item) => item.id === e.target.value);
+                const appointment = appointments.find((item) => item.id === e.target.value)
+                  || (currentReservation?.id === e.target.value ? currentReservation : undefined);
                 setForm((prev) => ({ ...prev, reservationDocId: e.target.value, category: categoryFor(appointment) }));
               }}
               className="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm focus:border-emerald-500 focus:outline-none"
             >
-              <option value="">일정 선택</option>
+              <option value="">{appointmentsLoading ? "일정 불러오는 중..." : "일정 선택"}</option>
+              {currentReservation && !appointments.some((appointment) => appointment.id === currentReservation.id) && (
+                <option value={currentReservation.id}>
+                  {currentReservation.reservationDate} · {currentReservation.appointmentType} · {currentReservation.hospital || "병원 미지정"} · {currentReservation.consultArea || "항목 미지정"}
+                </option>
+              )}
               {appointments.map((appointment) => (
                 <option key={appointment.id} value={appointment.id}>
                   {appointment.reservationDate} · {appointment.appointmentType} · {appointment.hospital || "병원 미지정"} · {appointment.consultArea || "항목 미지정"}
