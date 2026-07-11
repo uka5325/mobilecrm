@@ -24,6 +24,7 @@ let admin: TestUser;
 let coordA: TestUser;
 let coordB: TestUser;
 let reservationDocId: string;
+let settlementDocId: string;
 
 before(async () => {
   admin = await createTestUser("inv-admin");
@@ -40,10 +41,22 @@ before(async () => {
     name: "홍길동",
     patientId: "P-TEST-1",
     reservationDate: "2026-07-01",
-    surgeryCost: "1000000",
     coordinatorUids: [coordA.uid],
     coordinators: ["코디A"],
     doctors: [],
+    isDeleted: false,
+  });
+  const settlementRef = adminDb.collection("settlements").doc();
+  settlementDocId = settlementRef.id;
+  await settlementRef.set({
+    reservationDocId,
+    reservationId: "R-TEST-1",
+    patientId: "P-TEST-1",
+    direction: "payment",
+    amount: 1000000,
+    paymentMethod: "cash",
+    status: "active",
+    paidAt: "2026-07-01",
     isDeleted: false,
   });
 
@@ -56,6 +69,7 @@ after(async () => {
   await adminDb.collection("staff").doc(coordA.uid).delete();
   await adminDb.collection("staff").doc(coordB.uid).delete();
   await adminDb.collection("reservations").doc(reservationDocId).delete();
+  await adminDb.collection("settlements").doc(settlementDocId).delete().catch(() => {});
   await adminDb.collection("patients").doc("P-TEST-1").delete().catch(() => {});
 });
 
@@ -187,7 +201,7 @@ test("update에 isDeleted를 보내면 400(DISALLOWED_FIELD)으로 거부된다"
   const resRef = adminDb.collection("reservations").doc();
   await resRef.set({
     reservationId: `R-INVDEL-${Date.now()}`, name: "삭제필드", patientId: "P-TEST-1",
-    reservationDate: "2026-07-02", surgeryCost: "500000",
+    reservationDate: "2026-07-02",
     coordinatorUids: [coordA.uid], coordinators: ["코디A"], doctors: [], isDeleted: false,
   });
   const created = await POST(makeReq(coordA.idToken, "create", { reservationDocId: resRef.id }));
