@@ -1,5 +1,5 @@
 import type { InvoiceRecord } from "@/lib/invoices";
-import { INVOICE_STATUS_CLASS, INVOICE_STATUS_LABEL } from "./invoiceTabUi";
+import { INVOICE_STATUS_CLASS, INVOICE_STATUS_LABEL } from "@/components/invoices/invoiceUi";
 
 type Props = {
   invoice: InvoiceRecord;

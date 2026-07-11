@@ -3,18 +3,14 @@
 import { useEffect, useState } from "react";
 import type { StaffUser } from "@/lib/auth";
 import {
-  getOrCreateInvoiceDraft,
-  updateInvoice,
   deleteInvoice,
   getInvoicesByPatientId,
+  getOrCreateInvoiceDraft,
   type InvoiceRecord,
-  type InvoiceUpdatePayload,
 } from "@/lib/invoices";
-import { getStaffListForSettings, type SettingsStaffRecord } from "@/lib/settings";
-import { calcCommissionBase, calcCommission } from "@/lib/commissionUtils";
+import { InvoiceEditorForm } from "@/components/invoices/InvoiceEditorForm";
 import { InvoiceDetailView } from "./InvoiceDetailView";
 import { InvoiceList } from "./InvoiceList";
-import { formatMoney, INVOICE_STATUS_CLASS, INVOICE_STATUS_LABEL } from "./invoiceTabUi";
 
 type Props = {
   reservationDocId: string;
@@ -24,236 +20,17 @@ type Props = {
   coordinators?: string[];
 };
 
-function InvoiceEditPanel({
-  invoice,
-  staffList,
-  onSaved,
-  onDeleted,
-  onCancel,
-  currentUser,
-}: {
-  invoice: InvoiceRecord;
-  staffList: SettingsStaffRecord[];
-  onSaved: (inv: InvoiceRecord) => void;
-  onDeleted: () => void;
-  onCancel: () => void;
-  currentUser: StaffUser;
-}) {
-  const [form, setForm] = useState<InvoiceUpdatePayload>({
-    hospitalName: invoice.hospitalName || "",
-    surgeryItems: invoice.surgeryItems || "",
-    surgeryDate: invoice.surgeryDate || "",
-    totalAmount: invoice.totalAmount || 0,
-    paymentMethod: invoice.paymentMethod,
-    cardAmount: invoice.cardAmount,
-    cashAmount: invoice.cashAmount,
-    commissionStaffUid: invoice.commissionStaffUid,
-    commissionStaffName: invoice.commissionStaffName,
-    commissionRate: invoice.commissionRate,
-    commissionBase: invoice.commissionBase,
-    commissionAmount: invoice.commissionAmount,
-    memo: invoice.memo || "",
-    doctors: invoice.doctors || [],
-    status: invoice.status || "draft",
-  });
-  const [saving, setSaving] = useState(false);
-  const [deleting, setDeleting] = useState(false);
-  const [error, setError] = useState("");
-  const [message, setMessage] = useState("");
-
-  const computedBase = (() => {
-    if (!form.paymentMethod || !form.totalAmount) return undefined;
-    return calcCommissionBase(form.totalAmount, form.paymentMethod, form.cardAmount, form.cashAmount);
-  })();
-  const computedCommission = computedBase !== undefined && form.commissionRate
-    ? calcCommission(computedBase, form.commissionRate)
-    : undefined;
-
-  async function handleSave() {
-    setSaving(true);
-    setError("");
-    setMessage("");
-    try {
-      const result = await updateInvoice(invoice.id, { ...form, commissionBase: computedBase, commissionAmount: computedCommission }, currentUser);
-      if (!result.success || !result.invoice) { setError(result.message || "저장 실패"); return; }
-      setMessage("저장되었습니다.");
-      onSaved(result.invoice);
-    } catch { setError("저장 중 오류가 발생했습니다."); }
-    finally { setSaving(false); }
-  }
-
-  async function handleDelete() {
-    if (!confirm("인보이스를 삭제할까요?")) return;
-    setDeleting(true);
-    setError("");
-    try {
-      const result = await deleteInvoice(invoice.id, currentUser);
-      if (!result.success) { setError(result.message || "삭제 실패"); return; }
-      onDeleted();
-    } catch { setError("삭제 중 오류가 발생했습니다."); }
-    finally { setDeleting(false); }
-  }
-
-  return (
-    <div className="space-y-3">
-      <div className="flex items-center justify-between">
-        <button onClick={onCancel} className="text-xs text-gray-500 hover:underline">← 목록</button>
-        <span className={`rounded-lg px-2.5 py-1 text-xs font-semibold ${INVOICE_STATUS_CLASS[invoice.status] || "bg-gray-100 text-gray-500"}`}>
-          {INVOICE_STATUS_LABEL[invoice.status] || invoice.status}
-        </span>
-        <span className="text-xs text-gray-400">{invoice.invoiceId}</span>
-      </div>
-
-      <div className="space-y-2">
-        <div>
-          <label className="mb-1 block text-xs font-medium text-gray-600">병원명</label>
-          <input value={form.hospitalName} onChange={(e) => setForm((p) => ({ ...p, hospitalName: e.target.value }))}
-            className="w-full rounded-xl border border-[#dfe3e8] px-3 py-2 text-sm focus:border-[#1d9e75] focus:outline-none" />
-        </div>
-
-        <div>
-          <label className="mb-1 block text-xs font-medium text-gray-600">수술날짜</label>
-          <input
-            type="date"
-            value={form.surgeryDate || ""}
-            onChange={(e) => setForm((p) => ({ ...p, surgeryDate: e.target.value }))}
-            className="w-full rounded-xl border border-[#dfe3e8] px-3 py-2 text-sm focus:border-[#1d9e75] focus:outline-none"
-          />
-        </div>
-
-        <div className="grid grid-cols-2 gap-2">
-          <div>
-            <label className="mb-1 block text-xs font-medium text-gray-600">담당 원장</label>
-            <input
-              value={(form.doctors || []).join(", ")}
-              onChange={(e) => setForm((p) => ({ ...p, doctors: e.target.value.split(",").map((s) => s.trim()).filter(Boolean) }))}
-              placeholder="쉼표로 구분"
-              className="w-full rounded-xl border border-[#dfe3e8] px-3 py-2 text-sm focus:border-[#1d9e75] focus:outline-none"
-            />
-          </div>
-          <div>
-            <label className="mb-1 block text-xs font-medium text-gray-600">담당자</label>
-            <div className="rounded-xl border border-[#dfe3e8] bg-gray-50 px-3 py-2 text-sm text-gray-600">
-              {invoice.coordinators?.length ? invoice.coordinators.join(", ") : "-"}
-            </div>
-          </div>
-        </div>
-
-        <div>
-          <label className="mb-1 block text-xs font-medium text-gray-600">수술/시술명</label>
-          <textarea value={form.surgeryItems} onChange={(e) => setForm((p) => ({ ...p, surgeryItems: e.target.value }))}
-            rows={2} className="w-full rounded-xl border border-[#dfe3e8] px-3 py-2 text-sm focus:border-[#1d9e75] focus:outline-none resize-none" />
-        </div>
-
-        <div>
-          <label className="mb-1 block text-xs font-medium text-gray-600">수술비 (KRW)</label>
-          <input type="number" value={form.totalAmount || ""} onChange={(e) => setForm((p) => ({ ...p, totalAmount: Number(e.target.value) || 0 }))}
-            className="w-full rounded-xl border border-[#dfe3e8] px-3 py-2 text-sm focus:border-[#1d9e75] focus:outline-none" />
-        </div>
-
-        <div>
-          <label className="mb-1 block text-xs font-medium text-gray-600">상태</label>
-          <select value={form.status || "draft"} onChange={(e) => setForm((p) => ({ ...p, status: e.target.value as "draft" | "confirmed" | "void" }))}
-            className="w-full rounded-xl border border-[#dfe3e8] px-3 py-2 text-sm focus:border-[#1d9e75] focus:outline-none">
-            <option value="draft">임시저장</option>
-            <option value="confirmed">확정</option>
-            <option value="void">취소</option>
-          </select>
-        </div>
-
-        <div>
-          <label className="mb-1 block text-xs font-medium text-gray-600">메모</label>
-          <textarea value={form.memo || ""} onChange={(e) => setForm((p) => ({ ...p, memo: e.target.value }))}
-            rows={2} className="w-full rounded-xl border border-[#dfe3e8] px-3 py-2 text-sm focus:border-[#1d9e75] focus:outline-none resize-none" />
-        </div>
-      </div>
-
-      {/* 커미션 */}
-      <div className="rounded-xl border border-[#edf0f3] bg-gray-50 p-3 space-y-2">
-        <div className="text-xs font-semibold text-gray-600">커미션</div>
-        <div>
-          <label className="mb-1 block text-xs text-gray-500">결제방법</label>
-          <select value={form.paymentMethod || ""} onChange={(e) => setForm((p) => ({ ...p, paymentMethod: (e.target.value as "card" | "cash" | "mixed") || undefined }))}
-            className="w-full rounded-xl border border-[#dfe3e8] bg-white px-3 py-2 text-sm focus:border-[#1d9e75] focus:outline-none">
-            <option value="">선택</option>
-            <option value="card">카드</option>
-            <option value="cash">현금</option>
-            <option value="mixed">혼합</option>
-          </select>
-        </div>
-        {form.paymentMethod === "mixed" && (
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <label className="mb-1 block text-xs text-gray-500">카드금액</label>
-              <input type="number" value={form.cardAmount || ""} onChange={(e) => setForm((p) => ({ ...p, cardAmount: Number(e.target.value) || 0 }))}
-                className="w-full rounded-xl border border-[#dfe3e8] bg-white px-3 py-2 text-sm focus:border-[#1d9e75] focus:outline-none" />
-            </div>
-            <div>
-              <label className="mb-1 block text-xs text-gray-500">현금금액</label>
-              <input type="number" value={form.cashAmount || ""} onChange={(e) => setForm((p) => ({ ...p, cashAmount: Number(e.target.value) || 0 }))}
-                className="w-full rounded-xl border border-[#dfe3e8] bg-white px-3 py-2 text-sm focus:border-[#1d9e75] focus:outline-none" />
-            </div>
-          </div>
-        )}
-        <div>
-          <label className="mb-1 block text-xs text-gray-500">커미션 담당자</label>
-          <select value={form.commissionStaffUid || ""} onChange={(e) => {
-            const uid = e.target.value;
-            const staff = staffList.find((s) => s.uid === uid);
-            setForm((p) => ({ ...p, commissionStaffUid: uid || undefined, commissionStaffName: staff?.displayName || undefined }));
-          }} className="w-full rounded-xl border border-[#dfe3e8] bg-white px-3 py-2 text-sm focus:border-[#1d9e75] focus:outline-none">
-            <option value="">담당자 선택</option>
-            {staffList.map((s) => <option key={s.uid} value={s.uid}>{s.displayName}</option>)}
-          </select>
-        </div>
-        <div>
-          <label className="mb-1 block text-xs text-gray-500">커미션율 (%)</label>
-          <input type="number" value={form.commissionRate ?? ""} onChange={(e) => setForm((p) => ({ ...p, commissionRate: e.target.value ? Number(e.target.value) : undefined }))}
-            className="w-full rounded-xl border border-[#dfe3e8] bg-white px-3 py-2 text-sm focus:border-[#1d9e75] focus:outline-none" />
-        </div>
-        {computedBase !== undefined && (
-          <div className="grid grid-cols-2 gap-2 rounded-xl bg-white p-2.5 text-xs">
-            <div><div className="text-gray-400">커미션 기준액</div><div className="font-semibold">{formatMoney(computedBase)} KRW</div></div>
-            <div><div className="text-gray-400">커미션액</div><div className="font-semibold text-[#1d9e75]">{formatMoney(computedCommission)} KRW</div></div>
-          </div>
-        )}
-      </div>
-
-      {error && <div className="rounded-lg bg-red-50 px-3 py-2 text-center text-xs text-red-600">{error}</div>}
-      {message && <div className="rounded-lg bg-emerald-50 px-3 py-2 text-center text-xs text-emerald-700">{message}</div>}
-
-      <div className="flex gap-2">
-        <button onClick={handleSave} disabled={saving}
-          className="flex-1 rounded-xl bg-[#1d9e75] px-4 py-2.5 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:shadow-md active:scale-95 disabled:opacity-50">
-          {saving ? "저장 중..." : "저장"}
-        </button>
-        <button onClick={handleDelete} disabled={deleting}
-          className="rounded-xl border border-red-200 bg-red-50 px-4 py-2.5 text-sm font-medium text-red-600 transition hover:-translate-y-0.5 hover:shadow-md active:scale-95 disabled:opacity-50">
-          {deleting ? "삭제 중..." : "삭제"}
-        </button>
-      </div>
-    </div>
-  );
-}
-
 export function InvoiceTab({ reservationDocId, patientId, currentUser, appointmentType, coordinators }: Props) {
-  const [allInvoices, setAllInvoices] = useState<InvoiceRecord[]>([]);
+  const [invoices, setInvoices] = useState<InvoiceRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState("");
   const [editingInvoice, setEditingInvoice] = useState<InvoiceRecord | null>(null);
   const [viewingInvoice, setViewingInvoice] = useState<InvoiceRecord | null>(null);
-  const [staffList, setStaffList] = useState<SettingsStaffRecord[]>([]);
-
-  useEffect(() => {
-    getStaffListForSettings()
-      .then((list) => setStaffList(list.filter((s) => s.active && (s.role === "admin" || s.role === "coordinator"))))
-      .catch(() => {});
-  }, [currentUser.role, currentUser.displayName]);
 
   useEffect(() => {
     if (!reservationDocId) return;
-    loadInvoices();
+    void loadInvoices();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [reservationDocId, patientId]);
 
@@ -261,31 +38,34 @@ export function InvoiceTab({ reservationDocId, patientId, currentUser, appointme
     setLoading(true);
     setError("");
     try {
-      let invoices: InvoiceRecord[] = [];
       if (patientId) {
-        invoices = await getInvoicesByPatientId(patientId);
+        setInvoices(await getInvoicesByPatientId(patientId));
       } else {
         const { getInvoiceByReservationDocId } = await import("@/lib/invoices");
-        const inv = await getInvoiceByReservationDocId(reservationDocId);
-        if (inv) invoices = [inv];
+        const invoice = await getInvoiceByReservationDocId(reservationDocId);
+        setInvoices(invoice ? [invoice] : []);
       }
-      setAllInvoices(invoices);
-    } catch (e) {
-      console.error("[InvoiceTab] load error:", (e as Error)?.message ?? "");
+    } catch (loadError) {
+      console.error("[InvoiceTab] load error:", (loadError as Error)?.message ?? "");
       setError("인보이스를 불러오지 못했습니다.");
     } finally {
       setLoading(false);
     }
   }
 
-  async function handleDeleteFromList(inv: InvoiceRecord) {
+  async function handleDelete(invoice: InvoiceRecord) {
     if (!confirm("인보이스를 삭제할까요?")) return;
     setError("");
     try {
-      const result = await deleteInvoice(inv.id, currentUser);
-      if (!result.success) { setError(result.message || "삭제 실패"); return; }
-      setAllInvoices((prev) => prev.filter((i) => i.id !== inv.id));
-    } catch { setError("삭제 중 오류가 발생했습니다."); }
+      const result = await deleteInvoice(invoice.id, currentUser);
+      if (!result.success) {
+        setError(result.message || "삭제 실패");
+        return;
+      }
+      setInvoices((current) => current.filter((item) => item.id !== invoice.id));
+    } catch {
+      setError("삭제 중 오류가 발생했습니다.");
+    }
   }
 
   async function handleCreate() {
@@ -299,8 +79,8 @@ export function InvoiceTab({ reservationDocId, patientId, currentUser, appointme
       }
       await loadInvoices();
       setEditingInvoice(result.invoice);
-    } catch (e) {
-      console.error("[InvoiceTab] create error:", (e as Error)?.message ?? "");
+    } catch (createError) {
+      console.error("[InvoiceTab] create error:", (createError as Error)?.message ?? "");
       setError("인보이스 생성 중 오류가 발생했습니다.");
     } finally {
       setCreating(false);
@@ -309,7 +89,6 @@ export function InvoiceTab({ reservationDocId, patientId, currentUser, appointme
 
   if (loading) return <div className="py-8 text-center text-sm text-gray-400">불러오는 중...</div>;
 
-  // 보기 패널 표시 중
   if (viewingInvoice) {
     return (
       <InvoiceDetailView
@@ -320,19 +99,17 @@ export function InvoiceTab({ reservationDocId, patientId, currentUser, appointme
     );
   }
 
-  // 편집 패널 표시 중
   if (editingInvoice) {
     return (
-      <InvoiceEditPanel
+      <InvoiceEditorForm
         invoice={editingInvoice}
-        staffList={staffList}
         currentUser={currentUser}
-        onSaved={(inv) => {
-          setAllInvoices((prev) => prev.map((i) => i.id === inv.id ? inv : i));
+        onSaved={(updated) => {
+          setInvoices((current) => current.map((invoice) => invoice.id === updated.id ? updated : invoice));
           setEditingInvoice(null);
         }}
         onDeleted={() => {
-          setAllInvoices((prev) => prev.filter((i) => i.id !== editingInvoice.id));
+          setInvoices((current) => current.filter((invoice) => invoice.id !== editingInvoice.id));
           setEditingInvoice(null);
         }}
         onCancel={() => setEditingInvoice(null)}
@@ -342,7 +119,7 @@ export function InvoiceTab({ reservationDocId, patientId, currentUser, appointme
 
   return (
     <InvoiceList
-      invoices={allInvoices}
+      invoices={invoices}
       reservationDocId={reservationDocId}
       appointmentType={appointmentType}
       coordinators={coordinators}
@@ -352,7 +129,7 @@ export function InvoiceTab({ reservationDocId, patientId, currentUser, appointme
       onCreate={handleCreate}
       onView={setViewingInvoice}
       onEdit={setEditingInvoice}
-      onDelete={handleDeleteFromList}
+      onDelete={handleDelete}
     />
   );
 }

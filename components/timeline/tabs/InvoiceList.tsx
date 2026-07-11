@@ -1,6 +1,6 @@
 import type { StaffUser } from "@/lib/auth";
 import type { InvoiceRecord } from "@/lib/invoices";
-import { formatMoney, INVOICE_STATUS_CLASS, INVOICE_STATUS_LABEL } from "./invoiceTabUi";
+import { formatMoney, INVOICE_STATUS_CLASS, INVOICE_STATUS_LABEL } from "@/components/invoices/invoiceUi";
 
 type Props = {
   invoices: InvoiceRecord[];
