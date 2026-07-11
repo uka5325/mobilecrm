@@ -14,15 +14,11 @@ import {
   invalidateInvoicesByPatientCache,
 } from "@/lib/invoices";
 import { calcCommissionBase, calcCommission } from "@/lib/commissionUtils";
-
-const STATUS_LABEL: Record<string, string> = {
-  draft: "임시저장", confirmed: "확정", void: "취소",
-};
-const STATUS_CLASS: Record<string, string> = {
-  draft: "bg-gray-100 text-gray-500", confirmed: "bg-emerald-50 text-emerald-700", void: "bg-red-50 text-red-500",
-};
-
-function formatMoney(v: number) { return v.toLocaleString("ko-KR"); }
+import {
+  PatientInvoiceCard,
+  PatientInvoiceCreatePanel,
+  PatientInvoiceDetailModal,
+} from "./PatientInvoiceViews";
 
 type PatientInvoiceModalProps = {
   patientId: string;
@@ -130,49 +126,14 @@ export function PatientInvoiceModal({ patientId, patientName, onClose, onCountLo
 
   // 읽기 전용 보기 패널
   if (viewingInvoice) {
-    const PAY_LABEL: Record<string, string> = { cash: "현금", card: "카드", mixed: "혼합" };
     return (
-      <div className="fixed inset-0 z-[1100] flex items-center justify-center bg-black/40" onClick={onClose}>
-        <div
-          className="relative w-full max-w-xl rounded-2xl bg-white shadow-2xl mx-4 max-h-[85vh] flex flex-col"
-          onClick={(e) => e.stopPropagation()}
-        >
-          <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4 shrink-0">
-            <button onClick={() => setViewingInvoice(null)} className="text-xs text-gray-500 hover:underline">← 목록</button>
-            <span className="text-sm font-bold">{patientName} — 인보이스 상세</span>
-            <button onClick={onClose} className="text-gray-400 hover:text-gray-600">✕</button>
-          </div>
-          <div className="flex-1 overflow-y-auto p-5 space-y-2 text-sm">
-            {([
-              ["인보이스 ID", viewingInvoice.invoiceId],
-              ["병원명", viewingInvoice.hospitalName || "-"],
-              ["수술날짜", viewingInvoice.surgeryDate || "-"],
-              ["수술/시술명", viewingInvoice.surgeryItems || "-"],
-              ["담당원장", viewingInvoice.doctors?.join(", ") || "-"],
-              ["담당자", viewingInvoice.coordinators?.join(", ") || "-"],
-              ["수술비", viewingInvoice.totalAmount ? `₩${Number(viewingInvoice.totalAmount).toLocaleString("ko-KR")}` : "-"],
-              ["결제방법", PAY_LABEL[viewingInvoice.paymentMethod ?? ""] || "-"],
-              ["커미션율", viewingInvoice.commissionRate !== undefined ? `${viewingInvoice.commissionRate}%` : "-"],
-              ["커미션액", viewingInvoice.commissionAmount ? `₩${Number(viewingInvoice.commissionAmount).toLocaleString("ko-KR")}` : "-"],
-              ["상태", STATUS_LABEL[viewingInvoice.status] || viewingInvoice.status],
-              ["메모", viewingInvoice.memo || "-"],
-            ] as [string, string][]).map(([label, value]) => (
-              <div key={label} className="flex gap-2">
-                <span className="w-24 shrink-0 text-gray-500">{label}</span>
-                <span className="font-medium">{value}</span>
-              </div>
-            ))}
-          </div>
-          <div className="shrink-0 border-t border-gray-100 p-4">
-            <button
-              onClick={() => { setEditingInvoice(viewingInvoice); setViewingInvoice(null); }}
-              className="w-full rounded-xl bg-[#1d9e75] py-2.5 text-sm font-semibold text-white"
-            >
-              수정하기
-            </button>
-          </div>
-        </div>
-      </div>
+      <PatientInvoiceDetailModal
+        invoice={viewingInvoice}
+        patientName={patientName}
+        onBack={() => setViewingInvoice(null)}
+        onEdit={() => { setEditingInvoice(viewingInvoice); setViewingInvoice(null); }}
+        onClose={onClose}
+      />
     );
   }
 
@@ -237,91 +198,30 @@ export function PatientInvoiceModal({ patientId, patientName, onClose, onCountLo
             <div className="py-12 text-center text-sm text-gray-400">로딩 중...</div>
           ) : (
             <>
-              {reservations.map((res) => {
-                const inv = invoiceByReservation.get(res.id);
-                if (inv) {
-                  return (
-                    <div key={res.id} className="rounded-xl border border-[#edf0f3] bg-white p-3">
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className="text-sm font-semibold truncate">{inv.hospitalName || "병원명 미입력"}</span>
-                            {inv.doctors?.length > 0 && (
-                              <span className="text-xs text-gray-500">{inv.doctors.join(", ")}</span>
-                            )}
-                            <span className="rounded-full bg-[#1d9e75] px-1.5 py-0.5 text-[10px] font-bold text-white">이 예약</span>
-                          </div>
-                          <div className="mt-0.5 text-xs text-gray-400">{res.reservationDate} {res.reservationTime}</div>
-                          {inv.surgeryItems && (
-                            <div className="mt-0.5 text-xs text-gray-500 truncate">{inv.surgeryItems}</div>
-                          )}
-                          <div className="mt-1 flex items-center gap-2 flex-wrap">
-                            <span className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ${STATUS_CLASS[inv.status] || "bg-gray-100 text-gray-500"}`}>
-                              {STATUS_LABEL[inv.status] || inv.status}
-                            </span>
-                            {inv.totalAmount > 0 && (
-                              <span className="text-xs text-gray-600">₩{formatMoney(inv.totalAmount)}</span>
-                            )}
-                            {inv.commissionAmount ? (
-                              <span className="text-xs text-[#1d9e75]">커미션 ₩{formatMoney(inv.commissionAmount)}</span>
-                            ) : null}
-                          </div>
-                          <div className="mt-0.5 text-[10px] text-gray-400">{inv.invoiceId}</div>
-                        </div>
-                        <div className="flex shrink-0 gap-1">
-                          <button
-                            onClick={() => setViewingInvoice(inv)}
-                            className="rounded-lg bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-600 hover:bg-blue-100"
-                          >
-                            보기
-                          </button>
-                          <button
-                            onClick={() => setEditingInvoice(inv)}
-                            className="rounded-lg bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-600 hover:bg-gray-200"
-                          >
-                            수정
-                          </button>
-                          <button
-                            onClick={() => handleDelete(inv)}
-                            className="rounded-lg bg-red-50 px-2.5 py-1 text-xs font-medium text-red-600 hover:bg-red-100"
-                          >
-                            삭제
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                }
-                return null;
+              {reservations.map((reservation) => {
+                const invoice = invoiceByReservation.get(reservation.id);
+                return invoice ? (
+                  <PatientInvoiceCard
+                    key={reservation.id}
+                    invoice={invoice}
+                    reservation={reservation}
+                    onView={() => setViewingInvoice(invoice)}
+                    onEdit={() => setEditingInvoice(invoice)}
+                    onDelete={() => handleDelete(invoice)}
+                  />
+                ) : null;
               })}
-              {invoices.filter((inv) => !reservations.find((r) => r.id === inv.reservationDocId)).map((inv) => (
-                <div key={inv.id} className="rounded-xl border border-[#edf0f3] bg-white p-3">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-sm font-semibold truncate">{inv.hospitalName || "병원명 미입력"}</span>
-                        {inv.doctors?.length > 0 && (
-                          <span className="text-xs text-gray-500">{inv.doctors.join(", ")}</span>
-                        )}
-                      </div>
-                      {inv.surgeryItems && <div className="mt-0.5 text-xs text-gray-500 truncate">{inv.surgeryItems}</div>}
-                      <div className="mt-1 flex items-center gap-2 flex-wrap">
-                        <span className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ${STATUS_CLASS[inv.status] || "bg-gray-100 text-gray-500"}`}>
-                          {STATUS_LABEL[inv.status] || inv.status}
-                        </span>
-                        {inv.totalAmount > 0 && <span className="text-xs text-gray-600">₩{formatMoney(inv.totalAmount)}</span>}
-                        {inv.commissionAmount ? <span className="text-xs text-[#1d9e75]">커미션 ₩{formatMoney(inv.commissionAmount)}</span> : null}
-                      </div>
-                      <div className="mt-0.5 text-[10px] text-gray-400">{inv.invoiceId}</div>
-                    </div>
-                    <div className="flex shrink-0 gap-1">
-                      <button onClick={() => setViewingInvoice(inv)} className="rounded-lg bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-600 hover:bg-blue-100">보기</button>
-                      <button onClick={() => setEditingInvoice(inv)} className="rounded-lg bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-600 hover:bg-gray-200">수정</button>
-                      <button onClick={() => handleDelete(inv)} className="rounded-lg bg-red-50 px-2.5 py-1 text-xs font-medium text-red-600 hover:bg-red-100">삭제</button>
-                    </div>
-                  </div>
-                </div>
-              ))}
+              {invoices
+                .filter((invoice) => !reservations.some((reservation) => reservation.id === invoice.reservationDocId))
+                .map((invoice) => (
+                  <PatientInvoiceCard
+                    key={invoice.id}
+                    invoice={invoice}
+                    onView={() => setViewingInvoice(invoice)}
+                    onEdit={() => setEditingInvoice(invoice)}
+                    onDelete={() => handleDelete(invoice)}
+                  />
+                ))}
               <div className="mt-1">
                 <button
                   onClick={() => {
@@ -333,28 +233,16 @@ export function PatientInvoiceModal({ patientId, patientName, onClose, onCountLo
                   {showCreatePanel ? "닫기" : "+ 인보이스 생성"}
                 </button>
                 {showCreatePanel && (
-                  <div className="mt-2 space-y-2">
-                    {reservationsLoading ? (
-                      <div className="rounded-xl bg-gray-50 p-3 text-center text-xs text-gray-400">생성 가능한 일정을 불러오는 중...</div>
-                    ) : surgeryReservationsWithoutInvoice.length === 0 ? (
-                      <div className="rounded-xl bg-gray-50 p-3 text-center text-xs text-gray-400">생성 가능한 수술/시술 일정이 없습니다.</div>
-                    ) : (
-                      surgeryReservationsWithoutInvoice.map((res) => (
-                        <div key={res.id} className="flex items-center justify-between rounded-xl border border-dashed border-[#dfe3e8] p-3">
-                          <div>
-                            <div className="text-xs font-medium text-gray-700">{res.reservationDate} {res.reservationTime}</div>
-                            <div className="text-xs text-gray-500">{res.hospital || "병원명 없음"} · {res.appointmentType}</div>
-                          </div>
-                          <button
-                            onClick={() => { handleCreate(res.id); setShowCreatePanel(false); }}
-                            disabled={creating === res.id}
-                            className="rounded-lg bg-black px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50"
-                          >
-                            {creating === res.id ? "생성 중..." : "생성"}
-                          </button>
-                        </div>
-                      ))
-                    )}
+                  <div className="mt-2">
+                    <PatientInvoiceCreatePanel
+                      reservations={surgeryReservationsWithoutInvoice}
+                      loading={reservationsLoading}
+                      creatingId={creating}
+                      onCreate={(reservationId) => {
+                        void handleCreate(reservationId);
+                        setShowCreatePanel(false);
+                      }}
+                    />
                   </div>
                 )}
               </div>
