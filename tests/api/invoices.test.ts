@@ -117,12 +117,12 @@ test("비담당 코디네이터는 update가 403", async () => {
   assert.equal(res.status, 403);
 });
 
-test("담당 코디네이터는 update로 금액을 바꿀 수 있고 예약 문서도 트랜잭션으로 동기화된다", async () => {
+test("정산이 있으면 update 시 정산 금액을 유지하고 예약 문서도 트랜잭션으로 동기화된다", async () => {
   __resetStaffCacheForTests();
   const res = await POST(makeReq(coordA.idToken, "update", { invoiceDocId, totalAmount: 2000000, status: "confirmed" }));
   assert.equal(res.status, 200);
   const body = await res.json();
-  assert.equal(body.invoice.totalAmount, 2000000);
+  assert.equal(body.invoice.totalAmount, 1000000);
   assert.equal(body.invoice.updatedByUid, coordA.uid);
 
   const resSnap = await adminDb.collection("reservations").doc(reservationDocId).get();
