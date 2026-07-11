@@ -76,6 +76,7 @@ export type InvoiceUpdatePayload = {
 
 // 환자별 인보이스 결과 캐시 (pre-fetch 결과를 모달에서 즉시 재사용)
 const _invoicesByPatientCache = new Map<string, InvoiceRecord[]>();
+const _invoicesByPatientInflight = new Map<string, Promise<InvoiceRecord[]>>();
 
 // 환자별 인보이스 건수 캐시 (고객관리 행 뱃지) — 재진입 시 환자별 N개 재조회 방지.
 // 변경 반영: TTL 만료 시 재조회 + 내 생성/삭제 시 무효화.
@@ -102,6 +103,7 @@ export function getInvoicesByPatientCache(patientId: string): InvoiceRecord[] | 
 
 export function invalidateInvoicesByPatientCache(patientId: string) {
   _invoicesByPatientCache.delete(patientId);
+  _invoicesByPatientInflight.delete(patientId);
   _invoiceCountCache.delete(patientId);
   try { sessionStorage.removeItem(`inv_${patientId}`); } catch {}
 }
@@ -198,13 +200,28 @@ function mapInvoiceDoc(data: Record<string, unknown>): InvoiceRecord {
 }
 
 export async function getInvoicesByPatientId(patientId: string): Promise<InvoiceRecord[]> {
-  const result = await callInvoicesApi("get_by_patient", { patientId });
-  if (!result.success || !Array.isArray(result.invoices)) return [];
-  const records = (result.invoices as Record<string, unknown>[]).map(mapInvoiceDoc);
-  _invoicesByPatientCache.set(patientId, records);
-  _invoiceCountCache.set(patientId, { at: Date.now(), count: records.length });
-  try { sessionStorage.setItem(`inv_${patientId}`, JSON.stringify(records)); } catch {}
-  return records;
+  const cached = getInvoicesByPatientCache(patientId);
+  if (cached) return cached;
+
+  const inflight = _invoicesByPatientInflight.get(patientId);
+  if (inflight) return inflight;
+
+  const promise = (async () => {
+    const result = await callInvoicesApi("get_by_patient", { patientId });
+    if (!result.success || !Array.isArray(result.invoices)) return [];
+    const records = (result.invoices as Record<string, unknown>[]).map(mapInvoiceDoc);
+    _invoicesByPatientCache.set(patientId, records);
+    _invoiceCountCache.set(patientId, { at: Date.now(), count: records.length });
+    try { sessionStorage.setItem(`inv_${patientId}`, JSON.stringify(records)); } catch {}
+    return records;
+  })();
+
+  _invoicesByPatientInflight.set(patientId, promise);
+  try {
+    return await promise;
+  } finally {
+    _invoicesByPatientInflight.delete(patientId);
+  }
 }
 
 export async function getInvoiceCountByPatientId(patientId: string): Promise<number> {
