@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   toggleSurgeryReserved,
   updateReservationFull,
@@ -74,6 +74,7 @@ export function useDetailDrawerController({
   const [logsLoading, setLogsLoading] = useState(false);
   const [logsError, setLogsError] = useState("");
   const [logsRecentOnly, setLogsRecentOnly] = useState(true);
+  const logsLoadedReservationRef = useRef<string | null>(null);
 
   const [memoText, setMemoText] = useState("");
   const [memoError, setMemoError] = useState("");
@@ -92,6 +93,8 @@ export function useDetailDrawerController({
     setNotes([]);
     setLogs([]);
     setLogsError("");
+    setLogsRecentOnly(true);
+    logsLoadedReservationRef.current = null;
     setSelectedReservation(reservation);
     setDetailForm({
       name: reservation.name || "",
@@ -110,11 +113,19 @@ export function useDetailDrawerController({
     });
 
     const mounted = { current: true };
-    loadLogs(reservation, mounted);
     loadNotes(reservation, mounted);
     return () => { mounted.current = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, reservation?.id]);
+
+  useEffect(() => {
+    if (!open || activeTab !== "logs" || !selectedReservation) return;
+    if (logsLoadedReservationRef.current === selectedReservation.id) return;
+    logsLoadedReservationRef.current = selectedReservation.id;
+    void loadLogs(selectedReservation);
+    // loadLogs는 컴포넌트 스코프 함수이며 예약 ID/ref가 중복 로드를 막는다.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, activeTab, selectedReservation?.id]);
 
   const detailBirthPreview = useMemo(() => parseBirthInfo(detailForm.birthInput), [detailForm.birthInput]);
   const recentNotes = notes.slice(0, 3);
@@ -131,6 +142,7 @@ export function useDetailDrawerController({
       setLogsRecentOnly(sinceDays > 0);
     } catch {
       if (mounted && !mounted.current) return;
+      logsLoadedReservationRef.current = null;
       setLogsError("로그를 불러오지 못했습니다.");
     } finally {
       if (!mounted || mounted.current) setLogsLoading(false);
@@ -213,7 +225,7 @@ export function useDetailDrawerController({
       // 부모(전체 이력 모달/리스트)에 저장 사실을 알려 stale 목록을 갱신한다.
       // (형제 핸들러 handleCompletedToggle/handleCancelledToggle과 동일 패턴)
       onRefresh?.();
-      await loadLogs(updated);
+      if (logsLoadedReservationRef.current === updated.id) await loadLogs(updated);
       await onRefreshLatestLog(updated);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -320,7 +332,7 @@ export function useDetailDrawerController({
       }
       const updated = { ...selectedReservation, surgeryReserved: next };
       setSelectedReservation(updated);
-      await loadLogs(updated);
+      if (logsLoadedReservationRef.current === updated.id) await loadLogs(updated);
       await onRefreshLatestLog(updated);
     } catch {
       setDetailError("수술예약 상태 변경 중 오류가 발생했습니다.");
@@ -348,7 +360,7 @@ export function useDetailDrawerController({
       setMemoText("");
       setMemoSuccess("메모가 저장되었습니다.");
       await loadNotes(selectedReservation);
-      await loadLogs(selectedReservation);
+      if (logsLoadedReservationRef.current === selectedReservation.id) await loadLogs(selectedReservation);
       await onRefreshLatestLog(selectedReservation);
     } catch {
       setMemoError("메모 저장 중 오류가 발생했습니다.");
@@ -366,7 +378,7 @@ export function useDetailDrawerController({
     });
     if (!result.success) { setMemoError(result.message || "메모 수정 실패"); return; }
     await loadNotes(selectedReservation);
-    await loadLogs(selectedReservation);
+    if (logsLoadedReservationRef.current === selectedReservation.id) await loadLogs(selectedReservation);
     await onRefreshLatestLog(selectedReservation);
   }
 
@@ -380,7 +392,7 @@ export function useDetailDrawerController({
       staff: currentUser,
     });
     await loadNotes(selectedReservation);
-    await loadLogs(selectedReservation);
+    if (logsLoadedReservationRef.current === selectedReservation.id) await loadLogs(selectedReservation);
     await onRefreshLatestLog(selectedReservation);
   }
 
