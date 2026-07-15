@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   activateStaffFromSettings,
   addConferenceMemo,
@@ -43,6 +43,7 @@ type AddStaffParams = { email: string; password: string; displayName: string; ro
 // 페이지(app/settings/page.tsx)는 JSX 배선만 담당한다.
 export function useSettingsPageController() {
   const [activeTab, setActiveTab] = useState<SettingsTab>("statusColors");
+  const loadedTabsRef = useRef<Set<SettingsTab>>(new Set());
 
   // 전역 단일 Provider(CurrentUserProvider)에서 직원 상태를 읽는다 — 자체 onAuthStateChanged/
   // verify-staff 중복 구독 제거, 비활성 직원 처리 일관화(Provider가 안전 로그아웃 담당).
@@ -87,24 +88,33 @@ export function useSettingsPageController() {
     return JSON.stringify(colors) !== JSON.stringify(initialColors);
   }, [colors, initialColors]);
 
-  async function loadBaseSettings() {
+  async function loadColors() {
     setLoading(true);
     setError("");
     setMessage("");
     try {
-      const [loadedColors, loadedGeneral] = await Promise.all([
-        getAppointmentTypeColors(),
-        getGeneralSettings(),
-      ]);
+      const loadedColors = await getAppointmentTypeColors();
       setColors(loadedColors);
       setInitialColors(loadedColors);
+    } catch (err) {
+      loadedTabsRef.current.delete("statusColors");
+      console.error((err as Error)?.message ?? "");
+      setError("색상 설정을 불러오지 못했습니다.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function loadGeneralSettings() {
+    setError("");
+    try {
+      const loadedGeneral = await getGeneralSettings();
       setGeneralSettings(loadedGeneral);
       setSelectedCountry(loadedGeneral.appCountry);
     } catch (err) {
+      loadedTabsRef.current.delete("system");
       console.error((err as Error)?.message ?? "");
-      setError("설정 데이터를 불러오지 못했습니다.");
-    } finally {
-      setLoading(false);
+      setError("기본 설정을 불러오지 못했습니다.");
     }
   }
 
@@ -115,6 +125,7 @@ export function useSettingsPageController() {
       const list = await getConferenceMemos(date, 50);
       setMemos(list);
     } catch (err) {
+      loadedTabsRef.current.delete("memo");
       console.error((err as Error)?.message ?? "");
       setError("메모를 불러오지 못했습니다.");
     } finally {
@@ -129,6 +140,7 @@ export function useSettingsPageController() {
       const list = await getStaffListForSettings();
       setStaffList(list);
     } catch (err) {
+      loadedTabsRef.current.delete("staff");
       console.error((err as Error)?.message ?? "");
       setError("직원 목록을 불러오지 못했습니다.");
     } finally {
@@ -137,14 +149,18 @@ export function useSettingsPageController() {
   }
 
   useEffect(() => {
-    if (authLoading) return;
-    loadBaseSettings();
-    loadMemos(todayString());
-    if (currentUser) loadStaffList();
-    // 인증이 준비된 시점에 1회 초기 로드한다. loader들은 컴포넌트 스코프 함수라 deps에 넣으면
-    // 매 렌더 재실행되므로 authLoading 트랜지션만 트리거로 둔다.
+    if (authLoading || loadedTabsRef.current.has(activeTab)) return;
+    if (activeTab === "staff" && !currentUser) return;
+
+    loadedTabsRef.current.add(activeTab);
+    if (activeTab === "statusColors") void loadColors();
+    else if (activeTab === "system") void loadGeneralSettings();
+    else if (activeTab === "memo") void loadMemos(memoDate);
+    else if (activeTab === "staff") void loadStaffList();
+    // 탭별 loader는 컴포넌트 스코프 함수라 deps에 넣으면 매 렌더 재실행된다.
+    // loadedTabsRef가 최초 1회 로드와 실패 후 재시도를 제어한다.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [authLoading]);
+  }, [authLoading, activeTab, currentUser]);
 
   function clearAlerts() {
     setError("");
@@ -154,7 +170,6 @@ export function useSettingsPageController() {
   function selectTab(tab: SettingsTab) {
     setActiveTab(tab);
     clearAlerts();
-    if (tab === "memo") loadMemos(memoDate);
   }
 
   function updateColor(type: string, value: string) {
