@@ -129,11 +129,15 @@ export function SettlementPanel({ patientId, patientName, currentReservation, on
     }
   }, [patientId, currentReservation?.id]);
 
+  // currentReservation은 부모(DetailDrawer)가 렌더마다 새 객체 리터럴로 넘기므로
+  // 객체 identity가 아니라 id 프리미티브에만 의존한다. 그렇지 않으면 부모 재렌더마다
+  // effect가 재실행돼 입력 중이던 정산 폼이 초기화된다. load는 이미 id 기반 useCallback이라 안정적.
   useEffect(() => {
     setForm(defaultForm(patientId, currentReservation));
     setEditingId(null);
     void load();
-  }, [patientId, currentReservation, load]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [patientId, currentReservation?.id]);
 
   const selectedAppointment = useMemo(
     () => {

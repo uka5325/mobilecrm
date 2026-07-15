@@ -107,6 +107,24 @@
       "queryScope": "COLLECTION",
       "fields": [
         {
+          "fieldPath": "patientId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "isDeleted",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "invoices",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
           "fieldPath": "coordinatorUids",
           "arrayConfig": "CONTAINS"
         },
