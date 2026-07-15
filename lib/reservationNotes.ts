@@ -53,12 +53,14 @@ function mapNote(
 export async function getReservationNotes(
   reservationId: string,
   reservationDocId: string,
-  patientId?: string
+  patientId?: string,
+  options: { limit?: number } = {}
 ): Promise<ReservationNote[]> {
   const result = await callNotesApi("read", {
     reservationId: cleanText(reservationId),
     reservationDocId: cleanText(reservationDocId),
     patientId: cleanText(patientId),
+    limit: options.limit,
   });
 
   if (!result.success || !Array.isArray(result.notes)) return [];
