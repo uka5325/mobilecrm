@@ -1,13 +1,14 @@
 import {
   collection,
+  limit as queryLimit,
   onSnapshot,
+  orderBy,
   query,
   where,
 } from "firebase/firestore";
 import { auth, db } from "./firebase";
 import type { StaffUser } from "./auth";
 import { cleanText } from "./stringUtils";
-import { toDate } from "./dateUtils";
 import { callSettingsApi } from "./settingsApi";
 import { assertCanEditMemo } from "./settingsShared";
 
@@ -126,9 +127,11 @@ function mapConferenceMemoDoc(id: string, data: Record<string, unknown>): Confer
 export function subscribeConferenceMemos(
   memoDate: string,
   callback: (memos: ConferenceMemo[]) => void,
-  onError?: (error: Error) => void
+  onError?: (error: Error) => void,
+  maxItems = 50
 ) {
   const targetDate = normalizeDateOnly(memoDate);
+  const requestedLimit = Math.max(1, Math.min(100, Number(maxItems) || 50));
   let unsubscribeSnapshot: (() => void) | null = null;
 
   const unsubscribeAuth = auth.onAuthStateChanged((user) => {
@@ -136,16 +139,21 @@ export function subscribeConferenceMemos(
     if (!user) return;
 
     unsubscribeSnapshot = onSnapshot(
-      query(collection(db, "conferenceMemos"), where("memoDate", "==", targetDate)),
+      query(
+        collection(db, "conferenceMemos"),
+        where("memoDate", "==", targetDate),
+        where("deleted", "==", false),
+        orderBy("createdAt", "desc"),
+        queryLimit(requestedLimit)
+      ),
       (snap) => {
         if (snap.metadata.fromCache && snap.empty) {
           callback([]);
           return;
         }
-        const memos = snap.docs
-          .map((d) => mapConferenceMemoDoc(d.id, d.data() as Record<string, unknown>))
-          .filter((m) => !m.deleted)
-          .sort((a, b) => (toDate(b.createdAt)?.getTime() ?? 0) - (toDate(a.createdAt)?.getTime() ?? 0));
+        const memos = snap.docs.map(
+          (d) => mapConferenceMemoDoc(d.id, d.data() as Record<string, unknown>)
+        );
         callback(memos);
       },
       (error) => {
