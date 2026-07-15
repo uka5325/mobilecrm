@@ -34,6 +34,11 @@ export function useReservationsList({ uid, authReady }: { uid: string | undefine
   const [patientsNextCursor, setPatientsNextCursor] = useState<string | null>(
     () => summaryNextCursor
   );
+  const hasPatientsRef = useRef(patients.length > 0);
+
+  useEffect(() => {
+    hasPatientsRef.current = patients.length > 0;
+  }, [patients.length]);
 
   const isSearchMode = useMemo(() => {
     const term = search.trim();
@@ -121,7 +126,7 @@ export function useReservationsList({ uid, authReady }: { uid: string | undefine
     const longEnough = digitsOnly ? term.length >= 4 : term.length >= 2;
 
     if (term && longEnough) {
-      if (patients.length > 0) setRefreshing(true); else setInitialLoading(true);
+      if (hasPatientsRef.current) setRefreshing(true); else setInitialLoading(true);
       setListError(null);
       searchPatients(term)
         .then((list) => {
@@ -138,7 +143,7 @@ export function useReservationsList({ uid, authReady }: { uid: string | undefine
     setPatients(summaryPatients);
     setPatientsNextCursor(summaryNextCursor);
     void refreshPatientSummary();
-  }, [search, patients.length, summaryPatients, summaryNextCursor, refreshPatientSummary]);
+  }, [search, summaryPatients, summaryNextCursor, refreshPatientSummary]);
 
   // 서버 커서로 다음 페이지를 이어붙인다("더보기") — 검색 중에는 사용하지 않음.
   const loadMorePatients = useCallback(async () => {
@@ -175,7 +180,7 @@ export function useReservationsList({ uid, authReady }: { uid: string | undefine
     }
     const seq = ++searchSeqRef.current;
     const handle = setTimeout(() => {
-      if (patients.length > 0) setRefreshing(true); else setInitialLoading(true);
+      if (hasPatientsRef.current) setRefreshing(true); else setInitialLoading(true);
       setPatientsNextCursor(null);
       setListError(null);
       searchPatients(term)
@@ -184,7 +189,7 @@ export function useReservationsList({ uid, authReady }: { uid: string | undefine
         .finally(() => { if (searchSeqRef.current === seq) { setInitialLoading(false); setRefreshing(false); } });
     }, 300);
     return () => clearTimeout(handle);
-  }, [authReady, uid, search, reloadPatients, patients.length]);
+  }, [authReady, uid, search, reloadPatients]);
 
   const pagedGroups = useMemo(() => {
     const start = (groupPage - 1) * PAGE_SIZE;
