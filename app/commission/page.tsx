@@ -6,12 +6,10 @@ import { getInvoices, type InvoiceRecord } from "@/lib/invoices";
 import { getStaffListForSettings, type SettingsStaffRecord } from "@/lib/settings";
 import { paymentMethodLabel } from "@/lib/commissionUtils";
 import { buildCsvContent } from "@/lib/csv";
+import { monthRange } from "@/lib/dateUtils";
+import { formatMoney } from "@/components/invoices/invoiceUi";
+import { InvoiceDetailModal } from "@/components/invoices/InvoiceDetailModal";
 import { QuickButton } from "@/components/dashboard/QuickButton";
-
-function formatMoney(value: number | undefined) {
-  if (value === undefined || value === null) return "-";
-  return Number(value).toLocaleString("ko-KR");
-}
 
 function getTodayStr() {
   const d = new Date();
@@ -21,16 +19,6 @@ function getTodayStr() {
 function getFirstDayOfMonth() {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
-}
-
-function pad(n: number) { return String(n).padStart(2, "0"); }
-function monthRange(offset: number) {
-  const d = new Date();
-  d.setDate(1);
-  d.setMonth(d.getMonth() + offset);
-  const y = d.getFullYear(), m = d.getMonth();
-  const lastDay = new Date(y, m + 1, 0).getDate();
-  return { start: `${y}-${pad(m + 1)}-01`, end: `${y}-${pad(m + 1)}-${pad(lastDay)}` };
 }
 
 function downloadCSV(records: InvoiceRecord[]) {
@@ -54,50 +42,6 @@ function downloadCSV(records: InvoiceRecord[]) {
   a.download = `커미션내역_${getTodayStr()}.csv`;
   a.click();
   URL.revokeObjectURL(url);
-}
-
-function DetailModal({ invoice, onClose }: { invoice: InvoiceRecord; onClose: () => void }) {
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
-      <div
-        className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="mb-4 flex items-center justify-between">
-          <div className="text-lg font-bold">{invoice.patientName} 정산 상세</div>
-          <button onClick={onClose} className="text-2xl leading-none text-gray-400 hover:text-gray-700">×</button>
-        </div>
-        <div className="space-y-2 text-sm">
-          {[
-            ["인보이스 ID", invoice.invoiceId],
-            ["수술날짜", invoice.surgeryDate || "-"],
-            ["병원명", invoice.hospitalName || "-"],
-            ["담당원장", invoice.doctors?.join(", ") || "-"],
-            ["수술/시술명", invoice.surgeryItems || "-"],
-            ["담당자", invoice.commissionStaffName || "-"],
-            ["결제방법", paymentMethodLabel(invoice.paymentMethod)],
-            ["최종 수술비", formatMoney(invoice.totalAmount) + " KRW"],
-            ["커미션 기준액", formatMoney(invoice.commissionBase) + " KRW"],
-            ["커미션율", invoice.commissionRate !== undefined ? `${invoice.commissionRate}%` : "-"],
-            ["커미션액", formatMoney(invoice.commissionAmount) + " KRW"],
-            ["상태", { draft: "임시저장", confirmed: "확정", void: "취소" }[invoice.status] || invoice.status],
-            ["메모", invoice.memo || "-"],
-          ].map(([label, value]) => (
-            <div key={label} className="flex gap-2">
-              <span className="w-28 shrink-0 text-gray-500">{label}</span>
-              <span className="font-medium">{value}</span>
-            </div>
-          ))}
-        </div>
-        <button
-          onClick={onClose}
-          className="mt-5 w-full rounded-xl bg-gray-100 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-200"
-        >
-          닫기
-        </button>
-      </div>
-    </div>
-  );
 }
 
 export default function CommissionPage() {
@@ -191,7 +135,7 @@ export default function CommissionPage() {
   return (
     <div className="space-y-5 pb-12">
       {selectedInvoice && (
-        <DetailModal invoice={selectedInvoice} onClose={() => setSelectedInvoice(null)} />
+        <InvoiceDetailModal invoice={selectedInvoice} title="정산 상세" onClose={() => setSelectedInvoice(null)} />
       )}
 
       {/* 컨트롤바 */}

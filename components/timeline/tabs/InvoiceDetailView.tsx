@@ -1,13 +1,12 @@
 import type { InvoiceRecord } from "@/lib/invoices";
-import { INVOICE_STATUS_CLASS, INVOICE_STATUS_LABEL } from "@/components/invoices/invoiceUi";
+import { paymentMethodLabel } from "@/lib/commissionUtils";
+import { formatMoney, INVOICE_STATUS_CLASS, INVOICE_STATUS_LABEL } from "@/components/invoices/invoiceUi";
 
 type Props = {
   invoice: InvoiceRecord;
   onEdit: () => void;
   onBack: () => void;
 };
-
-const PAYMENT_LABEL: Record<string, string> = { cash: "현금", card: "카드", mixed: "혼합" };
 
 export function InvoiceDetailView({ invoice, onEdit, onBack }: Props) {
   const details: [string, string][] = [
@@ -16,10 +15,10 @@ export function InvoiceDetailView({ invoice, onEdit, onBack }: Props) {
     ["수술/시술명", invoice.surgeryItems || "-"],
     ["담당원장", invoice.doctors?.join(", ") || "-"],
     ["담당자", invoice.coordinators?.join(", ") || "-"],
-    ["수술비", invoice.totalAmount ? `₩${Number(invoice.totalAmount).toLocaleString("ko-KR")}` : "-"],
-    ["결제방법", PAYMENT_LABEL[invoice.paymentMethod ?? ""] || "-"],
+    ["수술비", invoice.totalAmount ? `₩${formatMoney(invoice.totalAmount)}` : "-"],
+    ["결제방법", paymentMethodLabel(invoice.paymentMethod)],
     ["커미션율", invoice.commissionRate !== undefined ? `${invoice.commissionRate}%` : "-"],
-    ["커미션액", invoice.commissionAmount ? `₩${Number(invoice.commissionAmount).toLocaleString("ko-KR")}` : "-"],
+    ["커미션액", invoice.commissionAmount ? `₩${formatMoney(invoice.commissionAmount)}` : "-"],
     ["메모", invoice.memo || "-"],
   ];
 

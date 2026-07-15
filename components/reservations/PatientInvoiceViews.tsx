@@ -1,21 +1,7 @@
 import type { InvoiceRecord } from "@/lib/invoices";
 import type { ReservationRecord } from "@/lib/reservations";
-
-const STATUS_LABEL: Record<string, string> = {
-  draft: "임시저장",
-  confirmed: "확정",
-  void: "취소",
-};
-
-const STATUS_CLASS: Record<string, string> = {
-  draft: "bg-gray-100 text-gray-500",
-  confirmed: "bg-emerald-50 text-emerald-700",
-  void: "bg-red-50 text-red-500",
-};
-
-function formatMoney(value: number) {
-  return value.toLocaleString("ko-KR");
-}
+import { paymentMethodLabel } from "@/lib/commissionUtils";
+import { formatMoney, INVOICE_STATUS_CLASS, INVOICE_STATUS_LABEL } from "@/components/invoices/invoiceUi";
 
 export function PatientInvoiceDetailModal({
   invoice,
@@ -30,7 +16,6 @@ export function PatientInvoiceDetailModal({
   onEdit: () => void;
   onClose: () => void;
 }) {
-  const paymentLabel: Record<string, string> = { cash: "현금", card: "카드", mixed: "혼합" };
   const details: [string, string][] = [
     ["인보이스 ID", invoice.invoiceId],
     ["병원명", invoice.hospitalName || "-"],
@@ -39,10 +24,10 @@ export function PatientInvoiceDetailModal({
     ["담당원장", invoice.doctors?.join(", ") || "-"],
     ["담당자", invoice.coordinators?.join(", ") || "-"],
     ["수술비", invoice.totalAmount ? `₩${formatMoney(Number(invoice.totalAmount))}` : "-"],
-    ["결제방법", paymentLabel[invoice.paymentMethod ?? ""] || "-"],
+    ["결제방법", paymentMethodLabel(invoice.paymentMethod)],
     ["커미션율", invoice.commissionRate !== undefined ? `${invoice.commissionRate}%` : "-"],
     ["커미션액", invoice.commissionAmount ? `₩${formatMoney(Number(invoice.commissionAmount))}` : "-"],
-    ["상태", STATUS_LABEL[invoice.status] || invoice.status],
+    ["상태", INVOICE_STATUS_LABEL[invoice.status] || invoice.status],
     ["메모", invoice.memo || "-"],
   ];
 
@@ -95,8 +80,8 @@ export function PatientInvoiceCard({
           {reservation && <div className="mt-0.5 text-xs text-gray-400">{reservation.reservationDate} {reservation.reservationTime}</div>}
           {invoice.surgeryItems && <div className="mt-0.5 truncate text-xs text-gray-500">{invoice.surgeryItems}</div>}
           <div className="mt-1 flex flex-wrap items-center gap-2">
-            <span className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ${STATUS_CLASS[invoice.status] || "bg-gray-100 text-gray-500"}`}>
-              {STATUS_LABEL[invoice.status] || invoice.status}
+            <span className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ${INVOICE_STATUS_CLASS[invoice.status] || "bg-gray-100 text-gray-500"}`}>
+              {INVOICE_STATUS_LABEL[invoice.status] || invoice.status}
             </span>
             {invoice.totalAmount > 0 && <span className="text-xs text-gray-600">₩{formatMoney(invoice.totalAmount)}</span>}
             {invoice.commissionAmount ? <span className="text-xs text-[#1d9e75]">커미션 ₩{formatMoney(invoice.commissionAmount)}</span> : null}
