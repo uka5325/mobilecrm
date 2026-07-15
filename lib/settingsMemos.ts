@@ -7,7 +7,7 @@ import {
 import { auth, db } from "./firebase";
 import type { StaffUser } from "./auth";
 import { cleanText } from "./stringUtils";
-import { toDate } from "./settingsUtils";
+import { toDate } from "./dateUtils";
 import { callSettingsApi } from "./settingsApi";
 import { assertCanEditMemo } from "./settingsShared";
 

@@ -9,6 +9,38 @@ export function todayString(): string {
   );
 }
 
+// Firestore Timestamp / Date / number / string 을 Date 로 정규화하는 원시 헬퍼.
+export function toDate(value: unknown): Date | null {
+  try {
+    if (!value) return null;
+
+    if (
+      typeof value === "object" &&
+      value !== null &&
+      "toDate" in value &&
+      typeof (value as { toDate?: unknown }).toDate === "function"
+    ) {
+      return (value as { toDate: () => Date }).toDate();
+    }
+
+    if (value instanceof Date) return value;
+
+    if (typeof value === "string" || typeof value === "number") {
+      const date = new Date(value);
+      if (Number.isNaN(date.getTime())) return null;
+      return date;
+    }
+
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+export function toMillis(value: unknown): number {
+  return toDate(value)?.getTime() ?? 0;
+}
+
 function pad(n: number) {
   return String(n).padStart(2, "0");
 }

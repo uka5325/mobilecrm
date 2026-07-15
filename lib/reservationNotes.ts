@@ -1,7 +1,7 @@
 import { auth } from "./firebase";
 import type { StaffUser } from "./auth";
 import { cleanText } from "./stringUtils";
-import { toMillis } from "./settingsUtils";
+import { toMillis } from "./dateUtils";
 
 export type ReservationNote = {
   id: string;

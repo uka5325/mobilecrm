@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { getInvoices, type InvoiceRecord, type InvoiceListFilter } from "@/lib/invoices";
 import { QuickButton } from "@/components/dashboard/QuickButton";
-import { toDate } from "@/lib/settingsUtils";
+import { toDate } from "@/lib/dateUtils";
 import { monthRange } from "@/lib/dateUtils";
 import { formatMoney, INVOICE_STATUS_CLASS, INVOICE_STATUS_LABEL } from "@/components/invoices/invoiceUi";
 import { InvoiceDetailModal } from "@/components/invoices/InvoiceDetailModal";

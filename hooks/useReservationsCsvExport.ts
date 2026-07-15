@@ -6,7 +6,7 @@ import { getCardStatus } from "@/lib/timelineUtils";
 import { getReservationBirthInfo } from "@/lib/reservationUtils";
 import { todayString } from "@/lib/dateUtils";
 import { buildCsvContent } from "@/lib/csv";
-import { toDate } from "@/lib/settingsUtils";
+import { toDate } from "@/lib/dateUtils";
 
 // 예약 목록 CSV 내보내기: 기간 선택 상태 + 서버 조회/CSV 생성/다운로드 트리거.
 export function useReservationsCsvExport({ setPageError }: { setPageError: (msg: string) => void }) {

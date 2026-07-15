@@ -1,6 +1,6 @@
 import type { DoctorOption, ReservationRecord } from "@/lib/reservations";
 import { getReservationBirthInfo } from "@/lib/reservationUtils";
-import { toDate } from "@/lib/settingsUtils";
+import { toDate } from "@/lib/dateUtils";
 
 export const START_H = 9;
 export const END_H = 21;

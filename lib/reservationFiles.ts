@@ -12,7 +12,7 @@ import { deleteObject, ref, uploadBytes } from "firebase/storage";
 import { auth, db, storage } from "./firebase";
 import type { StaffUser } from "./auth";
 import { cleanText } from "./stringUtils";
-import { toMillis } from "./settingsUtils";
+import { toMillis } from "./dateUtils";
 import { createLog } from "./logs";
 
 export type PhotoRecord = {

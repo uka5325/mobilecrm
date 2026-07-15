@@ -6,7 +6,7 @@ import { subscribeReservationsByRange, type ReservationRecord } from "@/lib/rese
 import { useTodayMemosContext } from "@/components/TodayMemosProvider";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { todayString } from "@/lib/dateUtils";
-import { toDate } from "@/lib/settingsUtils";
+import { toDate } from "@/lib/dateUtils";
 
 function todayDisplayString() {
   const d = new Date();
