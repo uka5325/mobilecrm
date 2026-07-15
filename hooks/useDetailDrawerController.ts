@@ -80,6 +80,8 @@ export function useDetailDrawerController({
   const [memoError, setMemoError] = useState("");
   const [memoSuccess, setMemoSuccess] = useState("");
   const [notes, setNotes] = useState<ReservationNote[]>([]);
+  const fullNotesLoadedReservationRef = useRef<string | null>(null);
+  const notesLoadSeqRef = useRef(0);
 
   useEffect(() => {
     if (!open || !reservation) return;
@@ -91,6 +93,8 @@ export function useDetailDrawerController({
     setMemoError("");
     setMemoSuccess("");
     setNotes([]);
+    fullNotesLoadedReservationRef.current = null;
+    notesLoadSeqRef.current += 1;
     setLogs([]);
     setLogsError("");
     setLogsRecentOnly(true);
@@ -113,7 +117,7 @@ export function useDetailDrawerController({
     });
 
     const mounted = { current: true };
-    loadNotes(reservation, mounted);
+    loadNotes(reservation, mounted, 3);
     return () => { mounted.current = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, reservation?.id]);
@@ -124,6 +128,14 @@ export function useDetailDrawerController({
     logsLoadedReservationRef.current = selectedReservation.id;
     void loadLogs(selectedReservation);
     // loadLogs는 컴포넌트 스코프 함수이며 예약 ID/ref가 중복 로드를 막는다.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, activeTab, selectedReservation?.id]);
+
+  useEffect(() => {
+    if (!open || activeTab !== "notes" || !selectedReservation) return;
+    if (fullNotesLoadedReservationRef.current === selectedReservation.id) return;
+    void loadNotes(selectedReservation);
+    // loadNotes는 request sequence와 예약 ID/ref로 중복·stale 응답을 막는다.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, activeTab, selectedReservation?.id]);
 
@@ -154,14 +166,33 @@ export function useDetailDrawerController({
     await loadLogs(selectedReservation, undefined, 0);
   }
 
-  async function loadNotes(item: ReservationRecord, mounted?: { current: boolean }) {
+  async function loadNotes(
+    item: ReservationRecord,
+    mounted?: { current: boolean },
+    limit?: number
+  ) {
+    const seq = ++notesLoadSeqRef.current;
+    if (limit == null) fullNotesLoadedReservationRef.current = item.id;
     try {
-      const list = await getReservationNotes(item.reservationId, item.id, item.patientId);
-      if (mounted && !mounted.current) return;
+      const list = await getReservationNotes(
+        item.reservationId,
+        item.id,
+        item.patientId,
+        limit == null ? {} : { limit }
+      );
+      if ((mounted && !mounted.current) || notesLoadSeqRef.current !== seq) return;
       setNotes(list);
     } catch {
-      if (!mounted || mounted.current) setNotes([]);
+      if (limit == null && fullNotesLoadedReservationRef.current === item.id) {
+        fullNotesLoadedReservationRef.current = null;
+      }
+      if ((!mounted || mounted.current) && notesLoadSeqRef.current === seq) setNotes([]);
     }
+  }
+
+  async function refreshLoadedNotes(item: ReservationRecord) {
+    const limit = fullNotesLoadedReservationRef.current === item.id ? undefined : 3;
+    await loadNotes(item, undefined, limit);
   }
 
   function updateForm(updates: Partial<DetailForm>) {
@@ -359,7 +390,7 @@ export function useDetailDrawerController({
 
       setMemoText("");
       setMemoSuccess("메모가 저장되었습니다.");
-      await loadNotes(selectedReservation);
+      await refreshLoadedNotes(selectedReservation);
       if (logsLoadedReservationRef.current === selectedReservation.id) await loadLogs(selectedReservation);
       await onRefreshLatestLog(selectedReservation);
     } catch {
@@ -377,7 +408,7 @@ export function useDetailDrawerController({
       staff: currentUser,
     });
     if (!result.success) { setMemoError(result.message || "메모 수정 실패"); return; }
-    await loadNotes(selectedReservation);
+    await refreshLoadedNotes(selectedReservation);
     if (logsLoadedReservationRef.current === selectedReservation.id) await loadLogs(selectedReservation);
     await onRefreshLatestLog(selectedReservation);
   }
@@ -391,7 +422,7 @@ export function useDetailDrawerController({
       patientId: selectedReservation.patientId || "",
       staff: currentUser,
     });
-    await loadNotes(selectedReservation);
+    await refreshLoadedNotes(selectedReservation);
     if (logsLoadedReservationRef.current === selectedReservation.id) await loadLogs(selectedReservation);
     await onRefreshLatestLog(selectedReservation);
   }
