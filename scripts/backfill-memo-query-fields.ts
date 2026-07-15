@@ -278,7 +278,12 @@ async function main() {
     applied,
     before: summarize(before),
     after: summarize(after),
-    findings: after.map(({ updates: _updates, ...finding }) => finding),
+    findings: after.map((finding) => ({
+      collection: finding.collection,
+      id: finding.id,
+      updateFields: finding.updateFields,
+      issues: finding.issues,
+    })),
   };
   const path = reportPath();
   writeFileSync(path, JSON.stringify(output, null, 2), "utf8");
