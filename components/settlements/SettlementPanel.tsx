@@ -70,10 +70,10 @@ function money(value: number) {
   return `${new Intl.NumberFormat("ko-KR").format(value)}원`;
 }
 
-// 폼 컨트롤 공통 클래스 — select/input 타입 무관 동일 높이(h-11 고정)로 통일한다.
-// (padding 기반 높이는 모바일에서 컨트롤 타입별로 달라져 필드 크기가 제각각이 됨)
+// 기본정보 탭 필드와 같은 40px 높이. min-w-0/max-w-full은 iOS date input의
+// 고유 최소 너비가 2열 그리드를 밀어내지 않도록 모든 컨트롤에 공통 적용한다.
 const FIELD_CLASS =
-  "mt-1 h-11 w-full rounded-xl border border-gray-200 bg-white px-3 text-sm text-gray-800 focus:border-emerald-500 focus:outline-none";
+  "mt-1 h-10 min-w-0 max-w-full w-full rounded-xl border border-[#dfe3e8] bg-white px-3 text-sm text-gray-800 transition focus:border-[#1d9e75] focus:outline-none";
 
 function categoryFor(appointment?: SettlementAppointment | CurrentReservation): SettlementCategory {
   if (appointment?.appointmentType === "수술") return "surgery_fee";
@@ -296,7 +296,7 @@ export function SettlementPanel({ patientId, patientName, currentReservation, on
           </div>
 
           <div className="grid grid-cols-2 gap-2">
-            <div>
+            <div className="min-w-0">
               <label className="text-xs text-gray-500">구분</label>
               <select
                 value={form.direction}
@@ -307,7 +307,7 @@ export function SettlementPanel({ patientId, patientName, currentReservation, on
                 <option value="refund">환불</option>
               </select>
             </div>
-            <div>
+            <div className="min-w-0">
               <label className="text-xs text-gray-500">항목</label>
               <select
                 value={form.category}
@@ -320,7 +320,7 @@ export function SettlementPanel({ patientId, patientName, currentReservation, on
           </div>
 
           <div className="grid grid-cols-2 gap-2">
-            <div>
+            <div className="min-w-0">
               <label className="text-xs text-gray-500">실제 금액</label>
               <input
                 type="number"
@@ -331,7 +331,7 @@ export function SettlementPanel({ patientId, patientName, currentReservation, on
                 className={FIELD_CLASS}
               />
             </div>
-            <div>
+            <div className="min-w-0">
               <label className="text-xs text-gray-500">결제 방법</label>
               <select
                 value={form.paymentMethod}
@@ -343,19 +343,19 @@ export function SettlementPanel({ patientId, patientName, currentReservation, on
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-2">
-            <div>
+          <div className="grid grid-cols-[minmax(0,1.08fr)_minmax(0,0.92fr)] gap-2">
+            <div className="min-w-0">
               <label className="text-xs text-gray-500">결제·환불일</label>
               <input
                 type="date"
                 value={form.paidAt}
                 onChange={(e) => setForm((prev) => ({ ...prev, paidAt: e.target.value }))}
-                className={FIELD_CLASS}
+                className={`${FIELD_CLASS} appearance-none`}
               />
             </div>
-            <div>
+            <div className="min-w-0">
               <label className="text-xs text-gray-500">선택 일정</label>
-              <div className="mt-1 flex h-11 items-center rounded-xl bg-gray-50 px-3 text-xs text-gray-500">
+              <div className="mt-1 flex h-10 min-w-0 items-center truncate rounded-xl bg-gray-50 px-3 text-xs text-gray-500">
                 {selectedAppointment ? `${selectedAppointment.appointmentType} · ${selectedAppointment.consultArea || "항목 미지정"}` : "—"}
               </div>
             </div>
