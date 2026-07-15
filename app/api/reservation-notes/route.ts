@@ -21,6 +21,7 @@ export async function POST(req: NextRequest) {
     // ── READ ──────────────────────────────────────────────────────────────
     if (action === "read") {
       const { reservationId, reservationDocId, patientId } = payload as Record<string, string>;
+      const requestedLimit = Math.max(1, Math.min(100, Number(payload?.limit) || 100));
       const noteMap: Record<string, unknown> = {};
 
       const run = async (field: string, value: string) => {
@@ -52,7 +53,7 @@ export async function POST(req: NextRequest) {
         return bt - at;
       });
 
-      return NextResponse.json({ success: true, notes });
+      return NextResponse.json({ success: true, notes: notes.slice(0, requestedLimit) });
     }
 
     // ── CREATE ─────────────────────────────────────────────────────────────
