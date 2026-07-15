@@ -7,6 +7,7 @@
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { NextRequest } from "next/server";
+import type { DocumentReference } from "firebase-admin/firestore";
 import { adminDb } from "@/lib/firebaseAdmin";
 import { __resetStaffCacheForTests } from "@/lib/apiAuth";
 import { createTestUser, type TestUser } from "../helpers/testAuth";
@@ -64,7 +65,7 @@ test("get_staff_list는 활성 직원 누구나 조회 가능하다", async () =
 test("get_memos는 삭제 메모가 limit을 소비하지 않게 최신 활성 메모만 반환한다", async () => {
   const memoDate = "2099-12-31";
   const runId = `settings-memo-query-${Date.now()}`;
-  const refs = [];
+  const refs: DocumentReference[] = [];
   const batch = adminDb.batch();
 
   for (let index = 1; index <= 5; index += 1) {
