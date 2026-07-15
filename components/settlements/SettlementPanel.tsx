@@ -70,6 +70,11 @@ function money(value: number) {
   return `${new Intl.NumberFormat("ko-KR").format(value)}원`;
 }
 
+// 폼 컨트롤 공통 클래스 — select/input 타입 무관 동일 높이(h-11 고정)로 통일한다.
+// (padding 기반 높이는 모바일에서 컨트롤 타입별로 달라져 필드 크기가 제각각이 됨)
+const FIELD_CLASS =
+  "mt-1 h-11 w-full rounded-xl border border-gray-200 bg-white px-3 text-sm text-gray-800 focus:border-emerald-500 focus:outline-none";
+
 function categoryFor(appointment?: SettlementAppointment | CurrentReservation): SettlementCategory {
   if (appointment?.appointmentType === "수술") return "surgery_fee";
   if (appointment?.appointmentType === "시술") return "procedure_fee";
@@ -274,7 +279,7 @@ export function SettlementPanel({ patientId, patientName, currentReservation, on
                   || (currentReservation?.id === e.target.value ? currentReservation : undefined);
                 setForm((prev) => ({ ...prev, reservationDocId: e.target.value, category: categoryFor(appointment) }));
               }}
-              className="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm focus:border-emerald-500 focus:outline-none"
+              className={FIELD_CLASS}
             >
               <option value="">{appointmentsLoading ? "일정 불러오는 중..." : "일정 선택"}</option>
               {currentReservation && !appointments.some((appointment) => appointment.id === currentReservation.id) && (
@@ -296,7 +301,7 @@ export function SettlementPanel({ patientId, patientName, currentReservation, on
               <select
                 value={form.direction}
                 onChange={(e) => setForm((prev) => ({ ...prev, direction: e.target.value as SettlementDirection }))}
-                className="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm focus:border-emerald-500 focus:outline-none"
+                className={FIELD_CLASS}
               >
                 <option value="payment">결제</option>
                 <option value="refund">환불</option>
@@ -307,7 +312,7 @@ export function SettlementPanel({ patientId, patientName, currentReservation, on
               <select
                 value={form.category}
                 onChange={(e) => setForm((prev) => ({ ...prev, category: e.target.value as SettlementCategory }))}
-                className="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm focus:border-emerald-500 focus:outline-none"
+                className={FIELD_CLASS}
               >
                 {Object.entries(CATEGORY_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
               </select>
@@ -323,7 +328,7 @@ export function SettlementPanel({ patientId, patientName, currentReservation, on
                 value={form.amount || ""}
                 onChange={(e) => setForm((prev) => ({ ...prev, amount: Number(e.target.value) }))}
                 placeholder="이번 결제액"
-                className="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm focus:border-emerald-500 focus:outline-none"
+                className={FIELD_CLASS}
               />
             </div>
             <div>
@@ -331,7 +336,7 @@ export function SettlementPanel({ patientId, patientName, currentReservation, on
               <select
                 value={form.paymentMethod}
                 onChange={(e) => setForm((prev) => ({ ...prev, paymentMethod: e.target.value as SettlementPaymentMethod }))}
-                className="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm focus:border-emerald-500 focus:outline-none"
+                className={FIELD_CLASS}
               >
                 {Object.entries(METHOD_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
               </select>
@@ -345,12 +350,12 @@ export function SettlementPanel({ patientId, patientName, currentReservation, on
                 type="date"
                 value={form.paidAt}
                 onChange={(e) => setForm((prev) => ({ ...prev, paidAt: e.target.value }))}
-                className="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm focus:border-emerald-500 focus:outline-none"
+                className={FIELD_CLASS}
               />
             </div>
             <div>
               <label className="text-xs text-gray-500">선택 일정</label>
-              <div className="mt-1 min-h-[38px] rounded-xl bg-gray-50 px-3 py-2 text-xs text-gray-500">
+              <div className="mt-1 flex h-11 items-center rounded-xl bg-gray-50 px-3 text-xs text-gray-500">
                 {selectedAppointment ? `${selectedAppointment.appointmentType} · ${selectedAppointment.consultArea || "항목 미지정"}` : "—"}
               </div>
             </div>
@@ -362,7 +367,7 @@ export function SettlementPanel({ patientId, patientName, currentReservation, on
               value={form.memo || ""}
               onChange={(e) => setForm((prev) => ({ ...prev, memo: e.target.value }))}
               placeholder="예: 1차 예약금, 잔금 결제"
-              className="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm focus:border-emerald-500 focus:outline-none"
+              className={FIELD_CLASS}
             />
           </div>
 
