@@ -123,21 +123,21 @@ export function useDetailDrawerController({
   }, [open, reservation?.id]);
 
   useEffect(() => {
-    if (!open || activeTab !== "logs" || !selectedReservation) return;
+    if (!open || activeTab !== "logs" || !selectedReservation || selectedReservation.id !== reservation?.id) return;
     if (logsLoadedReservationRef.current === selectedReservation.id) return;
     logsLoadedReservationRef.current = selectedReservation.id;
     void loadLogs(selectedReservation);
     // loadLogs는 컴포넌트 스코프 함수이며 예약 ID/ref가 중복 로드를 막는다.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, activeTab, selectedReservation?.id]);
+  }, [open, activeTab, selectedReservation?.id, reservation?.id]);
 
   useEffect(() => {
-    if (!open || activeTab !== "notes" || !selectedReservation) return;
+    if (!open || activeTab !== "notes" || !selectedReservation || selectedReservation.id !== reservation?.id) return;
     if (fullNotesLoadedReservationRef.current === selectedReservation.id) return;
     void loadNotes(selectedReservation);
     // loadNotes는 request sequence와 예약 ID/ref로 중복·stale 응답을 막는다.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, activeTab, selectedReservation?.id]);
+  }, [open, activeTab, selectedReservation?.id, reservation?.id]);
 
   const detailBirthPreview = useMemo(() => parseBirthInfo(detailForm.birthInput), [detailForm.birthInput]);
   const recentNotes = notes.slice(0, 3);
