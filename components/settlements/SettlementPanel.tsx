@@ -203,12 +203,12 @@ export function SettlementPanel({ patientId, patientName, currentReservation, on
       if (!result.success) { setError(result.message || "정산 저장에 실패했습니다."); return; }
       setMessage(editingId ? "정산 내역을 수정했습니다." : "실제 결제 내역을 등록했습니다.");
       resetForm();
-      const refreshed = await listPatientSettlements(patientId);
+      const refreshed = await listPatientSettlements(patientId, { includeAppointments: false });
       setSettlements(refreshed.settlements);
-      setAppointments(refreshed.appointments);
-      setAppointmentsLoaded(refreshed.appointmentsLoaded);
       setAggregate(refreshed.aggregate);
       onMutated?.();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "정산 저장 중 오류가 발생했습니다.");
     } finally {
       setSaving(false);
     }
@@ -224,12 +224,12 @@ export function SettlementPanel({ patientId, patientName, currentReservation, on
       if (!result.success) { setError(result.message || "무효 처리에 실패했습니다."); return; }
       setMessage("정산 기록을 무효 처리했습니다.");
       if (editingId === row.id) resetForm();
-      const refreshed = await listPatientSettlements(patientId);
+      const refreshed = await listPatientSettlements(patientId, { includeAppointments: false });
       setSettlements(refreshed.settlements);
-      setAppointments(refreshed.appointments);
-      setAppointmentsLoaded(refreshed.appointmentsLoaded);
       setAggregate(refreshed.aggregate);
       onMutated?.();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "무효 처리 중 오류가 발생했습니다.");
     } finally {
       setSaving(false);
     }
