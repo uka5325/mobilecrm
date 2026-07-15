@@ -20,41 +20,6 @@ export async function handleInvoiceReadAction(
     return NextResponse.json({ success: true, invoices });
   }
 
-  if (action === "counts_by_patients") {
-    const rawIds = Array.isArray(payload.patientIds) ? payload.patientIds : [];
-    const ids = [...new Set(rawIds.map(String).filter(Boolean))];
-    if (!ids.length) return NextResponse.json({ success: true, counts: {} });
-
-    const counts: Record<string, number> = {};
-    if (access.isAdmin) {
-      await Promise.all(ids.map(async (patientId) => {
-        const aggregate = await adminDb.collection("invoices")
-          .where("patientId", "==", patientId)
-          .where("isDeleted", "==", false)
-          .count()
-          .get();
-        counts[patientId] = aggregate.data().count;
-      }));
-    } else {
-      for (const id of ids) counts[id] = 0;
-      const chunkSize = 30;
-      for (let index = 0; index < ids.length; index += chunkSize) {
-        const chunk = ids.slice(index, index + chunkSize);
-        const snap = await adminDb.collection("invoices")
-          .where("patientId", "in", chunk)
-          .where("isDeleted", "==", false)
-          .get();
-        for (const doc of snap.docs) {
-          const invoice = docToObj(doc);
-          if (!access.canAccess(invoice)) continue;
-          const patientId = String(invoice.patientId || "");
-          if (patientId in counts) counts[patientId] += 1;
-        }
-      }
-    }
-    return NextResponse.json({ success: true, counts });
-  }
-
   if (action === "get_by_reservation") {
     const reservationDocId = String(payload.reservationDocId || "");
     const snap = await adminDb.collection("invoices")
