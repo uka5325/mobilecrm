@@ -80,6 +80,7 @@ export function useDetailDrawerController({
   const [memoError, setMemoError] = useState("");
   const [memoSuccess, setMemoSuccess] = useState("");
   const [notes, setNotes] = useState<ReservationNote[]>([]);
+  const [notesLoading, setNotesLoading] = useState(false);
   const fullNotesLoadedReservationRef = useRef<string | null>(null);
   const notesLoadSeqRef = useRef(0);
 
@@ -173,6 +174,7 @@ export function useDetailDrawerController({
   ) {
     const seq = ++notesLoadSeqRef.current;
     if (limit == null) fullNotesLoadedReservationRef.current = item.id;
+    setNotesLoading(true);
     try {
       const list = await getReservationNotes(
         item.reservationId,
@@ -187,6 +189,8 @@ export function useDetailDrawerController({
         fullNotesLoadedReservationRef.current = null;
       }
       if ((!mounted || mounted.current) && notesLoadSeqRef.current === seq) setNotes([]);
+    } finally {
+      if ((!mounted || mounted.current) && notesLoadSeqRef.current === seq) setNotesLoading(false);
     }
   }
 
@@ -457,6 +461,7 @@ export function useDetailDrawerController({
     memoError,
     memoSuccess,
     notes,
+    notesLoading,
     recentNotes,
     logs,
     logsLoading,
