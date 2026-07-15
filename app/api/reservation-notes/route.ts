@@ -22,38 +22,28 @@ export async function POST(req: NextRequest) {
     if (action === "read") {
       const { reservationId, reservationDocId, patientId } = payload as Record<string, string>;
       const requestedLimit = Math.max(1, Math.min(100, Number(payload?.limit) || 100));
-      const noteMap: Record<string, unknown> = {};
-
-      const run = async (field: string, value: string) => {
-        if (!value) return;
-        const snap = await adminDb.collection("reservationNotes")
-          .where(field, "==", value)
-          .limit(100)
-          .get();
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        snap.docs.forEach((d: any) => {
-          const data = d.data();
-          if (data.isDeleted === true || data.deleted === true) return;
-          const memoText = String(data.memoText || data.memo || data.note || data.content || data.text || "").trim();
-          if (!memoText) return;
-          noteMap[d.id] = toSer({ id: d.id, ...data, memoText });
-        });
-      };
-
-      // patientId 우선: 동일 환자의 모든 예약 메모를 한번에 조회
+      // patientId 우선: 동일 환자의 모든 예약 메모를 한번에 조회.
+      // 삭제 필터·정렬·limit을 Firestore에 적용해 삭제 문서가 limit을 소비하지 않게 한다.
       const primaryField = patientId ? "patientId"
         : reservationDocId ? "reservationDocId"
         : "reservationId";
       const primaryValue = patientId || reservationDocId || reservationId || "";
-      await run(primaryField, primaryValue);
+      if (!primaryValue) return NextResponse.json({ success: true, notes: [] });
 
-      const notes = Object.values(noteMap).sort((a, b) => {
-        const at = Number((a as Record<string, unknown>).createdAt || 0);
-        const bt = Number((b as Record<string, unknown>).createdAt || 0);
-        return bt - at;
+      const snap = await adminDb.collection("reservationNotes")
+        .where(primaryField, "==", primaryValue)
+        .where("isDeleted", "==", false)
+        .orderBy("createdAt", "desc")
+        .limit(requestedLimit)
+        .get();
+
+      const notes = snap.docs.flatMap((doc) => {
+        const data = doc.data() as Record<string, unknown>;
+        const memoText = String(data.memoText || data.memo || data.note || data.content || data.text || "").trim();
+        return memoText ? [toSer({ id: doc.id, ...data, memoText })] : [];
       });
 
-      return NextResponse.json({ success: true, notes: notes.slice(0, requestedLimit) });
+      return NextResponse.json({ success: true, notes });
     }
 
     // ── CREATE ─────────────────────────────────────────────────────────────
