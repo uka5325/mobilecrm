@@ -1,38 +1,5 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import {
-  activateStaffFromSettings,
-  addConferenceMemo,
-  changeMyPassword,
-  DEFAULT_APPOINTMENT_TYPE_COLORS,
-  DEFAULT_GENERAL_SETTINGS,
-  deactivateStaffFromSettings,
-  deleteConferenceMemo,
-  updateConferenceMemo,
-  getAppointmentTypeColors,
-  getConferenceMemos,
-  getGeneralSettings,
-  getStaffListForSettings,
-  resetAppointmentTypeColors,
-  saveAppointmentTypeColors,
-  saveGeneralSettings,
-  updateStaffFromSettings,
-  createStaffFromSettings,
-  type AppointmentTypeColorMap,
-  type ConferenceMemo,
-  type CountryKey,
-  type GeneralSettings,
-  type SettingsStaffRecord,
-  type SettingsStaffRole,
-} from "@/lib/settings";
-import { useCurrentUser } from "@/hooks/useCurrentUser";
-import { todayString } from "@/lib/dateUtils";
-import {
-  getErrorMessage,
-  normalizeHexInput,
-  notifyStaffSettingsUpdated,
-} from "@/lib/settingsUtils";
 import { GlobalAlert, EmptyBox, SectionHeader, Th } from "@/components/settings/ui";
 import { StaffRow } from "@/components/settings/StaffRow";
 import { AddStaffModal } from "@/components/settings/AddStaffModal";
@@ -40,8 +7,7 @@ import { StatusColorsPanel } from "@/components/settings/StatusColorsPanel";
 import { SystemSettingsPanel } from "@/components/settings/SystemSettingsPanel";
 import { MemoPanel } from "@/components/settings/MemoPanel";
 import { SecurityPanel } from "@/components/settings/SecurityPanel";
-
-type SettingsTab = "statusColors" | "system" | "memo" | "staff" | "security";
+import { useSettingsPageController, type SettingsTab } from "@/hooks/useSettingsPageController";
 
 const TAB_ITEMS: { key: SettingsTab; label: string; icon: string }[] = [
   { key: "statusColors", label: "유형별 색상", icon: "🎨" },
@@ -52,233 +18,8 @@ const TAB_ITEMS: { key: SettingsTab; label: string; icon: string }[] = [
 ];
 
 export default function SettingsPage() {
-  const [activeTab, setActiveTab] = useState<SettingsTab>("statusColors");
-
-  // 전역 단일 Provider(CurrentUserProvider)에서 직원 상태를 읽는다 — 자체 onAuthStateChanged/
-  // verify-staff 중복 구독 제거, 비활성 직원 처리 일관화(Provider가 안전 로그아웃 담당).
-  const { currentUser, authReady } = useCurrentUser();
-  const authLoading = !authReady;
-
-  const [colors, setColors] = useState<AppointmentTypeColorMap>(DEFAULT_APPOINTMENT_TYPE_COLORS);
-  const [initialColors, setInitialColors] = useState<AppointmentTypeColorMap>(DEFAULT_APPOINTMENT_TYPE_COLORS);
-
-  const [generalSettings, setGeneralSettings] = useState<GeneralSettings>(DEFAULT_GENERAL_SETTINGS);
-  const [selectedCountry, setSelectedCountry] = useState<CountryKey>("Korea");
-
-  const [memoDate, setMemoDate] = useState(todayString());
-  const [memoText, setMemoText] = useState("");
-  const [memos, setMemos] = useState<ConferenceMemo[]>([]);
-
-  const [staffList, setStaffList] = useState<SettingsStaffRecord[]>([]);
-
-  const [currentPassword, setCurrentPassword] = useState("");
-  const [newPassword, setNewPassword] = useState("");
-
-  const [loading, setLoading] = useState(true);
-  const [memoLoading, setMemoLoading] = useState(false);
-  const [staffLoading, setStaffLoading] = useState(false);
-  const [showAddStaff, setShowAddStaff] = useState(false);
-  const [saving, setSaving] = useState(false);
-
-  const [message, setMessage] = useState("");
-  const [error, setError] = useState("");
-
-  const canManageSettings = useMemo(() => {
-    const role = String(currentUser?.role || "").toLowerCase();
-    return role === "admin";
-  }, [currentUser]);
-
-  const canEditMemo = useMemo(() => {
-    const role = String(currentUser?.role || "").toLowerCase();
-    return ["admin", "coordinator", "staff"].includes(role);
-  }, [currentUser]);
-
-  const hasColorChanges = useMemo(() => {
-    return JSON.stringify(colors) !== JSON.stringify(initialColors);
-  }, [colors, initialColors]);
-
-  async function loadBaseSettings() {
-    setLoading(true);
-    setError("");
-    setMessage("");
-    try {
-      const [loadedColors, loadedGeneral] = await Promise.all([
-        getAppointmentTypeColors(),
-        getGeneralSettings(),
-      ]);
-      setColors(loadedColors);
-      setInitialColors(loadedColors);
-      setGeneralSettings(loadedGeneral);
-      setSelectedCountry(loadedGeneral.appCountry);
-    } catch (err) {
-      console.error((err as Error)?.message ?? "");
-      setError("설정 데이터를 불러오지 못했습니다.");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function loadMemos(date = memoDate) {
-    setMemoLoading(true);
-    setError("");
-    try {
-      const list = await getConferenceMemos(date, 50);
-      setMemos(list);
-    } catch (err) {
-      console.error((err as Error)?.message ?? "");
-      setError("메모를 불러오지 못했습니다.");
-    } finally {
-      setMemoLoading(false);
-    }
-  }
-
-  async function loadStaffList() {
-    setStaffLoading(true);
-    setError("");
-    try {
-      const list = await getStaffListForSettings();
-      setStaffList(list);
-    } catch (err) {
-      console.error((err as Error)?.message ?? "");
-      setError("직원 목록을 불러오지 못했습니다.");
-    } finally {
-      setStaffLoading(false);
-    }
-  }
-
-  useEffect(() => {
-    if (authLoading) return;
-    loadBaseSettings();
-    loadMemos(todayString());
-    if (currentUser) loadStaffList();
-    // 인증이 준비된 시점에 1회 초기 로드한다. loader들은 컴포넌트 스코프 함수라 deps에 넣으면
-    // 매 렌더 재실행되므로 authLoading 트랜지션만 트리거로 둔다.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [authLoading]);
-
-  function clearAlerts() {
-    setError("");
-    setMessage("");
-  }
-
-  async function handleSaveColors() {
-    if (!currentUser) { setError("로그인 정보를 확인할 수 없습니다."); return; }
-    setSaving(true);
-    clearAlerts();
-    try {
-      const savedColors = await saveAppointmentTypeColors(colors, currentUser);
-      setColors(savedColors);
-      setInitialColors(savedColors);
-      setMessage("유형별 색상이 저장되었습니다.");
-    } catch (err) {
-      console.error((err as Error)?.message ?? "");
-      setError(getErrorMessage(err));
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function handleResetColors() {
-    if (!currentUser) { setError("로그인 정보를 확인할 수 없습니다."); return; }
-    const ok = confirm("유형별 색상을 기본값으로 되돌릴까요?");
-    if (!ok) return;
-    setSaving(true);
-    clearAlerts();
-    try {
-      const resetColors = await resetAppointmentTypeColors(currentUser);
-      setColors(resetColors);
-      setInitialColors(resetColors);
-      setMessage("기본 색상으로 복원되었습니다.");
-    } catch (err) {
-      console.error((err as Error)?.message ?? "");
-      setError(getErrorMessage(err));
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function handleSaveGeneralSettings() {
-    if (!currentUser) { setError("로그인 정보를 확인할 수 없습니다."); return; }
-    setSaving(true);
-    clearAlerts();
-    try {
-      const saved = await saveGeneralSettings(selectedCountry, currentUser);
-      setGeneralSettings(saved);
-      setSelectedCountry(saved.appCountry);
-      setMessage("기본 설정이 저장되었습니다.");
-    } catch (err) {
-      console.error((err as Error)?.message ?? "");
-      setError(getErrorMessage(err));
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function handleAddMemo() {
-    if (!currentUser) { setError("로그인 정보를 확인할 수 없습니다."); return; }
-    if (!memoText.trim()) { setError("메모 내용을 입력하세요."); return; }
-    setSaving(true);
-    clearAlerts();
-    try {
-      await addConferenceMemo(memoDate, memoText, currentUser);
-      setMemoText("");
-      await loadMemos(memoDate);
-      setMessage("메모가 추가되었습니다.");
-    } catch (err) {
-      console.error((err as Error)?.message ?? "");
-      setError(getErrorMessage(err));
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function handleDeleteMemo(memoId: string) {
-    if (!currentUser) { setError("로그인 정보를 확인할 수 없습니다."); return; }
-    const ok = confirm("이 메모를 삭제할까요?");
-    if (!ok) return;
-    setSaving(true);
-    clearAlerts();
-    try {
-      await deleteConferenceMemo(memoId, currentUser);
-      await loadMemos(memoDate);
-      setMessage("메모가 삭제되었습니다.");
-    } catch (err) {
-      console.error((err as Error)?.message ?? "");
-      setError(getErrorMessage(err));
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function handleUpdateMemo(memoId: string, newText: string) {
-    if (!currentUser) { setError("로그인 정보를 확인할 수 없습니다."); return; }
-    clearAlerts();
-    try {
-      await updateConferenceMemo(memoId, newText, currentUser, memoDate);
-      await loadMemos(memoDate);
-      setMessage("메모가 수정되었습니다.");
-    } catch (err) {
-      console.error((err as Error)?.message ?? "");
-      setError(getErrorMessage(err));
-    }
-  }
-
-  async function handleChangePassword() {
-    if (!currentUser) { setError("로그인 정보를 확인할 수 없습니다."); return; }
-    setSaving(true);
-    clearAlerts();
-    try {
-      await changeMyPassword(currentPassword, newPassword, currentUser);
-      setCurrentPassword("");
-      setNewPassword("");
-      setMessage("비밀번호가 변경되었습니다.");
-    } catch (err) {
-      console.error((err as Error)?.message ?? "");
-      setError(getErrorMessage(err));
-    } finally {
-      setSaving(false);
-    }
-  }
+  const s = useSettingsPageController();
+  const { currentUser, activeTab, canManageSettings } = s;
 
   return (
     <div className="grid max-w-[1180px] grid-cols-1 gap-5 lg:grid-cols-[230px_minmax(0,1fr)]">
@@ -292,7 +33,7 @@ export default function SettingsPage() {
             return (
               <button
                 key={item.key}
-                onClick={() => { setActiveTab(item.key); clearAlerts(); if (item.key === "memo") loadMemos(memoDate); }}
+                onClick={() => s.selectTab(item.key)}
                 className={`flex shrink-0 items-center gap-2 rounded-xl px-3 py-3 text-left text-sm transition hover:-translate-y-0.5 active:scale-95 lg:w-full ${
                   active ? "bg-emerald-50 font-bold text-emerald-700" : "bg-white text-gray-500 hover:bg-gray-50 hover:text-gray-900"
                 }`}
@@ -306,48 +47,46 @@ export default function SettingsPage() {
       </nav>
 
       <div className="min-w-0">
-        <GlobalAlert error={error} message={message} />
+        <GlobalAlert error={s.error} message={s.message} />
 
         {activeTab === "statusColors" && (
           <StatusColorsPanel
-            colors={colors}
-            loading={loading}
-            authLoading={authLoading}
+            colors={s.colors}
+            loading={s.loading}
+            authLoading={s.authLoading}
             canManage={canManageSettings}
-            saving={saving}
-            hasChanges={hasColorChanges}
-            onUpdateColor={(type: string, value: string) => {
-              setColors((prev) => ({ ...prev, [type]: normalizeHexInput(value) }));
-            }}
-            onSave={handleSaveColors}
-            onReset={handleResetColors}
+            saving={s.saving}
+            hasChanges={s.hasColorChanges}
+            onUpdateColor={s.updateColor}
+            onSave={s.handleSaveColors}
+            onReset={s.handleResetColors}
           />
         )}
 
         {activeTab === "system" && (
           <SystemSettingsPanel
-            generalSettings={generalSettings}
-            selectedCountry={selectedCountry}
+            generalSettings={s.generalSettings}
+            selectedCountry={s.selectedCountry}
             canManage={canManageSettings}
-            saving={saving}
-            onChangeCountry={setSelectedCountry}
-            onSave={handleSaveGeneralSettings}
+            saving={s.saving}
+            onChangeCountry={s.setSelectedCountry}
+            onSave={s.handleSaveGeneralSettings}
           />
         )}
 
         {activeTab === "memo" && (
           <MemoPanel
-            memoDate={memoDate}
-            memoText={memoText}
-            memos={memos}
-            memoLoading={memoLoading}
-            canEdit={canEditMemo}
-            saving={saving}
-            onDateChange={(date) => { setMemoDate(date); loadMemos(date); }}
-            onTextChange={setMemoText}
-            onAdd={handleAddMemo}
-            onDelete={handleDeleteMemo}
-            onUpdate={handleUpdateMemo}
+            memoDate={s.memoDate}
+            memoText={s.memoText}
+            memos={s.memos}
+            memoLoading={s.memoLoading}
+            canEdit={s.canEditMemo}
+            saving={s.saving}
+            onDateChange={s.changeMemoDate}
+            onTextChange={s.setMemoText}
+            onAdd={s.handleAddMemo}
+            onDelete={s.handleDeleteMemo}
+            onUpdate={s.handleUpdateMemo}
           />
         )}
 
@@ -362,7 +101,7 @@ export default function SettingsPage() {
               />
               {currentUser?.role === "admin" && (
                 <button
-                  onClick={() => setShowAddStaff(true)}
+                  onClick={() => s.setShowAddStaff(true)}
                   className="shrink-0 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-medium text-white transition hover:-translate-y-0.5 hover:shadow-md active:scale-95"
                 >
                   + 직원 추가
@@ -370,9 +109,9 @@ export default function SettingsPage() {
               )}
             </div>
 
-            {staffLoading ? (
+            {s.staffLoading ? (
               <EmptyBox text="직원 목록을 불러오는 중..." />
-            ) : staffList.length === 0 ? (
+            ) : s.staffList.length === 0 ? (
               <EmptyBox text="등록된 직원이 없습니다." />
             ) : (
               <div className="overflow-x-auto">
@@ -388,70 +127,16 @@ export default function SettingsPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {staffList.map((staff) => (
+                    {s.staffList.map((staff) => (
                       <StaffRow
                         key={staff.id}
                         item={staff}
                         currentUser={currentUser}
                         canManage={canManageSettings}
-                        saving={saving}
-                        onSave={async (payload) => {
-                          if (!currentUser) { setError("로그인 정보를 확인할 수 없습니다."); return; }
-                          setSaving(true);
-                          clearAlerts();
-                          try {
-                            await updateStaffFromSettings(staff.id, payload, currentUser);
-                            await loadStaffList();
-                            notifyStaffSettingsUpdated();
-                            setMessage("직원 정보가 저장되었습니다.");
-                          } catch (err) {
-                            console.error((err as Error)?.message ?? "");
-                            setError(getErrorMessage(err));
-                          } finally {
-                            setSaving(false);
-                          }
-                        }}
-                        onDeactivate={async () => {
-                          if (!currentUser) { setError("로그인 정보를 확인할 수 없습니다."); return; }
-                          const ok = confirm("이 직원을 비활성화할까요?\n로그인은 차단되지만 기록은 보존됩니다.");
-                          if (!ok) return;
-                          setSaving(true);
-                          clearAlerts();
-                          try {
-                            const result = await deactivateStaffFromSettings(staff.id, currentUser);
-                            await loadStaffList();
-                            notifyStaffSettingsUpdated();
-                            if (result.tokenRevoked === false) {
-                              // 부분 성공 — 완전 성공으로 숨기지 않고 재확인이 필요함을 알린다.
-                              setError("직원은 비활성화됐지만 기존 로그인 토큰 폐기에 실패했습니다. 재확인이 필요합니다.");
-                            } else {
-                              setMessage("직원이 비활성화되었습니다.");
-                            }
-                          } catch (err) {
-                            console.error((err as Error)?.message ?? "");
-                            setError(getErrorMessage(err));
-                          } finally {
-                            setSaving(false);
-                          }
-                        }}
-                        onActivate={async () => {
-                          if (!currentUser) { setError("로그인 정보를 확인할 수 없습니다."); return; }
-                          const ok = confirm("이 직원을 다시 활성화할까요?");
-                          if (!ok) return;
-                          setSaving(true);
-                          clearAlerts();
-                          try {
-                            await activateStaffFromSettings(staff.id, currentUser);
-                            await loadStaffList();
-                            notifyStaffSettingsUpdated();
-                            setMessage("직원이 활성화되었습니다.");
-                          } catch (err) {
-                            console.error((err as Error)?.message ?? "");
-                            setError(getErrorMessage(err));
-                          } finally {
-                            setSaving(false);
-                          }
-                        }}
+                        saving={s.saving}
+                        onSave={(payload) => s.saveStaff(staff.id, payload)}
+                        onDeactivate={() => s.deactivateStaff(staff.id)}
+                        onActivate={() => s.activateStaff(staff.id)}
                       />
                     ))}
                   </tbody>
@@ -461,28 +146,21 @@ export default function SettingsPage() {
           </section>
         )}
 
-        {showAddStaff && currentUser && (
+        {s.showAddStaff && currentUser && (
           <AddStaffModal
-            onClose={() => setShowAddStaff(false)}
-            onSubmit={async (params) => {
-              await createStaffFromSettings(
-                params as { email: string; password: string; displayName: string; role: SettingsStaffRole; staffCode?: string },
-                currentUser
-              );
-              await loadStaffList();
-              setMessage("직원 계정이 추가되었습니다.");
-            }}
+            onClose={() => s.setShowAddStaff(false)}
+            onSubmit={s.addStaff}
           />
         )}
 
         {activeTab === "security" && (
           <SecurityPanel
-            currentPassword={currentPassword}
-            newPassword={newPassword}
-            saving={saving}
-            onCurrentPasswordChange={setCurrentPassword}
-            onNewPasswordChange={setNewPassword}
-            onSave={handleChangePassword}
+            currentPassword={s.currentPassword}
+            newPassword={s.newPassword}
+            saving={s.saving}
+            onCurrentPasswordChange={s.setCurrentPassword}
+            onNewPasswordChange={s.setNewPassword}
+            onSave={s.handleChangePassword}
           />
         )}
       </div>
