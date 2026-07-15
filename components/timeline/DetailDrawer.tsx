@@ -98,6 +98,7 @@ export function DetailDrawer({ open, reservation, currentUser, onClose, onRefres
             <NotesTab
               memoText={d.memoText}
               notes={d.notes}
+              notesLoading={d.notesLoading}
               memoError={d.memoError}
               memoSuccess={d.memoSuccess}
               onMemoTextChange={d.setMemoText}
