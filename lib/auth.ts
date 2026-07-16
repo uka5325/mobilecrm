@@ -87,12 +87,13 @@ export async function loginWithEmail(email: string, password: string) {
 
     return { success: true, user: data.user, redirect: "/" };
   } catch (error) {
-    const code = (error as { code?: string }).code ?? "";
-    console.error("[Auth] 로그인 실패:", code, (error as Error)?.message ?? "");
+    if (process.env.NODE_ENV === "development") {
+      const code = (error as { code?: string }).code ?? "";
+      console.error("[Auth] 로그인 실패:", code, (error as Error)?.message ?? "");
+    }
     return {
       success: false,
       message: LOGIN_FAIL_MESSAGE,
-      _debug: code,
     };
   }
 }
@@ -127,14 +128,7 @@ export async function loginWithGoogle() {
     if (code === "auth/popup-closed-by-user" || code === "auth/cancelled-popup-request") {
       return { success: false, message: "" };
     }
-    if (code === "auth/operation-not-allowed") {
-      return { success: false, message: "Google 로그인이 비활성화되어 있습니다. Firebase Console → Authentication → Sign-in method에서 Google을 활성화하세요." };
-    }
-    if (code === "auth/unauthorized-domain") {
-      return { success: false, message: "이 도메인은 Firebase에서 허용되지 않습니다. Firebase Console → Authentication → Settings → Authorized domains에 현재 도메인을 추가하세요." };
-    }
-    const msg = (error as { message?: string }).message || String(error);
-    return { success: false, message: `Google 로그인 실패 (${code ?? msg})` };
+    return { success: false, message: "Google 로그인에 실패했습니다. 잠시 후 다시 시도해주세요." };
   }
 }
 
@@ -188,9 +182,11 @@ export async function resetPassword(email: string) {
     return { success: true };
   } catch (error) {
     const code = (error as { code?: string }).code;
-    if (code === "auth/user-not-found") {
-      return { success: false, message: "등록된 이메일이 없습니다." };
+    if (process.env.NODE_ENV === "development") {
+      console.error("[Auth] 비밀번호 재설정 실패:", code ?? "");
     }
+    // 계정 존재 여부를 로그인 화면에서 추론할 수 없도록 동일한 성공 결과를 반환한다.
+    if (code === "auth/user-not-found") return { success: true };
     return { success: false, message: "재설정 메일 전송에 실패했습니다." };
   }
 }

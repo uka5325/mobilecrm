@@ -23,9 +23,6 @@
       }
     ],
     "paths": {
-      "@/lib/reservationNotes": [
-        "./lib/reservationNotesSafe.ts"
-      ],
       "@/*": [
         "./*"
       ]

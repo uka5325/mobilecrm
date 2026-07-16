@@ -16,6 +16,7 @@ import {
   getReservationNotes,
   updateReservationNote,
   type ReservationNote,
+  type MutationResult,
 } from "@/lib/reservationNotes";
 import { todayString } from "@/lib/dateUtils";
 import { splitComma } from "@/lib/timelineUtils";
@@ -388,36 +389,44 @@ export function useDetailDrawerController({
     }
   }
 
-  async function handleAddMemo() {
+  // 저장은 성공했는데 후속 새로고침만 실패한 경우 mutation 성공을 뒤집지 않는다(best-effort).
+  async function refreshAfterMutation() {
     if (!selectedReservation) return;
-    const text = memoText.trim();
-    setMemoError("");
-    setMemoSuccess("");
-    if (!text) { setMemoError("메모 내용을 입력하세요."); return; }
-
     try {
-      const result = await addReservationNote({
-        reservationId: selectedReservation.reservationId,
-        reservationDocId: selectedReservation.id,
-        patientId: selectedReservation.patientId || "",
-        memoText: text,
-        staff: currentUser,
-      });
-
-      if (!result.success) { setMemoError(result.message || "메모 저장 실패"); return; }
-
-      setMemoText("");
-      setMemoSuccess("메모가 저장되었습니다.");
       await refreshLoadedNotes(selectedReservation);
       if (logsLoadedReservationRef.current === selectedReservation.id) await loadLogs(selectedReservation);
       await onRefreshLatestLog(selectedReservation);
-    } catch {
-      setMemoError("메모 저장 중 오류가 발생했습니다.");
-    }
+    } catch { /* mutation은 성공, 새로고침 실패는 무시 */ }
   }
 
-  async function handleUpdateNote(note: ReservationNote, newText: string) {
-    if (!selectedReservation) return;
+  async function handleAddMemo(): Promise<MutationResult> {
+    if (!selectedReservation) return { success: false, message: "예약이 선택되지 않았습니다." };
+    const text = memoText.trim();
+    setMemoError("");
+    setMemoSuccess("");
+    if (!text) {
+      const message = "메모 내용을 입력하세요.";
+      setMemoError(message);
+      return { success: false, message };
+    }
+
+    const result = await addReservationNote({
+      reservationId: selectedReservation.reservationId,
+      reservationDocId: selectedReservation.id,
+      patientId: selectedReservation.patientId || "",
+      memoText: text,
+      staff: currentUser,
+    });
+    if (!result.success) { setMemoError(result.message); return result; }
+
+    setMemoText("");
+    setMemoSuccess("메모가 저장되었습니다.");
+    await refreshAfterMutation();
+    return { success: true };
+  }
+
+  async function handleUpdateNote(note: ReservationNote, newText: string): Promise<MutationResult> {
+    if (!selectedReservation) return { success: false, message: "예약이 선택되지 않았습니다." };
     const result = await updateReservationNote({
       noteId: note.id,
       reservationId: selectedReservation.reservationId,
@@ -425,25 +434,23 @@ export function useDetailDrawerController({
       memoText: newText,
       staff: currentUser,
     });
-    if (!result.success) { setMemoError(result.message || "메모 수정 실패"); return; }
-    await refreshLoadedNotes(selectedReservation);
-    if (logsLoadedReservationRef.current === selectedReservation.id) await loadLogs(selectedReservation);
-    await onRefreshLatestLog(selectedReservation);
+    if (!result.success) return result;
+    await refreshAfterMutation();
+    return { success: true };
   }
 
-  async function handleDeleteNote(note: ReservationNote) {
-    if (!selectedReservation) return;
-    if (!confirm("메모를 삭제할까요?")) return;
+  async function handleDeleteNote(note: ReservationNote): Promise<MutationResult> {
+    if (!selectedReservation) return { success: false, message: "예약이 선택되지 않았습니다." };
+    if (!confirm("메모를 삭제할까요?")) return { success: true }; // 취소 = 무동작
     const result = await deleteReservationNote({
       noteId: note.id,
       reservationId: selectedReservation.reservationId,
       patientId: selectedReservation.patientId || "",
       staff: currentUser,
     });
-    if (!result.success) { setMemoError(result.message || "메모 삭제 실패"); return; }
-    await refreshLoadedNotes(selectedReservation);
-    if (logsLoadedReservationRef.current === selectedReservation.id) await loadLogs(selectedReservation);
-    await onRefreshLatestLog(selectedReservation);
+    if (!result.success) return result;
+    await refreshAfterMutation();
+    return { success: true };
   }
 
   // Stable reference — only changes when reservation ID changes, prevents form reset on parent re-render

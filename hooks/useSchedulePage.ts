@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import {
   subscribeReservationsByRange,
@@ -52,10 +52,21 @@ export function useSchedulePage() {
   const [selectedReservation, setSelectedReservation] = useState<ReservationRecord | null>(null);
   const [todayMemos, setTodayMemos] = useState<ConferenceMemo[]>([]);
   const [memoSectionOpen, setMemoSectionOpen] = useState(true);
+  const memoLoadSeqRef = useRef(0);
 
   useEffect(() => {
+    const seq = ++memoLoadSeqRef.current;
     if (!authReady) return;
-    getConferenceMemos(baseDate).then(setTodayMemos).catch(() => setTodayMemos([]));
+    void getConferenceMemos(baseDate)
+      .then((memos) => {
+        if (memoLoadSeqRef.current === seq) setTodayMemos(memos);
+      })
+      .catch(() => {
+        if (memoLoadSeqRef.current === seq) setTodayMemos([]);
+      });
+    return () => {
+      if (memoLoadSeqRef.current === seq) memoLoadSeqRef.current += 1;
+    };
   }, [baseDate, authReady]);
 
   const { startDate, endDate } = useMemo(() => {

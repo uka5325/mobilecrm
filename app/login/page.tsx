@@ -37,8 +37,7 @@ export default function LoginPage() {
       const result = await loginWithEmail(email, password);
 
       if (!result.success) {
-        const debug = (result as { _debug?: string })._debug;
-        setErrorMessage((result.message || "이메일 또는 비밀번호가 올바르지 않습니다.") + (debug ? ` [${debug}]` : ""));
+        setErrorMessage(result.message || "이메일 또는 비밀번호가 올바르지 않습니다.");
         return;
       }
 

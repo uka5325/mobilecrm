@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import type { ReservationNote } from "@/lib/reservationNotes";
+import type { ReservationNote, MutationResult } from "@/lib/reservationNotes";
 import type { ReservationRecord } from "@/lib/reservations";
 import { toDate } from "@/lib/dateUtils";
 
@@ -20,9 +20,9 @@ type Props = {
   onEditStart: (noteId: string, text: string) => void;
   onEditCancel: () => void;
   onEditTextChange: (text: string) => void;
-  onUpdate: (note: ReservationNote) => Promise<void>;
-  onDelete: (note: ReservationNote) => Promise<void>;
-  onAdd: (text: string) => Promise<void>;
+  onUpdate: (note: ReservationNote) => Promise<MutationResult>;
+  onDelete: (note: ReservationNote) => Promise<MutationResult>;
+  onAdd: (text: string) => Promise<MutationResult>;
 };
 
 const PAGE_SIZE = 10;
@@ -56,7 +56,9 @@ export function MemoPopover({
     setAdding(true);
     setMutationError("");
     try {
-      await onAdd(newText.trim());
+      const result = await onAdd(newText.trim());
+      // 실패 시 입력을 지우지 않아 작성 내용을 보존한다.
+      if (!result.success) { setMutationError(result.message); return; }
       setNewText("");
     } catch (error) {
       setMutationError(error instanceof Error ? error.message : "메모 저장에 실패했습니다.");
@@ -69,7 +71,8 @@ export function MemoPopover({
     setMutatingId(note.id);
     setMutationError("");
     try {
-      await onUpdate(note);
+      const result = await onUpdate(note);
+      if (!result.success) { setMutationError(result.message); return; }
     } catch (error) {
       setMutationError(error instanceof Error ? error.message : "메모 수정에 실패했습니다.");
     } finally {
@@ -81,7 +84,8 @@ export function MemoPopover({
     setMutatingId(note.id);
     setMutationError("");
     try {
-      await onDelete(note);
+      const result = await onDelete(note);
+      if (!result.success) { setMutationError(result.message); return; }
     } catch (error) {
       setMutationError(error instanceof Error ? error.message : "메모 삭제에 실패했습니다.");
     } finally {

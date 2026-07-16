@@ -1,6 +1,6 @@
 "use client";
 
-import { type ReservationNote } from "@/lib/reservationNotes";
+import { type ReservationNote, type MutationResult } from "@/lib/reservationNotes";
 import { type AppointmentType, APPOINTMENT_TYPES } from "@/lib/reservations";
 import { EditField } from "@/components/timeline/EditField";
 import { NoteCard } from "@/components/timeline/NoteCard";
@@ -34,14 +34,15 @@ type Props = {
   memoText: string;
   memoError?: string;
   memoSuccess?: string;
+  notesLoading: boolean;
   notesError?: string;
   recentNotes: ReservationNote[];
   onFormChange: (updates: Partial<DetailForm>) => void;
   onSave: () => void;
   onMemoTextChange: (text: string) => void;
   onAddMemo: () => void;
-  onUpdateNote: (note: ReservationNote, text: string) => Promise<void>;
-  onDeleteNote: (note: ReservationNote) => Promise<void>;
+  onUpdateNote: (note: ReservationNote, text: string) => Promise<MutationResult>;
+  onDeleteNote: (note: ReservationNote) => Promise<MutationResult>;
   onShowAllNotes: () => void;
 };
 
@@ -55,6 +56,7 @@ export function InfoTab({
   memoText,
   memoError,
   memoSuccess,
+  notesLoading,
   notesError,
   recentNotes,
   onFormChange,
@@ -227,7 +229,11 @@ export function InfoTab({
         )}
 
         <div className="mt-3 space-y-2">
-          {notesError ? (
+          {notesLoading ? (
+            <div className="rounded-xl bg-gray-50 px-4 py-3 text-sm text-gray-400">
+              메모를 불러오는 중...
+            </div>
+          ) : notesError ? (
             <div className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-600">
               {notesError}
             </div>
