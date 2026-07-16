@@ -4,6 +4,8 @@ import { useCallback, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { searchReservationsByDateRange } from "@/lib/reservations";
+import { listSalesSummaryRows, type SalesSummaryRow } from "@/lib/settlements";
+import { aggregateSettlementRows } from "@/lib/settlementMath";
 import { todayString } from "@/lib/dateUtils";
 import {
   type ReservationDoc,
@@ -25,6 +27,14 @@ import { Panel } from "@/components/dashboard/Panel";
 import { KpiTable } from "@/components/dashboard/KpiTable";
 
 const APPOINTMENT_TYPES = ["상담", "수술", "시술", "치료", "경과", "진료", "검진"] as const;
+
+const PAYMENT_METHOD_LABELS: Record<string, string> = {
+  card: "카드",
+  cash: "현금",
+  bank_transfer: "계좌이체",
+  foreign_card: "해외카드",
+  other: "기타",
+};
 
 const APPT_TYPE_COLORS: Record<string, string> = {
   상담: "#2563eb",
@@ -57,6 +67,10 @@ type DayTrend = {
 
 function formatNumber(value: number) {
   return value.toLocaleString("ko-KR");
+}
+
+function formatWon(value: number) {
+  return `${formatNumber(value)}원`;
 }
 
 function rateText(part: number, total: number) {
@@ -107,9 +121,12 @@ function toOperationalTableRows(rows: OperationalRow[]) {
 }
 
 export default function DashboardPage() {
-  useCurrentUser();
+  const { currentUser } = useCurrentUser();
+  const isAdmin = currentUser?.role === "admin";
   const router = useRouter();
   const [allReservations, setAllReservations] = useState<ReservationDoc[]>([]);
+  const [salesRows, setSalesRows] = useState<SalesSummaryRow[]>([]);
+  const [salesError, setSalesError] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [lastLoadedAt, setLastLoadedAt] = useState<Date | null>(null);
@@ -128,9 +145,20 @@ export default function DashboardPage() {
     const normTo = from <= to ? to : from;
     setLoading(true);
     setError("");
+    setSalesError("");
     try {
-      const list = await searchReservationsByDateRange(normFrom, normTo);
-      setAllReservations(list as unknown as ReservationDoc[]);
+      const [reservationResult, salesResult] = await Promise.allSettled([
+        searchReservationsByDateRange(normFrom, normTo),
+        isAdmin ? listSalesSummaryRows(normFrom, normTo) : Promise.resolve([] as SalesSummaryRow[]),
+      ]);
+      if (reservationResult.status === "rejected") throw reservationResult.reason;
+      setAllReservations(reservationResult.value as unknown as ReservationDoc[]);
+      if (salesResult.status === "fulfilled") {
+        setSalesRows(salesResult.value as SalesSummaryRow[]);
+      } else if (isAdmin) {
+        setSalesRows([]);
+        setSalesError(salesResult.reason instanceof Error ? salesResult.reason.message : "매출 현황을 불러오지 못했습니다.");
+      }
       setLastLoadedAt(new Date());
       setSearched(true);
     } catch (e) {
@@ -141,7 +169,7 @@ export default function DashboardPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [isAdmin]);
 
   const reservations = useMemo(() => {
     const normalizedStart = startDate <= endDate ? startDate : endDate;
@@ -153,20 +181,30 @@ export default function DashboardPage() {
   }, [allReservations, startDate, endDate]);
 
   const hospitals = useMemo(() => {
-    return Array.from(new Set(reservations.map(getHospital).filter(Boolean))).sort();
-  }, [reservations]);
+    return Array.from(new Set([
+      ...reservations.map(getHospital),
+      ...salesRows.map((row) => row.hospital),
+    ].filter(Boolean))).sort();
+  }, [reservations, salesRows]);
 
   const doctors = useMemo(() => {
-    return Array.from(new Set(reservations.flatMap(getDoctors).filter(Boolean))).sort();
-  }, [reservations]);
+    return Array.from(new Set([
+      ...reservations.flatMap(getDoctors),
+      ...salesRows.flatMap((row) => row.doctors),
+    ].filter(Boolean))).sort();
+  }, [reservations, salesRows]);
 
   const coordinators = useMemo(() => {
-    return Array.from(new Set(reservations.flatMap(getManagers).filter(Boolean))).sort();
-  }, [reservations]);
+    return Array.from(new Set([
+      ...reservations.flatMap(getManagers),
+      ...salesRows.flatMap((row) => row.coordinators),
+    ].filter(Boolean))).sort();
+  }, [reservations, salesRows]);
 
   const itemOptions = useMemo(() => {
-    return Array.from(new Set(reservations.flatMap(getDemandAreas).filter(Boolean))).sort();
-  }, [reservations]);
+    const salesAreas = salesRows.flatMap((row) => getDemandAreas({ id: "", ...row } as ReservationDoc));
+    return Array.from(new Set([...reservations.flatMap(getDemandAreas), ...salesAreas].filter(Boolean))).sort();
+  }, [reservations, salesRows]);
 
   const filteredRows = useMemo(() => {
     return reservations.filter((item) => {
@@ -178,6 +216,40 @@ export default function DashboardPage() {
       return true;
     });
   }, [reservations, hospitalFilter, apptTypeFilter, itemFilter, doctorFilter, coordinatorFilter]);
+
+  const filteredSalesRows = useMemo(() => {
+    const normalizedStart = startDate <= endDate ? startDate : endDate;
+    const normalizedEnd = startDate <= endDate ? endDate : startDate;
+    return salesRows.filter((row) => {
+      if (row.paidAt < normalizedStart || row.paidAt > normalizedEnd) return false;
+      const reservationLike = { id: "", ...row } as ReservationDoc;
+      if (hospitalFilter && row.hospital !== hospitalFilter) return false;
+      if (apptTypeFilter && getAppointmentType(reservationLike) !== apptTypeFilter) return false;
+      if (itemFilter && !getDemandAreas(reservationLike).includes(itemFilter)) return false;
+      if (doctorFilter && !row.doctors.includes(doctorFilter)) return false;
+      if (coordinatorFilter && !row.coordinators.includes(coordinatorFilter)) return false;
+      return true;
+    });
+  }, [salesRows, startDate, endDate, hospitalFilter, apptTypeFilter, itemFilter, doctorFilter, coordinatorFilter]);
+
+  const sales = useMemo(() => {
+    const aggregate = aggregateSettlementRows(filteredSalesRows);
+    const group = (getName: (row: SalesSummaryRow) => string) => {
+      const map = new Map<string, SalesSummaryRow[]>();
+      for (const row of filteredSalesRows) {
+        const name = getName(row) || "미지정";
+        map.set(name, [...(map.get(name) || []), row]);
+      }
+      return [...map.entries()]
+        .map(([name, rows]) => ({ name, ...aggregateSettlementRows(rows) }))
+        .sort((a, b) => b.netAmount - a.netAmount || a.name.localeCompare(b.name));
+    };
+    return {
+      aggregate,
+      hospitals: group((row) => row.hospital || "미지정"),
+      methods: group((row) => PAYMENT_METHOD_LABELS[row.paymentMethod] || "기타"),
+    };
+  }, [filteredSalesRows]);
 
   const dashboard = useMemo(() => {
     const summary = buildOperationalRow("전체", filteredRows);
@@ -428,6 +500,61 @@ export default function DashboardPage() {
               </div>
             ))}
           </section>
+
+          {isAdmin && (
+            <>
+              <Panel title="매출 현황" rightText="실제 결제일 기준 · Admin 전용">
+                {salesError ? (
+                  <div className="px-6 pb-5 text-sm text-red-600 lg:px-8">{salesError}</div>
+                ) : (
+                  <div className="grid grid-cols-2 gap-3 px-6 pb-5 md:grid-cols-4 lg:px-8">
+                    {[
+                      { label: "순매출", value: formatWon(sales.aggregate.netAmount), helper: "결제 - 환불" },
+                      { label: "총 결제", value: formatWon(sales.aggregate.totalPaid), helper: `${formatNumber(sales.aggregate.paymentCount)}건` },
+                      { label: "총 환불", value: formatWon(sales.aggregate.totalRefunded), helper: `${formatNumber(sales.aggregate.refundCount)}건` },
+                      { label: "정산 건수", value: `${formatNumber(sales.aggregate.count)}건`, helper: `결제 ${formatNumber(sales.aggregate.paymentCount)} · 환불 ${formatNumber(sales.aggregate.refundCount)}` },
+                    ].map((card) => (
+                      <div key={card.label} className="rounded-[8px] border border-black/5 bg-[#f8fafc] p-4">
+                        <div className="text-xs font-bold text-gray-500">{card.label}</div>
+                        <div className="mt-1 break-words text-[20px] font-bold text-gray-900">{card.value}</div>
+                        <div className="mt-0.5 text-xs text-gray-500">{card.helper}</div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </Panel>
+
+              {!salesError && (
+                <>
+                  <Panel title="병원별 매출">
+                    <KpiTable
+                      headers={["병원", "결제", "환불", "순매출", "건수"]}
+                      rows={sales.hospitals.map((row) => [
+                        row.name,
+                        formatWon(row.totalPaid),
+                        formatWon(row.totalRefunded),
+                        formatWon(row.netAmount),
+                        `${formatNumber(row.count)}건`,
+                      ])}
+                    />
+                  </Panel>
+
+                  <Panel title="결제수단별 매출">
+                    <KpiTable
+                      headers={["결제수단", "결제", "환불", "순매출", "건수"]}
+                      rows={sales.methods.map((row) => [
+                        row.name,
+                        formatWon(row.totalPaid),
+                        formatWon(row.totalRefunded),
+                        formatWon(row.netAmount),
+                        `${formatNumber(row.count)}건`,
+                      ])}
+                    />
+                  </Panel>
+                </>
+              )}
+            </>
+          )}
 
           <Panel title="예약 유형별 현황">
             <div className="grid grid-cols-2 gap-3 px-6 pb-5 md:grid-cols-4 lg:px-8">
