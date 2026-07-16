@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { type ReservationNote } from "@/lib/reservationNotes";
+import { type ReservationNote, type MutationResult } from "@/lib/reservationNotes";
 import { NoteCard } from "@/components/timeline/NoteCard";
 
 const PAGE_SIZE = 10;
@@ -15,8 +15,8 @@ type Props = {
   memoSuccess?: string;
   onMemoTextChange: (text: string) => void;
   onAddMemo: () => void;
-  onUpdateNote: (note: ReservationNote, text: string) => Promise<void>;
-  onDeleteNote: (note: ReservationNote) => Promise<void>;
+  onUpdateNote: (note: ReservationNote, text: string) => Promise<MutationResult>;
+  onDeleteNote: (note: ReservationNote) => Promise<MutationResult>;
 };
 
 export function NotesTab({ memoText, notes, notesLoading, notesError, memoError, memoSuccess, onMemoTextChange, onAddMemo, onUpdateNote, onDeleteNote }: Props) {

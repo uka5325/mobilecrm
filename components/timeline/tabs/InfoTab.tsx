@@ -1,6 +1,6 @@
 "use client";
 
-import { type ReservationNote } from "@/lib/reservationNotes";
+import { type ReservationNote, type MutationResult } from "@/lib/reservationNotes";
 import { type AppointmentType, APPOINTMENT_TYPES } from "@/lib/reservations";
 import { EditField } from "@/components/timeline/EditField";
 import { NoteCard } from "@/components/timeline/NoteCard";
@@ -40,8 +40,8 @@ type Props = {
   onSave: () => void;
   onMemoTextChange: (text: string) => void;
   onAddMemo: () => void;
-  onUpdateNote: (note: ReservationNote, text: string) => Promise<void>;
-  onDeleteNote: (note: ReservationNote) => Promise<void>;
+  onUpdateNote: (note: ReservationNote, text: string) => Promise<MutationResult>;
+  onDeleteNote: (note: ReservationNote) => Promise<MutationResult>;
   onShowAllNotes: () => void;
 };
 

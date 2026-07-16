@@ -18,16 +18,33 @@ export type ReservationNote = {
   isDeleted: boolean;
 };
 
+export type MutationResult = { success: true } | { success: false; message: string };
+
 async function callNotesApi(action: string, payload: Record<string, unknown>) {
-  const firebaseUser = auth.currentUser;
-  if (!firebaseUser) return { success: false as const };
-  const idToken = await firebaseUser.getIdToken();
-  const res = await fetch("/api/reservation-notes", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ idToken, action, payload }),
-  });
-  return res.json() as Promise<Record<string, unknown> & { success: boolean; message?: string }>;
+  try {
+    const firebaseUser = auth.currentUser;
+    if (!firebaseUser) return { success: false as const, message: "로그인이 필요합니다." };
+    const idToken = await firebaseUser.getIdToken();
+    const res = await fetch("/api/reservation-notes", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ idToken, action, payload }),
+    });
+    // HTTP 상태와 본문 형식을 함께 검사한다. 500 HTML 오류 페이지나 잘못된 JSON에서
+    // res.json()이 던지는 날것의 파싱 에러 대신 사용자용 메시지를 돌려준다.
+    const body = (await res.json().catch(() => null)) as
+      | (Record<string, unknown> & { success?: unknown; message?: string })
+      | null;
+    if (!res.ok || !body || typeof body.success !== "boolean") {
+      return {
+        success: false as const,
+        message: body?.message || `메모 요청에 실패했습니다. (${res.status})`,
+      };
+    }
+    return body as Record<string, unknown> & { success: boolean; message?: string };
+  } catch {
+    return { success: false as const, message: "네트워크를 확인해주세요." };
+  }
 }
 
 function mapNote(
@@ -93,7 +110,7 @@ export async function addReservationNote(params: {
   patientId: string;
   memoText: string;
   staff: StaffUser;
-}) {
+}): Promise<MutationResult> {
   const memoText = params.memoText.trim();
   if (!memoText) return { success: false, message: "메모 내용을 입력하세요." };
 
@@ -106,9 +123,7 @@ export async function addReservationNote(params: {
     staffUid: params.staff.uid,
   });
 
-  return result.success
-    ? { success: true, id: String(result.id || "") }
-    : { success: false, message: result.message || "저장 실패" };
+  return result.success ? { success: true } : { success: false, message: result.message || "저장 실패" };
 }
 
 export async function updateReservationNote(params: {
@@ -117,7 +132,7 @@ export async function updateReservationNote(params: {
   patientId: string;
   memoText: string;
   staff: StaffUser;
-}) {
+}): Promise<MutationResult> {
   const memoText = params.memoText.trim();
   if (!memoText) return { success: false, message: "메모 내용을 입력하세요." };
 
@@ -138,7 +153,7 @@ export async function deleteReservationNote(params: {
   reservationId: string;
   patientId: string;
   staff: StaffUser;
-}) {
+}): Promise<MutationResult> {
   const result = await callNotesApi("delete", {
     noteId: params.noteId,
     reservationId: params.reservationId,

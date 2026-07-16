@@ -1,14 +1,14 @@
 "use client";
 
 import { useState } from "react";
-import type { ReservationNote } from "@/lib/reservationNotes";
+import type { ReservationNote, MutationResult } from "@/lib/reservationNotes";
 import { formatLogDate } from "@/lib/timelineUtils";
 
 type Props = {
   note: ReservationNote;
   compact?: boolean;
-  onUpdate: (note: ReservationNote, newText: string) => Promise<void>;
-  onDelete: (note: ReservationNote) => Promise<void>;
+  onUpdate: (note: ReservationNote, newText: string) => Promise<MutationResult>;
+  onDelete: (note: ReservationNote) => Promise<MutationResult>;
 };
 
 export function NoteCard({ note, compact = false, onUpdate, onDelete }: Props) {
@@ -21,7 +21,8 @@ export function NoteCard({ note, compact = false, onUpdate, onDelete }: Props) {
     setSaving(true);
     setError("");
     try {
-      await onUpdate(note, editText);
+      const result = await onUpdate(note, editText);
+      if (!result.success) { setError(result.message); return; }
       setEditing(false);
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : "메모 수정에 실패했습니다.");
@@ -34,7 +35,8 @@ export function NoteCard({ note, compact = false, onUpdate, onDelete }: Props) {
     setSaving(true);
     setError("");
     try {
-      await onDelete(note);
+      const result = await onDelete(note);
+      if (!result.success) { setError(result.message); return; }
     } catch (deleteError) {
       setError(deleteError instanceof Error ? deleteError.message : "메모 삭제에 실패했습니다.");
     } finally {

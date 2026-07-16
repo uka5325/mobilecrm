@@ -9,6 +9,7 @@ import {
   updateReservationNote,
   deleteReservationNote,
   type ReservationNote,
+  type MutationResult,
 } from "@/lib/reservationNotes";
 import { type MemoPopoverState } from "@/components/reservations/MemoPopover";
 import type { PatientGroup } from "@/components/reservations/ReservationsTable";
@@ -50,8 +51,8 @@ export function useReservationMemoPopover({
     setMemoPopover((prev) => (prev?.item.id === item.id ? { ...prev, notes: res.notes, error: undefined } : prev));
   }
 
-  async function handleMemoUpdate(note: ReservationNote) {
-    if (!currentUser || !memoPopover) return;
+  async function handleMemoUpdate(note: ReservationNote): Promise<MutationResult> {
+    if (!currentUser || !memoPopover) return { success: false, message: "로그인이 필요합니다." };
     const result = await updateReservationNote({
       noteId: note.id,
       reservationId: note.reservationId,
@@ -59,32 +60,28 @@ export function useReservationMemoPopover({
       memoText: editingNoteText,
       staff: currentUser,
     });
-    if (!result.success) {
-      setPageError(result.message || "메모 수정에 실패했습니다.");
-      return;
-    }
+    if (!result.success) return result;
     setEditingNoteId(null);
     await refetchMemoNotes(memoPopover.item);
+    return { success: true };
   }
 
-  async function handleMemoDelete(note: ReservationNote) {
-    if (!currentUser || !memoPopover) return;
-    if (!confirm("메모를 삭제할까요?")) return;
+  async function handleMemoDelete(note: ReservationNote): Promise<MutationResult> {
+    if (!currentUser || !memoPopover) return { success: false, message: "로그인이 필요합니다." };
+    if (!confirm("메모를 삭제할까요?")) return { success: true }; // 취소 = 무동작
     const result = await deleteReservationNote({
       noteId: note.id,
       reservationId: note.reservationId,
       patientId: note.patientId || memoPopover.item.patientId || "",
       staff: currentUser,
     });
-    if (!result.success) {
-      setPageError(result.message || "메모 삭제에 실패했습니다.");
-      return;
-    }
+    if (!result.success) return result;
     await refetchMemoNotes(memoPopover.item);
+    return { success: true };
   }
 
-  async function handleMemoAdd(text: string) {
-    if (!currentUser || !memoPopover) return;
+  async function handleMemoAdd(text: string): Promise<MutationResult> {
+    if (!currentUser || !memoPopover) return { success: false, message: "로그인이 필요합니다." };
     const item = memoPopover.item;
     const result = await addReservationNote({
       reservationId: item.reservationId,
@@ -93,11 +90,9 @@ export function useReservationMemoPopover({
       memoText: text,
       staff: currentUser,
     });
-    if (!result.success) {
-      setPageError(result.message || "메모 등록에 실패했습니다.");
-      return;
-    }
+    if (!result.success) return result;
     await refetchMemoNotes(item);
+    return { success: true };
   }
 
   async function openPatientMemoPopover(group: PatientGroup) {
