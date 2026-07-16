@@ -8,7 +8,7 @@
  *   2) 모든 환자 문서에 identityKey 필드 backfill(향후 create-dedup이 동작하도록).
  *   3) 신원 키가 같은 문서가 2개 이상인 그룹:
  *        - 대표 = createdAt 최솟값(가장 먼저 등록). 동률이면 문서 ID 사전순.
- *        - 비대표 문서의 예약/인보이스/메모/사진 patientId를 대표 patientId로 재지정.
+ *        - 비대표 문서의 예약/인보이스/정산/메모/사진 patientId를 대표 patientId로 재지정.
  *        - 비대표 patients 문서 soft-delete(isDeleted=true, mergedIntoPatientId, reconcileMergedAt).
  *        - 대표 patientId 기준으로 요약(summary) 재계산.
  *
@@ -27,6 +27,7 @@
 import * as admin from "firebase-admin";
 import { readFileSync } from "node:fs";
 import { identityKeyForPatient } from "../lib/patientIdentity";
+import { aggregateSettlementRows, type SettlementMathRow } from "../lib/settlementMath";
 
 const APPLY = process.argv.includes("--apply");
 const DRY_RUN = !APPLY;
@@ -68,23 +69,7 @@ function createdAtMillis(data: admin.firestore.DocumentData): number {
   return Number.POSITIVE_INFINITY;
 }
 
-function parseAmount(v: unknown): number {
-  const cleaned = String(v ?? "").replace(/[^0-9.]/g, "");
-  const n = parseFloat(cleaned);
-  return Number.isFinite(n) ? n : 0;
-}
-
-// lib/patientSummary.ts reservationGroupKey와 동일 규칙(병원+부위+원장).
-function reservationGroupKey(r: admin.firestore.DocumentData): string {
-  const doctors = Array.isArray(r.doctors) ? (r.doctors as unknown[]) : [];
-  return [
-    String(r.hospital || "").trim().toLowerCase(),
-    String(r.consultArea || "").trim().toLowerCase(),
-    doctors.map((d) => String(d).trim().toLowerCase()).sort().join(","),
-  ].join("|");
-}
-
-// 대표 patientId 기준 요약 재계산(재지정 후 배지/최근예약이 정확하도록). backfill과 동일 집계.
+// 대표 patientId 기준 요약 재계산(재지정 후 배지/최근예약/정산이 정확하도록).
 async function recomputeSummary(db: admin.firestore.Firestore, patientId: string): Promise<Record<string, unknown>> {
   const resSnap = await db
     .collection("reservations")
@@ -95,21 +80,13 @@ async function recomputeSummary(db: admin.firestore.Firestore, patientId: string
     .get();
 
   let reservationCount = 0;
-  let totalDepositAmount = 0;
-  let totalSurgeryCost = 0;
   let lastReservationDate = "";
   let lastReservationTime = "";
   let lastComposite = "";
-  const depositGroups = new Set<string>();
-  const surgeryGroups = new Set<string>();
 
   for (const d of resSnap.docs) {
     const r = d.data();
     reservationCount += 1;
-    const hasDeposit = String(r.depositAmount ?? "").trim() !== "";
-    const hasSurgery = String(r.surgeryCost ?? "").trim() !== "";
-    if (hasDeposit) { depositGroups.add(reservationGroupKey(r)); totalDepositAmount += parseAmount(r.depositAmount); }
-    if (hasSurgery) { surgeryGroups.add(reservationGroupKey(r)); totalSurgeryCost += parseAmount(r.surgeryCost); }
     const date = String(r.reservationDate || "");
     const time = String(r.reservationTime || "");
     const comp = `${date} ${time}`;
@@ -120,25 +97,30 @@ async function recomputeSummary(db: admin.firestore.Firestore, patientId: string
     }
   }
 
-  const [invAgg, memoAgg] = await Promise.all([
+  const [invAgg, memoAgg, settlementSnap] = await Promise.all([
     db.collection("invoices").where("patientId", "==", patientId).where("isDeleted", "==", false).count().get(),
     db.collection("reservationNotes").where("patientId", "==", patientId).where("isDeleted", "==", false).count().get(),
+    db.collection("settlements").where("patientId", "==", patientId).get(),
   ]);
   const invoiceCount = invAgg.data().count;
   const memoCount = memoAgg.data().count;
+  const settlementAggregate = aggregateSettlementRows(
+    settlementSnap.docs.map((doc) => doc.data() as SettlementMathRow)
+  );
 
   return {
     reservationCount,
-    depositCount: depositGroups.size,
-    surgeryCostCount: surgeryGroups.size,
-    totalDepositAmount,
-    totalSurgeryCost,
     lastReservationDate,
     lastReservationTime,
     lastReservationAt: lastReservationDate ? `${lastReservationDate} ${lastReservationTime}`.trim() : "",
     reservationCountCapped: resSnap.docs.length === RESERVATION_CAP,
     invoiceCount,
     hasInvoice: invoiceCount > 0,
+    settlementCount: settlementAggregate.count,
+    totalSettlementPaid: settlementAggregate.totalPaid,
+    totalSettlementRefunded: settlementAggregate.totalRefunded,
+    netSettlementAmount: settlementAggregate.netAmount,
+    lastSettlementAt: settlementAggregate.lastPaidAt,
     memoCount,
     hasMemo: memoCount > 0,
     summaryUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -194,6 +176,7 @@ async function main() {
     softDeletedPatients: 0,
     repointedReservations: 0,
     repointedInvoices: 0,
+    repointedSettlements: 0,
     repointedNotes: 0,
     repointedPhotos: 0,
     summariesRecomputed: 0,
@@ -231,19 +214,21 @@ async function main() {
     for (const dup of sorted.slice(1)) {
       const dupPatientId = String(dup.data().patientId || "");
       if (dupPatientId && dupPatientId !== canonicalPatientId) {
-        const [r, inv, memo, photo] = await Promise.all([
+        const [r, inv, settlement, memo, photo] = await Promise.all([
           repointCollection(db, "reservations", dupPatientId, canonicalPatientId),
           repointCollection(db, "invoices", dupPatientId, canonicalPatientId),
+          repointCollection(db, "settlements", dupPatientId, canonicalPatientId),
           repointCollection(db, "reservationNotes", dupPatientId, canonicalPatientId),
           repointCollection(db, "reservationPhotos", dupPatientId, canonicalPatientId),
         ]);
         stats.repointedReservations += r;
         stats.repointedInvoices += inv;
+        stats.repointedSettlements += settlement;
         stats.repointedNotes += memo;
         stats.repointedPhotos += photo;
         console.log(
           `[reconcile]${DRY_RUN ? " [DRY]" : ""} 재지정 ${dupPatientId} → ${canonicalPatientId} ` +
-          `(예약 ${r}, 인보이스 ${inv}, 메모 ${memo}, 사진 ${photo})`
+          `(예약 ${r}, 인보이스 ${inv}, 정산 ${settlement}, 메모 ${memo}, 사진 ${photo})`
         );
       }
 

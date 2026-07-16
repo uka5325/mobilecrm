@@ -1,7 +1,7 @@
 import { auth } from "./firebase";
 import type { StaffUser } from "./auth";
 import { cleanText } from "./stringUtils";
-import { toMillis } from "./settingsUtils";
+import { toMillis } from "./dateUtils";
 
 export type ReservationNote = {
   id: string;
@@ -53,12 +53,14 @@ function mapNote(
 export async function getReservationNotes(
   reservationId: string,
   reservationDocId: string,
-  patientId?: string
+  patientId?: string,
+  options: { limit?: number } = {}
 ): Promise<ReservationNote[]> {
   const result = await callNotesApi("read", {
     reservationId: cleanText(reservationId),
     reservationDocId: cleanText(reservationDocId),
     patientId: cleanText(patientId),
+    limit: options.limit,
   });
 
   if (!result.success || !Array.isArray(result.notes)) return [];

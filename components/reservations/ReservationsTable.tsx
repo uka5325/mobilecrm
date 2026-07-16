@@ -4,6 +4,8 @@ import { useState, type ReactNode } from "react";
 import type { ReservationRecord, AppointmentType } from "@/lib/reservations";
 import { APPOINTMENT_TYPES } from "@/lib/reservations";
 import { getReservationBirthInfo } from "@/lib/reservationUtils";
+import { getInvoicesByPatientId, getInvoicesByPatientCache } from "@/lib/invoices";
+import { getCachedPatientSettlements, listPatientSettlements } from "@/lib/settlements";
 import { PatientInvoiceModal } from "./PatientInvoiceModal";
 import { SettlementModal } from "@/components/settlements/SettlementModal";
 
@@ -112,6 +114,16 @@ export function ReservationsTable({
 
   const [invoiceModal, setInvoiceModal] = useState<{ patientId: string; patientName: string } | null>(null);
   const [settlementModal, setSettlementModal] = useState<{ patientId: string; patientName: string } | null>(null);
+
+  function prefetchInvoiceModal(patientId: string) {
+    if (!patientId) return;
+    if (!getInvoicesByPatientCache(patientId)) void getInvoicesByPatientId(patientId);
+  }
+
+  function prefetchSettlementModal(patientId: string) {
+    if (!patientId || getCachedPatientSettlements(patientId)) return;
+    void listPatientSettlements(patientId, { includeAppointments: false });
+  }
 
   // 행 단위 인라인 편집 렌더러 — 현재 화면에서 호출되지 않는 레거시 경로(환자 헤더 편집으로 대체됨).
   // 부모의 inline-edit 상태 체인과 함께 별도 정리 예정. (3단계 범위 밖 — 다중 파일 정리 리스크)
@@ -309,6 +321,8 @@ export function ReservationsTable({
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
             {/* 정산 원장 — patients.settlementCount 배지, 상세는 공용 모달 */}
             <button
+              onFocus={() => prefetchSettlementModal(pid)}
+              onMouseEnter={() => prefetchSettlementModal(pid)}
               onClick={() => setSettlementModal({ patientId: pid, patientName: group.name })}
               className={`rounded-md border px-2 py-0.5 text-xs transition ${settlementCount > 0 ? "border-blue-200 bg-white text-blue-600 hover:bg-blue-50" : "border-gray-200 bg-white text-gray-400 hover:bg-gray-50"}`}
             >
@@ -317,6 +331,8 @@ export function ReservationsTable({
 
             {/* 인보이스 (건수) — summary */}
             <button
+              onFocus={() => prefetchInvoiceModal(pid)}
+              onMouseEnter={() => prefetchInvoiceModal(pid)}
               onClick={() => setInvoiceModal({ patientId: pid, patientName: group.name })}
               className={`rounded-md border px-2 py-0.5 text-xs transition ${invoiceCount > 0 ? "border-emerald-200 bg-white text-[#1d9e75] hover:bg-emerald-50" : "border-gray-200 bg-white text-gray-400 hover:bg-gray-50"}`}
             >

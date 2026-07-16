@@ -9,6 +9,7 @@ const PAGE_SIZE = 10;
 type Props = {
   memoText: string;
   notes: ReservationNote[];
+  notesLoading?: boolean;
   memoError?: string;
   memoSuccess?: string;
   onMemoTextChange: (text: string) => void;
@@ -17,7 +18,7 @@ type Props = {
   onDeleteNote: (note: ReservationNote) => Promise<void>;
 };
 
-export function NotesTab({ memoText, notes, memoError, memoSuccess, onMemoTextChange, onAddMemo, onUpdateNote, onDeleteNote }: Props) {
+export function NotesTab({ memoText, notes, notesLoading, memoError, memoSuccess, onMemoTextChange, onAddMemo, onUpdateNote, onDeleteNote }: Props) {
   const [page, setPage] = useState(1);
   // 렌더 중 상태 조정(React 공식 패턴) — notes.length가 바뀌면(새 메모 추가/삭제)
   // effect 없이 이번 렌더에서 바로 1페이지로 되돌린다.
@@ -53,7 +54,11 @@ export function NotesTab({ memoText, notes, memoError, memoSuccess, onMemoTextCh
       )}
 
       <div className="mt-4 space-y-3">
-        {notes.length === 0 ? (
+        {notesLoading ? (
+          <div className="rounded-xl border border-[#edf0f3] bg-white p-4 text-sm text-gray-400">
+            메모를 불러오는 중...
+          </div>
+        ) : notes.length === 0 ? (
           <div className="rounded-xl border border-[#edf0f3] bg-white p-4 text-sm text-gray-400">
             등록된 메모가 없습니다.
           </div>

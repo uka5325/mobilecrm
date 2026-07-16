@@ -3,7 +3,7 @@
 import { useState } from "react";
 import type { ReservationNote } from "@/lib/reservationNotes";
 import type { ReservationRecord } from "@/lib/reservations";
-import { toDate } from "@/lib/settingsUtils";
+import { toDate } from "@/lib/dateUtils";
 
 export type MemoPopoverState = {
   item: ReservationRecord;

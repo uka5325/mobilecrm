@@ -114,6 +114,7 @@ export function PatientSummaryProvider({ children }: { children: ReactNode }) {
   const patientsRef = useRef<PatientRecord[]>(initialCache?.patients ?? []);
   const unsubscribeRef = useRef<(() => void) | null>(null);
   const startedUidRef = useRef<string | null>(null);
+  const requestedUidRef = useRef<string | null>(null);
   const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const retryAttemptRef = useRef(0);
   const startRef = useRef<() => void>(() => {});
@@ -152,9 +153,19 @@ export function PatientSummaryProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
+    // 소비자 effect가 Provider effect보다 먼저 start()를 호출한 경우 현재 구독을 보존한다.
+    if (uid && startedUidRef.current === uid) {
+      return () => {
+        unsubscribeRef.current?.();
+        unsubscribeRef.current = null;
+        clearRetryTimer();
+      };
+    }
+
     unsubscribeRef.current?.();
     unsubscribeRef.current = null;
     startedUidRef.current = null;
+    if (requestedUidRef.current !== uid) requestedUidRef.current = null;
     resetRetry();
     setStarted(false);
     setError(null);
@@ -183,7 +194,9 @@ export function PatientSummaryProvider({ children }: { children: ReactNode }) {
   }, [uid, clearRetryTimer, resetRetry]);
 
   const start = useCallback(() => {
-    if (!authReady || !uid || startedUidRef.current === uid) return;
+    if (!authReady || !uid) return;
+    requestedUidRef.current = uid;
+    if (startedUidRef.current === uid) return;
 
     clearRetryTimer();
     unsubscribeRef.current?.();
@@ -274,17 +287,11 @@ export function PatientSummaryProvider({ children }: { children: ReactNode }) {
     startRef.current = start;
   }, [start]);
 
-  // 인증이 끝나는 즉시 AppShell 수명에서 미리 구독해 고객관리 진입 전 데이터를 준비한다.
-  useEffect(() => {
-    if (!authReady || !uid) return;
-    start();
-  }, [authReady, uid, start]);
-
   // 네트워크가 복구됐는데 listener가 끊긴 상태라면 즉시 재연결한다.
   useEffect(() => {
     if (typeof window === "undefined") return;
     const handleOnline = () => {
-      if (!uid || startedUidRef.current === uid) return;
+      if (!uid || requestedUidRef.current !== uid || startedUidRef.current === uid) return;
       retryAttemptRef.current = 0;
       clearRetryTimer();
       startRef.current();
@@ -331,6 +338,7 @@ export function PatientSummaryProvider({ children }: { children: ReactNode }) {
     unsubscribeRef.current?.();
     unsubscribeRef.current = null;
     startedUidRef.current = null;
+    requestedUidRef.current = null;
     patientsRef.current = [];
     resetRetry();
     setStarted(false);

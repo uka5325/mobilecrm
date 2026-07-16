@@ -1,7 +1,7 @@
 import { after, before, test } from "node:test";
 import assert from "node:assert/strict";
 import { NextRequest } from "next/server";
-import { POST } from "@/app/api/invoices-consistent/route";
+import { POST } from "@/app/api/invoices/route";
 import { adminDb } from "@/lib/firebaseAdmin";
 import { __resetStaffCacheForTests } from "@/lib/apiAuth";
 import { createTestUser, type TestUser } from "../helpers/testAuth";

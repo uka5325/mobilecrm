@@ -5,6 +5,18 @@ import { requireActiveStaff, toAuthErrorResponse } from "@/lib/apiAuth";
 
 const STAFF_LIST_LIMIT = 200;
 
+function isValidDateOnly(value: string): boolean {
+  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return false;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  return date.getUTCFullYear() === year
+    && date.getUTCMonth() === month - 1
+    && date.getUTCDate() === day;
+}
+
 // 데이터/설정 변경 action — 토큰 폐기 검사 적용
 const WRITE_ACTIONS = new Set([
   "save_appointment_colors",
@@ -100,23 +112,23 @@ export async function POST(req: NextRequest) {
 
     // ── READ: get memos by date ───────────────────────────────────────────
     if (action === "get_memos") {
-      const p = payload as { memoDate: string; limit?: number };
-      // 무제한 스캔 방지 안전 상한. 같은 날짜 메모는 소수이나 상한으로 보호.
+      const p = payload as { memoDate?: string; limit?: number };
+      const memoDate = String(p.memoDate || "").trim();
+      if (!isValidDateOnly(memoDate)) {
+        return NextResponse.json(
+          { success: false, message: "메모 날짜 형식이 올바르지 않습니다." },
+          { status: 400 }
+        );
+      }
+      const requestedLimit = Math.max(1, Math.min(100, Number(p.limit) || 50));
       const snap = await adminDb
         .collection("conferenceMemos")
-        .where("memoDate", "==", p.memoDate)
-        .limit(300)
+        .where("memoDate", "==", memoDate)
+        .where("deleted", "==", false)
+        .orderBy("createdAt", "desc")
+        .limit(requestedLimit)
         .get();
-      const memos = snap.docs
-        .map(docToObj)
-        .filter((m: Record<string, unknown>) => m.deleted !== true)
-        .sort((a: Record<string, unknown>, b: Record<string, unknown>) => {
-          const at = typeof a.createdAt === "number" ? a.createdAt : 0;
-          const bt = typeof b.createdAt === "number" ? b.createdAt : 0;
-          return bt - at;
-        })
-        .slice(0, p.limit ?? 50);
-      return NextResponse.json({ success: true, memos });
+      return NextResponse.json({ success: true, memos: snap.docs.map(docToObj) });
     }
 
     // ── WRITE: add memo ───────────────────────────────────────────────────

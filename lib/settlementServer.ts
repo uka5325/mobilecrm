@@ -136,18 +136,21 @@ function invoicePatch(
 
 export async function listSettlements(payload: Record<string, unknown>) {
   const patientId = cleanText(payload.patientId);
+  const includeAppointments = payload.includeAppointments !== false;
   if (!patientId) return error("patientId가 없습니다.");
 
-  const [settlementSnap, reservationSnap] = await Promise.all([
-    adminDb.collection("settlements")
-      .where("patientId", "==", patientId)
-      .limit(MAX_SETTLEMENTS_PER_PATIENT + 1)
-      .get(),
-    adminDb.collection("reservations")
+  const settlementSnap = await adminDb.collection("settlements")
+    .where("patientId", "==", patientId)
+    .limit(MAX_SETTLEMENTS_PER_PATIENT + 1)
+    .get();
+
+  const reservationSnap = includeAppointments
+    ? await adminDb.collection("reservations")
       .where("patientId", "==", patientId)
       .limit(501)
-      .get(),
-  ]);
+      .get()
+    : null;
+
   if (settlementSnap.docs.length > MAX_SETTLEMENTS_PER_PATIENT) {
     return error("정산 내역이 너무 많아 한 번에 처리할 수 없습니다.", 409, "SETTLEMENT_LIMIT_EXCEEDED");
   }
@@ -155,7 +158,7 @@ export async function listSettlements(payload: Record<string, unknown>) {
   const settlements: SettlementDoc[] = settlementSnap.docs
     .map((doc): SettlementDoc => ({ id: doc.id, ...(doc.data() as Record<string, unknown>) }))
     .sort((a, b) => `${String(b.paidAt || "")}\u0000${String(b.id || "")}`.localeCompare(`${String(a.paidAt || "")}\u0000${String(a.id || "")}`));
-  const appointments = reservationSnap.docs
+  const appointments = (reservationSnap?.docs ?? [])
     .flatMap((doc) => {
       const data = doc.data() as Record<string, unknown>;
       if (data.isDeleted === true) return [];
@@ -176,6 +179,7 @@ export async function listSettlements(payload: Record<string, unknown>) {
     success: true,
     settlements: toSerializable(settlements),
     appointments,
+    appointmentsLoaded: includeAppointments,
     aggregate: aggregateSettlementRows(asMathRows(settlements)),
   });
 }

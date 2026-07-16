@@ -7,6 +7,7 @@
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { NextRequest } from "next/server";
+import type { DocumentReference } from "firebase-admin/firestore";
 import { adminDb } from "@/lib/firebaseAdmin";
 import { __resetStaffCacheForTests } from "@/lib/apiAuth";
 import { createTestUser, type TestUser } from "../helpers/testAuth";
@@ -60,3 +61,59 @@ test("get_staff_list는 활성 직원 누구나 조회 가능하다", async () =
   assert.equal(body.success, true);
   assert.ok(Array.isArray(body.staff));
 });
+
+test("get_memos는 삭제 메모가 limit을 소비하지 않게 최신 활성 메모만 반환한다", async () => {
+  const memoDate = "2099-12-31";
+  const runId = `settings-memo-query-${Date.now()}`;
+  const refs: DocumentReference[] = [];
+  const batch = adminDb.batch();
+
+  for (let index = 1; index <= 5; index += 1) {
+    const ref = adminDb.collection("conferenceMemos").doc();
+    refs.push(ref);
+    batch.set(ref, {
+      testRun: runId,
+      memoDate,
+      memoText: `active-${index}`,
+      deleted: false,
+      createdAt: index * 100,
+    });
+  }
+  for (let index = 1; index <= 2; index += 1) {
+    const ref = adminDb.collection("conferenceMemos").doc();
+    refs.push(ref);
+    batch.set(ref, {
+      testRun: runId,
+      memoDate,
+      memoText: `deleted-${index}`,
+      deleted: true,
+      createdAt: 500 + index * 100,
+    });
+  }
+  await batch.commit();
+
+  try {
+    __resetStaffCacheForTests();
+    const response = await POST(makeReq(staff.idToken, "get_memos", { memoDate, limit: 3 }));
+    assert.equal(response.status, 200);
+    const body = await response.json();
+    assert.deepEqual(
+      body.memos.map((memo: { memoText: string }) => memo.memoText),
+      ["active-5", "active-4", "active-3"]
+    );
+  } finally {
+    const cleanup = adminDb.batch();
+    refs.forEach((ref) => cleanup.delete(ref));
+    await cleanup.commit();
+  }
+});
+
+test("get_memos는 잘못된 날짜를 거부한다", async () => {
+  __resetStaffCacheForTests();
+  const response = await POST(makeReq(staff.idToken, "get_memos", {
+    memoDate: "2099-99-99",
+    limit: 50,
+  }));
+  assert.equal(response.status, 400);
+});
+

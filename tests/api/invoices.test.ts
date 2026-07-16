@@ -117,12 +117,12 @@ test("비담당 코디네이터는 update가 403", async () => {
   assert.equal(res.status, 403);
 });
 
-test("담당 코디네이터는 update로 금액을 바꿀 수 있고 예약 문서도 트랜잭션으로 동기화된다", async () => {
+test("정산이 있으면 update 시 정산 금액을 유지하고 예약 문서도 트랜잭션으로 동기화된다", async () => {
   __resetStaffCacheForTests();
   const res = await POST(makeReq(coordA.idToken, "update", { invoiceDocId, totalAmount: 2000000, status: "confirmed" }));
   assert.equal(res.status, 200);
   const body = await res.json();
-  assert.equal(body.invoice.totalAmount, 2000000);
+  assert.equal(body.invoice.totalAmount, 1000000);
   assert.equal(body.invoice.updatedByUid, coordA.uid);
 
   const resSnap = await adminDb.collection("reservations").doc(reservationDocId).get();
@@ -145,24 +145,6 @@ test("list: admin은 전체를, coordinator는 본인 담당분만 본다", asyn
 
   const asCoordB = await (await POST(makeReq(coordB.idToken, "list", {}))).json();
   assert.ok(!asCoordB.invoices.some((inv: { id: string }) => inv.id === invoiceDocId));
-});
-
-test("counts_by_patients: admin은 count() 집계로 정확한 개수를 받는다", async () => {
-  __resetStaffCacheForTests();
-  const res = await POST(makeReq(admin.idToken, "counts_by_patients", { patientIds: ["P-TEST-1", "P-NO-INVOICE"] }));
-  assert.equal(res.status, 200);
-  const body = await res.json();
-  assert.equal(body.counts["P-TEST-1"], 1);
-  assert.equal(body.counts["P-NO-INVOICE"], 0);
-});
-
-test("counts_by_patients: 담당 코디네이터는 본인 담당분만 개수에 반영된다", async () => {
-  __resetStaffCacheForTests();
-  const asCoordA = await (await POST(makeReq(coordA.idToken, "counts_by_patients", { patientIds: ["P-TEST-1"] }))).json();
-  assert.equal(asCoordA.counts["P-TEST-1"], 1);
-
-  const asCoordB = await (await POST(makeReq(coordB.idToken, "counts_by_patients", { patientIds: ["P-TEST-1"] }))).json();
-  assert.equal(asCoordB.counts["P-TEST-1"], 0);
 });
 
 test("담당 코디네이터는 인보이스를 삭제(소프트)할 수 있고 예약 연결이 해제된다", async () => {

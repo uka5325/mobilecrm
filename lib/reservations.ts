@@ -346,7 +346,6 @@ export async function createPatientOnly(
     };
   }
 
-  base.invalidatePatientsCache();
   base.invalidatePatientsSummaryCache();
   return {
     success: true,
