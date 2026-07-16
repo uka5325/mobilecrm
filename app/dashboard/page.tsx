@@ -12,7 +12,8 @@ import {
   getAppointmentType,
   getReservationDate,
   getReservationTime,
-  getConsultArea,
+  getConsultAreas,
+  getPatientKey,
   getManagers,
   getDoctors,
   isCompleted,
@@ -62,11 +63,6 @@ function rateText(part: number, total: number) {
   return pctText(total ? Math.round((part / total) * 1000) / 10 : 0);
 }
 
-function patientKey(item: ReservationDoc) {
-  const raw = item.id || item.reservationId || item.reservation_id || item.name || "";
-  return cleanText(raw) || "미지정";
-}
-
 function isCancelled(item: ReservationDoc) {
   return item.cancelled === true;
 }
@@ -75,12 +71,16 @@ function isScheduled(item: ReservationDoc) {
   return !isCancelled(item) && !isCompleted(item);
 }
 
+function isOperationallyCompleted(item: ReservationDoc) {
+  return !isCancelled(item) && isCompleted(item);
+}
+
 function buildOperationalRow(name: string, rows: ReservationDoc[], shareBase?: number): OperationalRow {
   const nonCancelled = rows.filter((item) => !isCancelled(item)).length;
-  const completed = rows.filter(isCompleted).length;
+  const completed = rows.filter(isOperationallyCompleted).length;
   const cancelled = rows.filter(isCancelled).length;
   const scheduled = rows.filter(isScheduled).length;
-  const patients = new Set(rows.map(patientKey)).size;
+  const patients = new Set(rows.map(getPatientKey)).size;
 
   return {
     name,
@@ -165,14 +165,14 @@ export default function DashboardPage() {
   }, [reservations]);
 
   const itemOptions = useMemo(() => {
-    return Array.from(new Set(reservations.map(getConsultArea).filter(Boolean))).sort();
+    return Array.from(new Set(reservations.flatMap(getConsultAreas).filter(Boolean))).sort();
   }, [reservations]);
 
   const filteredRows = useMemo(() => {
     return reservations.filter((item) => {
       if (hospitalFilter && getHospital(item) !== hospitalFilter) return false;
       if (apptTypeFilter && getAppointmentType(item) !== apptTypeFilter) return false;
-      if (itemFilter && getConsultArea(item) !== itemFilter) return false;
+      if (itemFilter && !getConsultAreas(item).includes(itemFilter)) return false;
       if (doctorFilter && !getDoctors(item).includes(doctorFilter)) return false;
       if (coordinatorFilter && !getManagers(item).includes(coordinatorFilter)) return false;
       return true;
@@ -198,9 +198,15 @@ export default function DashboardPage() {
       const rows = filteredRows.filter((item) => getAppointmentType(item) === type);
       return buildOperationalRow(type, rows);
     });
-    const itemRows = groupRows((item) => getConsultArea(item) || "미지정")
-      .filter((item) => item.total > 0)
-      .map((row) => ({ ...row, shareRate: summary.total ? Math.round((row.total / summary.total) * 1000) / 10 : 0 }));
+    const itemMap = new Map<string, ReservationDoc[]>();
+    for (const item of filteredRows) {
+      for (const area of getConsultAreas(item)) {
+        itemMap.set(area, [...(itemMap.get(area) || []), item]);
+      }
+    }
+    const itemRows = [...itemMap.entries()]
+      .map(([name, rows]) => buildOperationalRow(name, rows, summary.total))
+      .sort((a, b) => b.total - a.total || cleanText(a.name).localeCompare(cleanText(b.name)));
 
     return { summary, hospitalRows, apptTypeRows, itemRows };
   }, [filteredRows]);
@@ -212,7 +218,7 @@ export default function DashboardPage() {
       if (!map.has(date)) map.set(date, { date, total: 0, completed: 0, scheduled: 0, cancelled: 0 });
       const row = map.get(date)!;
       row.total += 1;
-      if (isCompleted(r)) row.completed += 1;
+      if (isOperationallyCompleted(r)) row.completed += 1;
       if (isScheduled(r)) row.scheduled += 1;
       if (isCancelled(r)) row.cancelled += 1;
     }
@@ -408,29 +414,6 @@ export default function DashboardPage() {
             ))}
           </section>
 
-          <Panel title="일자별 운영 추이" rightText={`${dayTrendRows.length.toLocaleString("ko-KR")}일`}>
-            <div className="space-y-3 px-6 pb-5 lg:px-8">
-              {dayTrendRows.length === 0 ? (
-                <div className="py-8 text-center text-sm text-gray-400">데이터가 없습니다.</div>
-              ) : (
-                dayTrendRows.map((row) => {
-                  const max = Math.max(...dayTrendRows.map((item) => item.total), 1);
-                  return (
-                    <div key={row.date} className="grid grid-cols-[92px_1fr] gap-3 text-xs md:grid-cols-[92px_1fr_160px] md:items-center">
-                      <div className="font-medium text-gray-700">{row.date}</div>
-                      <div className="h-3 overflow-hidden rounded-full bg-gray-100">
-                        <div className="h-full rounded-full bg-[#1d9e75]" style={{ width: `${Math.max(4, (row.total / max) * 100)}%` }} />
-                      </div>
-                      <div className="col-span-2 text-gray-500 md:col-span-1 md:text-right">
-                        {formatNumber(row.total)}건 · 완료 {formatNumber(row.completed)} · 예정 {formatNumber(row.scheduled)} · 취소 {formatNumber(row.cancelled)}
-                      </div>
-                    </div>
-                  );
-                })
-              )}
-            </div>
-          </Panel>
-
           <Panel title="예약 유형별 현황">
             <div className="grid grid-cols-2 gap-3 px-6 pb-5 md:grid-cols-4 lg:px-8">
               {APPOINTMENT_TYPES.map((type) => {
@@ -438,6 +421,7 @@ export default function DashboardPage() {
                 const count = row?.total || 0;
                 const completed = row?.completed || 0;
                 const scheduled = row?.scheduled || 0;
+                const cancelled = row?.cancelled || 0;
                 return (
                   <div
                     key={type}
@@ -447,7 +431,7 @@ export default function DashboardPage() {
                     <div className="text-xs font-bold" style={{ color: APPT_TYPE_COLORS[type] }}>{type}</div>
                     <div className="mt-1 text-[24px] font-bold text-gray-900">{formatNumber(count)}</div>
                     <div className="mt-0.5 text-xs text-gray-500">
-                      완료 {formatNumber(completed)}건 · 예정 {formatNumber(scheduled)}건
+                      완료 {formatNumber(completed)}건 · 예정 {formatNumber(scheduled)}건 · 취소 {formatNumber(cancelled)}건
                     </div>
                   </div>
                 );
@@ -504,6 +488,29 @@ export default function DashboardPage() {
                   <div className="mt-1 text-[22px] font-bold text-gray-900">{formatNumber(item.value)}</div>
                 </button>
               ))}
+            </div>
+          </Panel>
+
+          <Panel title="일자별 운영 추이" rightText={`${dayTrendRows.length.toLocaleString("ko-KR")}일`}>
+            <div className="space-y-3 px-6 pb-5 lg:px-8">
+              {dayTrendRows.length === 0 ? (
+                <div className="py-8 text-center text-sm text-gray-400">데이터가 없습니다.</div>
+              ) : (
+                dayTrendRows.map((row) => {
+                  const max = Math.max(...dayTrendRows.map((item) => item.total), 1);
+                  return (
+                    <div key={row.date} className="grid grid-cols-[92px_1fr] gap-3 text-xs md:grid-cols-[92px_1fr_160px] md:items-center">
+                      <div className="font-medium text-gray-700">{row.date}</div>
+                      <div className="h-3 overflow-hidden rounded-full bg-gray-100">
+                        <div className="h-full rounded-full bg-[#1d9e75]" style={{ width: `${Math.max(4, (row.total / max) * 100)}%` }} />
+                      </div>
+                      <div className="col-span-2 text-gray-500 md:col-span-1 md:text-right">
+                        {formatNumber(row.total)}건 · 완료 {formatNumber(row.completed)} · 예정 {formatNumber(row.scheduled)} · 취소 {formatNumber(row.cancelled)}
+                      </div>
+                    </div>
+                  );
+                })
+              )}
             </div>
           </Panel>
         </>
