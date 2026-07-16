@@ -12,7 +12,7 @@ import {
   getAppointmentType,
   getReservationDate,
   getReservationTime,
-  getConsultAreas,
+  getDemandAreas,
   getPatientKey,
   getManagers,
   getDoctors,
@@ -165,14 +165,14 @@ export default function DashboardPage() {
   }, [reservations]);
 
   const itemOptions = useMemo(() => {
-    return Array.from(new Set(reservations.flatMap(getConsultAreas).filter(Boolean))).sort();
+    return Array.from(new Set(reservations.flatMap(getDemandAreas).filter(Boolean))).sort();
   }, [reservations]);
 
   const filteredRows = useMemo(() => {
     return reservations.filter((item) => {
       if (hospitalFilter && getHospital(item) !== hospitalFilter) return false;
       if (apptTypeFilter && getAppointmentType(item) !== apptTypeFilter) return false;
-      if (itemFilter && !getConsultAreas(item).includes(itemFilter)) return false;
+      if (itemFilter && !getDemandAreas(item).includes(itemFilter)) return false;
       if (doctorFilter && !getDoctors(item).includes(doctorFilter)) return false;
       if (coordinatorFilter && !getManagers(item).includes(coordinatorFilter)) return false;
       return true;
@@ -200,7 +200,7 @@ export default function DashboardPage() {
     });
     const itemMap = new Map<string, ReservationDoc[]>();
     for (const item of filteredRows) {
-      for (const area of getConsultAreas(item)) {
+      for (const area of getDemandAreas(item)) {
         itemMap.set(area, [...(itemMap.get(area) || []), item]);
       }
     }
