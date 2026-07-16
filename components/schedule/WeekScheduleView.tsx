@@ -4,8 +4,9 @@ import { useMemo } from "react";
 import type { ReservationRecord } from "@/lib/reservations";
 import { addDays, formatDayLabel, isToday } from "@/lib/scheduleDates";
 import {
-  buildColumnPositions,
   getAppointmentColor,
+  minutesToPx,
+  timeToMinutes,
   HOUR_HEIGHT,
   START_HOUR,
   TIME_COL_W,
@@ -14,7 +15,28 @@ import {
 } from "@/lib/scheduleLayout";
 import { ScheduleHourGrid } from "@/components/schedule/ScheduleHourGrid";
 
-function WeekDayCard({ item, top, col, totalCols, onClick }: { item: ReservationRecord; top: number; col: number; totalCols: number; onClick: () => void }) {
+const WEEK_CARD_GAP = 2;
+
+function buildWeekStackPositions(items: ReservationRecord[]) {
+  const sorted = [...items].sort((a, b) => {
+    const timeDiff =
+      timeToMinutes(a.reservationTime || "00:00") -
+      timeToMinutes(b.reservationTime || "00:00");
+    return timeDiff || String(a.id).localeCompare(String(b.id));
+  });
+  let nextTop = 0;
+
+  return sorted.map((item) => {
+    const naturalTop = minutesToPx(
+      timeToMinutes(item.reservationTime || `${START_HOUR}:00`)
+    );
+    const top = Math.max(naturalTop, nextTop);
+    nextTop = top + WEEK_CARD_H + WEEK_CARD_GAP;
+    return { item, top };
+  });
+}
+
+function WeekDayCard({ item, top, onClick }: { item: ReservationRecord; top: number; onClick: () => void }) {
   const cancelled = item.cancelled === true;
   const color = cancelled ? "#fef08a" : item.completed ? "#9ca3af" : getAppointmentColor(item.appointmentType);
   const textColor = cancelled ? "#78350f" : "white";
@@ -29,8 +51,8 @@ function WeekDayCard({ item, top, col, totalCols, onClick }: { item: Reservation
         backgroundColor: color,
         opacity: item.completed ? 0.75 : 1,
         color: textColor,
-        left: `calc(${(col / totalCols) * 100}% + 1px)`,
-        width: `calc(${(1 / totalCols) * 100}% - 2px)`,
+        left: 1,
+        width: "calc(100% - 2px)",
       }}
       title={[item.name, time, item.hospital, item.consultArea].filter(Boolean).join(" · ")}
     >
@@ -56,7 +78,7 @@ export function WeekScheduleView({
   const dayData = useMemo(() => {
     return days.map((day) => {
       const dayItems = reservations.filter((r) => r.reservationDate === day);
-      const positioned = buildColumnPositions(dayItems, WEEK_CARD_H);
+      const positioned = buildWeekStackPositions(dayItems);
       const contentH = positioned.length > 0
         ? Math.max(...positioned.map((p) => p.top + WEEK_CARD_H + 4))
         : 0;
@@ -113,8 +135,8 @@ export function WeekScheduleView({
               </div>
               <div className="relative" style={{ height: maxH }}>
                 <ScheduleHourGrid rows={gridRows} />
-                {positioned.map(({ item, top, col, totalCols }) => (
-                  <WeekDayCard key={item.id} item={item} top={top} col={col} totalCols={totalCols} onClick={() => onCardClick(item)} />
+                {positioned.map(({ item, top }) => (
+                  <WeekDayCard key={item.id} item={item} top={top} onClick={() => onCardClick(item)} />
                 ))}
               </div>
             </div>
