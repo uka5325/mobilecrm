@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireActiveStaff, toAuthErrorResponse } from "@/lib/apiAuth";
 import {
   createSettlementAtomic,
+  listSalesSummaryRows,
   listSettlements,
   updateSettlementAtomic,
   voidSettlementAtomic,
@@ -18,6 +19,7 @@ export async function POST(req: NextRequest) {
     const ctx = await requireActiveStaff(String(body.idToken || ""), { checkRevoked: true });
     const payload = body.payload || {};
     if (body.action === "list") return listSettlements(payload);
+    if (body.action === "sales_summary") return listSalesSummaryRows(payload, ctx);
     if (body.action === "create") return createSettlementAtomic(payload, ctx);
     if (body.action === "update") return updateSettlementAtomic(payload, ctx);
     if (body.action === "void") return voidSettlementAtomic(payload, ctx);
