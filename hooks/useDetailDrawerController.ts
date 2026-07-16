@@ -82,6 +82,7 @@ export function useDetailDrawerController({
   const [memoSuccess, setMemoSuccess] = useState("");
   const [notes, setNotes] = useState<ReservationNote[]>([]);
   const [notesLoading, setNotesLoading] = useState(false);
+  const [notesError, setNotesError] = useState("");
   const fullNotesLoadedReservationRef = useRef<string | null>(null);
   const notesLoadSeqRef = useRef(0);
 
@@ -95,6 +96,7 @@ export function useDetailDrawerController({
     setMemoError("");
     setMemoSuccess("");
     setNotes([]);
+    setNotesError("");
     fullNotesLoadedReservationRef.current = null;
     notesLoadSeqRef.current += 1;
     setLogs([]);
@@ -180,23 +182,26 @@ export function useDetailDrawerController({
     const seq = ++notesLoadSeqRef.current;
     if (limit == null) fullNotesLoadedReservationRef.current = item.id;
     setNotesLoading(true);
-    try {
-      const list = await getReservationNotes(
-        item.reservationId,
-        item.id,
-        item.patientId,
-        limit == null ? {} : { limit }
-      );
-      if ((mounted && !mounted.current) || notesLoadSeqRef.current !== seq) return;
-      setNotes(list);
-    } catch {
+    setNotesError("");
+    // getReservationNotes는 throw하지 않고 판별 결과를 돌려준다. seq/mounted 가드로 stale 응답만 무시.
+    const res = await getReservationNotes(
+      item.reservationId,
+      item.id,
+      item.patientId,
+      limit == null ? {} : { limit }
+    );
+    if ((mounted && !mounted.current) || notesLoadSeqRef.current !== seq) return;
+    if (!res.success) {
+      // 전체 로드 실패 시 ref를 비워 다음 진입에서 재시도 가능하게 한다.
       if (limit == null && fullNotesLoadedReservationRef.current === item.id) {
         fullNotesLoadedReservationRef.current = null;
       }
-      if ((!mounted || mounted.current) && notesLoadSeqRef.current === seq) setNotes([]);
-    } finally {
-      if ((!mounted || mounted.current) && notesLoadSeqRef.current === seq) setNotesLoading(false);
+      setNotes([]);
+      setNotesError(res.message);
+    } else {
+      setNotes(res.notes);
     }
+    setNotesLoading(false);
   }
 
   async function refreshLoadedNotes(item: ReservationRecord) {
@@ -472,6 +477,7 @@ export function useDetailDrawerController({
     memoSuccess,
     notes,
     notesLoading,
+    notesError,
     recentNotes,
     logs,
     logsLoading,

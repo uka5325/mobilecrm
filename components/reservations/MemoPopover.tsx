@@ -9,6 +9,7 @@ export type MemoPopoverState = {
   item: ReservationRecord;
   notes: ReservationNote[];
   loading: boolean;
+  error?: string;
 } | null;
 
 type Props = {
@@ -121,10 +122,16 @@ export function MemoPopover({
         </div>
 
         <div className="overflow-y-auto p-5 flex-1">
+          {memoPopover.error && (
+            <div className="mb-3 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-600">{memoPopover.error}</div>
+          )}
           {memoPopover.loading ? (
             <div className="py-8 text-center text-sm text-gray-400">메모 로딩 중...</div>
           ) : memoPopover.notes.length === 0 ? (
-            <div className="py-8 text-center text-sm text-gray-400">등록된 메모가 없습니다.</div>
+            // refetch 실패로 목록이 보존됐을 땐 위 에러 배너만, 초기 로드 실패면 배너만(빈목록 문구 숨김)
+            memoPopover.error ? null : (
+              <div className="py-8 text-center text-sm text-gray-400">등록된 메모가 없습니다.</div>
+            )
           ) : (
             <div className="space-y-3">
               {pagedNotes.map((note) => (

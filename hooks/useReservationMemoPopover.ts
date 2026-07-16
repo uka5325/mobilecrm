@@ -28,12 +28,26 @@ export function useReservationMemoPopover({
   async function openMemoPopover(item: ReservationRecord) {
     setMemoPopover({ item, notes: [], loading: true });
     setEditingNoteId(null);
-    try {
-      const notes = await getReservationNotes(item.reservationId, item.id, item.patientId);
-      setMemoPopover((prev) => (prev?.item.id === item.id ? { item, notes, loading: false } : prev));
-    } catch {
-      setMemoPopover((prev) => (prev?.item.id === item.id ? { item, notes: [], loading: false } : prev));
+    const res = await getReservationNotes(item.reservationId, item.id, item.patientId);
+    // 응답 대기 중 다른 환자 팝오버를 열었으면(prev.item.id 불일치) 덮지 않는다.
+    setMemoPopover((prev) => {
+      if (prev?.item.id !== item.id) return prev;
+      return res.success
+        ? { item, notes: res.notes, loading: false }
+        : { item, notes: [], loading: false, error: res.message };
+    });
+  }
+
+  // mutation 성공 후 목록 새로고침. race guard(item.id)로 다른 환자 팝오버를 덮지 않으며,
+  // refetch만 실패한 경우 기존 목록을 보존한 채 팝오버 내부 + 페이지에 오류만 표시한다.
+  async function refetchMemoNotes(item: ReservationRecord) {
+    const res = await getReservationNotes(item.reservationId, item.id, item.patientId);
+    if (!res.success) {
+      setMemoPopover((prev) => (prev?.item.id === item.id ? { ...prev, loading: false, error: res.message } : prev));
+      setPageError(res.message);
+      return;
     }
+    setMemoPopover((prev) => (prev?.item.id === item.id ? { ...prev, notes: res.notes, error: undefined } : prev));
   }
 
   async function handleMemoUpdate(note: ReservationNote) {
@@ -50,8 +64,7 @@ export function useReservationMemoPopover({
       return;
     }
     setEditingNoteId(null);
-    const notes = await getReservationNotes(memoPopover.item.reservationId, memoPopover.item.id, memoPopover.item.patientId);
-    setMemoPopover((prev) => prev ? { ...prev, notes } : prev);
+    await refetchMemoNotes(memoPopover.item);
   }
 
   async function handleMemoDelete(note: ReservationNote) {
@@ -67,8 +80,7 @@ export function useReservationMemoPopover({
       setPageError(result.message || "메모 삭제에 실패했습니다.");
       return;
     }
-    const notes = await getReservationNotes(memoPopover.item.reservationId, memoPopover.item.id, memoPopover.item.patientId);
-    setMemoPopover((prev) => prev ? { ...prev, notes } : prev);
+    await refetchMemoNotes(memoPopover.item);
   }
 
   async function handleMemoAdd(text: string) {
@@ -85,8 +97,7 @@ export function useReservationMemoPopover({
       setPageError(result.message || "메모 등록에 실패했습니다.");
       return;
     }
-    const notes = await getReservationNotes(item.reservationId, item.id, item.patientId);
-    setMemoPopover((prev) => prev ? { ...prev, notes } : prev);
+    await refetchMemoNotes(item);
   }
 
   async function openPatientMemoPopover(group: PatientGroup) {

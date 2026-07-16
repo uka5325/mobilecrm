@@ -50,25 +50,41 @@ function mapNote(
   };
 }
 
+export type ReservationNotesResult =
+  | { success: true; notes: ReservationNote[] }
+  | { success: false; message: string };
+
 export async function getReservationNotes(
   reservationId: string,
   reservationDocId: string,
   patientId?: string,
   options: { limit?: number } = {}
-): Promise<ReservationNote[]> {
-  const result = await callNotesApi("read", {
-    reservationId: cleanText(reservationId),
-    reservationDocId: cleanText(reservationDocId),
-    patientId: cleanText(patientId),
-    limit: options.limit,
-  });
+): Promise<ReservationNotesResult> {
+  try {
+    const result = await callNotesApi("read", {
+      reservationId: cleanText(reservationId),
+      reservationDocId: cleanText(reservationDocId),
+      patientId: cleanText(patientId),
+      limit: options.limit,
+    });
 
-  if (!result.success || !Array.isArray(result.notes)) return [];
+    // 실패/네트워크 오류와 "메모 없음"을 값으로 구분한다. success이면서 notes가 명시적 배열일
+    // 때만 정상 빈 목록으로 인정하고, 그 외(실패·오형식)는 에러로 반환한다.
+    if (!result.success) {
+      return { success: false, message: result.message || "메모를 불러오지 못했습니다." };
+    }
+    if (!Array.isArray(result.notes)) {
+      return { success: false, message: "메모 응답 형식이 올바르지 않습니다." };
+    }
 
-  return (result.notes as Record<string, unknown>[])
-    .map((d) => mapNote(d, { reservationId, reservationDocId, patientId }))
-    .filter((n) => !n.isDeleted && n.memoText)
-    .sort((a, b) => toMillis(b.createdAt) - toMillis(a.createdAt));
+    const notes = (result.notes as Record<string, unknown>[])
+      .map((d) => mapNote(d, { reservationId, reservationDocId, patientId }))
+      .filter((n) => !n.isDeleted && n.memoText)
+      .sort((a, b) => toMillis(b.createdAt) - toMillis(a.createdAt));
+    return { success: true, notes };
+  } catch {
+    return { success: false, message: "메모를 불러오지 못했습니다. 네트워크를 확인해주세요." };
+  }
 }
 
 export async function addReservationNote(params: {
