@@ -352,19 +352,34 @@ export default function DashboardPage() {
               <option key={coordinator} value={coordinator}>{coordinator}</option>
             ))}
           </select>
+          <div className="flex min-w-0 gap-2 lg:hidden">
+            <button
+              onClick={() => load(startDate, endDate)}
+              disabled={loading}
+              className="h-10 min-w-0 flex-1 rounded-xl bg-[#1d9e75] px-2 text-sm font-medium text-white transition active:scale-95 disabled:opacity-60"
+            >
+              {loading ? "조회 중" : "조회"}
+            </button>
+            <button
+              onClick={resetFilters}
+              className="h-10 min-w-0 flex-1 rounded-xl bg-black px-2 text-sm font-medium text-white transition active:scale-95"
+            >
+              초기화
+            </button>
+          </div>
         </div>
 
         <div className="mt-2 flex items-center gap-2">
           <button
             onClick={() => load(startDate, endDate)}
             disabled={loading}
-            className="h-10 shrink-0 rounded-xl bg-[#1d9e75] px-4 text-sm font-medium text-white transition hover:-translate-y-0.5 hover:shadow-md active:scale-95 disabled:opacity-60"
+            className="hidden h-10 shrink-0 rounded-xl bg-[#1d9e75] px-4 text-sm font-medium text-white transition hover:-translate-y-0.5 hover:shadow-md active:scale-95 disabled:opacity-60 lg:block"
           >
             {loading ? "조회 중..." : "조회"}
           </button>
           <button
             onClick={resetFilters}
-            className="h-10 shrink-0 rounded-xl bg-black px-4 text-sm font-medium text-white transition hover:-translate-y-0.5 hover:shadow-md active:scale-95"
+            className="hidden h-10 shrink-0 rounded-xl bg-black px-4 text-sm font-medium text-white transition hover:-translate-y-0.5 hover:shadow-md active:scale-95 lg:block"
           >
             초기화
           </button>
