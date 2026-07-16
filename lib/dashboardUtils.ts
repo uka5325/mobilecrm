@@ -223,6 +223,30 @@ export function getAppointmentType(item: ReservationDoc) {
   return "상담";
 }
 
+const SURGERY_AREA_GROUPS: Array<{ name: string; pattern: RegExp }> = [
+  { name: "눈", pattern: /(눈|쌍꺼풀|트임|안검|눈매교정)/i },
+  { name: "코", pattern: /(코|콧|비중격|비주|비밸브|비절골)/i },
+  { name: "가슴", pattern: /(가슴|유방|유두|유륜|여유증)/i },
+  { name: "윤곽", pattern: /(윤곽|광대|사각턱|턱끝|양악|안면골|피질골)/i },
+  { name: "리프팅", pattern: /(리프팅|거상|스마스|smas)/i },
+  { name: "지방이식", pattern: /지방이식/i },
+  { name: "지방흡입", pattern: /(지방흡입|지흡|복부|허벅지|팔뚝|옆구리)/i },
+  { name: "입술", pattern: /입술/i },
+];
+
+export function getDemandAreas(item: ReservationDoc) {
+  const appointmentType = getAppointmentType(item);
+  if (appointmentType === "시술") return ["시술"];
+
+  const areas = getConsultAreas(item);
+  if (appointmentType !== "수술") return areas;
+
+  return Array.from(new Set(areas.map((area) => {
+    const group = SURGERY_AREA_GROUPS.find(({ pattern }) => pattern.test(area));
+    return group?.name || area;
+  })));
+}
+
 export function isCompleted(item: ReservationDoc) {
   return item.completed === true;
 }
