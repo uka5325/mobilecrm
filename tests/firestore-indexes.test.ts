@@ -19,34 +19,35 @@ const indexes = parsed.indexes;
 // canonical signature: 필드 순서(Firestore 의미상 중요)는 보존하되 order/arrayConfig를 한 토큰으로
 // 정규화한다. 배열 내 인덱스들의 순서는 signature Set 비교로 무시된다.
 function signature(index: CompositeIndex): string {
+  const scope = index.queryScope ?? "COLLECTION";
   const fields = index.fields.map((f) => `${f.fieldPath}:${f.order ?? f.arrayConfig ?? "?"}`).join(",");
-  return `${index.collectionGroup}|${fields}`;
+  return `${index.collectionGroup}|${scope}|${fields}`;
 }
 
 // 쿼리 감사로 도출한 필수 인덱스(각 줄 옆 주석 = 서빙 쿼리). 파일에서 누락되면 해당 쿼리는
 // 런타임에 FAILED_PRECONDITION으로 깨진다.
 const REQUIRED: string[] = [
-  "reservations|isDeleted:ASCENDING,reservationDate:DESCENDING", // 관리자 예약 조회(orderBy desc)
-  "reservations|isDeleted:ASCENDING,reservationDate:ASCENDING", // 실시간 범위 구독(range ASC)
-  "reservations|patientId:ASCENDING,isDeleted:ASCENDING,reservationDate:DESCENDING,reservationTime:DESCENDING", // 최신 예약(date,time)
-  "reservations|patientId:ASCENDING,isDeleted:ASCENDING,reservationDate:DESCENDING", // 환자 이력(date만 정렬) — 위 4필드로 대체 불가
-  "invoices|isDeleted:ASCENDING,createdAt:DESCENDING", // 인보이스 list 관리자 no-range
-  "invoices|patientId:ASCENDING,isDeleted:ASCENDING,createdAt:DESCENDING", // get_by_patient 관리자
-  "invoices|patientId:ASCENDING,coordinatorUids:CONTAINS,isDeleted:ASCENDING,createdAt:DESCENDING", // get_by_patient 코디(uid)
-  "invoices|patientId:ASCENDING,coordinators:CONTAINS,isDeleted:ASCENDING,createdAt:DESCENDING", // get_by_patient 코디(이름, 레거시)
-  "invoices|coordinatorUids:CONTAINS,isDeleted:ASCENDING,createdAt:DESCENDING", // list 코디 no-range
-  "invoices|coordinators:CONTAINS,isDeleted:ASCENDING,createdAt:DESCENDING", // list 코디 no-range(레거시)
-  "invoices|isDeleted:ASCENDING,surgeryDate:DESCENDING", // list 관리자 range
-  "invoices|coordinatorUids:CONTAINS,isDeleted:ASCENDING,surgeryDate:DESCENDING", // list 코디 range
-  "invoices|coordinators:CONTAINS,isDeleted:ASCENDING,surgeryDate:DESCENDING", // list 코디 range(레거시)
-  "patients|isDeleted:ASCENDING,lastReservationDate:DESCENDING", // 환자 목록 페이지네이션
-  "logs|reservationId:ASCENDING,createdAt:DESCENDING", // 로그 조회
-  "logs|targetId:ASCENDING,createdAt:DESCENDING", // 로그 조회
-  "logs|patientId:ASCENDING,createdAt:DESCENDING", // 로그 조회
-  "reservationNotes|patientId:ASCENDING,isDeleted:ASCENDING,createdAt:DESCENDING", // 메모 read(patientId)
-  "reservationNotes|reservationDocId:ASCENDING,isDeleted:ASCENDING,createdAt:DESCENDING", // 메모 read(reservationDocId)
-  "reservationNotes|reservationId:ASCENDING,isDeleted:ASCENDING,createdAt:DESCENDING", // 메모 read(reservationId)
-  "conferenceMemos|memoDate:ASCENDING,deleted:ASCENDING,createdAt:DESCENDING", // 컨퍼런스 메모
+  "reservations|COLLECTION|isDeleted:ASCENDING,reservationDate:DESCENDING", // 관리자 예약 조회(orderBy desc)
+  "reservations|COLLECTION|isDeleted:ASCENDING,reservationDate:ASCENDING", // 실시간 범위 구독(range ASC)
+  "reservations|COLLECTION|patientId:ASCENDING,isDeleted:ASCENDING,reservationDate:DESCENDING,reservationTime:DESCENDING", // 최신 예약(date,time)
+  "reservations|COLLECTION|patientId:ASCENDING,isDeleted:ASCENDING,reservationDate:DESCENDING", // 환자 이력(date만 정렬) — 위 4필드로 대체 불가
+  "invoices|COLLECTION|isDeleted:ASCENDING,createdAt:DESCENDING", // 인보이스 list 관리자 no-range
+  "invoices|COLLECTION|patientId:ASCENDING,isDeleted:ASCENDING,createdAt:DESCENDING", // get_by_patient 관리자
+  "invoices|COLLECTION|patientId:ASCENDING,coordinatorUids:CONTAINS,isDeleted:ASCENDING,createdAt:DESCENDING", // get_by_patient 코디(uid)
+  "invoices|COLLECTION|patientId:ASCENDING,coordinators:CONTAINS,isDeleted:ASCENDING,createdAt:DESCENDING", // get_by_patient 코디(이름, 레거시)
+  "invoices|COLLECTION|coordinatorUids:CONTAINS,isDeleted:ASCENDING,createdAt:DESCENDING", // list 코디 no-range
+  "invoices|COLLECTION|coordinators:CONTAINS,isDeleted:ASCENDING,createdAt:DESCENDING", // list 코디 no-range(레거시)
+  "invoices|COLLECTION|isDeleted:ASCENDING,surgeryDate:DESCENDING", // list 관리자 range
+  "invoices|COLLECTION|coordinatorUids:CONTAINS,isDeleted:ASCENDING,surgeryDate:DESCENDING", // list 코디 range
+  "invoices|COLLECTION|coordinators:CONTAINS,isDeleted:ASCENDING,surgeryDate:DESCENDING", // list 코디 range(레거시)
+  "patients|COLLECTION|isDeleted:ASCENDING,lastReservationDate:DESCENDING", // 환자 목록 페이지네이션
+  "logs|COLLECTION|reservationId:ASCENDING,createdAt:DESCENDING", // 로그 조회
+  "logs|COLLECTION|targetId:ASCENDING,createdAt:DESCENDING", // 로그 조회
+  "logs|COLLECTION|patientId:ASCENDING,createdAt:DESCENDING", // 로그 조회
+  "reservationNotes|COLLECTION|patientId:ASCENDING,isDeleted:ASCENDING,createdAt:DESCENDING", // 메모 read(patientId)
+  "reservationNotes|COLLECTION|reservationDocId:ASCENDING,isDeleted:ASCENDING,createdAt:DESCENDING", // 메모 read(reservationDocId)
+  "reservationNotes|COLLECTION|reservationId:ASCENDING,isDeleted:ASCENDING,createdAt:DESCENDING", // 메모 read(reservationId)
+  "conferenceMemos|COLLECTION|memoDate:ASCENDING,deleted:ASCENDING,createdAt:DESCENDING", // 컨퍼런스 메모
 ];
 
 function assertRequiredIndexes(list: CompositeIndex[]) {
@@ -76,17 +77,25 @@ test("REQUIRED 목록 자체에 중복이 없다", () => {
 
 test("reservations 3필드/4필드 인덱스는 서로 다른 계약이며 둘 다 필수다", () => {
   // 4필드(…,reservationTime DESC)는 3필드(date만 정렬) 쿼리를 서빙하지 못한다 — 프로덕션 장애의 교훈.
-  const threeField = "reservations|patientId:ASCENDING,isDeleted:ASCENDING,reservationDate:DESCENDING";
-  const fourField = "reservations|patientId:ASCENDING,isDeleted:ASCENDING,reservationDate:DESCENDING,reservationTime:DESCENDING";
+  const threeField = "reservations|COLLECTION|patientId:ASCENDING,isDeleted:ASCENDING,reservationDate:DESCENDING";
+  const fourField = "reservations|COLLECTION|patientId:ASCENDING,isDeleted:ASCENDING,reservationDate:DESCENDING,reservationTime:DESCENDING";
   assert.notEqual(threeField, fourField);
   const present = new Set(indexes.map(signature));
   assert.ok(present.has(threeField), "3필드 reservations 인덱스가 누락됨");
   assert.ok(present.has(fourField), "4필드 reservations 인덱스가 누락됨");
 });
 
+test("필수 인덱스의 queryScope가 바뀌면 계약 검증이 실패한다", () => {
+  const target = "reservations|COLLECTION|patientId:ASCENDING,isDeleted:ASCENDING,reservationDate:DESCENDING";
+  const wrongScope = indexes.map((index) =>
+    signature(index) === target ? { ...index, queryScope: "COLLECTION_GROUP" } : index
+  );
+  assert.throws(() => assertRequiredIndexes(wrongScope));
+});
+
 test("필수 인덱스가 하나라도 빠지면 계약 검증이 실패한다 (파일 미수정, 인메모리 fixture)", () => {
   // 추적 파일을 실제로 수정했다 복구하는 방식은 복구 누락 위험이 있어, 메모리에서만 하나를 제거한다.
-  const target = "reservations|patientId:ASCENDING,isDeleted:ASCENDING,reservationDate:DESCENDING";
+  const target = "reservations|COLLECTION|patientId:ASCENDING,isDeleted:ASCENDING,reservationDate:DESCENDING";
   const missingOne = indexes.filter((i) => signature(i) !== target);
   assert.throws(() => assertRequiredIndexes(missingOne));
   // 원본은 그대로 통과 — 파일을 건드리지 않았음을 확인.

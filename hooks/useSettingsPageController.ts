@@ -44,6 +44,7 @@ type AddStaffParams = { email: string; password: string; displayName: string; ro
 export function useSettingsPageController() {
   const [activeTab, setActiveTab] = useState<SettingsTab>("statusColors");
   const loadedTabsRef = useRef<Set<SettingsTab>>(new Set());
+  const memoLoadSeqRef = useRef(0);
 
   // 전역 단일 Provider(CurrentUserProvider)에서 직원 상태를 읽는다 — 자체 onAuthStateChanged/
   // verify-staff 중복 구독 제거, 비활성 직원 처리 일관화(Provider가 안전 로그아웃 담당).
@@ -119,17 +120,19 @@ export function useSettingsPageController() {
   }
 
   async function loadMemos(date = memoDate) {
+    const seq = ++memoLoadSeqRef.current;
     setMemoLoading(true);
     setError("");
     try {
       const list = await getConferenceMemos(date, 50);
-      setMemos(list);
+      if (memoLoadSeqRef.current === seq) setMemos(list);
     } catch (err) {
+      if (memoLoadSeqRef.current !== seq) return;
       loadedTabsRef.current.delete("memo");
       console.error((err as Error)?.message ?? "");
       setError("메모를 불러오지 못했습니다.");
     } finally {
-      setMemoLoading(false);
+      if (memoLoadSeqRef.current === seq) setMemoLoading(false);
     }
   }
 

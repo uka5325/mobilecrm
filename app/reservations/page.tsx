@@ -188,7 +188,7 @@ export default function ReservationsPage() {
       )}
 
       {!search.trim() && patientsNextCursor && (
-        <div className="flex justify-center pb-4">
+        <div className="flex flex-col items-center gap-2 pb-4">
           <button
             onClick={list.loadMorePatients}
             disabled={loadingMore}
@@ -196,6 +196,9 @@ export default function ReservationsPage() {
           >
             {loadingMore ? "불러오는 중..." : "더보기"}
           </button>
+          {list.loadMoreError && (
+            <div className="text-sm text-red-600">{list.loadMoreError}</div>
+          )}
         </div>
       )}
 

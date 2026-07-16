@@ -24,6 +24,7 @@ export function useReservationsList({ uid, authReady }: { uid: string | undefine
   );
   const [refreshing, setRefreshing] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [loadMoreError, setLoadMoreError] = useState<string | null>(null);
   const [listError, setListError] = useState<string | null>(null);
   const searchSeqRef = useRef(0);
   const extraPatientsRef = useRef<PatientRecord[]>([]);
@@ -149,6 +150,7 @@ export function useReservationsList({ uid, authReady }: { uid: string | undefine
   const loadMorePatients = useCallback(async () => {
     if (!patientsNextCursor || loadingMore) return;
     setLoadingMore(true);
+    setLoadMoreError(null);
     try {
       const r = await listPatientsSummary(30, patientsNextCursor);
       const byId = new Map<string, PatientRecord>();
@@ -161,8 +163,8 @@ export function useReservationsList({ uid, authReady }: { uid: string | undefine
       // visiblePatients가 재계산되도록 로컬 state도 같은 병합 결과로 갱신한다.
       setPatients([...summaryPatients, ...extraPatientsRef.current]);
       setPatientsNextCursor(r.nextCursor);
-    } catch {
-      /* 무시 — 다음 클릭 시 재시도 */
+    } catch (e) {
+      setLoadMoreError(e instanceof Error ? e.message : "추가 고객을 불러오지 못했습니다. 다시 시도해주세요.");
     } finally {
       setLoadingMore(false);
     }
@@ -191,12 +193,16 @@ export function useReservationsList({ uid, authReady }: { uid: string | undefine
     return () => clearTimeout(handle);
   }, [authReady, uid, search, reloadPatients]);
 
+  const totalPages = Math.max(1, Math.ceil(patientGroups.length / PAGE_SIZE));
+
+  useEffect(() => {
+    setGroupPage((page) => Math.min(Math.max(1, page), totalPages));
+  }, [totalPages]);
+
   const pagedGroups = useMemo(() => {
     const start = (groupPage - 1) * PAGE_SIZE;
     return patientGroups.slice(start, start + PAGE_SIZE);
   }, [patientGroups, groupPage]);
-
-  const totalPages = Math.max(1, Math.ceil(patientGroups.length / PAGE_SIZE));
 
   return {
     search,
@@ -211,6 +217,7 @@ export function useReservationsList({ uid, authReady }: { uid: string | undefine
     tableError,
     patientsNextCursor,
     loadingMore,
+    loadMoreError,
     loadMorePatients,
     reloadCurrent,
   };
