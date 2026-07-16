@@ -20,9 +20,14 @@ export type ReservationDoc = {
   id: string;
   reservationId?: string;
   reservation_id?: string;
+  patientId?: string;
+  patient_id?: string;
   name?: string;
   patientName?: string;
   patient_name?: string;
+  birth?: string;
+  birthInput?: string;
+  birth_input?: string;
   reservationDate?: string;
   reservation_date?: string;
   date?: string;
@@ -161,6 +166,51 @@ export function getPatientName(item: ReservationDoc) {
 
 export function getConsultArea(item: ReservationDoc) {
   return cleanName(item.consultArea || item.consult_area || item.area || "미지정");
+}
+
+export function getConsultAreas(item: ReservationDoc) {
+  const raw = item.consultArea || item.consult_area || item.area;
+  if (Array.isArray(raw)) {
+    return Array.from(new Set(raw.map(cleanName).filter(Boolean)));
+  }
+
+  const text = cleanText(raw);
+  if (!text) return ["미지정"];
+
+  if (text.startsWith("[")) {
+    try {
+      const parsed = JSON.parse(text);
+      if (Array.isArray(parsed)) {
+        const areas = parsed.map(cleanName).filter(Boolean);
+        if (areas.length) return Array.from(new Set(areas));
+      }
+    } catch {
+      // Continue with delimiter-based parsing for legacy text values.
+    }
+  }
+
+  const areas = text
+    .split(/[,/|·、，\n]/)
+    .map(cleanName)
+    .filter(Boolean);
+  return areas.length ? Array.from(new Set(areas)) : ["미지정"];
+}
+
+export function getPatientKey(item: ReservationDoc) {
+  const patientId = cleanText(item.patientId || item.patient_id);
+  if (patientId) return `pid:${patientId}`;
+
+  const name = cleanText(item.name || item.patientName || item.patient_name)
+    .normalize("NFC")
+    .replace(/\s+/g, "")
+    .toLowerCase();
+  const phone = cleanText(item.phone).replace(/[^0-9]/g, "");
+  if (name && phone) return `legacy:${name}:${phone}`;
+
+  const birth = cleanText(item.birth || item.birthInput || item.birth_input).replace(/[^0-9]/g, "");
+  if (name && birth) return `legacy:${name}:${birth.slice(0, 8)}`;
+
+  return `reservation:${cleanText(item.id || item.reservationId || item.reservation_id)}`;
 }
 
 export function getHospital(item: ReservationDoc) {
