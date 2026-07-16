@@ -75,12 +75,14 @@ export function useDetailDrawerController({
   const [logsError, setLogsError] = useState("");
   const [logsRecentOnly, setLogsRecentOnly] = useState(true);
   const logsLoadedReservationRef = useRef<string | null>(null);
+  const logsLoadSeqRef = useRef(0);
 
   const [memoText, setMemoText] = useState("");
   const [memoError, setMemoError] = useState("");
   const [memoSuccess, setMemoSuccess] = useState("");
   const [notes, setNotes] = useState<ReservationNote[]>([]);
   const [notesLoading, setNotesLoading] = useState(false);
+  const [notesError, setNotesError] = useState("");
   const fullNotesLoadedReservationRef = useRef<string | null>(null);
   const notesLoadSeqRef = useRef(0);
 
@@ -94,12 +96,14 @@ export function useDetailDrawerController({
     setMemoError("");
     setMemoSuccess("");
     setNotes([]);
+    setNotesError("");
     fullNotesLoadedReservationRef.current = null;
     notesLoadSeqRef.current += 1;
     setLogs([]);
     setLogsError("");
     setLogsRecentOnly(true);
     logsLoadedReservationRef.current = null;
+    logsLoadSeqRef.current += 1;
     setSelectedReservation(reservation);
     setDetailForm({
       name: reservation.name || "",
@@ -145,20 +149,23 @@ export function useDetailDrawerController({
 
   // sinceDays>0이면 최근 N일만(상세 오픈 기본 3일), 0이면 전체("이전 로그 보기").
   async function loadLogs(item: ReservationRecord, mounted?: { current: boolean }, sinceDays: number = 3) {
+    // notes와 동일한 request sequence guard: 같은 예약에서 recent(3일)/older(전체) 로드가
+    // 겹칠 때 늦게 도착한 응답이 최신 응답을 덮어쓰지 않도록 한다.
+    const seq = ++logsLoadSeqRef.current;
     setLogsLoading(true);
     setLogsError("");
     setLogs([]);
     try {
       const list = await getLogsByReservationId(item.reservationId, item.id, item.patientId, { sinceDays });
-      if (mounted && !mounted.current) return;
+      if ((mounted && !mounted.current) || logsLoadSeqRef.current !== seq) return;
       setLogs(list);
       setLogsRecentOnly(sinceDays > 0);
     } catch {
-      if (mounted && !mounted.current) return;
+      if ((mounted && !mounted.current) || logsLoadSeqRef.current !== seq) return;
       logsLoadedReservationRef.current = null;
       setLogsError("로그를 불러오지 못했습니다.");
     } finally {
-      if (!mounted || mounted.current) setLogsLoading(false);
+      if ((!mounted || mounted.current) && logsLoadSeqRef.current === seq) setLogsLoading(false);
     }
   }
 
@@ -175,23 +182,26 @@ export function useDetailDrawerController({
     const seq = ++notesLoadSeqRef.current;
     if (limit == null) fullNotesLoadedReservationRef.current = item.id;
     setNotesLoading(true);
-    try {
-      const list = await getReservationNotes(
-        item.reservationId,
-        item.id,
-        item.patientId,
-        limit == null ? {} : { limit }
-      );
-      if ((mounted && !mounted.current) || notesLoadSeqRef.current !== seq) return;
-      setNotes(list);
-    } catch {
+    setNotesError("");
+    // getReservationNotes는 throw하지 않고 판별 결과를 돌려준다. seq/mounted 가드로 stale 응답만 무시.
+    const res = await getReservationNotes(
+      item.reservationId,
+      item.id,
+      item.patientId,
+      limit == null ? {} : { limit }
+    );
+    if ((mounted && !mounted.current) || notesLoadSeqRef.current !== seq) return;
+    if (!res.success) {
+      // 전체 로드 실패 시 ref를 비워 다음 진입에서 재시도 가능하게 한다.
       if (limit == null && fullNotesLoadedReservationRef.current === item.id) {
         fullNotesLoadedReservationRef.current = null;
       }
-      if ((!mounted || mounted.current) && notesLoadSeqRef.current === seq) setNotes([]);
-    } finally {
-      if ((!mounted || mounted.current) && notesLoadSeqRef.current === seq) setNotesLoading(false);
+      setNotes([]);
+      setNotesError(res.message);
+    } else {
+      setNotes(res.notes);
     }
+    setNotesLoading(false);
   }
 
   async function refreshLoadedNotes(item: ReservationRecord) {
@@ -281,19 +291,21 @@ export function useDetailDrawerController({
         selectedReservation.id,
         selectedReservation.reservationId,
         selectedReservation.patientId,
+        // 상태 토글은 마지막으로 저장된 예약값(selectedReservation)만 재전송하고 완료 플래그만
+        // 바꾼다. detailForm에 있는 미저장 편집을 토글 한 번에 조용히 커밋하지 않도록 한다.
         {
-          name: detailForm.name,
-          birthInput: detailForm.birthInput,
-          birth: detailForm.birthInput,
-          phone: detailForm.phone,
-          nationality: detailForm.nationality,
-          consultArea: detailForm.consultArea,
-          reservationDate: detailForm.reservationDate,
-          reservationTime: detailForm.reservationTime,
-          hospital: detailForm.hospital,
-          appointmentType: detailForm.appointmentType,
-          coordinators: splitComma(detailForm.coordinators),
-          doctors: splitComma(detailForm.doctors),
+          name: selectedReservation.name,
+          birthInput: selectedReservation.birthInput || selectedReservation.birth,
+          birth: selectedReservation.birthInput || selectedReservation.birth,
+          phone: selectedReservation.phone,
+          nationality: selectedReservation.nationality,
+          consultArea: selectedReservation.consultArea,
+          reservationDate: selectedReservation.reservationDate,
+          reservationTime: selectedReservation.reservationTime,
+          hospital: selectedReservation.hospital,
+          appointmentType: selectedReservation.appointmentType,
+          coordinators: selectedReservation.coordinators || [],
+          doctors: selectedReservation.doctors || [],
           completed: next,
         },
         currentUser
@@ -323,20 +335,22 @@ export function useDetailDrawerController({
         selectedReservation.id,
         selectedReservation.reservationId,
         selectedReservation.patientId,
+        // 상태 토글은 마지막으로 저장된 예약값(selectedReservation)만 재전송하고 취소 플래그만
+        // 바꾼다. detailForm에 있는 미저장 편집을 토글 한 번에 조용히 커밋하지 않도록 한다.
         {
-          name: detailForm.name,
-          birthInput: detailForm.birthInput,
-          birth: detailForm.birthInput,
-          phone: detailForm.phone,
-          nationality: detailForm.nationality,
-          consultArea: detailForm.consultArea,
-          reservationDate: detailForm.reservationDate,
-          reservationTime: detailForm.reservationTime,
-          hospital: detailForm.hospital,
-          appointmentType: detailForm.appointmentType,
-          coordinators: splitComma(detailForm.coordinators),
-          doctors: splitComma(detailForm.doctors),
-          completed: detailForm.completed,
+          name: selectedReservation.name,
+          birthInput: selectedReservation.birthInput || selectedReservation.birth,
+          birth: selectedReservation.birthInput || selectedReservation.birth,
+          phone: selectedReservation.phone,
+          nationality: selectedReservation.nationality,
+          consultArea: selectedReservation.consultArea,
+          reservationDate: selectedReservation.reservationDate,
+          reservationTime: selectedReservation.reservationTime,
+          hospital: selectedReservation.hospital,
+          appointmentType: selectedReservation.appointmentType,
+          coordinators: selectedReservation.coordinators || [],
+          doctors: selectedReservation.doctors || [],
+          completed: selectedReservation.completed,
           cancelled: next,
         },
         currentUser
@@ -420,12 +434,13 @@ export function useDetailDrawerController({
   async function handleDeleteNote(note: ReservationNote) {
     if (!selectedReservation) return;
     if (!confirm("메모를 삭제할까요?")) return;
-    await deleteReservationNote({
+    const result = await deleteReservationNote({
       noteId: note.id,
       reservationId: selectedReservation.reservationId,
       patientId: selectedReservation.patientId || "",
       staff: currentUser,
     });
+    if (!result.success) { setMemoError(result.message || "메모 삭제 실패"); return; }
     await refreshLoadedNotes(selectedReservation);
     if (logsLoadedReservationRef.current === selectedReservation.id) await loadLogs(selectedReservation);
     await onRefreshLatestLog(selectedReservation);
@@ -462,6 +477,7 @@ export function useDetailDrawerController({
     memoSuccess,
     notes,
     notesLoading,
+    notesError,
     recentNotes,
     logs,
     logsLoading,

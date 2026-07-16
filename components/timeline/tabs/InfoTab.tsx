@@ -34,6 +34,7 @@ type Props = {
   memoText: string;
   memoError?: string;
   memoSuccess?: string;
+  notesError?: string;
   recentNotes: ReservationNote[];
   onFormChange: (updates: Partial<DetailForm>) => void;
   onSave: () => void;
@@ -54,6 +55,7 @@ export function InfoTab({
   memoText,
   memoError,
   memoSuccess,
+  notesError,
   recentNotes,
   onFormChange,
   onSave,
@@ -225,7 +227,11 @@ export function InfoTab({
         )}
 
         <div className="mt-3 space-y-2">
-          {recentNotes.length === 0 ? (
+          {notesError ? (
+            <div className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-600">
+              {notesError}
+            </div>
+          ) : recentNotes.length === 0 ? (
             <div className="rounded-xl bg-gray-50 px-4 py-3 text-sm text-gray-400">
               등록된 메모가 없습니다.
             </div>

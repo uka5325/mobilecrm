@@ -10,13 +10,17 @@ export async function handleInvoiceReadAction(
 ): Promise<NextResponse | null> {
   if (action === "get_by_patient") {
     const patientId = String(payload.patientId || "");
+    // isDeleted를 쿼리에 넣어 limit(50)이 "살아있는" 인보이스에만 적용되게 한다.
+    // (soft-delete가 누적되면 삭제 문서가 50 슬롯을 소진해 실제 표시분이 잘릴 수 있음)
+    // canAccess는 array-contains(코디)/admin 조합이라 where로 옮길 수 없어 post-filter 유지.
     const snap = await adminDb.collection("invoices")
       .where("patientId", "==", patientId)
+      .where("isDeleted", "==", false)
       .orderBy("createdAt", "desc")
       .limit(50)
       .get();
     const invoices = snap.docs.map(docToObj)
-      .filter((record) => !record.isDeleted && access.canAccess(record));
+      .filter((record) => access.canAccess(record));
     return NextResponse.json({ success: true, invoices });
   }
 

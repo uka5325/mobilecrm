@@ -57,6 +57,7 @@ export function DetailDrawer({ open, reservation, currentUser, onClose, onRefres
               memoText={d.memoText}
               memoError={d.memoError}
               memoSuccess={d.memoSuccess}
+              notesError={d.notesError}
               recentNotes={d.recentNotes}
               onFormChange={d.updateForm}
               onSave={d.handleSaveDetail}
@@ -99,6 +100,7 @@ export function DetailDrawer({ open, reservation, currentUser, onClose, onRefres
               memoText={d.memoText}
               notes={d.notes}
               notesLoading={d.notesLoading}
+              notesError={d.notesError}
               memoError={d.memoError}
               memoSuccess={d.memoSuccess}
               onMemoTextChange={d.setMemoText}
