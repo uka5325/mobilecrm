@@ -5,6 +5,47 @@ import { parseBirthInfo } from "../lib/invoiceUtils";
 import { calcCommissionBase, calcCommission, paymentMethodLabel } from "../lib/commissionUtils";
 import { cleanText, toSerializable } from "../lib/adminUtils";
 import { aggregateSettlementRows } from "../lib/settlementMath";
+import { getConsultAreas, getDemandAreas, getPatientKey } from "../lib/dashboardUtils";
+
+test("dashboard items: 복수 항목을 각각 분리하고 중복 항목은 한 번만 센다", () => {
+  assert.deepEqual(
+    getConsultAreas({ id: "r1", consultArea: "가슴, 눈 / 가슴" }),
+    ["가슴", "눈"]
+  );
+});
+
+test("dashboard demand: 시술 예약은 세부 항목과 관계없이 시술로 통합한다", () => {
+  assert.deepEqual(
+    getDemandAreas({ id: "r1", appointmentType: "시술", consultArea: "보톡스, 필러" }),
+    ["시술"]
+  );
+});
+
+test("dashboard demand: 수술 세부·재수술 명칭은 대표 부위로 분류한다", () => {
+  assert.deepEqual(
+    getDemandAreas({ id: "r1", appointmentType: "수술", consultArea: "눈재수술, 쌍꺼풀, 코재수술" }),
+    ["눈", "코"]
+  );
+});
+
+test("dashboard demand: 상담으로 저장된 눈재·코재도 대표 부위로 분류한다", () => {
+  assert.deepEqual(
+    getDemandAreas({ id: "r1", appointmentType: "상담", consultArea: "눈재, 코재, 지이" }),
+    ["눈", "코", "지방이식"]
+  );
+});
+
+test("dashboard patients: 같은 patientId의 여러 예약은 한 환자 키로 묶인다", () => {
+  const first = getPatientKey({ id: "r1", patientId: "P-100", name: "홍길동" });
+  const second = getPatientKey({ id: "r2", patientId: "P-100", name: "홍길동" });
+  assert.equal(first, second);
+});
+
+test("dashboard patients: patientId 없는 레거시는 이름과 전화번호로 묶인다", () => {
+  const first = getPatientKey({ id: "r1", name: "홍 길동", phone: "010-1234-5678" });
+  const second = getPatientKey({ id: "r2", name: "홍길동", phone: "01012345678" });
+  assert.equal(first, second);
+});
 
 test("parseBirthInfo: 주민번호 앞자리+성별코드 (남)", () => {
   const r = parseBirthInfo("900101-1");

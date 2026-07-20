@@ -1,12 +1,13 @@
 
 import { auth } from "./firebase";
 import { cleanText } from "./stringUtils";
-import type {
-  SettlementAggregate,
-  SettlementCategory,
-  SettlementDirection,
-  SettlementPaymentMethod,
-  SettlementStatus,
+import {
+  isSettlementPaymentMethod,
+  type SettlementAggregate,
+  type SettlementCategory,
+  type SettlementDirection,
+  type SettlementPaymentMethod,
+  type SettlementStatus,
 } from "./settlementMath";
 
 export type SettlementRecord = {
@@ -54,6 +55,18 @@ export type SettlementMutationInput = {
   memo?: string;
 };
 
+export type SalesSummaryRow = {
+  paidAt: string;
+  direction: SettlementDirection;
+  amount: number;
+  paymentMethod: SettlementPaymentMethod;
+  hospital: string;
+  appointmentType: string;
+  consultArea: string;
+  doctors: string[];
+  coordinators: string[];
+};
+
 type SettlementListResult = {
   success: boolean;
   message?: string;
@@ -61,6 +74,7 @@ type SettlementListResult = {
   appointments?: Record<string, unknown>[];
   appointmentsLoaded?: boolean;
   aggregate?: SettlementAggregate;
+  rows?: Record<string, unknown>[];
 };
 
 type PatientSettlementsCacheEntry = {
@@ -238,4 +252,20 @@ export async function voidSettlement(settlementId: string, reason: string) {
   const result = await callSettlementsApi("void", { settlementId, reason });
   if (result.success) _settlementsByPatientCache.clear();
   return result;
+}
+
+export async function listSalesSummaryRows(startDate: string, endDate: string): Promise<SalesSummaryRow[]> {
+  const result = await callSettlementsApi("sales_summary", { startDate, endDate });
+  if (!result.success) throw new Error(result.message || "매출 현황을 불러오지 못했습니다.");
+  return (result.rows || []).map((raw) => ({
+    paidAt: cleanText(raw.paidAt),
+    direction: raw.direction === "refund" ? "refund" : "payment",
+    amount: numberValue(raw.amount),
+    paymentMethod: (isSettlementPaymentMethod(raw.paymentMethod) ? raw.paymentMethod : "other"),
+    hospital: cleanText(raw.hospital),
+    appointmentType: cleanText(raw.appointmentType) || "상담",
+    consultArea: cleanText(raw.consultArea),
+    doctors: Array.isArray(raw.doctors) ? raw.doctors.map(cleanText).filter(Boolean) : [],
+    coordinators: Array.isArray(raw.coordinators) ? raw.coordinators.map(cleanText).filter(Boolean) : [],
+  }));
 }

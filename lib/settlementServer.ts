@@ -13,6 +13,7 @@ import {
 import type { requireActiveStaff } from "@/lib/apiAuth";
 
 const MAX_SETTLEMENTS_PER_PATIENT = 500;
+const MAX_SALES_ROWS = 5000;
 const CATEGORIES = new Set<SettlementCategory>(["deposit", "surgery_fee", "procedure_fee", "other"]);
 const DIRECTIONS = new Set<SettlementDirection>(["payment", "refund"]);
 
@@ -99,6 +100,90 @@ function buildAuditLog(
 
 function asMathRows(docs: SettlementDoc[]): SettlementMathRow[] {
   return docs.map((doc) => doc as SettlementMathRow);
+}
+
+function splitStaffNames(value: unknown) {
+  if (Array.isArray(value)) return value.map(cleanText).filter(Boolean);
+  return cleanText(value)
+    .split(/[,/|·、，\n]/)
+    .map(cleanText)
+    .filter(Boolean);
+}
+
+function uniqueStaffNames(...values: unknown[]) {
+  return Array.from(new Set(values.flatMap(splitStaffNames)));
+}
+
+function stringArray(value: unknown) {
+  return Array.isArray(value) ? Array.from(new Set(value.map(cleanText).filter(Boolean))) : [];
+}
+
+function isValidDateRange(startDate: string, endDate: string) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(startDate) || !/^\d{4}-\d{2}-\d{2}$/.test(endDate)) return false;
+  const start = new Date(`${startDate}T00:00:00Z`).getTime();
+  const end = new Date(`${endDate}T00:00:00Z`).getTime();
+  if (!Number.isFinite(start) || !Number.isFinite(end) || start > end) return false;
+  return end - start <= 366 * 24 * 60 * 60 * 1000;
+}
+
+export async function listSalesSummaryRows(payload: Record<string, unknown>, ctx: StaffContext) {
+  if (ctx.role !== "admin") return error("매출 조회 권한이 없습니다.", 403, "FORBIDDEN");
+
+  const startDate = cleanText(payload.startDate);
+  const endDate = cleanText(payload.endDate);
+  if (!isValidDateRange(startDate, endDate)) {
+    return error("매출 조회 기간을 확인해주세요. 최대 1년까지 조회할 수 있습니다.");
+  }
+
+  const snap = await adminDb.collection("settlements")
+    .where("paidAt", ">=", startDate)
+    .where("paidAt", "<=", endDate)
+    .limit(MAX_SALES_ROWS + 1)
+    .get();
+
+  if (snap.docs.length > MAX_SALES_ROWS) {
+    return error("매출 내역이 너무 많습니다. 기간을 좁혀 다시 조회해주세요.", 409, "SALES_LIMIT_EXCEEDED");
+  }
+
+  const settlements = snap.docs
+    .map((doc) => doc.data() as Record<string, unknown>)
+    .filter((row) => row.isDeleted !== true && row.status !== "void");
+  const reservationIds = Array.from(new Set(
+    settlements.map((row) => cleanText(row.reservationDocId)).filter(Boolean)
+  ));
+  const reservations = new Map<string, Record<string, unknown>>();
+
+  for (let offset = 0; offset < reservationIds.length; offset += 200) {
+    const refs = reservationIds.slice(offset, offset + 200)
+      .map((id) => adminDb.collection("reservations").doc(id));
+    const docs = refs.length ? await adminDb.getAll(...refs) : [];
+    docs.forEach((doc) => {
+      if (doc.exists) reservations.set(doc.id, doc.data() as Record<string, unknown>);
+    });
+  }
+
+  const rows = settlements.map((row) => {
+    const reservation = reservations.get(cleanText(row.reservationDocId)) || {};
+    const doctors = Object.prototype.hasOwnProperty.call(row, "doctors")
+      ? uniqueStaffNames(row.doctors)
+      : uniqueStaffNames(reservation.doctors, reservation.doctor || reservation.doctorName);
+    const coordinators = Object.prototype.hasOwnProperty.call(row, "coordinators")
+      ? uniqueStaffNames(row.coordinators)
+      : uniqueStaffNames(reservation.coordinators, reservation.coordinator || reservation.manager || reservation.managerName);
+    return {
+      paidAt: cleanText(row.paidAt),
+      direction: row.direction === "refund" ? "refund" : "payment",
+      amount: settlementAmount(row.amount),
+      paymentMethod: isSettlementPaymentMethod(row.paymentMethod) ? row.paymentMethod : "other",
+      hospital: cleanText(row.hospital || reservation.hospital),
+      appointmentType: cleanText(row.appointmentType || reservation.appointmentType) || "상담",
+      consultArea: cleanText(row.consultArea || reservation.consultArea),
+      doctors,
+      coordinators,
+    };
+  });
+
+  return NextResponse.json({ success: true, rows: toSerializable(rows) });
 }
 
 function invoicePatch(
@@ -265,6 +350,13 @@ async function mutateSettlement(mode: MutationMode, payload: Record<string, unkn
           updatedBy: ctx.name,
           updatedByUid: ctx.uid,
           ...(mode === "create" ? {
+            doctors: uniqueStaffNames(reservation.doctors, reservation.doctor || reservation.doctorName),
+            doctorUids: stringArray(reservation.doctorUids),
+            coordinators: uniqueStaffNames(
+              reservation.coordinators,
+              reservation.coordinator || reservation.manager || reservation.managerName
+            ),
+            coordinatorUids: stringArray(reservation.coordinatorUids),
             createdAt: now,
             createdBy: ctx.name,
             createdByUid: ctx.uid,

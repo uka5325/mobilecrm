@@ -20,9 +20,14 @@ export type ReservationDoc = {
   id: string;
   reservationId?: string;
   reservation_id?: string;
+  patientId?: string;
+  patient_id?: string;
   name?: string;
   patientName?: string;
   patient_name?: string;
+  birth?: string;
+  birthInput?: string;
+  birth_input?: string;
   reservationDate?: string;
   reservation_date?: string;
   date?: string;
@@ -163,6 +168,51 @@ export function getConsultArea(item: ReservationDoc) {
   return cleanName(item.consultArea || item.consult_area || item.area || "미지정");
 }
 
+export function getConsultAreas(item: ReservationDoc) {
+  const raw = item.consultArea || item.consult_area || item.area;
+  if (Array.isArray(raw)) {
+    return Array.from(new Set(raw.map(cleanName).filter(Boolean)));
+  }
+
+  const text = cleanText(raw);
+  if (!text) return ["미지정"];
+
+  if (text.startsWith("[")) {
+    try {
+      const parsed = JSON.parse(text);
+      if (Array.isArray(parsed)) {
+        const areas = parsed.map(cleanName).filter(Boolean);
+        if (areas.length) return Array.from(new Set(areas));
+      }
+    } catch {
+      // Continue with delimiter-based parsing for legacy text values.
+    }
+  }
+
+  const areas = text
+    .split(/[,/|·、，\n]/)
+    .map(cleanName)
+    .filter(Boolean);
+  return areas.length ? Array.from(new Set(areas)) : ["미지정"];
+}
+
+export function getPatientKey(item: ReservationDoc) {
+  const patientId = cleanText(item.patientId || item.patient_id);
+  if (patientId) return `pid:${patientId}`;
+
+  const name = cleanText(item.name || item.patientName || item.patient_name)
+    .normalize("NFC")
+    .replace(/\s+/g, "")
+    .toLowerCase();
+  const phone = cleanText(item.phone).replace(/[^0-9]/g, "");
+  if (name && phone) return `legacy:${name}:${phone}`;
+
+  const birth = cleanText(item.birth || item.birthInput || item.birth_input).replace(/[^0-9]/g, "");
+  if (name && birth) return `legacy:${name}:${birth.slice(0, 8)}`;
+
+  return `reservation:${cleanText(item.id || item.reservationId || item.reservation_id)}`;
+}
+
 export function getHospital(item: ReservationDoc) {
   return cleanName(item.hospital || "");
 }
@@ -171,6 +221,28 @@ export function getAppointmentType(item: ReservationDoc) {
   const v = cleanText(item.appointmentType || "");
   if (v === "상담" || v === "수술" || v === "시술" || v === "치료" || v === "경과" || v === "진료" || v === "검진") return v;
   return "상담";
+}
+
+const SURGERY_AREA_GROUPS: Array<{ name: string; pattern: RegExp }> = [
+  { name: "눈", pattern: /(눈|쌍꺼풀|트임|안검|눈매교정)/i },
+  { name: "코", pattern: /(코|콧|비중격|비주|비밸브|비절골)/i },
+  { name: "가슴", pattern: /(가슴|유방|유두|유륜|여유증)/i },
+  { name: "윤곽", pattern: /(윤곽|광대|사각턱|턱끝|양악|안면골|피질골)/i },
+  { name: "리프팅", pattern: /(리프팅|거상|스마스|smas)/i },
+  { name: "지방이식", pattern: /(지방이식|지이)/i },
+  { name: "지방흡입", pattern: /(지방흡입|지흡|복부|허벅지|팔뚝|옆구리)/i },
+  { name: "입술", pattern: /입술/i },
+];
+
+export function getDemandAreas(item: ReservationDoc) {
+  const appointmentType = getAppointmentType(item);
+  if (appointmentType === "시술") return ["시술"];
+
+  const areas = getConsultAreas(item);
+  return Array.from(new Set(areas.map((area) => {
+    const group = SURGERY_AREA_GROUPS.find(({ pattern }) => pattern.test(area));
+    return group?.name || area;
+  })));
 }
 
 export function isCompleted(item: ReservationDoc) {
