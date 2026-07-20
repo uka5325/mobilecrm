@@ -47,7 +47,10 @@ before(async () => {
   });
 
   const rows = [
-    { direction: "payment", amount: 1000000, paymentMethod: "card", status: "active", isDeleted: false },
+    {
+      direction: "payment", amount: 1000000, paymentMethod: "card", status: "active", isDeleted: false,
+      doctors: ["결제당시원장"], coordinators: ["결제당시코디"],
+    },
     { direction: "refund", amount: 100000, paymentMethod: "card", status: "active", isDeleted: false },
     { direction: "payment", amount: 999999, paymentMethod: "cash", status: "void", isDeleted: false },
   ];
@@ -86,8 +89,14 @@ test("Admin 매출 조회는 활성 결제·환불만 반환하고 환자정보�
   assert.equal(body.success, true);
   assert.equal(body.rows.length, 2);
   assert.deepEqual(body.rows.map((row: { amount: number }) => row.amount).sort((a: number, b: number) => a - b), [100000, 1000000]);
-  assert.deepEqual(body.rows[0].doctors, ["김원장"]);
-  assert.deepEqual(body.rows[0].coordinators, ["박코디"]);
+  const snapshotted = body.rows.find((row: { amount: number }) => row.amount === 1000000);
+  const legacy = body.rows.find((row: { amount: number }) => row.amount === 100000);
+  assert.ok(snapshotted);
+  assert.ok(legacy);
+  assert.deepEqual(snapshotted.doctors, ["결제당시원장"]);
+  assert.deepEqual(snapshotted.coordinators, ["결제당시코디"]);
+  assert.deepEqual(legacy.doctors, ["김원장"]);
+  assert.deepEqual(legacy.coordinators, ["박코디"]);
   assert.ok(!("patientId" in body.rows[0]));
   assert.ok(!("reservationDocId" in body.rows[0]));
   assert.ok(!("name" in body.rows[0]));
