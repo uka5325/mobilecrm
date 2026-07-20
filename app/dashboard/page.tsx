@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { searchReservationsByDateRange } from "@/lib/reservations";
@@ -130,7 +130,9 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [lastLoadedAt, setLastLoadedAt] = useState<Date | null>(null);
+  const [loadedRange, setLoadedRange] = useState<{ start: string; end: string } | null>(null);
   const [searched, setSearched] = useState(false);
+  const loadSequenceRef = useRef(0);
 
   const [startDate, setStartDate] = useState(todayString());
   const [endDate, setEndDate] = useState(todayString());
@@ -143,6 +145,7 @@ export default function DashboardPage() {
   const load = useCallback(async (from: string, to: string) => {
     const normFrom = from <= to ? from : to;
     const normTo = from <= to ? to : from;
+    const sequence = ++loadSequenceRef.current;
     setLoading(true);
     setError("");
     setSalesError("");
@@ -151,6 +154,7 @@ export default function DashboardPage() {
         searchReservationsByDateRange(normFrom, normTo),
         isAdmin ? listSalesSummaryRows(normFrom, normTo) : Promise.resolve([] as SalesSummaryRow[]),
       ]);
+      if (sequence !== loadSequenceRef.current) return;
       if (reservationResult.status === "rejected") throw reservationResult.reason;
       setAllReservations(reservationResult.value as unknown as ReservationDoc[]);
       if (salesResult.status === "fulfilled") {
@@ -159,26 +163,27 @@ export default function DashboardPage() {
         setSalesRows([]);
         setSalesError(salesResult.reason instanceof Error ? salesResult.reason.message : "매출 현황을 불러오지 못했습니다.");
       }
+      setLoadedRange({ start: normFrom, end: normTo });
       setLastLoadedAt(new Date());
       setSearched(true);
     } catch (e) {
+      if (sequence !== loadSequenceRef.current) return;
       console.error("[dashboard] load error:", e);
       const msg = e instanceof Error && e.message ? e.message : "대시보드 데이터를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.";
       setError(msg);
       setSearched(false);
     } finally {
-      setLoading(false);
+      if (sequence === loadSequenceRef.current) setLoading(false);
     }
   }, [isAdmin]);
 
   const reservations = useMemo(() => {
-    const normalizedStart = startDate <= endDate ? startDate : endDate;
-    const normalizedEnd = startDate <= endDate ? endDate : startDate;
+    if (!loadedRange) return [];
     return allReservations.filter((item) => {
       const date = getReservationDate(item);
-      return date >= normalizedStart && date <= normalizedEnd;
+      return date >= loadedRange.start && date <= loadedRange.end;
     });
-  }, [allReservations, startDate, endDate]);
+  }, [allReservations, loadedRange]);
 
   const hospitals = useMemo(() => {
     return Array.from(new Set([
@@ -218,10 +223,9 @@ export default function DashboardPage() {
   }, [reservations, hospitalFilter, apptTypeFilter, itemFilter, doctorFilter, coordinatorFilter]);
 
   const filteredSalesRows = useMemo(() => {
-    const normalizedStart = startDate <= endDate ? startDate : endDate;
-    const normalizedEnd = startDate <= endDate ? endDate : startDate;
+    if (!loadedRange) return [];
     return salesRows.filter((row) => {
-      if (row.paidAt < normalizedStart || row.paidAt > normalizedEnd) return false;
+      if (row.paidAt < loadedRange.start || row.paidAt > loadedRange.end) return false;
       const reservationLike = { id: "", ...row } as ReservationDoc;
       if (hospitalFilter && row.hospital !== hospitalFilter) return false;
       if (apptTypeFilter && getAppointmentType(reservationLike) !== apptTypeFilter) return false;
@@ -230,7 +234,7 @@ export default function DashboardPage() {
       if (coordinatorFilter && !row.coordinators.includes(coordinatorFilter)) return false;
       return true;
     });
-  }, [salesRows, startDate, endDate, hospitalFilter, apptTypeFilter, itemFilter, doctorFilter, coordinatorFilter]);
+  }, [salesRows, loadedRange, hospitalFilter, apptTypeFilter, itemFilter, doctorFilter, coordinatorFilter]);
 
   const sales = useMemo(() => {
     const aggregate = aggregateSettlementRows(filteredSalesRows);
@@ -470,7 +474,7 @@ export default function DashboardPage() {
                 loading
                   ? "조회 중..."
                   : lastLoadedAt
-                  ? `${String(lastLoadedAt.getHours()).padStart(2, "0")}:${String(lastLoadedAt.getMinutes()).padStart(2, "0")} 조회 기준`
+                  ? `${loadedRange?.start} ~ ${loadedRange?.end} · ${String(lastLoadedAt.getHours()).padStart(2, "0")}:${String(lastLoadedAt.getMinutes()).padStart(2, "0")} 조회 기준`
                   : "조회 대기"
               } · 표시 ${filteredRows.length.toLocaleString("ko-KR")}건`}
         </div>
