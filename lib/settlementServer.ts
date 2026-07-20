@@ -110,6 +110,14 @@ function splitStaffNames(value: unknown) {
     .filter(Boolean);
 }
 
+function uniqueStaffNames(...values: unknown[]) {
+  return Array.from(new Set(values.flatMap(splitStaffNames)));
+}
+
+function stringArray(value: unknown) {
+  return Array.isArray(value) ? Array.from(new Set(value.map(cleanText).filter(Boolean))) : [];
+}
+
 function isValidDateRange(startDate: string, endDate: string) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(startDate) || !/^\d{4}-\d{2}-\d{2}$/.test(endDate)) return false;
   const start = new Date(`${startDate}T00:00:00Z`).getTime();
@@ -156,14 +164,12 @@ export async function listSalesSummaryRows(payload: Record<string, unknown>, ctx
 
   const rows = settlements.map((row) => {
     const reservation = reservations.get(cleanText(row.reservationDocId)) || {};
-    const doctors = Array.from(new Set([
-      ...splitStaffNames(reservation.doctors),
-      ...splitStaffNames(reservation.doctor || reservation.doctorName),
-    ]));
-    const coordinators = Array.from(new Set([
-      ...splitStaffNames(reservation.coordinators),
-      ...splitStaffNames(reservation.coordinator || reservation.manager || reservation.managerName),
-    ]));
+    const doctors = Object.prototype.hasOwnProperty.call(row, "doctors")
+      ? uniqueStaffNames(row.doctors)
+      : uniqueStaffNames(reservation.doctors, reservation.doctor || reservation.doctorName);
+    const coordinators = Object.prototype.hasOwnProperty.call(row, "coordinators")
+      ? uniqueStaffNames(row.coordinators)
+      : uniqueStaffNames(reservation.coordinators, reservation.coordinator || reservation.manager || reservation.managerName);
     return {
       paidAt: cleanText(row.paidAt),
       direction: row.direction === "refund" ? "refund" : "payment",
@@ -344,6 +350,13 @@ async function mutateSettlement(mode: MutationMode, payload: Record<string, unkn
           updatedBy: ctx.name,
           updatedByUid: ctx.uid,
           ...(mode === "create" ? {
+            doctors: uniqueStaffNames(reservation.doctors, reservation.doctor || reservation.doctorName),
+            doctorUids: stringArray(reservation.doctorUids),
+            coordinators: uniqueStaffNames(
+              reservation.coordinators,
+              reservation.coordinator || reservation.manager || reservation.managerName
+            ),
+            coordinatorUids: stringArray(reservation.coordinatorUids),
             createdAt: now,
             createdBy: ctx.name,
             createdByUid: ctx.uid,
