@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { reconcileDirtyPatientBatch } from "@/lib/patientSummary";
+import { runStorageCleanupBatch } from "@/features/photos/jobs";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -16,9 +17,13 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    const result = await reconcileDirtyPatientBatch({ limit: 5 });
+    // 무료 운영을 위해 Vercel Cron 호출은 하나만 유지하고 독립 worker를 함께 실행한다.
+    const [result, storageCleanup] = await Promise.all([
+      reconcileDirtyPatientBatch({ limit: 5 }),
+      runStorageCleanupBatch({ limit: 5 }),
+    ]);
     return NextResponse.json(
-      { success: true, ...result },
+      { success: true, ...result, storageCleanup },
       { headers: { "Cache-Control": "no-store" } }
     );
   } catch (error) {

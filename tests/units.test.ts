@@ -338,6 +338,11 @@ test("clearAllClientCaches: mcrm_/arc_crm_ 키는 삭제하고 무관한 키는 
 
 // ── reservationFiles: Storage 삭제 실패 분류 (재시도 가능 로직, P0 후속) ────────────
 import { classifyStorageDeleteError } from "../lib/reservationFiles";
+import {
+  isAllowedStoragePath,
+  isRetryableStorageDeleteError,
+  storageCleanupRetryDelayMs,
+} from "../features/photos/domain/storageCleanupPolicy";
 
 test("classifyStorageDeleteError: object-not-found는 성공(deleted)으로 분류한다", () => {
   const result = classifyStorageDeleteError({ code: "storage/object-not-found" });
@@ -352,4 +357,22 @@ test("classifyStorageDeleteError: 그 외 에러는 failed + errorCode로 분류
 test("classifyStorageDeleteError: code가 없는 에러는 unknown으로 분류한다", () => {
   const result = classifyStorageDeleteError(new Error("boom"));
   assert.deepEqual(result, { status: "failed", errorCode: "unknown" });
+});
+
+test("storage cleanup policy: 예약 사진 경로만 허용한다", () => {
+  assert.equal(isAllowedStoragePath("reservationFiles/r1/photos/a.png"), true);
+  assert.equal(isAllowedStoragePath("other/r1/photos/a.png"), false);
+  assert.equal(isAllowedStoragePath("reservationFiles/../secret.json"), false);
+});
+
+test("storage cleanup policy: 재시도 간격은 1시간부터 증가해 24시간으로 제한한다", () => {
+  assert.equal(storageCleanupRetryDelayMs(1), 60 * 60 * 1000);
+  assert.equal(storageCleanupRetryDelayMs(2), 2 * 60 * 60 * 1000);
+  assert.equal(storageCleanupRetryDelayMs(99), 24 * 60 * 60 * 1000);
+});
+
+test("storage cleanup policy: 권한·잘못된 요청은 재시도하지 않는다", () => {
+  assert.equal(isRetryableStorageDeleteError({ code: 503 }), true);
+  assert.equal(isRetryableStorageDeleteError({ code: 403 }), false);
+  assert.equal(isRetryableStorageDeleteError({ code: "storage/unauthorized" }), false);
 });
