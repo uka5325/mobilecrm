@@ -5,7 +5,12 @@ import { parseBirthInfo } from "../lib/invoiceUtils";
 import { calcCommissionBase, calcCommission, paymentMethodLabel } from "../lib/commissionUtils";
 import { cleanText, toSerializable } from "../lib/adminUtils";
 import { aggregateSettlementRows } from "../lib/settlementMath";
-import { getConsultAreas, getDemandAreas, getPatientKey } from "../lib/dashboardUtils";
+import {
+  calculateDashboardKpi,
+  getConsultAreas,
+  getDemandAreas,
+  getPatientKey,
+} from "../features/dashboard/domain/dashboardKpi";
 
 test("dashboard items: 복수 항목을 각각 분리하고 중복 항목은 한 번만 센다", () => {
   assert.deepEqual(
@@ -45,6 +50,75 @@ test("dashboard patients: patientId 없는 레거시는 이름과 전화번호�
   const first = getPatientKey({ id: "r1", name: "홍 길동", phone: "010-1234-5678" });
   const second = getPatientKey({ id: "r2", name: "홍길동", phone: "01012345678" });
   assert.equal(first, second);
+});
+
+test("dashboard KPI: 취소를 완료에서 제외하고 환자·담당자·항목을 정확히 집계한다", () => {
+  const result = calculateDashboardKpi([
+    {
+      id: "r1",
+      patientId: "p1",
+      reservationDate: "2026-07-20",
+      reservationTime: "10:00",
+      hospital: "ARC",
+      appointmentType: "상담",
+      consultArea: "눈, 코",
+      doctors: ["김원장"],
+      coordinators: ["David"],
+      completed: true,
+    },
+    {
+      id: "r2",
+      patientId: "p1",
+      reservationDate: "2026-07-21",
+      reservationTime: "",
+      hospital: "ARC",
+      appointmentType: "수술",
+      consultArea: "코재수술",
+      doctors: ["김원장"],
+      coordinators: [],
+      completed: true,
+      cancelled: true,
+    },
+    {
+      id: "r3",
+      patientId: "p2",
+      reservationDate: "2026-07-26",
+      reservationTime: "11:00",
+      appointmentType: "시술",
+      consultArea: "보톡스",
+      doctors: [],
+      coordinators: ["David"],
+      completed: false,
+    },
+  ], "2026-07-24");
+
+  assert.deepEqual(result.summary, {
+    name: "전체",
+    total: 3,
+    patients: 2,
+    completed: 1,
+    scheduled: 1,
+    cancelled: 1,
+    completionRate: 50,
+    shareRate: 0,
+  });
+  assert.equal(result.doctorRows.find((row) => row.name === "김원장")?.total, 2);
+  assert.equal(result.doctorRows.find((row) => row.name === "미지정")?.total, 1);
+  assert.equal(result.itemRows.find((row) => row.name === "코")?.total, 2);
+  assert.equal(result.itemRows.find((row) => row.name === "시술")?.total, 1);
+  assert.deepEqual(result.dayTrendRows.map((row) => row.date), [
+    "2026-07-20",
+    "2026-07-21",
+    "2026-07-26",
+  ]);
+  assert.equal(
+    result.issueRows.find((row) => row.label === "지난 날짜 미완료")?.value,
+    0
+  );
+  assert.equal(
+    result.issueRows.find((row) => row.label === "예약시간 미입력")?.value,
+    1
+  );
 });
 
 test("parseBirthInfo: 주민번호 앞자리+성별코드 (남)", () => {

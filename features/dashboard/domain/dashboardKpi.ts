@@ -1,4 +1,4 @@
-import { cleanText } from "./stringUtils";
+import { cleanText } from "@/lib/stringUtils";
 export { cleanText };
 
 // Types
@@ -72,6 +72,38 @@ export type Counter = {
 export type KpiRow = Counter & {
   surgeryRate: number;
   shareRate?: number;
+};
+
+export const APPOINTMENT_TYPES = ["상담", "수술", "시술", "치료", "경과", "진료", "검진"] as const;
+
+export type OperationalRow = {
+  name: string;
+  total: number;
+  patients: number;
+  completed: number;
+  scheduled: number;
+  cancelled: number;
+  completionRate: number;
+  shareRate?: number;
+};
+
+export type DayTrend = {
+  date: string;
+  total: number;
+  completed: number;
+  scheduled: number;
+  cancelled: number;
+};
+
+export type DashboardKpi = {
+  summary: OperationalRow;
+  hospitalRows: OperationalRow[];
+  apptTypeRows: OperationalRow[];
+  itemRows: OperationalRow[];
+  doctorRows: OperationalRow[];
+  coordinatorRows: OperationalRow[];
+  issueRows: Array<{ label: string; value: number }>;
+  dayTrendRows: DayTrend[];
 };
 
 export const CURRENCY_ORDER = ["KRW", "MNT", "USD", "JPY", "CNY", "VND"];
@@ -332,6 +364,173 @@ export function finalizeCounter(counter: Counter, shareBase?: number): KpiRow {
     ...counter,
     surgeryRate: rate(counter.surgery, counter.consultCount || counter.total),
     shareRate: shareBase ? rate(counter.consultCount, shareBase) : 0,
+  };
+}
+
+function isCancelled(item: ReservationDoc) {
+  return item.cancelled === true;
+}
+
+function isScheduled(item: ReservationDoc) {
+  return !isCancelled(item) && !isCompleted(item);
+}
+
+function isOperationallyCompleted(item: ReservationDoc) {
+  return !isCancelled(item) && isCompleted(item);
+}
+
+function buildOperationalRow(
+  name: string,
+  rows: ReservationDoc[],
+  shareBase?: number
+): OperationalRow {
+  const nonCancelled = rows.filter((item) => !isCancelled(item)).length;
+  const completed = rows.filter(isOperationallyCompleted).length;
+  const cancelled = rows.filter(isCancelled).length;
+  const scheduled = rows.filter(isScheduled).length;
+  const patients = new Set(rows.map(getPatientKey)).size;
+
+  return {
+    name,
+    total: rows.length,
+    patients,
+    completed,
+    scheduled,
+    cancelled,
+    completionRate: nonCancelled
+      ? Math.round((completed / nonCancelled) * 1000) / 10
+      : 0,
+    shareRate: shareBase
+      ? Math.round((rows.length / shareBase) * 1000) / 10
+      : 0,
+  };
+}
+
+function addToGroup(
+  map: Map<string, ReservationDoc[]>,
+  name: string,
+  item: ReservationDoc
+) {
+  const rows = map.get(name);
+  if (rows) rows.push(item);
+  else map.set(name, [item]);
+}
+
+function buildGroupedRows(
+  rows: ReservationDoc[],
+  getNames: (item: ReservationDoc) => string[]
+) {
+  const map = new Map<string, ReservationDoc[]>();
+  for (const item of rows) {
+    const names = getNames(item);
+    for (const rawName of names.length ? names : ["미지정"]) {
+      addToGroup(map, rawName || "미지정", item);
+    }
+  }
+
+  return [...map.entries()]
+    .map(([name, groupedRows]) => buildOperationalRow(name, groupedRows))
+    .sort(
+      (a, b) =>
+        b.total - a.total ||
+        cleanText(a.name).localeCompare(cleanText(b.name))
+    );
+}
+
+function buildDayTrendRows(rows: ReservationDoc[]): DayTrend[] {
+  const map = new Map<string, DayTrend>();
+  for (const item of rows) {
+    const date = getReservationDate(item) || "날짜 미입력";
+    const row = map.get(date) || {
+      date,
+      total: 0,
+      completed: 0,
+      scheduled: 0,
+      cancelled: 0,
+    };
+    row.total += 1;
+    if (isOperationallyCompleted(item)) row.completed += 1;
+    if (isScheduled(item)) row.scheduled += 1;
+    if (isCancelled(item)) row.cancelled += 1;
+    map.set(date, row);
+  }
+  return [...map.values()].sort((a, b) => a.date.localeCompare(b.date));
+}
+
+function buildIssueRows(rows: ReservationDoc[], today: string) {
+  const count = (predicate: (item: ReservationDoc) => boolean) =>
+    rows.filter(predicate).length;
+
+  return [
+    {
+      label: "지난 날짜 미완료",
+      value: count((item) => {
+        const date = getReservationDate(item);
+        return !!date && date < today && isScheduled(item);
+      }),
+    },
+    {
+      label: "담당 원장 미지정",
+      value: count((item) => getDoctors(item).length === 0),
+    },
+    {
+      label: "코디네이터 미지정",
+      value: count((item) => getManagers(item).length === 0),
+    },
+    {
+      label: "병원 미지정",
+      value: count((item) => !getHospital(item)),
+    },
+    {
+      label: "예약시간 미입력",
+      value: count((item) => getReservationTime(item) === "-"),
+    },
+    { label: "취소 예약", value: count(isCancelled) },
+  ];
+}
+
+export function calculateDashboardKpi(
+  rows: ReservationDoc[],
+  today: string
+): DashboardKpi {
+  const summary = buildOperationalRow("전체", rows);
+
+  const hospitalRows = buildGroupedRows(rows, (item) => [
+    getHospital(item) || "미지정",
+  ]);
+
+  const apptTypeRows = APPOINTMENT_TYPES.map((type) =>
+    buildOperationalRow(
+      type,
+      rows.filter((item) => getAppointmentType(item) === type)
+    )
+  );
+
+  const itemMap = new Map<string, ReservationDoc[]>();
+  for (const item of rows) {
+    for (const area of getDemandAreas(item)) {
+      addToGroup(itemMap, area, item);
+    }
+  }
+  const itemRows = [...itemMap.entries()]
+    .map(([name, groupedRows]) =>
+      buildOperationalRow(name, groupedRows, summary.total)
+    )
+    .sort(
+      (a, b) =>
+        b.total - a.total ||
+        cleanText(a.name).localeCompare(cleanText(b.name))
+    );
+
+  return {
+    summary,
+    hospitalRows,
+    apptTypeRows,
+    itemRows,
+    doctorRows: buildGroupedRows(rows, getDoctors),
+    coordinatorRows: buildGroupedRows(rows, getManagers),
+    issueRows: buildIssueRows(rows, today),
+    dayTrendRows: buildDayTrendRows(rows),
   };
 }
 
