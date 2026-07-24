@@ -387,7 +387,7 @@ export async function updateReservationFull(
   patientId: string,
   params: UpdateReservationParams,
   staff: StaffUser
-) {
+): Promise<{ success: boolean; message?: string }> {
   const name = cleanText(params.name);
   const reservationDate = cleanText(params.reservationDate);
   if (!name) throw new Error("이름을 입력하세요.");
