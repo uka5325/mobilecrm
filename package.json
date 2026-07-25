@@ -14,7 +14,8 @@
     "backfill:invoice-links": "tsx scripts/backfill-invoice-reservation-links.ts",
     "backfill:reservation-notes": "tsx scripts/backfill-memo-query-fields.ts --target reservation-notes",
     "backfill:conference-memos": "tsx scripts/backfill-memo-query-fields.ts --target conference-memos",
-    "backfill:memo-query-fields": "tsx scripts/backfill-memo-query-fields.ts --target all"
+    "backfill:memo-query-fields": "tsx scripts/backfill-memo-query-fields.ts --target all",
+    "backfill:invoice-birth-format": "tsx scripts/backfill-invoice-birth-format.ts"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
