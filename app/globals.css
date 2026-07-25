@@ -41,7 +41,7 @@ body {
 
 html:has([data-login-page]),
 body:has([data-login-page]) {
-  background: #061821;
+  background: #07383A;
 }
 
 button,
