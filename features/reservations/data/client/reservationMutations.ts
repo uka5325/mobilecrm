@@ -7,7 +7,7 @@ import type {
   ReservationApiPayload,
   ReservationApiRequest,
   ReservationApiResult,
-} from "@/lib/reservationApiContracts";
+} from "@/features/reservations/domain/reservationApiContracts";
 import {
   buildReservationUpdatePayload,
   mapPatientRecord,

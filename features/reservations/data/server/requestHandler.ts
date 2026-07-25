@@ -5,7 +5,7 @@ import {
   type JsonRecord,
   type ReservationApiAction,
   type ReservationApiPayload,
-} from "@/lib/reservationApiContracts";
+} from "@/features/reservations/domain/reservationApiContracts";
 import {
   createPatientWithDecision,
   listPatientsRaw,

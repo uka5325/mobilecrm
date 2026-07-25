@@ -5,7 +5,7 @@ import { makePatientSearchTokens } from "@/lib/searchTokens";
 import { createEmptyPatientSummary } from "@/features/patients/jobs/summary/patientSummaryCore";
 import { updateReservationSummaryIncrementally } from "@/features/patients/jobs/summary/patientSummaryReservations";
 import { safeRecompute } from "@/features/patients/jobs/summary/patientSummaryDirty";
-import type { ReservationApiPayload } from "@/lib/reservationApiContracts";
+import type { ReservationApiPayload } from "@/features/reservations/domain/reservationApiContracts";
 import { identityKeyForPatient } from "@/lib/patientIdentity";
 import {
   RESERVATION_LOCKS,

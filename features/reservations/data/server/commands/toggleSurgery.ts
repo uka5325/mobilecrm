@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { adminDb, FieldValue } from "@/lib/firebaseAdmin";
-import type { ReservationApiPayload } from "@/lib/reservationApiContracts";
+import type { ReservationApiPayload } from "@/features/reservations/domain/reservationApiContracts";
 import {
   writeReservationLogInTx,
   type ReservationCommandContext,
