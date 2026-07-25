@@ -1,8 +1,8 @@
 "use client";
 
 import { useMemo } from "react";
-import type { ReservationRecord } from "@/lib/reservations";
-import { addDays, formatDayLabel, isToday } from "@/lib/scheduleDates";
+import type { ReservationRecord } from "@/features/reservations/domain/reservationModels";
+import { addDays, formatDayLabel, isToday } from "@/features/reservations/ui/scheduleDates";
 import {
   getAppointmentColor,
   minutesToPx,
@@ -12,7 +12,7 @@ import {
   TIME_COL_W,
   TOTAL_HOURS,
   WEEK_CARD_H,
-} from "@/lib/scheduleLayout";
+} from "@/features/reservations/ui/scheduleLayout";
 import { ScheduleHourGrid } from "@/components/schedule/ScheduleHourGrid";
 
 const WEEK_CARD_GAP = 2;

@@ -2,12 +2,8 @@
 
 import { useRef, useState } from "react";
 import type { StaffUser } from "@/lib/auth";
-import {
-  deleteReservation,
-  getPatientFullHistoryPage,
-  invalidatePatientFullHistoryCache,
-  type ReservationRecord,
-} from "@/lib/reservations";
+import { type ReservationRecord } from "@/features/reservations/domain/reservationModels";
+import { deleteReservation, getPatientFullHistoryPage, invalidatePatientFullHistoryCache } from "@/features/reservations/data/client";
 
 const HISTORY_PAGE_SIZE = 10;
 

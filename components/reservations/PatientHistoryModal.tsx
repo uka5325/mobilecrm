@@ -1,7 +1,7 @@
 "use client";
 
-import type { ReservationRecord } from "@/lib/reservations";
-import { getCardStatus } from "@/lib/timelineUtils";
+import type { ReservationRecord } from "@/features/reservations/domain/reservationModels";
+import { getCardStatus } from "@/features/reservations/ui/timelineUtils";
 
 type Props = {
   patientName: string;

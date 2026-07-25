@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { type ReservationNote, type MutationResult } from "@/lib/reservationNotes";
+import { type ReservationNote, type MutationResult } from "@/features/reservations/data/client/reservationNotes";
 import { NoteCard } from "@/components/timeline/NoteCard";
 
 const PAGE_SIZE = 10;

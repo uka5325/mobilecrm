@@ -8,9 +8,9 @@ import {
   updateInvoice,
   deleteInvoice,
   type InvoiceRecord,
-} from "@/lib/invoices";
+} from "@/features/invoices/data/client/invoices";
 import { calcCommissionBase, calcCommission, type PaymentMethod } from "@/lib/commissionUtils";
-import { getStaffListForSettings, type SettingsStaffRecord } from "@/lib/settings";
+import { getStaffListForSettings, type SettingsStaffRecord } from "@/features/settings/data/client/settings";
 
 function formatMoney(value: number | undefined) {
   if (value === undefined || value === null) return "";

@@ -2,12 +2,8 @@
 
 import { useState } from "react";
 import type { StaffUser } from "@/lib/auth";
-import {
-  updateReservationFull,
-  invalidatePatientFullHistoryCache,
-  type AppointmentType,
-  type ReservationRecord,
-} from "@/lib/reservations";
+import { type AppointmentType, type ReservationRecord } from "@/features/reservations/domain/reservationModels";
+import { updateReservationFull, invalidatePatientFullHistoryCache } from "@/features/reservations/data/client";
 
 // ReservationsTable의 InlineForm과 구조적으로 동일해야 한다(미export 타입이라 복제).
 export type InlineReservationForm = {

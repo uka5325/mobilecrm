@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import type { StaffUser } from "@/lib/auth";
-import { getPatientFullHistoryCached, type ReservationRecord } from "@/lib/reservations";
+import { type ReservationRecord } from "@/features/reservations/domain/reservationModels";
+import { getPatientFullHistoryCached } from "@/features/reservations/data/client";
 import {
   getReservationNotes,
   addReservationNote,
@@ -10,7 +11,7 @@ import {
   deleteReservationNote,
   type ReservationNote,
   type MutationResult,
-} from "@/lib/reservationNotes";
+} from "@/features/reservations/data/client/reservationNotes";
 import { type MemoPopoverState } from "@/components/reservations/MemoPopover";
 import type { PatientGroup } from "@/components/reservations/ReservationsTable";
 

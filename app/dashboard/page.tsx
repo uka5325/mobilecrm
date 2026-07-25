@@ -3,30 +3,26 @@
 import { useCallback, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
-import { searchReservationsByDateRange } from "@/lib/reservations";
-import { listSalesSummaryRows, type SalesSummaryRow } from "@/lib/settlements";
+import { searchReservationsByDateRange } from "@/features/reservations/data/client";
+import { listSalesSummaryRows, type SalesSummaryRow } from "@/features/settlements/data/client/settlements";
 import { aggregateSettlementRows } from "@/lib/settlementMath";
 import { todayString } from "@/lib/dateUtils";
 import {
+  APPOINTMENT_TYPES,
+  calculateDashboardKpi,
   type ReservationDoc,
-  cleanText,
   getHospital,
   getAppointmentType,
   getReservationDate,
-  getReservationTime,
   getDemandAreas,
-  getPatientKey,
   getManagers,
   getDoctors,
-  isCompleted,
   pctText,
   setQuickRange,
-} from "@/lib/dashboardUtils";
+} from "@/features/dashboard/domain/dashboardKpi";
 import { QuickButton } from "@/components/dashboard/QuickButton";
 import { Panel } from "@/components/dashboard/Panel";
 import { KpiTable } from "@/components/dashboard/KpiTable";
-
-const APPOINTMENT_TYPES = ["상담", "수술", "시술", "치료", "경과", "진료", "검진"] as const;
 
 const PAYMENT_METHOD_LABELS: Record<string, string> = {
   card: "카드",
@@ -46,25 +42,6 @@ const APPT_TYPE_COLORS: Record<string, string> = {
   검진: "#0891b2",
 };
 
-type OperationalRow = {
-  name: string;
-  total: number;
-  patients: number;
-  completed: number;
-  scheduled: number;
-  cancelled: number;
-  completionRate: number;
-  shareRate?: number;
-};
-
-type DayTrend = {
-  date: string;
-  total: number;
-  completed: number;
-  scheduled: number;
-  cancelled: number;
-};
-
 function formatNumber(value: number) {
   return value.toLocaleString("ko-KR");
 }
@@ -77,38 +54,7 @@ function rateText(part: number, total: number) {
   return pctText(total ? Math.round((part / total) * 1000) / 10 : 0);
 }
 
-function isCancelled(item: ReservationDoc) {
-  return item.cancelled === true;
-}
-
-function isScheduled(item: ReservationDoc) {
-  return !isCancelled(item) && !isCompleted(item);
-}
-
-function isOperationallyCompleted(item: ReservationDoc) {
-  return !isCancelled(item) && isCompleted(item);
-}
-
-function buildOperationalRow(name: string, rows: ReservationDoc[], shareBase?: number): OperationalRow {
-  const nonCancelled = rows.filter((item) => !isCancelled(item)).length;
-  const completed = rows.filter(isOperationallyCompleted).length;
-  const cancelled = rows.filter(isCancelled).length;
-  const scheduled = rows.filter(isScheduled).length;
-  const patients = new Set(rows.map(getPatientKey)).size;
-
-  return {
-    name,
-    total: rows.length,
-    patients,
-    completed,
-    scheduled,
-    cancelled,
-    completionRate: nonCancelled ? Math.round((completed / nonCancelled) * 1000) / 10 : 0,
-    shareRate: shareBase ? Math.round((rows.length / shareBase) * 1000) / 10 : 0,
-  };
-}
-
-function toOperationalTableRows(rows: OperationalRow[]) {
+function toOperationalTableRows(rows: ReturnType<typeof calculateDashboardKpi>["hospitalRows"]) {
   return rows.map((row) => [
     row.name || "미지정",
     formatNumber(row.total),
@@ -255,93 +201,10 @@ export default function DashboardPage() {
     };
   }, [filteredSalesRows]);
 
-  const dashboard = useMemo(() => {
-    const summary = buildOperationalRow("전체", filteredRows);
-
-    const groupRows = (getName: (item: ReservationDoc) => string) => {
-      const map = new Map<string, ReservationDoc[]>();
-      for (const item of filteredRows) {
-        const name = getName(item) || "미지정";
-        map.set(name, [...(map.get(name) || []), item]);
-      }
-      return [...map.entries()]
-        .map(([name, rows]) => buildOperationalRow(name, rows))
-        .sort((a, b) => b.total - a.total || cleanText(a.name).localeCompare(cleanText(b.name)));
-    };
-
-    const hospitalRows = groupRows((item) => getHospital(item) || "미지정");
-    const apptTypeRows = APPOINTMENT_TYPES.map((type) => {
-      const rows = filteredRows.filter((item) => getAppointmentType(item) === type);
-      return buildOperationalRow(type, rows);
-    });
-    const itemMap = new Map<string, ReservationDoc[]>();
-    for (const item of filteredRows) {
-      for (const area of getDemandAreas(item)) {
-        itemMap.set(area, [...(itemMap.get(area) || []), item]);
-      }
-    }
-    const itemRows = [...itemMap.entries()]
-      .map(([name, rows]) => buildOperationalRow(name, rows, summary.total))
-      .sort((a, b) => b.total - a.total || cleanText(a.name).localeCompare(cleanText(b.name)));
-
-    return { summary, hospitalRows, apptTypeRows, itemRows };
-  }, [filteredRows]);
-
-  const dayTrendRows = useMemo<DayTrend[]>(() => {
-    const map = new Map<string, DayTrend>();
-    for (const r of filteredRows) {
-      const date = getReservationDate(r) || "날짜 미입력";
-      if (!map.has(date)) map.set(date, { date, total: 0, completed: 0, scheduled: 0, cancelled: 0 });
-      const row = map.get(date)!;
-      row.total += 1;
-      if (isOperationallyCompleted(r)) row.completed += 1;
-      if (isScheduled(r)) row.scheduled += 1;
-      if (isCancelled(r)) row.cancelled += 1;
-    }
-    return [...map.values()].sort((a, b) => a.date.localeCompare(b.date));
-  }, [filteredRows]);
-
-  const doctorRows = useMemo(() => {
-    const map = new Map<string, ReservationDoc[]>();
-    for (const r of filteredRows) {
-      const names = getDoctors(r);
-      for (const name of names.length ? names : ["미지정"]) {
-        map.set(name, [...(map.get(name) || []), r]);
-      }
-    }
-    return [...map.entries()]
-      .map(([name, rows]) => buildOperationalRow(name, rows))
-      .sort((a, b) => b.total - a.total || cleanText(a.name).localeCompare(cleanText(b.name)));
-  }, [filteredRows]);
-
-  const coordinatorRows = useMemo(() => {
-    const map = new Map<string, ReservationDoc[]>();
-    for (const r of filteredRows) {
-      const names = getManagers(r);
-      for (const name of names.length ? names : ["미지정"]) {
-        map.set(name, [...(map.get(name) || []), r]);
-      }
-    }
-    return [...map.entries()]
-      .map(([name, rows]) => buildOperationalRow(name, rows))
-      .sort((a, b) => b.total - a.total || cleanText(a.name).localeCompare(cleanText(b.name)));
-  }, [filteredRows]);
-
-  const issueRows = useMemo(() => {
-    const today = todayString();
-    const count = (predicate: (item: ReservationDoc) => boolean) => filteredRows.filter(predicate).length;
-    return [
-      { label: "지난 날짜 미완료", value: count((item) => {
-        const date = getReservationDate(item);
-        return !!date && date < today && isScheduled(item);
-      }) },
-      { label: "담당 원장 미지정", value: count((item) => getDoctors(item).length === 0) },
-      { label: "코디네이터 미지정", value: count((item) => getManagers(item).length === 0) },
-      { label: "병원 미지정", value: count((item) => !getHospital(item)) },
-      { label: "예약시간 미입력", value: count((item) => getReservationTime(item) === "-") },
-      { label: "취소 예약", value: count(isCancelled) },
-    ];
-  }, [filteredRows]);
+  const dashboard = useMemo(
+    () => calculateDashboardKpi(filteredRows, todayString()),
+    [filteredRows]
+  );
 
   function handleQuickRange(type: "today" | "week" | "month" | "lastMonth" | "last7" | "last30") {
     const range = setQuickRange(type);
@@ -595,14 +458,14 @@ export default function DashboardPage() {
           <Panel title="담당 원장별 현황">
             <KpiTable
               headers={["원장", "예약", "환자 수", "완료", "예정", "취소", "완료율"]}
-              rows={toOperationalTableRows(doctorRows)}
+              rows={toOperationalTableRows(dashboard.doctorRows)}
             />
           </Panel>
 
           <Panel title="코디네이터별 현황">
             <KpiTable
               headers={["코디네이터", "예약", "환자 수", "완료", "예정", "취소", "완료율"]}
-              rows={toOperationalTableRows(coordinatorRows)}
+              rows={toOperationalTableRows(dashboard.coordinatorRows)}
             />
           </Panel>
 
@@ -623,7 +486,7 @@ export default function DashboardPage() {
 
           <Panel title="운영 확인 필요 항목" rightText="상세 확인은 스케줄에서 진행">
             <div className="grid grid-cols-2 gap-3 px-6 pb-5 md:grid-cols-3 lg:px-8">
-              {issueRows.map((item) => (
+              {dashboard.issueRows.map((item) => (
                 <button
                   key={item.label}
                   type="button"
@@ -637,13 +500,13 @@ export default function DashboardPage() {
             </div>
           </Panel>
 
-          <Panel title="일자별 운영 추이" rightText={`${dayTrendRows.length.toLocaleString("ko-KR")}일`}>
+          <Panel title="일자별 운영 추이" rightText={`${dashboard.dayTrendRows.length.toLocaleString("ko-KR")}일`}>
             <div className="space-y-3 px-6 pb-5 lg:px-8">
-              {dayTrendRows.length === 0 ? (
+              {dashboard.dayTrendRows.length === 0 ? (
                 <div className="py-8 text-center text-sm text-gray-400">데이터가 없습니다.</div>
               ) : (
-                dayTrendRows.map((row) => {
-                  const max = Math.max(...dayTrendRows.map((item) => item.total), 1);
+                dashboard.dayTrendRows.map((row) => {
+                  const max = Math.max(...dashboard.dayTrendRows.map((item) => item.total), 1);
                   return (
                     <div key={row.date} className="grid grid-cols-[92px_1fr] gap-3 text-xs md:grid-cols-[92px_1fr_160px] md:items-center">
                       <div className="font-medium text-gray-700">{row.date}</div>

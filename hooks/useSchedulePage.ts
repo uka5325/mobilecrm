@@ -2,12 +2,10 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
-import {
-  subscribeReservationsByRange,
-  type ReservationRecord,
-} from "@/lib/reservations";
+import { type ReservationRecord } from "@/features/reservations/domain/reservationModels";
+import { subscribeReservationsByRange } from "@/features/reservations/data/client";
 import { todayString } from "@/lib/dateUtils";
-import { getConferenceMemos, type ConferenceMemo } from "@/lib/settings";
+import { getConferenceMemos, type ConferenceMemo } from "@/features/settings/data/client/settings";
 import {
   addDays,
   formatDate,
@@ -15,8 +13,8 @@ import {
   getMonthEnd,
   getMonthStart,
   getWeekStart,
-} from "@/lib/scheduleDates";
-import { SCHEDULE_APPOINTMENT_TYPES } from "@/lib/scheduleLayout";
+} from "@/features/reservations/ui/scheduleDates";
+import { SCHEDULE_APPOINTMENT_TYPES } from "@/features/reservations/ui/scheduleLayout";
 
 export type ViewMode = "day" | "week" | "month";
 

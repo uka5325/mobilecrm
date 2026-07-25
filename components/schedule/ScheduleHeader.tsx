@@ -1,9 +1,9 @@
 "use client";
 
-import { type AppointmentType, APPOINTMENT_TYPE_COLORS } from "@/lib/reservations";
+import { type AppointmentType, APPOINTMENT_TYPE_COLORS } from "@/features/reservations/domain/reservationModels";
 import { todayString } from "@/lib/dateUtils";
-import type { ConferenceMemo } from "@/lib/settings";
-import { SCHEDULE_APPOINTMENT_TYPES } from "@/lib/scheduleLayout";
+import type { ConferenceMemo } from "@/features/settings/data/client/settings";
+import { SCHEDULE_APPOINTMENT_TYPES } from "@/features/reservations/ui/scheduleLayout";
 import type { ViewMode } from "@/hooks/useSchedulePage";
 
 const VIEW_LABELS: Record<ViewMode, string> = {

@@ -1,14 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import type { ReservationRecord } from "@/lib/reservations";
-import { getCachedPatientFullHistory, getPatientFullHistoryCached } from "@/lib/reservations";
-import type { InvoiceRecord } from "@/lib/invoices";
+import type { ReservationRecord } from "@/features/reservations/domain/reservationModels";
+import { getCachedPatientFullHistory, getPatientFullHistoryCached } from "@/features/reservations/data/client";
+import type { InvoiceRecord } from "@/features/invoices/data/client/invoices";
 import {
   getInvoicesByPatientId,
   getInvoicesByPatientCache,
   invalidateInvoicesByPatientCache,
-} from "@/lib/invoices";
+} from "@/features/invoices/data/client/invoices";
 import { InvoiceEditorForm } from "@/components/invoices/InvoiceEditorForm";
 import {
   PatientInvoiceCard,
@@ -71,7 +71,7 @@ export function PatientInvoiceModal({ patientId, patientName, onClose, onCountLo
     try {
       const [{ auth }, { deleteInvoice }, { getStaffByUid }] = await Promise.all([
         import("@/lib/firebase"),
-        import("@/lib/invoices"),
+        import("@/features/invoices/data/client/invoices"),
         import("@/lib/auth"),
       ]);
       if (!auth.currentUser) {
@@ -106,7 +106,7 @@ export function PatientInvoiceModal({ patientId, patientName, onClose, onCountLo
     try {
       const [{ auth }, { getOrCreateInvoiceDraft }, { getStaffByUid }] = await Promise.all([
         import("@/lib/firebase"),
-        import("@/lib/invoices"),
+        import("@/features/invoices/data/client/invoices"),
         import("@/lib/auth"),
       ]);
       if (!auth.currentUser) {

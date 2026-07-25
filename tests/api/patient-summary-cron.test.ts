@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { NextRequest } from "next/server";
 import { adminDb } from "@/lib/firebaseAdmin";
 import { GET } from "@/app/api/cron/reconcile-patient-summaries/route";
-import { reconcileDirtyPatientBatch } from "@/lib/patientSummary";
+import { reconcileDirtyPatientBatch } from "@/features/patients/jobs/summary/patientSummaryDirty";
 
 const cleanupRefs: FirebaseFirestore.DocumentReference[] = [];
 let previousCronSecret: string | undefined;

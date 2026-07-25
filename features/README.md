@@ -1,23 +1,36 @@
-# Feature Structure Skeleton
+# Feature Structure
 
-This directory prepares domain-oriented feature boundaries without moving or changing existing production code.
+Domain-oriented feature boundaries. Feature-owned code lives here; only
+cross-cutting infrastructure and shared primitives remain under `lib/`.
 
-## Rules
+## Slices
 
-- Existing code under `app/`, `components/`, `hooks/`, and `lib/` remains unchanged in this step.
-- No import paths, runtime behavior, Firebase queries, API routes, or tests are changed.
-- Empty directories are tracked with `.gitkeep`.
-- Files will be migrated incrementally in later steps.
-- `domain/` is reserved for pure business rules, types, and calculations.
-- `data/` is reserved for API, Firestore, Storage, mapping, and cache access. Client SDK and Admin SDK code must remain clearly separated when implementations are added.
-- `validators/` is reserved for reservation input and payload validation.
-- `jobs/` is reserved for resumable jobs, retries, leases, and cron workers.
-- `tests/` is reserved for feature-focused tests; existing tests stay in the root `tests/` directory until a later migration.
+- `domain/` — pure business rules, types, calculations, and shared client/server contracts (no framework or SDK imports).
+- `data/` — API, Firestore, Storage, mapping, and cache access. Client SDK (`data/client`) and Admin SDK (`data/server`) code are kept in separate subfolders and must not import across that boundary.
+- `ui/` — view/layout helpers specific to a feature (schedule layout, timeline formatting, etc.).
+- `validators/` — input and payload validation.
+- `jobs/` — resumable jobs, retries, leases, and cron workers.
+- `tests/` — feature-focused tests. Broad suites currently stay in the root `tests/` directory.
+
+Empty slices are documented here and do not need placeholder files. Prefer
+specific module paths over barrel `index.ts` re-exports, except for deliberate
+public API surfaces such as reservations client data.
+
+## What stays in `lib/`
+
+Cross-cutting infrastructure and primitives shared by multiple features, e.g.
+`firebase`, `firebaseAdmin`, `apiAuth`, `auth`, `adminUtils`, `dateUtils`,
+`stringUtils`, `clientCache`, `csv`, `logs`, and the shared write-time
+primitives `reservationLocks`, `patientIdentity`, `searchTokens`. Moving these
+into a single feature would create feature-to-feature coupling, so they remain
+neutral in `lib/`.
 
 ## Features
 
-- `reservations/`: reservation domain, data access, validation, and tests
-- `patients/`: patient domain, data access, mutation/reconciliation jobs, and tests
-- `photos/`: medical photo domain, Storage/metadata access, cleanup jobs, and tests
-- `dashboard/`: KPI domain calculations, data access, and tests
-- `settlements/`: settlement domain calculations, data access, and tests
+- `reservations/`: reservation domain/contracts, client + server data access, schedule/timeline ui, and jobs.
+- `patients/`: patient domain, data access, client summary cache, and mutation/reconciliation jobs.
+- `photos/`: medical photo domain, Storage/metadata access, and cleanup jobs.
+- `invoices/`: invoice domain, client reads, and server (Admin SDK) writes.
+- `settlements/`: settlement client reads and server writes (shared `settlementMath` stays in lib).
+- `settings/`: settings client data access and helpers.
+- `dashboard/`: KPI domain calculations and data access.

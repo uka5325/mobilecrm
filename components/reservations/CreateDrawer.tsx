@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { createPatientOnly, createReservation, type AppointmentType } from "@/lib/reservations";
-import { parseBirthInfo } from "@/lib/reservationUtils";
+import { type AppointmentType } from "@/features/reservations/domain/reservationModels";
+import { createPatientOnly, createReservation } from "@/features/reservations/data/client";
+import { parseBirthInfo } from "@/lib/birthUtils";
 import type { StaffUser } from "@/lib/auth";
 import { todayString } from "@/lib/dateUtils";
 

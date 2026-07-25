@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import type { StaffUser } from "@/lib/auth";
-import { updatePatientProfile, deletePatient, invalidatePatientFullHistoryCache } from "@/lib/reservations";
+import { updatePatientProfile, deletePatient, invalidatePatientFullHistoryCache } from "@/features/reservations/data/client";
 import type { PatientGroup, PatientEditForm } from "@/components/reservations/ReservationsTable";
 
 // 환자 헤더 편집: patients 마스터 정보 수정(서버 1회 배치) + 고객 목록 삭제(soft delete).

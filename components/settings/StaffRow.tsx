@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import type { StaffUser } from "@/lib/auth";
-import type { SettingsStaffRecord, SettingsStaffRole } from "@/lib/settings";
+import type { SettingsStaffRecord, SettingsStaffRole } from "@/features/settings/data/client/settings";
 import { Td } from "./ui";
 
 const STAFF_ROLES: SettingsStaffRole[] = [

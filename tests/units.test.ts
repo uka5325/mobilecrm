@@ -1,11 +1,16 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { parseBirthInfo } from "../lib/invoiceUtils";
+import { parseBirthInfo } from "../lib/birthUtils";
 import { calcCommissionBase, calcCommission, paymentMethodLabel } from "../lib/commissionUtils";
 import { cleanText, toSerializable } from "../lib/adminUtils";
 import { aggregateSettlementRows } from "../lib/settlementMath";
-import { getConsultAreas, getDemandAreas, getPatientKey } from "../lib/dashboardUtils";
+import {
+  calculateDashboardKpi,
+  getConsultAreas,
+  getDemandAreas,
+  getPatientKey,
+} from "../features/dashboard/domain/dashboardKpi";
 
 test("dashboard items: 복수 항목을 각각 분리하고 중복 항목은 한 번만 센다", () => {
   assert.deepEqual(
@@ -47,28 +52,98 @@ test("dashboard patients: patientId 없는 레거시는 이름과 전화번호�
   assert.equal(first, second);
 });
 
+test("dashboard KPI: 취소를 완료에서 제외하고 환자·담당자·항목을 정확히 집계한다", () => {
+  const result = calculateDashboardKpi([
+    {
+      id: "r1",
+      patientId: "p1",
+      reservationDate: "2026-07-20",
+      reservationTime: "10:00",
+      hospital: "ARC",
+      appointmentType: "상담",
+      consultArea: "눈, 코",
+      doctors: ["김원장"],
+      coordinators: ["David"],
+      completed: true,
+    },
+    {
+      id: "r2",
+      patientId: "p1",
+      reservationDate: "2026-07-21",
+      reservationTime: "",
+      hospital: "ARC",
+      appointmentType: "수술",
+      consultArea: "코재수술",
+      doctors: ["김원장"],
+      coordinators: [],
+      completed: true,
+      cancelled: true,
+    },
+    {
+      id: "r3",
+      patientId: "p2",
+      reservationDate: "2026-07-26",
+      reservationTime: "11:00",
+      appointmentType: "시술",
+      consultArea: "보톡스",
+      doctors: [],
+      coordinators: ["David"],
+      completed: false,
+    },
+  ], "2026-07-24");
+
+  assert.deepEqual(result.summary, {
+    name: "전체",
+    total: 3,
+    patients: 2,
+    completed: 1,
+    scheduled: 1,
+    cancelled: 1,
+    completionRate: 50,
+    shareRate: 0,
+  });
+  assert.equal(result.doctorRows.find((row) => row.name === "김원장")?.total, 2);
+  assert.equal(result.doctorRows.find((row) => row.name === "미지정")?.total, 1);
+  assert.equal(result.itemRows.find((row) => row.name === "코")?.total, 2);
+  assert.equal(result.itemRows.find((row) => row.name === "시술")?.total, 1);
+  assert.deepEqual(result.dayTrendRows.map((row) => row.date), [
+    "2026-07-20",
+    "2026-07-21",
+    "2026-07-26",
+  ]);
+  assert.equal(
+    result.issueRows.find((row) => row.label === "지난 날짜 미완료")?.value,
+    0
+  );
+  assert.equal(
+    result.issueRows.find((row) => row.label === "예약시간 미입력")?.value,
+    1
+  );
+});
+
+// 저장 표준은 birth = YYYYMMDD (lib/patientIdentity.ts 참고), 표시는 YYYY.MM.DD.
 test("parseBirthInfo: 주민번호 앞자리+성별코드 (남)", () => {
   const r = parseBirthInfo("900101-1");
-  assert.equal(r.birth, "1990-01-01");
-  assert.equal(r.birthDisplay, "900101");
+  assert.equal(r.birth, "19900101");
+  assert.equal(r.birthDisplay, "1990.01.01");
   assert.equal(r.gender, "남");
 });
 
 test("parseBirthInfo: 2000년대 출생 (성별코드 3 → 남)", () => {
   const r = parseBirthInfo("050203-3");
-  assert.equal(r.birth, "2005-02-03");
+  assert.equal(r.birth, "20050203");
   assert.equal(r.gender, "남");
 });
 
 test("parseBirthInfo: 7자리 (여, 코드 4)", () => {
   const r = parseBirthInfo("0502034");
-  assert.equal(r.birth, "2005-02-03");
+  assert.equal(r.birth, "20050203");
   assert.equal(r.gender, "여");
 });
 
 test("parseBirthInfo: 8자리 YYYYMMDD, 성별 폴백", () => {
   const r = parseBirthInfo("19900101", "여");
-  assert.equal(r.birth, "1990-01-01");
+  assert.equal(r.birth, "19900101");
   assert.equal(r.gender, "여");
 });
 
@@ -76,6 +151,28 @@ test("parseBirthInfo: 빈 입력", () => {
   const r = parseBirthInfo("");
   assert.equal(r.birth, "");
   assert.equal(r.birthDisplay, "");
+});
+
+// ── 아래는 인보이스용 중복 파서를 제거하며 고정한 회귀 케이스 ──────────────
+test("parseBirthInfo: 파싱 불가 입력은 원본을 보존한다 (유실 금지)", () => {
+  const r = parseBirthInfo("900101");
+  assert.equal(r.birth, "900101");
+  assert.equal(r.birthInput, "900101");
+  assert.equal(r.birthDisplay, "900101");
+});
+
+test("parseBirthInfo: 성별 폴백은 남/여로 정규화한다", () => {
+  assert.equal(parseBirthInfo("19900101", "male").gender, "남");
+  assert.equal(parseBirthInfo("19900101", "F").gender, "여");
+  assert.equal(parseBirthInfo("19900101", "남자").gender, "남");
+});
+
+test("parseBirthInfo: 예약이 저장한 birth를 다시 파싱해도 같은 값이 나온다 (인보이스 생성 경로)", () => {
+  // invoiceCreateServer 는 예약 문서의 birthInput || birth 를 읽어 다시 파싱한다.
+  const fromReservationInput = parseBirthInfo("891210-1");
+  const reparsedFromStoredBirth = parseBirthInfo(fromReservationInput.birth);
+  assert.equal(reparsedFromStoredBirth.birth, fromReservationInput.birth);
+  assert.equal(reparsedFromStoredBirth.birthDisplay, fromReservationInput.birthDisplay);
 });
 
 test("calcCommissionBase: 현금은 전액", () => {
@@ -137,7 +234,7 @@ test("toSerializable: Timestamp형(toMillis) 변환", () => {
 });
 
 // ── buildReservationUpdatePayload: 부분 patch(생략 필드 보존) ──────────────
-import { buildReservationUpdatePayload } from "../lib/reservations";
+import { buildReservationUpdatePayload } from "../features/reservations/domain/reservationModels";
 
 const _staff = { uid: "u1", displayName: "Tester" } as unknown as Parameters<typeof buildReservationUpdatePayload>[1];
 const _base = { name: "홍길동", reservationDate: "2026-07-06" };
@@ -337,7 +434,12 @@ test("clearAllClientCaches: mcrm_/arc_crm_ 키는 삭제하고 무관한 키는 
 });
 
 // ── reservationFiles: Storage 삭제 실패 분류 (재시도 가능 로직, P0 후속) ────────────
-import { classifyStorageDeleteError } from "../lib/reservationFiles";
+import { classifyStorageDeleteError } from "../features/photos/data/client/reservationFiles";
+import {
+  isAllowedStoragePath,
+  isRetryableStorageDeleteError,
+  storageCleanupRetryDelayMs,
+} from "../features/photos/domain/storageCleanupPolicy";
 
 test("classifyStorageDeleteError: object-not-found는 성공(deleted)으로 분류한다", () => {
   const result = classifyStorageDeleteError({ code: "storage/object-not-found" });
@@ -352,4 +454,22 @@ test("classifyStorageDeleteError: 그 외 에러는 failed + errorCode로 분류
 test("classifyStorageDeleteError: code가 없는 에러는 unknown으로 분류한다", () => {
   const result = classifyStorageDeleteError(new Error("boom"));
   assert.deepEqual(result, { status: "failed", errorCode: "unknown" });
+});
+
+test("storage cleanup policy: 예약 사진 경로만 허용한다", () => {
+  assert.equal(isAllowedStoragePath("reservationFiles/r1/photos/a.png"), true);
+  assert.equal(isAllowedStoragePath("other/r1/photos/a.png"), false);
+  assert.equal(isAllowedStoragePath("reservationFiles/../secret.json"), false);
+});
+
+test("storage cleanup policy: 재시도 간격은 1시간부터 증가해 24시간으로 제한한다", () => {
+  assert.equal(storageCleanupRetryDelayMs(1), 60 * 60 * 1000);
+  assert.equal(storageCleanupRetryDelayMs(2), 2 * 60 * 60 * 1000);
+  assert.equal(storageCleanupRetryDelayMs(99), 24 * 60 * 60 * 1000);
+});
+
+test("storage cleanup policy: 권한·잘못된 요청은 재시도하지 않는다", () => {
+  assert.equal(isRetryableStorageDeleteError({ code: 503 }), true);
+  assert.equal(isRetryableStorageDeleteError({ code: 403 }), false);
+  assert.equal(isRetryableStorageDeleteError({ code: "storage/unauthorized" }), false);
 });

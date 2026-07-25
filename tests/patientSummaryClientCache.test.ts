@@ -1,5 +1,12 @@
 import { describe, it, beforeEach } from "node:test";
 import assert from "node:assert/strict";
+import {
+  getPatientSummaryCache,
+  setPatientSummaryCache,
+  invalidatePatientSummaryCache,
+  isPatientSummaryCacheFresh,
+  PATIENT_SUMMARY_CACHE_TTL_MS,
+} from "../features/patients/data/client/patientSummaryClientCache";
 
 // Minimal sessionStorage shim for Node
 const store = new Map<string, string>();
@@ -13,17 +20,6 @@ const sessionStorage = {
 };
 (globalThis as Record<string, unknown>).window = globalThis;
 (globalThis as Record<string, unknown>).sessionStorage = sessionStorage;
-
-// Dynamic import after shim setup
-const mod = await import("../lib/patientSummaryClientCache.js");
-
-const {
-  getPatientSummaryCache,
-  setPatientSummaryCache,
-  invalidatePatientSummaryCache,
-  isPatientSummaryCacheFresh,
-  PATIENT_SUMMARY_CACHE_TTL_MS,
-} = mod;
 
 const fakePatient = (id: string) => ({
   id,

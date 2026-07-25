@@ -1,1 +1,1 @@
-export { handleReservationRequest as POST } from "@/lib/server/reservations/requestHandler";
+export { handleReservationRequest as POST } from "@/features/reservations/data/server/requestHandler";

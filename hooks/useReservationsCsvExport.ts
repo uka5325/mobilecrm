@@ -1,9 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { fetchReservationsForExport } from "@/lib/reservations";
-import { getCardStatus } from "@/lib/timelineUtils";
-import { getReservationBirthInfo } from "@/lib/reservationUtils";
+import { fetchReservationsForExport } from "@/features/reservations/data/client";
+import { getCardStatus } from "@/features/reservations/ui/timelineUtils";
+import { getReservationBirthInfo } from "@/features/reservations/domain/reservationUtils";
 import { todayString } from "@/lib/dateUtils";
 import { buildCsvContent } from "@/lib/csv";
 import { toDate } from "@/lib/dateUtils";
