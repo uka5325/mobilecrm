@@ -37,6 +37,13 @@ ui-debug.log*
 .env*
 !.env.example
 
+# service account keys (never commit)
+# scripts/*.ts 의 --key 인자로 저장소 안에 두게 되는 경우가 있어 미리 차단한다.
+# *-firebase-adminsdk-*.json 은 Firebase 콘솔에서 받을 때의 기본 파일명.
+serviceAccount*.json
+service-account*.json
+*-firebase-adminsdk-*.json
+
 # vercel
 .vercel
 
