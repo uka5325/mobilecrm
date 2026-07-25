@@ -84,8 +84,8 @@ export default function LoginPage() {
   const busy = loading || googleLoading || resetLoading;
 
   return (
-    <main className="min-h-[100dvh] bg-[#061821] text-[#12151f] md:bg-[#f7f7f5] md:px-6 md:py-8">
-      <section className="grid min-h-[100dvh] w-full overflow-hidden bg-white md:mx-auto md:min-h-[640px] md:max-w-[1180px] md:grid-cols-[1.08fr_0.92fr] md:rounded-[32px] md:border md:border-[#d9ddd9] md:shadow-[0_24px_80px_rgba(15,23,42,0.10)]">
+    <main data-login-page className="-mt-[env(safe-area-inset-top)] min-h-[calc(100dvh+env(safe-area-inset-top))] bg-[#061821] text-[#12151f] md:mt-0 md:min-h-[100dvh] md:bg-[#f7f7f5] md:px-6 md:py-8">
+      <section className="grid min-h-[calc(100dvh+env(safe-area-inset-top))] w-full overflow-hidden bg-white md:mx-auto md:min-h-[640px] md:max-w-[1180px] md:grid-cols-[1.08fr_0.92fr] md:rounded-[32px] md:border md:border-[#d9ddd9] md:shadow-[0_24px_80px_rgba(15,23,42,0.10)]">
         <BrandPanel />
 
         <section className="relative z-10 -mt-6 flex-1 rounded-t-[28px] bg-white px-5 pb-8 pt-7 md:mt-0 md:flex md:items-center md:justify-center md:rounded-none md:px-10 md:py-12 lg:px-14">
