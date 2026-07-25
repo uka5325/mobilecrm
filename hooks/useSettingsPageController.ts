@@ -25,14 +25,14 @@ import {
   type GeneralSettings,
   type SettingsStaffRecord,
   type SettingsStaffRole,
-} from "@/lib/settings";
+} from "@/features/settings/data/client/settings";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { todayString } from "@/lib/dateUtils";
 import {
   getErrorMessage,
   normalizeHexInput,
   notifyStaffSettingsUpdated,
-} from "@/lib/settingsUtils";
+} from "@/features/settings/data/client/settingsUtils";
 
 export type SettingsTab = "statusColors" | "system" | "memo" | "staff" | "security";
 

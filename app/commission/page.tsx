@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { getInvoices, type InvoiceRecord } from "@/features/invoices/data/client/invoices";
-import { getStaffListForSettings, type SettingsStaffRecord } from "@/lib/settings";
+import { getStaffListForSettings, type SettingsStaffRecord } from "@/features/settings/data/client/settings";
 import { paymentMethodLabel } from "@/lib/commissionUtils";
 import { buildCsvContent } from "@/lib/csv";
 import { monthRange } from "@/lib/dateUtils";

@@ -1,4 +1,4 @@
-import { auth } from "./firebase";
+import { auth } from "@/lib/firebase";
 
 export async function callSettingsApi(action: string, payload: Record<string, unknown> = {}) {
   const firebaseUser = auth.currentUser;

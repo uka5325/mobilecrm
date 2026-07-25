@@ -5,7 +5,7 @@ import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { type ReservationRecord } from "@/features/reservations/domain/reservationModels";
 import { subscribeReservationsByRange } from "@/features/reservations/data/client";
 import { todayString } from "@/lib/dateUtils";
-import { getConferenceMemos, type ConferenceMemo } from "@/lib/settings";
+import { getConferenceMemos, type ConferenceMemo } from "@/features/settings/data/client/settings";
 import {
   addDays,
   formatDate,

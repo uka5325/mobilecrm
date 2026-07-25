@@ -3,9 +3,9 @@
 import {
   DEFAULT_APPOINTMENT_TYPE_COLORS,
   type AppointmentTypeColorMap,
-} from "@/lib/settings";
+} from "@/features/settings/data/client/settings";
 import { getReadableTextColor } from "@/lib/colorUtils";
-import { isValidHex } from "@/lib/settingsUtils";
+import { isValidHex } from "@/features/settings/data/client/settingsUtils";
 import { SectionHeader, EmptyBox } from "@/components/settings/ui";
 
 const TYPE_KEYS = ["상담", "수술", "시술", "치료", "경과", "진료", "검진"] as const;

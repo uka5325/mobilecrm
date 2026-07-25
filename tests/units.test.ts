@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { parseBirthInfo } from "../lib/invoiceUtils";
+import { parseBirthInfo } from "../features/invoices/domain/invoiceUtils";
 import { calcCommissionBase, calcCommission, paymentMethodLabel } from "../lib/commissionUtils";
 import { cleanText, toSerializable } from "../lib/adminUtils";
 import { aggregateSettlementRows } from "../lib/settlementMath";
