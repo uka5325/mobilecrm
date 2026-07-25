@@ -84,7 +84,7 @@ export default function LoginPage() {
   const busy = loading || googleLoading || resetLoading;
 
   return (
-    <main data-login-page className="-mt-[env(safe-area-inset-top)] min-h-[calc(100dvh+env(safe-area-inset-top))] bg-[#061821] text-[#12151f] md:mt-0 md:min-h-[100dvh] md:bg-[#f7f7f5] md:px-6 md:py-8">
+    <main data-login-page className="-mt-[env(safe-area-inset-top)] min-h-[calc(100dvh+env(safe-area-inset-top))] bg-[#07383A] text-[#12151f] md:mt-0 md:min-h-[100dvh] md:bg-[#f7f7f5] md:px-6 md:py-8">
       <section className="grid min-h-[calc(100dvh+env(safe-area-inset-top))] w-full overflow-hidden bg-white md:mx-auto md:min-h-[640px] md:max-w-[1180px] md:grid-cols-[1.08fr_0.92fr] md:rounded-[32px] md:border md:border-[#d9ddd9] md:shadow-[0_24px_80px_rgba(15,23,42,0.10)]">
         <BrandPanel />
 
@@ -213,8 +213,8 @@ export default function LoginPage() {
 
 function BrandPanel() {
   return (
-    <section className="relative min-h-[250px] overflow-hidden bg-[linear-gradient(145deg,#061821_0%,#082D32_55%,#06413D_100%)] px-6 pb-16 pt-[calc(env(safe-area-inset-top)+1.75rem)] md:flex md:min-h-full md:items-center md:px-12 md:py-14 lg:px-16">
-      <div className="pointer-events-none absolute -right-24 -top-24 h-[320px] w-[320px] rounded-full bg-[radial-gradient(circle,rgba(52,211,180,0.24)_0%,rgba(52,211,180,0)_68%)]" />
+    <section className="relative min-h-[250px] overflow-hidden bg-[linear-gradient(145deg,#07383A_0%,#074244_46%,#06413D_100%)] px-6 pb-16 pt-[calc(env(safe-area-inset-top)+1.75rem)] md:flex md:min-h-full md:items-center md:px-12 md:py-14 lg:px-16">
+      <div className="pointer-events-none absolute -right-24 -top-24 h-[320px] w-[320px] rounded-full bg-[radial-gradient(circle,rgba(52,211,180,0.20)_0%,rgba(52,211,180,0)_68%)]" />
       <div className="pointer-events-none absolute -bottom-36 -left-28 h-[420px] w-[420px] rounded-full bg-[radial-gradient(circle,rgba(13,148,136,0.24)_0%,rgba(13,148,136,0)_70%)]" />
       <div className="pointer-events-none absolute inset-0 opacity-70">
         <svg viewBox="0 0 700 700" className="h-full w-full" preserveAspectRatio="none" aria-hidden="true">
