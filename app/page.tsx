@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { subscribeReservationsByRange, type ReservationRecord } from "@/lib/reservations";
+import { subscribeReservationsByRange, type ReservationRecord } from "@/features/reservations";
 import { useTodayMemosContext } from "@/components/TodayMemosProvider";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { todayString } from "@/lib/dateUtils";

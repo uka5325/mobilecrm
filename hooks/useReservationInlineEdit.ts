@@ -7,7 +7,7 @@ import {
   invalidatePatientFullHistoryCache,
   type AppointmentType,
   type ReservationRecord,
-} from "@/lib/reservations";
+} from "@/features/reservations";
 
 // ReservationsTable의 InlineForm과 구조적으로 동일해야 한다(미export 타입이라 복제).
 export type InlineReservationForm = {

@@ -7,7 +7,7 @@ import {
   getInvoicesByPatientId,
   getOrCreateInvoiceDraft,
   type InvoiceRecord,
-} from "@/lib/invoices";
+} from "@/features/invoices/data/client/invoices";
 import { InvoiceEditorForm } from "@/components/invoices/InvoiceEditorForm";
 import { InvoiceDetailView } from "./InvoiceDetailView";
 import { InvoiceList } from "./InvoiceList";
@@ -41,7 +41,7 @@ export function InvoiceTab({ reservationDocId, patientId, currentUser, appointme
       if (patientId) {
         setInvoices(await getInvoicesByPatientId(patientId));
       } else {
-        const { getInvoiceByReservationDocId } = await import("@/lib/invoices");
+        const { getInvoiceByReservationDocId } = await import("@/features/invoices/data/client/invoices");
         const invoice = await getInvoiceByReservationDocId(reservationDocId);
         setInvoices(invoice ? [invoice] : []);
       }

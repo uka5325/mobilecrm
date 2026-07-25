@@ -7,7 +7,7 @@ import {
   getPatientFullHistoryPage,
   invalidatePatientFullHistoryCache,
   type ReservationRecord,
-} from "@/lib/reservations";
+} from "@/features/reservations";
 
 const HISTORY_PAGE_SIZE = 10;
 

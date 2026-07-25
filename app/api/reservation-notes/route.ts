@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { adminDb, FieldValue } from "@/lib/firebaseAdmin";
 import { requireActiveStaff, toAuthErrorResponse } from "@/lib/apiAuth";
 import { toSerializable as toSer } from "@/lib/adminUtils";
-import { recomputeMemoSummary, safeRecompute } from "@/lib/patientSummary";
+import { recomputeMemoSummary, safeRecompute } from "@/features/patients/jobs/summary";
 
 export async function POST(req: NextRequest) {
   try {

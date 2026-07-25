@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePatientSummary } from "@/components/PatientSummaryProvider";
-import { searchPatients, listPatientsSummary, type PatientRecord } from "@/lib/reservations";
+import { searchPatients, listPatientsSummary, type PatientRecord } from "@/features/reservations";
 import type { PatientGroup } from "@/components/reservations/ReservationsTable";
 
 const PAGE_SIZE = 10;

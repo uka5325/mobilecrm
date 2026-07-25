@@ -6,7 +6,7 @@ import {
   createEmptyPatientSummary,
   safeRecompute,
   updateReservationSummaryIncrementally,
-} from "@/lib/patientSummary";
+} from "@/features/patients/jobs/summary";
 import type { ReservationApiPayload } from "@/lib/reservationApiContracts";
 import { identityKeyForPatient } from "@/lib/patientIdentity";
 import {

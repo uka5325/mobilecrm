@@ -6,7 +6,7 @@ import {
   updateReservationFull,
   type AppointmentType,
   type ReservationRecord,
-} from "@/lib/reservations";
+} from "@/features/reservations";
 import type { StaffUser } from "@/lib/auth";
 import { parseBirthInfo } from "@/lib/reservationUtils";
 import { getLogsByReservationId, type LogRecord } from "@/lib/logs";

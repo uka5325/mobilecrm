@@ -1,4 +1,4 @@
-import type { InvoiceRecord } from "@/lib/invoices";
+import type { InvoiceRecord } from "@/features/invoices/data/client/invoices";
 import { paymentMethodLabel } from "@/lib/commissionUtils";
 import { formatMoney, INVOICE_STATUS_CLASS, INVOICE_STATUS_LABEL } from "@/components/invoices/invoiceUi";
 

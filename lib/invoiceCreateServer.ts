@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { adminDb, FieldValue } from "@/lib/firebaseAdmin";
 import { cleanText, docToObj } from "@/lib/adminUtils";
 import { parseBirthInfo } from "@/lib/invoiceUtils";
-import { recomputeInvoiceSummary, safeRecompute } from "@/lib/patientSummary";
+import { recomputeInvoiceSummary, safeRecompute } from "@/features/patients/jobs/summary";
 import { aggregateSettlementRows } from "@/lib/settlementMath";
 import {
   invoiceLog,

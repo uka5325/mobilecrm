@@ -211,7 +211,7 @@ test("toSerializable: Timestamp형(toMillis) 변환", () => {
 });
 
 // ── buildReservationUpdatePayload: 부분 patch(생략 필드 보존) ──────────────
-import { buildReservationUpdatePayload } from "../lib/reservations";
+import { buildReservationUpdatePayload } from "../features/reservations";
 
 const _staff = { uid: "u1", displayName: "Tester" } as unknown as Parameters<typeof buildReservationUpdatePayload>[1];
 const _base = { name: "홍길동", reservationDate: "2026-07-06" };
@@ -411,7 +411,7 @@ test("clearAllClientCaches: mcrm_/arc_crm_ 키는 삭제하고 무관한 키는 
 });
 
 // ── reservationFiles: Storage 삭제 실패 분류 (재시도 가능 로직, P0 후속) ────────────
-import { classifyStorageDeleteError } from "../lib/reservationFiles";
+import { classifyStorageDeleteError } from "../features/photos/data/client";
 import {
   isAllowedStoragePath,
   isRetryableStorageDeleteError,

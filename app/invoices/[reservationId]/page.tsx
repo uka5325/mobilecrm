@@ -8,7 +8,7 @@ import {
   updateInvoice,
   deleteInvoice,
   type InvoiceRecord,
-} from "@/lib/invoices";
+} from "@/features/invoices/data/client/invoices";
 import { calcCommissionBase, calcCommission, type PaymentMethod } from "@/lib/commissionUtils";
 import { getStaffListForSettings, type SettingsStaffRecord } from "@/lib/settings";
 

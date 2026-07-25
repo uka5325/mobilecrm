@@ -13,11 +13,11 @@ import {
   patientFullHistoryPage,
   patientFullHistoryExact,
   searchPatientsRaw,
-} from "@/lib/reservationConsistencyServer";
+} from "@/features/patients/data/server";
 import {
   runPatientDeleteJob,
   runPatientUpdateJob,
-} from "@/lib/patientMutationJobs";
+} from "@/features/patients/jobs";
 import { createReservationCommand } from "./commands/createReservation";
 import { updateReservationCommand } from "./commands/updateReservation";
 import { deleteReservationCommand } from "./commands/deleteReservation";

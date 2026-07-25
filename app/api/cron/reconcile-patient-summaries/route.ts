@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { reconcileDirtyPatientBatch } from "@/lib/patientSummary";
+import { reconcileDirtyPatientBatch } from "@/features/patients/jobs/summary";
 import { runStorageCleanupBatch } from "@/features/photos/jobs";
 
 export const dynamic = "force-dynamic";

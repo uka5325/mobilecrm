@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
-import type { ReservationRecord } from "@/lib/reservations";
+import type { ReservationRecord } from "@/features/reservations";
 import { formatLog } from "@/lib/scheduleDates";
 import {
   buildColumnPositions,

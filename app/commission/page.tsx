@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
-import { getInvoices, type InvoiceRecord } from "@/lib/invoices";
+import { getInvoices, type InvoiceRecord } from "@/features/invoices/data/client/invoices";
 import { getStaffListForSettings, type SettingsStaffRecord } from "@/lib/settings";
 import { paymentMethodLabel } from "@/lib/commissionUtils";
 import { buildCsvContent } from "@/lib/csv";

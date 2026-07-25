@@ -1,4 +1,4 @@
-import type { DoctorOption, ReservationRecord } from "@/lib/reservations";
+import type { DoctorOption, ReservationRecord } from "@/features/reservations";
 import { getReservationBirthInfo } from "@/lib/reservationUtils";
 import { toDate } from "@/lib/dateUtils";
 

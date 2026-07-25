@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import type { ReservationNote, MutationResult } from "@/lib/reservationNotes";
-import type { ReservationRecord } from "@/lib/reservations";
+import type { ReservationRecord } from "@/features/reservations";
 import { toDate } from "@/lib/dateUtils";
 
 export type MemoPopoverState = {

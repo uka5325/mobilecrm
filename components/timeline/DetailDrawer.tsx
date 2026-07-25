@@ -1,6 +1,6 @@
 "use client";
 
-import type { ReservationRecord } from "@/lib/reservations";
+import type { ReservationRecord } from "@/features/reservations";
 import type { StaffUser } from "@/lib/auth";
 import { DetailDrawerHeader } from "@/components/timeline/DetailDrawerHeader";
 import { DetailDrawerTabs } from "@/components/timeline/DetailDrawerTabs";

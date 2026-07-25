@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import type { StaffUser } from "@/lib/auth";
-import type { InvoiceRecord, InvoiceUpdatePayload } from "@/lib/invoices";
+import type { InvoiceRecord, InvoiceUpdatePayload } from "@/features/invoices/data/client/invoices";
 import { calcCommission, calcCommissionBase } from "@/lib/commissionUtils";
 import { INVOICE_STATUS_CLASS, INVOICE_STATUS_LABEL, formatMoney } from "./invoiceUi";
 
@@ -84,7 +84,7 @@ export function InvoiceEditorForm({
         setError("로그인 또는 직원 정보를 확인할 수 없습니다.");
         return;
       }
-      const { updateInvoice } = await import("@/lib/invoices");
+      const { updateInvoice } = await import("@/features/invoices/data/client/invoices");
       const result = await updateInvoice(invoice.id, {
         ...form,
         commissionBase,
@@ -113,7 +113,7 @@ export function InvoiceEditorForm({
         setError("로그인 또는 직원 정보를 확인할 수 없습니다.");
         return;
       }
-      const { deleteInvoice } = await import("@/lib/invoices");
+      const { deleteInvoice } = await import("@/features/invoices/data/client/invoices");
       const result = await deleteInvoice(invoice.id, staff);
       if (!result.success) {
         setError(result.message || "삭제 실패");

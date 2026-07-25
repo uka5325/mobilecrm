@@ -6,7 +6,7 @@ import {
   deleteReservation,
   invalidatePatientFullHistoryCache,
   type ReservationRecord,
-} from "@/lib/reservations";
+} from "@/features/reservations";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { CreateDrawer } from "@/components/reservations/CreateDrawer";
 import { ImportDrawer } from "@/components/reservations/ImportDrawer";

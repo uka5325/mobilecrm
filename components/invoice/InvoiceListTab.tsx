@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { getInvoices, type InvoiceRecord, type InvoiceListFilter } from "@/lib/invoices";
+import { getInvoices, type InvoiceRecord, type InvoiceListFilter } from "@/features/invoices/data/client/invoices";
 import { QuickButton } from "@/components/dashboard/QuickButton";
 import { toDate } from "@/lib/dateUtils";
 import { monthRange } from "@/lib/dateUtils";
@@ -91,7 +91,7 @@ export function InvoiceListTab() {
     if (!confirm(`${inv.patientName}의 인보이스를 삭제할까요?`)) return;
     try {
       const { auth } = await import("@/lib/firebase");
-      const { deleteInvoice } = await import("@/lib/invoices");
+      const { deleteInvoice } = await import("@/features/invoices/data/client/invoices");
       const firebaseUser = auth.currentUser;
       if (!firebaseUser) { alert("로그인 정보를 확인할 수 없습니다."); return; }
       const { getStaffByUid } = await import("@/lib/auth");

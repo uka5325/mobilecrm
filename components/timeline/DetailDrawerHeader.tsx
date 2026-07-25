@@ -1,6 +1,6 @@
 "use client";
 
-import type { ReservationRecord } from "@/lib/reservations";
+import type { ReservationRecord } from "@/features/reservations";
 import { getBirthGenderText } from "@/lib/timelineUtils";
 
 type Props = {

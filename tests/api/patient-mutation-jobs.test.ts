@@ -4,7 +4,7 @@ import { NextRequest } from "next/server";
 import { adminDb } from "@/lib/firebaseAdmin";
 import { __resetStaffCacheForTests } from "@/lib/apiAuth";
 import { POST } from "@/app/api/reservations/route";
-import { patientMutationJobId } from "@/lib/patientMutationJobs";
+import { patientMutationJobId } from "@/features/patients/jobs";
 import { RESERVATION_LOCKS, lockIdForReservation } from "@/lib/reservationLocks";
 import { createTestUser, type TestUser } from "../helpers/testAuth";
 

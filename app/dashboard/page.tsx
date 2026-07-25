@@ -3,7 +3,7 @@
 import { useCallback, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
-import { searchReservationsByDateRange } from "@/lib/reservations";
+import { searchReservationsByDateRange } from "@/features/reservations";
 import { listSalesSummaryRows, type SalesSummaryRow } from "@/lib/settlements";
 import { aggregateSettlementRows } from "@/lib/settlementMath";
 import { todayString } from "@/lib/dateUtils";
