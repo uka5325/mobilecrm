@@ -6,14 +6,14 @@ import {
   type ReservationApiAction,
   type ReservationApiPayload,
 } from "@/features/reservations/domain/reservationApiContracts";
+import { createPatientWithDecision } from "@/features/patients/data/server/createPatient";
 import {
-  createPatientWithDecision,
   listPatientsRaw,
   listPatientsSummaryRaw,
   patientFullHistoryPage,
   patientFullHistoryExact,
   searchPatientsRaw,
-} from "@/features/patients/data/server";
+} from "@/features/patients/data/server/patientQueries";
 import { runPatientDeleteJob } from "@/features/patients/jobs/softDeletePatientJob";
 import { runPatientUpdateJob } from "@/features/patients/jobs/updatePatientJob";
 import { createReservationCommand } from "./commands/createReservation";

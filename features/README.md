@@ -12,8 +12,9 @@ cross-cutting infrastructure and shared primitives remain under `lib/`.
 - `jobs/` — resumable jobs, retries, leases, and cron workers.
 - `tests/` — feature-focused tests. Broad suites currently stay in the root `tests/` directory.
 
-Empty slices are tracked with `.gitkeep`. Prefer specific module paths over
-barrel `index.ts` re-exports.
+Empty slices are documented here and do not need placeholder files. Prefer
+specific module paths over barrel `index.ts` re-exports, except for deliberate
+public API surfaces such as reservations client data.
 
 ## What stays in `lib/`
 
