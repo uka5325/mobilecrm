@@ -9,7 +9,7 @@ import {
   uploadReservationPhoto,
   type PhotoRecord,
 } from "@/features/photos/data/client/reservationFiles";
-import { compressImage } from "@/lib/imageCompress";
+import { compressImage } from "@/features/photos/domain/imageCompress";
 
 type Props = {
   reservationDocId: string;

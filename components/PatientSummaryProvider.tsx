@@ -28,7 +28,7 @@ import {
   getPatientSummaryCache,
   invalidatePatientSummaryCache,
   setPatientSummaryCache,
-} from "@/lib/patientSummaryClientCache";
+} from "@/features/patients/data/client/patientSummaryClientCache";
 import { type PatientRecord } from "@/features/reservations/domain/reservationModels";
 import { listPatientsSummary } from "@/features/reservations/data/client";
 

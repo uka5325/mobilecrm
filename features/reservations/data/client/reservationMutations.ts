@@ -1,6 +1,6 @@
 import { auth } from "@/lib/firebase";
 import { cleanText } from "@/lib/stringUtils";
-import { parseBirthInfo } from "@/lib/reservationUtils";
+import { parseBirthInfo } from "@/features/reservations/domain/reservationUtils";
 import type { StaffUser } from "@/lib/auth";
 import type {
   ReservationApiAction,
@@ -23,8 +23,8 @@ export {
   setPatientSummaryCache,
   invalidatePatientSummaryCache,
   isPatientSummaryCacheFresh,
-} from "@/lib/patientSummaryClientCache";
-import { invalidatePatientSummaryCache as _invalidatePatientSummaryCache } from "@/lib/patientSummaryClientCache";
+} from "@/features/patients/data/client/patientSummaryClientCache";
+import { invalidatePatientSummaryCache as _invalidatePatientSummaryCache } from "@/features/patients/data/client/patientSummaryClientCache";
 
 export const invalidatePatientsSummaryCache = _invalidatePatientSummaryCache;
 

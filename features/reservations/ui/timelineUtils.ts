@@ -1,5 +1,5 @@
 import type { DoctorOption, ReservationRecord } from "@/features/reservations/domain/reservationModels";
-import { getReservationBirthInfo } from "@/lib/reservationUtils";
+import { getReservationBirthInfo } from "@/features/reservations/domain/reservationUtils";
 import { toDate } from "@/lib/dateUtils";
 
 export const START_H = 9;

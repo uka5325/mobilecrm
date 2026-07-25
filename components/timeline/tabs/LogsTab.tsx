@@ -1,7 +1,7 @@
 "use client";
 
 import { type LogRecord } from "@/lib/logs";
-import { formatLogDate, getLogBadgeClass } from "@/lib/timelineUtils";
+import { formatLogDate, getLogBadgeClass } from "@/features/reservations/ui/timelineUtils";
 
 type Props = {
   logs: LogRecord[];

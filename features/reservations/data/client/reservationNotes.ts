@@ -1,7 +1,7 @@
-import { auth } from "./firebase";
-import type { StaffUser } from "./auth";
-import { cleanText } from "./stringUtils";
-import { toMillis } from "./dateUtils";
+import { auth } from "@/lib/firebase";
+import type { StaffUser } from "@/lib/auth";
+import { cleanText } from "@/lib/stringUtils";
+import { toMillis } from "@/lib/dateUtils";
 
 export type ReservationNote = {
   id: string;

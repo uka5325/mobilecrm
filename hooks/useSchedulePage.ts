@@ -13,8 +13,8 @@ import {
   getMonthEnd,
   getMonthStart,
   getWeekStart,
-} from "@/lib/scheduleDates";
-import { SCHEDULE_APPOINTMENT_TYPES } from "@/lib/scheduleLayout";
+} from "@/features/reservations/ui/scheduleDates";
+import { SCHEDULE_APPOINTMENT_TYPES } from "@/features/reservations/ui/scheduleLayout";
 
 export type ViewMode = "day" | "week" | "month";
 

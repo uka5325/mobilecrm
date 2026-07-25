@@ -15,7 +15,7 @@ const sessionStorage = {
 (globalThis as Record<string, unknown>).sessionStorage = sessionStorage;
 
 // Dynamic import after shim setup
-const mod = await import("../lib/patientSummaryClientCache.js");
+const mod = await import("../features/patients/data/client/patientSummaryClientCache.js");
 
 const {
   getPatientSummaryCache,

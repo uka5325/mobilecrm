@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import type { ReservationNote, MutationResult } from "@/lib/reservationNotes";
+import type { ReservationNote, MutationResult } from "@/features/reservations/data/client/reservationNotes";
 import type { ReservationRecord } from "@/features/reservations/domain/reservationModels";
 import { toDate } from "@/lib/dateUtils";
 
