@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import type { SettingsStaffRole } from "@/lib/settings";
+import type { SettingsStaffRole } from "@/features/settings/data/client/settings";
 
 const ROLES: { value: SettingsStaffRole; label: string }[] = [
   { value: "admin", label: "관리자 (Admin)" },

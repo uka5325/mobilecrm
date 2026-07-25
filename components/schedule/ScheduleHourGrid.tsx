@@ -1,4 +1,4 @@
-import { HOUR_HEIGHT } from "@/lib/scheduleLayout";
+import { HOUR_HEIGHT } from "@/features/reservations/ui/scheduleLayout";
 
 // 타임그리드 시간별 가로 구분선 — 일간·주간 뷰가 카드 영역 배경으로 재사용한다.
 export function ScheduleHourGrid({ rows }: { rows: number }) {

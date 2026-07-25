@@ -1,6 +1,6 @@
 
-import { auth } from "./firebase";
-import { cleanText } from "./stringUtils";
+import { auth } from "@/lib/firebase";
+import { cleanText } from "@/lib/stringUtils";
 import {
   isSettlementPaymentMethod,
   type SettlementAggregate,
@@ -8,7 +8,7 @@ import {
   type SettlementDirection,
   type SettlementPaymentMethod,
   type SettlementStatus,
-} from "./settlementMath";
+} from "@/lib/settlementMath";
 
 export type SettlementRecord = {
   id: string;

@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { APPOINTMENT_TYPES, type AppointmentType } from "@/features/reservations/domain/reservationModels";
 import { createReservation } from "@/features/reservations/data/client";
-import { parseBirthInfo } from "@/lib/reservationUtils";
+import { parseBirthInfo } from "@/features/reservations/domain/reservationUtils";
 import type { StaffUser } from "@/lib/auth";
 import { todayString } from "@/lib/dateUtils";
 

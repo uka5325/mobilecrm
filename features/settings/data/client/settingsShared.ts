@@ -1,4 +1,4 @@
-import type { StaffUser } from "./auth";
+import type { StaffUser } from "@/lib/auth";
 
 // 색상 설정(내원상태/예약유형)에서 공통으로 쓰는 HEX 정규화.
 export function normalizeHexColor(value: unknown, fallback: string) {

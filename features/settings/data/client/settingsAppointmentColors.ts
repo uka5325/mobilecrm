@@ -1,5 +1,5 @@
-import type { StaffUser } from "./auth";
-import { createLog } from "./logs";
+import type { StaffUser } from "@/lib/auth";
+import { createLog } from "@/lib/logs";
 import { callSettingsApi } from "./settingsApi";
 import { assertCanManageSettings, normalizeHexColor } from "./settingsShared";
 

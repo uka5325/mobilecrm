@@ -4,7 +4,7 @@ import {
   COUNTRY_TIMEZONES,
   type CountryKey,
   type GeneralSettings,
-} from "@/lib/settings";
+} from "@/features/settings/data/client/settings";
 import { SectionHeader } from "@/components/settings/ui";
 
 type Props = {

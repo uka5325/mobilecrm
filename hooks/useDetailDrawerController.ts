@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { type AppointmentType, type ReservationRecord } from "@/features/reservations/domain/reservationModels";
 import { toggleSurgeryReserved, updateReservationFull } from "@/features/reservations/data/client";
 import type { StaffUser } from "@/lib/auth";
-import { parseBirthInfo } from "@/lib/reservationUtils";
+import { parseBirthInfo } from "@/features/reservations/domain/reservationUtils";
 import { getLogsByReservationId, type LogRecord } from "@/lib/logs";
 import {
   addReservationNote,
@@ -13,9 +13,9 @@ import {
   updateReservationNote,
   type ReservationNote,
   type MutationResult,
-} from "@/lib/reservationNotes";
+} from "@/features/reservations/data/client/reservationNotes";
 import { todayString } from "@/lib/dateUtils";
-import { splitComma } from "@/lib/timelineUtils";
+import { splitComma } from "@/features/reservations/ui/timelineUtils";
 import type { DetailTab } from "@/components/timeline/DetailDrawerTabs";
 
 export type DetailForm = {

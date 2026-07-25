@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import type { ConferenceMemo } from "@/lib/settings";
-import { formatDateTime } from "@/lib/settingsUtils";
+import type { ConferenceMemo } from "@/features/settings/data/client/settings";
+import { formatDateTime } from "@/features/settings/data/client/settingsUtils";
 import { SectionHeader, EmptyBox } from "@/components/settings/ui";
 
 type Props = {

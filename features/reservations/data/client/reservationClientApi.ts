@@ -4,7 +4,7 @@ import type {
   ReservationApiPayload,
   ReservationApiRequest,
   ReservationApiResult,
-} from "@/lib/reservationApiContracts";
+} from "@/features/reservations/domain/reservationApiContracts";
 
 // /api/reservations 공통 호출 래퍼 — 인증/오프라인/HTTP 오류를 표준 ApiResult로 정규화한다.
 export async function callReservationsApi<A extends ReservationApiAction>(

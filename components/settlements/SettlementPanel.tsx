@@ -11,7 +11,7 @@ import {
   type SettlementAppointment,
   type SettlementMutationInput,
   type SettlementRecord,
-} from "@/lib/settlements";
+} from "@/features/settlements/data/client/settlements";
 import type {
   SettlementAggregate,
   SettlementCategory,

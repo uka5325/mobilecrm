@@ -25,7 +25,7 @@ import {
   getCachedConferenceMemos,
   writeConferenceMemoCache,
   type ConferenceMemo,
-} from "@/lib/settings";
+} from "@/features/settings/data/client/settings";
 import { todayString } from "@/lib/dateUtils";
 
 type TodayMemosContextValue = {

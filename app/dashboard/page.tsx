@@ -4,7 +4,7 @@ import { useCallback, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { searchReservationsByDateRange } from "@/features/reservations/data/client";
-import { listSalesSummaryRows, type SalesSummaryRow } from "@/lib/settlements";
+import { listSalesSummaryRows, type SalesSummaryRow } from "@/features/settlements/data/client/settlements";
 import { aggregateSettlementRows } from "@/lib/settlementMath";
 import { todayString } from "@/lib/dateUtils";
 import {

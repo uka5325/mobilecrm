@@ -2,7 +2,7 @@
 
 import { useMemo } from "react";
 import type { ReservationRecord } from "@/features/reservations/domain/reservationModels";
-import { formatLog } from "@/lib/scheduleDates";
+import { formatLog } from "@/features/reservations/ui/scheduleDates";
 import {
   buildColumnPositions,
   CARD_HEIGHT,
@@ -11,7 +11,7 @@ import {
   START_HOUR,
   TIME_COL_W,
   TOTAL_HOURS,
-} from "@/lib/scheduleLayout";
+} from "@/features/reservations/ui/scheduleLayout";
 import { ScheduleHourGrid } from "@/components/schedule/ScheduleHourGrid";
 
 function DayCard({ item, top, col, totalCols, onClick }: { item: ReservationRecord; top: number; col: number; totalCols: number; onClick: () => void }) {

@@ -6,9 +6,9 @@ import {
   query,
   where,
 } from "firebase/firestore";
-import { auth, db } from "./firebase";
-import type { StaffUser } from "./auth";
-import { cleanText } from "./stringUtils";
+import { auth, db } from "@/lib/firebase";
+import type { StaffUser } from "@/lib/auth";
+import { cleanText } from "@/lib/stringUtils";
 import { callSettingsApi } from "./settingsApi";
 import { assertCanEditMemo } from "./settingsShared";
 

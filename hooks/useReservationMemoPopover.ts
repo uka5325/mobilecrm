@@ -11,7 +11,7 @@ import {
   deleteReservationNote,
   type ReservationNote,
   type MutationResult,
-} from "@/lib/reservationNotes";
+} from "@/features/reservations/data/client/reservationNotes";
 import { type MemoPopoverState } from "@/components/reservations/MemoPopover";
 import type { PatientGroup } from "@/components/reservations/ReservationsTable";
 

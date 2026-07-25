@@ -57,7 +57,7 @@ export function InvoiceEditorForm({
   const [message, setMessage] = useState("");
 
   useEffect(() => {
-    import("@/lib/settings").then(({ getStaffListForSettings }) => {
+    import("@/features/settings/data/client/settings").then(({ getStaffListForSettings }) => {
       getStaffListForSettings()
         .then((list) => setStaffList(list.filter((staff) => staff.active && (staff.role === "admin" || staff.role === "coordinator"))))
         .catch(() => {});

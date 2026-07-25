@@ -1,5 +1,5 @@
-import type { StaffUser } from "./auth";
-import { cleanText } from "./stringUtils";
+import type { StaffUser } from "@/lib/auth";
+import { cleanText } from "@/lib/stringUtils";
 import { callSettingsApi } from "./settingsApi";
 import { assertCanManageSettings } from "./settingsShared";
 

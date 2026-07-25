@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import type { ReservationNote, MutationResult } from "@/lib/reservationNotes";
-import { formatLogDate } from "@/lib/timelineUtils";
+import type { ReservationNote, MutationResult } from "@/features/reservations/data/client/reservationNotes";
+import { formatLogDate } from "@/features/reservations/ui/timelineUtils";
 
 type Props = {
   note: ReservationNote;
