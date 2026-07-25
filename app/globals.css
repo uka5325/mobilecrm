@@ -27,15 +27,21 @@ html {
   width: 100%;
   min-height: 100%;
   background: #ffffff;
+  color-scheme: light;
 }
 
 body {
   width: 100%;
-  min-height: 100%;
+  min-height: 100dvh;
   margin: 0;
   background: #ffffff;
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
+}
+
+html:has([data-login-page]),
+body:has([data-login-page]) {
+  background: #061821;
 }
 
 button,
