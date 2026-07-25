@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { adminDb, FieldValue } from "@/lib/firebaseAdmin";
-import { safeRecompute, updateReservationSummaryIncrementally } from "@/features/patients/jobs/summary";
+import { updateReservationSummaryIncrementally } from "@/features/patients/jobs/summary/patientSummaryReservations";
+import { safeRecompute } from "@/features/patients/jobs/summary/patientSummaryDirty";
 import type { ReservationApiPayload } from "@/lib/reservationApiContracts";
 import {
   RESERVATION_LOCKS,

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { adminDb, FieldValue } from "@/lib/firebaseAdmin";
 import { makePatientSearchTokens } from "@/lib/searchTokens";
 import { identityKeyForPatient } from "@/lib/patientIdentity";
-import { createEmptyPatientSummary } from "@/features/patients/jobs/summary";
+import { createEmptyPatientSummary } from "@/features/patients/jobs/summary/patientSummaryCore";
 import type { requireActiveStaff } from "@/lib/apiAuth";
 
 type StaffContext = Awaited<ReturnType<typeof requireActiveStaff>>;

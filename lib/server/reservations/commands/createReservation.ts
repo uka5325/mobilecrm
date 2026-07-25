@@ -2,11 +2,9 @@ import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { adminDb, FieldValue } from "@/lib/firebaseAdmin";
 import { makePatientSearchTokens } from "@/lib/searchTokens";
-import {
-  createEmptyPatientSummary,
-  safeRecompute,
-  updateReservationSummaryIncrementally,
-} from "@/features/patients/jobs/summary";
+import { createEmptyPatientSummary } from "@/features/patients/jobs/summary/patientSummaryCore";
+import { updateReservationSummaryIncrementally } from "@/features/patients/jobs/summary/patientSummaryReservations";
+import { safeRecompute } from "@/features/patients/jobs/summary/patientSummaryDirty";
 import type { ReservationApiPayload } from "@/lib/reservationApiContracts";
 import { identityKeyForPatient } from "@/lib/patientIdentity";
 import {

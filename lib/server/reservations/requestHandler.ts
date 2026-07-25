@@ -14,10 +14,8 @@ import {
   patientFullHistoryExact,
   searchPatientsRaw,
 } from "@/features/patients/data/server";
-import {
-  runPatientDeleteJob,
-  runPatientUpdateJob,
-} from "@/features/patients/jobs";
+import { runPatientDeleteJob } from "@/features/patients/jobs/softDeletePatientJob";
+import { runPatientUpdateJob } from "@/features/patients/jobs/updatePatientJob";
 import { createReservationCommand } from "./commands/createReservation";
 import { updateReservationCommand } from "./commands/updateReservation";
 import { deleteReservationCommand } from "./commands/deleteReservation";

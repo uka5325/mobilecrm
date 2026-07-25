@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { adminDb, FieldValue } from "@/lib/firebaseAdmin";
 import { cleanText } from "@/lib/adminUtils";
-import { recomputeInvoiceSummary, safeRecompute } from "@/features/patients/jobs/summary";
+import { recomputeInvoiceSummary } from "@/features/patients/jobs/summary/patientSummaryDomains";
+import { safeRecompute } from "@/features/patients/jobs/summary/patientSummaryDirty";
 import {
   invoiceLog,
   invoiceReservationLinkError,
