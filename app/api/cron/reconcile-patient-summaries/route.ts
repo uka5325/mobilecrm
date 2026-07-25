@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { reconcileDirtyPatientBatch } from "@/features/patients/jobs/summary/patientSummaryDirty";
-import { runStorageCleanupBatch } from "@/features/photos/jobs";
+import { runStorageCleanupBatch } from "@/features/photos/jobs/storageCleanupWorker";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";

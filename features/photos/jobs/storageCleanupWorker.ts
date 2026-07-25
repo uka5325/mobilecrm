@@ -5,7 +5,7 @@ import {
   deleteStorageObject,
   failStorageCleanupJob,
   listPendingStorageCleanupJobs,
-} from "@/features/photos/data/server";
+} from "@/features/photos/data/server/storageCleanupRepository";
 import {
   isRetryableStorageDeleteError,
   isStorageObjectNotFound,

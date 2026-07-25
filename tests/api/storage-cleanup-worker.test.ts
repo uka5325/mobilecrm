@@ -1,7 +1,7 @@
 import { after, test } from "node:test";
 import assert from "node:assert/strict";
 import { adminDb } from "@/lib/firebaseAdmin";
-import { runStorageCleanupBatch } from "@/features/photos/jobs";
+import { runStorageCleanupBatch } from "@/features/photos/jobs/storageCleanupWorker";
 
 const cleanupRefs: FirebaseFirestore.DocumentReference[] = [];
 

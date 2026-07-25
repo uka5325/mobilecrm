@@ -8,7 +8,7 @@ import {
   getReservationPhotos,
   uploadReservationPhoto,
   type PhotoRecord,
-} from "@/features/photos/data/client";
+} from "@/features/photos/data/client/reservationFiles";
 import { compressImage } from "@/lib/imageCompress";
 
 type Props = {

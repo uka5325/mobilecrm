@@ -3,7 +3,7 @@ import { requireActiveStaff, toAuthErrorResponse } from "@/lib/apiAuth";
 import {
   deleteStorageObject,
   enqueueStorageCleanupJob,
-} from "@/features/photos/data/server";
+} from "@/features/photos/data/server/storageCleanupRepository";
 import {
   isAllowedStoragePath,
   isStorageObjectNotFound,

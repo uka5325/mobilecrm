@@ -411,7 +411,7 @@ test("clearAllClientCaches: mcrm_/arc_crm_ 키는 삭제하고 무관한 키는 
 });
 
 // ── reservationFiles: Storage 삭제 실패 분류 (재시도 가능 로직, P0 후속) ────────────
-import { classifyStorageDeleteError } from "../features/photos/data/client";
+import { classifyStorageDeleteError } from "../features/photos/data/client/reservationFiles";
 import {
   isAllowedStoragePath,
   isRetryableStorageDeleteError,
