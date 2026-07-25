@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireActiveStaff, toAuthErrorResponse } from "@/lib/apiAuth";
-import { createInvoiceAtomic } from "@/lib/invoiceCreateServer";
-import { deleteInvoiceAtomic } from "@/lib/invoiceDeleteServer";
-import { updateInvoiceAtomic } from "@/lib/invoiceUpdateServer";
+import { createInvoiceAtomic } from "@/features/invoices/data/server/invoiceCreateServer";
+import { deleteInvoiceAtomic } from "@/features/invoices/data/server/invoiceDeleteServer";
+import { updateInvoiceAtomic } from "@/features/invoices/data/server/invoiceUpdateServer";
 import { createInvoiceAccess } from "./invoiceAccess";
 import { handleInvoiceReadAction } from "./invoiceReadActions";
 

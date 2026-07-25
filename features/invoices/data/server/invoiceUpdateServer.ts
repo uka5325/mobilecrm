@@ -9,7 +9,7 @@ import {
   invoiceReservationMatches,
   isCoordinatorOf,
   type StaffContext,
-} from "@/lib/invoiceConsistencyShared";
+} from "./invoiceConsistencyShared";
 
 const ALLOWED_INVOICE_STATUS = new Set(["draft", "confirmed", "void"]);
 

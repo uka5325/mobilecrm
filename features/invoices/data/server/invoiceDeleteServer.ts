@@ -9,7 +9,7 @@ import {
   invoiceReservationMatches,
   isCoordinatorOf,
   type StaffContext,
-} from "@/lib/invoiceConsistencyShared";
+} from "./invoiceConsistencyShared";
 
 export async function deleteInvoiceAtomic(
   payload: Record<string, unknown>,

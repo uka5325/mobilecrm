@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { adminDb, FieldValue } from "@/lib/firebaseAdmin";
 import { cleanText, docToObj } from "@/lib/adminUtils";
-import { parseBirthInfo } from "@/lib/invoiceUtils";
+import { parseBirthInfo } from "@/features/invoices/domain/invoiceUtils";
 import { recomputeInvoiceSummary } from "@/features/patients/jobs/summary/patientSummaryDomains";
 import { safeRecompute } from "@/features/patients/jobs/summary/patientSummaryDirty";
 import { aggregateSettlementRows } from "@/lib/settlementMath";
@@ -9,7 +9,7 @@ import {
   invoiceLog,
   isCoordinatorOf,
   type StaffContext,
-} from "@/lib/invoiceConsistencyShared";
+} from "./invoiceConsistencyShared";
 
 function makeInvoiceId(reservation: Record<string, unknown>) {
   const now = new Date();
