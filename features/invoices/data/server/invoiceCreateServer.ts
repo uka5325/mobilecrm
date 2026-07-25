@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { adminDb, FieldValue } from "@/lib/firebaseAdmin";
 import { cleanText, docToObj } from "@/lib/adminUtils";
-import { parseBirthInfo } from "@/features/invoices/domain/invoiceUtils";
+import { parseBirthInfo } from "@/lib/birthUtils";
 import { recomputeInvoiceSummary } from "@/features/patients/jobs/summary/patientSummaryDomains";
 import { safeRecompute } from "@/features/patients/jobs/summary/patientSummaryDirty";
 import { aggregateSettlementRows } from "@/lib/settlementMath";

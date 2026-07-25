@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { parseBirthInfo } from "../features/invoices/domain/invoiceUtils";
+import { parseBirthInfo } from "../lib/birthUtils";
 import { calcCommissionBase, calcCommission, paymentMethodLabel } from "../lib/commissionUtils";
 import { cleanText, toSerializable } from "../lib/adminUtils";
 import { aggregateSettlementRows } from "../lib/settlementMath";
@@ -121,28 +121,29 @@ test("dashboard KPI: 취소를 완료에서 제외하고 환자·담당자·항�
   );
 });
 
+// 저장 표준은 birth = YYYYMMDD (lib/patientIdentity.ts 참고), 표시는 YYYY.MM.DD.
 test("parseBirthInfo: 주민번호 앞자리+성별코드 (남)", () => {
   const r = parseBirthInfo("900101-1");
-  assert.equal(r.birth, "1990-01-01");
-  assert.equal(r.birthDisplay, "900101");
+  assert.equal(r.birth, "19900101");
+  assert.equal(r.birthDisplay, "1990.01.01");
   assert.equal(r.gender, "남");
 });
 
 test("parseBirthInfo: 2000년대 출생 (성별코드 3 → 남)", () => {
   const r = parseBirthInfo("050203-3");
-  assert.equal(r.birth, "2005-02-03");
+  assert.equal(r.birth, "20050203");
   assert.equal(r.gender, "남");
 });
 
 test("parseBirthInfo: 7자리 (여, 코드 4)", () => {
   const r = parseBirthInfo("0502034");
-  assert.equal(r.birth, "2005-02-03");
+  assert.equal(r.birth, "20050203");
   assert.equal(r.gender, "여");
 });
 
 test("parseBirthInfo: 8자리 YYYYMMDD, 성별 폴백", () => {
   const r = parseBirthInfo("19900101", "여");
-  assert.equal(r.birth, "1990-01-01");
+  assert.equal(r.birth, "19900101");
   assert.equal(r.gender, "여");
 });
 
@@ -150,6 +151,28 @@ test("parseBirthInfo: 빈 입력", () => {
   const r = parseBirthInfo("");
   assert.equal(r.birth, "");
   assert.equal(r.birthDisplay, "");
+});
+
+// ── 아래는 인보이스용 중복 파서를 제거하며 고정한 회귀 케이스 ──────────────
+test("parseBirthInfo: 파싱 불가 입력은 원본을 보존한다 (유실 금지)", () => {
+  const r = parseBirthInfo("900101");
+  assert.equal(r.birth, "900101");
+  assert.equal(r.birthInput, "900101");
+  assert.equal(r.birthDisplay, "900101");
+});
+
+test("parseBirthInfo: 성별 폴백은 남/여로 정규화한다", () => {
+  assert.equal(parseBirthInfo("19900101", "male").gender, "남");
+  assert.equal(parseBirthInfo("19900101", "F").gender, "여");
+  assert.equal(parseBirthInfo("19900101", "남자").gender, "남");
+});
+
+test("parseBirthInfo: 예약이 저장한 birth를 다시 파싱해도 같은 값이 나온다 (인보이스 생성 경로)", () => {
+  // invoiceCreateServer 는 예약 문서의 birthInput || birth 를 읽어 다시 파싱한다.
+  const fromReservationInput = parseBirthInfo("891210-1");
+  const reparsedFromStoredBirth = parseBirthInfo(fromReservationInput.birth);
+  assert.equal(reparsedFromStoredBirth.birth, fromReservationInput.birth);
+  assert.equal(reparsedFromStoredBirth.birthDisplay, fromReservationInput.birthDisplay);
 });
 
 test("calcCommissionBase: 현금은 전액", () => {
