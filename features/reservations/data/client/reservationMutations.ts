@@ -1,6 +1,6 @@
 import { auth } from "@/lib/firebase";
 import { cleanText } from "@/lib/stringUtils";
-import { parseBirthInfo } from "@/features/reservations/domain/reservationUtils";
+import { parseBirthInfo } from "@/lib/birthUtils";
 import type { StaffUser } from "@/lib/auth";
 import type {
   ReservationApiAction,

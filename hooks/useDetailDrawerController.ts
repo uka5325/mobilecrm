@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { type AppointmentType, type ReservationRecord } from "@/features/reservations/domain/reservationModels";
 import { toggleSurgeryReserved, updateReservationFull } from "@/features/reservations/data/client";
 import type { StaffUser } from "@/lib/auth";
-import { parseBirthInfo } from "@/features/reservations/domain/reservationUtils";
+import { parseBirthInfo } from "@/lib/birthUtils";
 import { getLogsByReservationId, type LogRecord } from "@/lib/logs";
 import {
   addReservationNote,

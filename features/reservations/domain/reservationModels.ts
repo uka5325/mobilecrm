@@ -1,5 +1,5 @@
 import { cleanText } from "@/lib/stringUtils";
-import { parseBirthInfo } from "@/features/reservations/domain/reservationUtils";
+import { parseBirthInfo } from "@/lib/birthUtils";
 import type { StaffUser } from "@/lib/auth";
 
 // 예약/환자 도메인 데이터 모양 + 순수 매퍼/빌더. Firestore/네트워크에 의존하지 않아 단위 테스트 가능.
