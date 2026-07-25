@@ -21,7 +21,6 @@ function isValidDateOnly(value: string): boolean {
 const WRITE_ACTIONS = new Set([
   "save_appointment_colors",
   "save_general_settings",
-  "save_visit_status_colors",
   "add_memo",
   "update_memo",
   "delete_memo",
@@ -50,12 +49,6 @@ export async function POST(req: NextRequest) {
     // ── READ: general settings ────────────────────────────────────────────
     if (action === "get_general_settings") {
       const snap = await adminDb.doc("appSettings/general").get();
-      return NextResponse.json({ success: true, data: snap.exists ? toSerializable(snap.data()) : null });
-    }
-
-    // ── READ: visit status colors ─────────────────────────────────────────
-    if (action === "get_visit_status_colors") {
-      const snap = await adminDb.doc("appSettings/visitStatusColors").get();
       return NextResponse.json({ success: true, data: snap.exists ? toSerializable(snap.data()) : null });
     }
 
@@ -90,21 +83,6 @@ export async function POST(req: NextRequest) {
       // updatedBy는 검증된 토큰(ctx.name)으로 강제 → 클라이언트가 보낸 표시명 위조 차단
       await adminDb.doc("appSettings/general").set(
         { ...p.settings, updatedAt: FieldValue.serverTimestamp(), updatedBy: ctx.name, updatedByUid: uid },
-        { merge: true }
-      );
-      return NextResponse.json({ success: true });
-    }
-
-    // ── WRITE: save visit status colors ───────────────────────────────────
-    if (action === "save_visit_status_colors") {
-      const role = ctx.role;
-      if (role !== "admin") {
-        return NextResponse.json({ success: false, message: "설정 변경 권한이 없습니다." }, { status: 403 });
-      }
-      const p = payload as { colors: Record<string, string> };
-      // updatedBy는 검증된 토큰(ctx.name)으로 강제 → 클라이언트가 보낸 표시명 위조 차단
-      await adminDb.doc("appSettings/visitStatusColors").set(
-        { id: "visitStatusColors", colors: p.colors, updatedAt: FieldValue.serverTimestamp(), updatedBy: ctx.name, updatedByUid: uid },
         { merge: true }
       );
       return NextResponse.json({ success: true });
