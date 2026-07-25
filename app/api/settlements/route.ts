@@ -7,7 +7,7 @@ import {
   listSettlements,
   updateSettlementAtomic,
   voidSettlementAtomic,
-} from "@/lib/settlementServer";
+} from "@/features/settlements/data/server/settlementServer";
 
 export async function POST(req: NextRequest) {
   try {
