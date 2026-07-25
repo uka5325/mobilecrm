@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePatientSummary } from "@/components/PatientSummaryProvider";
-import { type PatientRecord } from "@/features/reservations/domain/reservationModels";
+import { type PatientRecord } from "@/features/patients/domain/patientRecord";
 import { searchPatients, listPatientsSummary } from "@/features/reservations/data/client";
 import type { PatientGroup } from "@/components/reservations/ReservationsTable";
 

@@ -10,13 +10,12 @@ import type {
 } from "@/features/reservations/domain/reservationApiContracts";
 import {
   buildReservationUpdatePayload,
-  mapPatientRecord,
   mapReservationDoc,
   type AppointmentType,
   type CreateReservationParams,
-  type PatientRecord,
   type UpdateReservationParams,
 } from "@/features/reservations/domain/reservationModels";
+import { mapPatientRecord, type PatientRecord } from "@/features/patients/domain/patientRecord";
 import { invalidatePatientFullHistoryCache } from "./reservationHistory";
 export {
   getPatientSummaryCache,

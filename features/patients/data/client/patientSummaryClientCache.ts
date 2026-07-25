@@ -1,4 +1,4 @@
-import type { PatientRecord } from "@/features/reservations/domain/reservationModels";
+import type { PatientRecord } from "@/features/patients/domain/patientRecord";
 
 const CACHE_KEY_PREFIX = "arc_crm_patients_summary_v1_";
 const CACHE_TTL_MS = 2 * 60 * 1000;

@@ -29,7 +29,7 @@ import {
   invalidatePatientSummaryCache,
   setPatientSummaryCache,
 } from "@/features/patients/data/client/patientSummaryClientCache";
-import { type PatientRecord } from "@/features/reservations/domain/reservationModels";
+import { type PatientRecord } from "@/features/patients/domain/patientRecord";
 import { listPatientsSummary } from "@/features/reservations/data/client";
 
 const SUMMARY_LIMIT = 30;
