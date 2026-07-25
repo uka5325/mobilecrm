@@ -2,10 +2,8 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
-import {
-  subscribeReservationsByRange,
-  type ReservationRecord,
-} from "@/features/reservations";
+import { type ReservationRecord } from "@/features/reservations/domain/reservationModels";
+import { subscribeReservationsByRange } from "@/features/reservations/data/client";
 import { todayString } from "@/lib/dateUtils";
 import { getConferenceMemos, type ConferenceMemo } from "@/lib/settings";
 import {

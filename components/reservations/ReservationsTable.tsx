@@ -1,8 +1,8 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
-import type { ReservationRecord, AppointmentType } from "@/features/reservations";
-import { APPOINTMENT_TYPES } from "@/features/reservations";
+import type { ReservationRecord, AppointmentType } from "@/features/reservations/domain/reservationModels";
+import { APPOINTMENT_TYPES } from "@/features/reservations/domain/reservationModels";
 import { getReservationBirthInfo } from "@/lib/reservationUtils";
 import { getInvoicesByPatientId, getInvoicesByPatientCache } from "@/features/invoices/data/client/invoices";
 import { getCachedPatientSettlements, listPatientSettlements } from "@/lib/settlements";

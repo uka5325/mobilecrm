@@ -29,7 +29,8 @@ import {
   invalidatePatientSummaryCache,
   setPatientSummaryCache,
 } from "@/lib/patientSummaryClientCache";
-import { listPatientsSummary, type PatientRecord } from "@/features/reservations";
+import { type PatientRecord } from "@/features/reservations/domain/reservationModels";
+import { listPatientsSummary } from "@/features/reservations/data/client";
 
 const SUMMARY_LIMIT = 30;
 const RETRY_BASE_MS = 1_000;

@@ -211,7 +211,7 @@ test("toSerializable: Timestamp형(toMillis) 변환", () => {
 });
 
 // ── buildReservationUpdatePayload: 부분 patch(생략 필드 보존) ──────────────
-import { buildReservationUpdatePayload } from "../features/reservations";
+import { buildReservationUpdatePayload } from "../features/reservations/domain/reservationModels";
 
 const _staff = { uid: "u1", displayName: "Tester" } as unknown as Parameters<typeof buildReservationUpdatePayload>[1];
 const _base = { name: "홍길동", reservationDate: "2026-07-06" };

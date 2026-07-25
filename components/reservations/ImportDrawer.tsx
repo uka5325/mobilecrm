@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { createReservationsBatch } from "@/features/reservations";
+import { createReservationsBatch } from "@/features/reservations/data/client";
 import { auth } from "@/lib/firebase";
 import type { StaffUser } from "@/lib/auth";
 

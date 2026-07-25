@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { createReservation, APPOINTMENT_TYPES, type AppointmentType } from "@/features/reservations";
+import { APPOINTMENT_TYPES, type AppointmentType } from "@/features/reservations/domain/reservationModels";
+import { createReservation } from "@/features/reservations/data/client";
 import { parseBirthInfo } from "@/lib/reservationUtils";
 import type { StaffUser } from "@/lib/auth";
 import { todayString } from "@/lib/dateUtils";

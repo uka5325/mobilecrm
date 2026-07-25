@@ -1,8 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import type { ReservationRecord } from "@/features/reservations";
-import { getCachedPatientFullHistory, getPatientFullHistoryCached } from "@/features/reservations";
+import type { ReservationRecord } from "@/features/reservations/domain/reservationModels";
+import { getCachedPatientFullHistory, getPatientFullHistoryCached } from "@/features/reservations/data/client";
 import type { InvoiceRecord } from "@/features/invoices/data/client/invoices";
 import {
   getInvoicesByPatientId,

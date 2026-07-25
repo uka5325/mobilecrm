@@ -1,6 +1,6 @@
 "use client";
 
-import type { ReservationRecord } from "@/features/reservations";
+import type { ReservationRecord } from "@/features/reservations/domain/reservationModels";
 import { todayString } from "@/lib/dateUtils";
 import { formatDate, parseDate } from "@/lib/scheduleDates";
 import { getAppointmentColor } from "@/lib/scheduleLayout";

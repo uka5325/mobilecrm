@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
-import type { ReservationRecord } from "@/features/reservations";
+import type { ReservationRecord } from "@/features/reservations/domain/reservationModels";
 import { addDays, formatDayLabel, isToday } from "@/lib/scheduleDates";
 import {
   getAppointmentColor,

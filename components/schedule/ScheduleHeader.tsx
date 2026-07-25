@@ -1,6 +1,6 @@
 "use client";
 
-import { type AppointmentType, APPOINTMENT_TYPE_COLORS } from "@/features/reservations";
+import { type AppointmentType, APPOINTMENT_TYPE_COLORS } from "@/features/reservations/domain/reservationModels";
 import { todayString } from "@/lib/dateUtils";
 import type { ConferenceMemo } from "@/lib/settings";
 import { SCHEDULE_APPOINTMENT_TYPES } from "@/lib/scheduleLayout";

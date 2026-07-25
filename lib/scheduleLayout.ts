@@ -1,8 +1,4 @@
-import {
-  type AppointmentType,
-  APPOINTMENT_TYPE_COLORS,
-  type ReservationRecord,
-} from "@/features/reservations";
+import { type AppointmentType, APPOINTMENT_TYPE_COLORS, type ReservationRecord } from "@/features/reservations/domain/reservationModels";
 
 // 스케줄 타임그리드 레이아웃 상수/헬퍼 — 일간·주간 뷰가 공유한다.
 

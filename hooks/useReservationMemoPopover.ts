@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import type { StaffUser } from "@/lib/auth";
-import { getPatientFullHistoryCached, type ReservationRecord } from "@/features/reservations";
+import { type ReservationRecord } from "@/features/reservations/domain/reservationModels";
+import { getPatientFullHistoryCached } from "@/features/reservations/data/client";
 import {
   getReservationNotes,
   addReservationNote,

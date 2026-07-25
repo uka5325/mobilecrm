@@ -1,7 +1,7 @@
 "use client";
 
 import { type ReservationNote, type MutationResult } from "@/lib/reservationNotes";
-import { type AppointmentType, APPOINTMENT_TYPES } from "@/features/reservations";
+import { type AppointmentType, APPOINTMENT_TYPES } from "@/features/reservations/domain/reservationModels";
 import { EditField } from "@/components/timeline/EditField";
 import { NoteCard } from "@/components/timeline/NoteCard";
 

@@ -2,11 +2,8 @@
 
 import { useState } from "react";
 import { DetailDrawer } from "@/components/timeline/DetailDrawer";
-import {
-  deleteReservation,
-  invalidatePatientFullHistoryCache,
-  type ReservationRecord,
-} from "@/features/reservations";
+import { type ReservationRecord } from "@/features/reservations/domain/reservationModels";
+import { deleteReservation, invalidatePatientFullHistoryCache } from "@/features/reservations/data/client";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { CreateDrawer } from "@/components/reservations/CreateDrawer";
 import { ImportDrawer } from "@/components/reservations/ImportDrawer";
