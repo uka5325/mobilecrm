@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import type { CustomerFilterMode } from "@/hooks/useReservationsList";
 
 type Props = {
@@ -47,6 +48,19 @@ export function ReservationsToolbar({
   downloading,
   onDownload,
 }: Props) {
+  const [query, setQuery] = useState(search);
+
+  useEffect(() => {
+    setQuery(search);
+  }, [search]);
+
+  function submitSearch() {
+    onSearchChange(query.trim());
+  }
+
+  const chipClass = "flex h-7 shrink-0 items-center gap-1.5 rounded-full bg-white/72 px-3 text-[11px] font-normal text-[#667085]";
+  const actionChipClass = "h-7 shrink-0 rounded-full bg-white/72 px-3 text-[11px] font-semibold text-[#0f9b8e] transition active:scale-95";
+
   return (
     <section className="relative mb-4 h-[184px] overflow-visible rounded-[26px] bg-[#eaf8f3] p-5 shadow-[0_18px_50px_rgba(7,56,58,0.08)] lg:h-[196px] lg:p-6">
       <div className="flex h-full flex-col justify-between">
@@ -55,15 +69,15 @@ export function ReservationsToolbar({
             <span className="text-base text-[#98a2b3]">⌕</span>
             <input
               type="text"
-              value={search}
-              onChange={(e) => onSearchChange(e.target.value)}
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
               placeholder="한글 이름 / 영문 성·이름 검색"
               className="h-full min-w-0 flex-1 bg-transparent text-sm text-[#101828] outline-none placeholder:text-[#98a2b3]"
             />
           </div>
           <button
             type="button"
-            onClick={() => onSearchChange(search.trim())}
+            onClick={submitSearch}
             className="h-10 rounded-[20px] bg-white px-4 text-xs font-semibold text-[#0f9b8e] transition active:scale-95"
           >
             검색
@@ -91,14 +105,14 @@ export function ReservationsToolbar({
               onClick={onAddCustomer}
               className="h-8 whitespace-nowrap rounded-[16px] bg-[linear-gradient(135deg,#77dfd1_0%,#40c5b3_50%,#0f9b8e_100%)] px-2 text-[11px] font-bold text-white shadow-[0_10px_24px_rgba(15,143,131,0.18)] transition active:scale-95"
             >
-              + 고객추가
+              + 고객등록
             </button>
           </div>
         </div>
 
         <div className="flex items-center gap-2.5 overflow-x-auto whitespace-nowrap [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {filterModes.map((mode) => (
-            <span key={mode} className="flex shrink-0 items-center gap-1.5 text-[11px] font-normal text-[#667085]">
+            <span key={mode} className={chipClass}>
               <span className="h-2 w-2 rounded-full bg-[#0f9b8e]" />
               {FILTER_LABELS[mode]} {filterCounts[mode] || 0}
             </span>
@@ -106,14 +120,14 @@ export function ReservationsToolbar({
           <button
             type="button"
             onClick={onImport}
-            className="shrink-0 rounded-full bg-white/72 px-2.5 py-1 text-[11px] font-semibold text-[#0f9b8e] transition active:scale-95"
+            className={actionChipClass}
           >
             외부 링크
           </button>
           <button
             type="button"
             onClick={onToggleDownload}
-            className="shrink-0 rounded-full bg-white/72 px-2.5 py-1 text-[11px] font-semibold text-[#0f9b8e] transition active:scale-95"
+            className={actionChipClass}
           >
             CSV
           </button>
