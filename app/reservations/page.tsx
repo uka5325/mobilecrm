@@ -28,7 +28,7 @@ export default function ReservationsPage() {
   const [pageError, setPageError] = useState("");
 
   const list = useReservationsList({ uid, authReady });
-  const { search, filterMode, filterCounts, patientGroups, pagedGroups, groupPage, totalPages, patientsNextCursor, loadingMore, reloadCurrent } = list;
+  const { search, filterMode, filterCounts, pagedGroups, groupPage, totalPages, patientsNextCursor, loadingMore, reloadCurrent } = list;
 
   const csv = useReservationsCsvExport({ setPageError });
   const memo = useReservationMemoPopover({ currentUser, setPageError });
