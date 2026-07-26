@@ -20,6 +20,7 @@ export type PatientRecord = {
   lastSettlementAt?: string;
   lastReservationDate?: string;
   lastReservationTime?: string;
+  lastAppointmentType?: string;
   hasMemo?: boolean;
   hasInvoice?: boolean;
   reservationCountCapped?: boolean;
@@ -47,6 +48,7 @@ export function mapPatientRecord(p: Record<string, unknown>): PatientRecord {
     lastSettlementAt: cleanText(p.lastSettlementAt),
     lastReservationDate: cleanText(p.lastReservationDate),
     lastReservationTime: cleanText(p.lastReservationTime),
+    lastAppointmentType: cleanText(p.lastAppointmentType || p.lastReservationType || p.appointmentType),
     hasMemo: p.hasMemo === true,
     hasInvoice: p.hasInvoice === true,
     reservationCountCapped: p.reservationCountCapped === true,
