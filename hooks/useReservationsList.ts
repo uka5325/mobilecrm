@@ -11,7 +11,7 @@ export type CustomerFilterMode = "all" | "today" | "recent";
 
 const PAGE_SIZE = 10;
 
-// 예약관리 환자 목록 상태 머신: Provider 요약 동기화 + 검색(디바운스) + 커서 페이지네이션 + 그룹 페이지.
+// 예약관리 환자 목록 상태 머신: Provider 요약 동기화 + 명시 검색 + 커서 페이지네이션 + 그룹 페이지.
 export function useReservationsList({ uid, authReady }: { uid: string | undefined; authReady: boolean }) {
   const {
     patients: summaryPatients,
@@ -90,6 +90,7 @@ export function useReservationsList({ uid, authReady }: { uid: string | undefine
         memoCount: p.memoCount,
         lastReservationDate: p.lastReservationDate || "",
         lastReservationTime: p.lastReservationTime || "",
+        lastAppointmentType: p.lastAppointmentType || "",
         hasMemo: p.hasMemo === true,
         hasInvoice: p.hasInvoice === true,
       });
@@ -209,16 +210,13 @@ export function useReservationsList({ uid, authReady }: { uid: string | undefine
       return;
     }
     const seq = ++searchSeqRef.current;
-    const handle = setTimeout(() => {
-      if (hasPatientsRef.current) setRefreshing(true); else setInitialLoading(true);
-      setPatientsNextCursor(null);
-      setListError(null);
-      searchPatients(term)
-        .then((list) => { if (searchSeqRef.current === seq) { setPatients(list); setListError(null); } })
-        .catch((e) => { if (searchSeqRef.current === seq) { setListError(e instanceof Error ? e.message : "검색에 실패했습니다."); } })
-        .finally(() => { if (searchSeqRef.current === seq) { setInitialLoading(false); setRefreshing(false); } });
-    }, 300);
-    return () => clearTimeout(handle);
+    if (hasPatientsRef.current) setRefreshing(true); else setInitialLoading(true);
+    setPatientsNextCursor(null);
+    setListError(null);
+    searchPatients(term)
+      .then((list) => { if (searchSeqRef.current === seq) { setPatients(list); setListError(null); } })
+      .catch((e) => { if (searchSeqRef.current === seq) { setListError(e instanceof Error ? e.message : "검색에 실패했습니다."); } })
+      .finally(() => { if (searchSeqRef.current === seq) { setInitialLoading(false); setRefreshing(false); } });
   }, [authReady, uid, search, reloadPatients]);
 
   const totalPages = Math.max(1, Math.ceil(patientGroups.length / PAGE_SIZE));
