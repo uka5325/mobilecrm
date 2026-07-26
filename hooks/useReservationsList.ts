@@ -5,6 +5,9 @@ import { usePatientSummary } from "@/components/PatientSummaryProvider";
 import { type PatientRecord } from "@/features/patients/domain/patientRecord";
 import { searchPatients, listPatientsSummary } from "@/features/reservations/data/client";
 import type { PatientGroup } from "@/components/reservations/ReservationsTable";
+import { todayString } from "@/lib/dateUtils";
+
+export type CustomerFilterMode = "all" | "today" | "recent";
 
 const PAGE_SIZE = 10;
 
@@ -31,6 +34,7 @@ export function useReservationsList({ uid, authReady }: { uid: string | undefine
   const extraPatientsRef = useRef<PatientRecord[]>([]);
 
   const [search, setSearch] = useState("");
+  const [filterMode, setFilterMode] = useState<CustomerFilterMode>("all");
   const [groupPage, setGroupPage] = useState(1);
   const [patients, setPatients] = useState<PatientRecord[]>(() => summaryPatients);
   const [patientsNextCursor, setPatientsNextCursor] = useState<string | null>(
@@ -62,7 +66,7 @@ export function useReservationsList({ uid, authReady }: { uid: string | undefine
     return [...byId.values()];
   }, [isSearchMode, patients, summaryPatients]);
 
-  const patientGroups = useMemo<PatientGroup[]>(() => {
+  const allPatientGroups = useMemo<PatientGroup[]>(() => {
     // patients 요약을 단일 소스로 그룹 구성(예약 구독 없음 — 상세는 클릭 시 lazy-load).
     // NOTE: 검색 시에는 서버 검색 결과를, 기본 목록에서는 Provider 데이터를 직접 사용한다.
     const groups: PatientGroup[] = [];
@@ -85,6 +89,9 @@ export function useReservationsList({ uid, authReady }: { uid: string | undefine
         invoiceCount: p.invoiceCount,
         memoCount: p.memoCount,
         lastReservationDate: p.lastReservationDate || "",
+        lastReservationTime: p.lastReservationTime || "",
+        hasMemo: p.hasMemo === true,
+        hasInvoice: p.hasInvoice === true,
       });
     }
     return groups.sort((a, b) =>
@@ -92,13 +99,33 @@ export function useReservationsList({ uid, authReady }: { uid: string | undefine
     );
   }, [visiblePatients]);
 
+  const filterCounts = useMemo(() => {
+    const today = todayString();
+    return {
+      all: allPatientGroups.length,
+      today: allPatientGroups.filter((group) => group.lastReservationDate === today).length,
+      recent: allPatientGroups.filter((group) => Boolean(group.lastReservationDate)).length,
+    };
+  }, [allPatientGroups]);
+
+  const patientGroups = useMemo(() => {
+    if (filterMode === "today") {
+      const today = todayString();
+      return allPatientGroups.filter((group) => group.lastReservationDate === today);
+    }
+    if (filterMode === "recent") {
+      return allPatientGroups.filter((group) => Boolean(group.lastReservationDate));
+    }
+    return allPatientGroups;
+  }, [allPatientGroups, filterMode]);
+
   const tableLoading = isSearchMode
     ? initialLoading
     : summaryLoading && visiblePatients.length === 0;
   const tableRefreshing = isSearchMode ? refreshing : summaryRefreshing;
   const tableError = isSearchMode ? listError : summaryError;
 
-  useEffect(() => { setGroupPage(1); }, [search]);
+  useEffect(() => { setGroupPage(1); }, [search, filterMode]);
 
   // 기본 목록의 cursor/추가 페이지 상태만 동기화한다. 화면 데이터 자체는 Provider를 직접 표시한다.
   useEffect(() => {
@@ -208,6 +235,9 @@ export function useReservationsList({ uid, authReady }: { uid: string | undefine
   return {
     search,
     setSearch,
+    filterMode,
+    setFilterMode,
+    filterCounts,
     patientGroups,
     pagedGroups,
     groupPage,
