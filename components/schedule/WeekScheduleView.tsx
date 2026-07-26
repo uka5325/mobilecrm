@@ -78,19 +78,19 @@ function WeekReservationCard({
       <button
         type="button"
         onClick={onClick}
-        className="h-[42px] w-full min-w-0 overflow-hidden rounded-[16px] px-1 py-1.5 text-center transition active:scale-[0.99]"
+        className="h-[36px] w-full min-w-0 overflow-hidden rounded-[15px] px-1 py-1 text-left transition active:scale-[0.99]"
         style={{
           background: `linear-gradient(90deg, ${color}16 0%, rgba(255,255,255,0.94) 48%, rgba(255,255,255,0.98) 100%)`,
           boxShadow: `inset 4px 0 0 ${color}, 0 6px 12px rgba(15,23,42,.035)`,
           opacity: item.completed ? 0.84 : 1,
         }}
       >
-        <div className="whitespace-nowrap text-[9px] font-semibold leading-3" style={{ color }}>
+        <div className="whitespace-nowrap pl-1 text-[8px] font-semibold leading-3" style={{ color }}>
           {time}
         </div>
         <div
           className={
-            "mt-0.5 truncate whitespace-nowrap text-[10px] font-semibold leading-3 tracking-[-0.03em] text-[#101828]" +
+            "truncate whitespace-nowrap pl-1 text-[9px] font-semibold leading-3 tracking-[-0.03em] text-[#101828]" +
             (cancelled ? " line-through decoration-2" : "")
           }
         >
@@ -104,7 +104,7 @@ function WeekReservationCard({
     <button
       type="button"
       onClick={onClick}
-      className="flex min-h-[68px] w-full min-w-0 items-center overflow-hidden rounded-[26px] py-2 pl-4 pr-3 text-left transition active:scale-[0.99]"
+      className="flex min-h-[54px] w-full min-w-0 items-center overflow-hidden rounded-[26px] py-1.5 pl-4 pr-3 text-left transition active:scale-[0.99]"
       style={{
         background: `linear-gradient(90deg, ${color}16 0%, rgba(255,255,255,0.92) 42%, rgba(255,255,255,0.98) 100%)`,
         boxShadow: `inset 5px 0 0 ${color}, 0 8px 16px rgba(15,23,42,.04)`,
@@ -120,14 +120,10 @@ function WeekReservationCard({
         >
           {item.name || "이름 없음"}
         </div>
-        <div className="mt-0.5 truncate text-[11px] font-normal text-[#667085]">
+        <div className="mt-0.5 truncate text-[11px] font-normal leading-4 text-[#667085]">
           {time} · {item.hospital || "병원 미지정"}
+          {item.consultArea ? ` · ${detailLabel(item)}: ${item.consultArea}` : ""}
         </div>
-        {item.consultArea ? (
-          <div className="mt-0.5 truncate text-[11px] font-normal text-[#667085]">
-            {detailLabel(item)}: {item.consultArea}
-          </div>
-        ) : null}
       </div>
     </button>
   );
@@ -157,8 +153,8 @@ export function WeekScheduleView({
     <div className="min-h-0 flex-1 overflow-auto">
       <div className="space-y-4">
         {displayMode === "table" ? (
-          <section className="rounded-[34px] bg-white px-1.5 py-3 shadow-[0_10px_24px_rgba(15,23,42,.05)]">
-            <div className="grid grid-cols-7 gap-0.5">
+          <section className="rounded-[34px] bg-white px-0.5 py-3 shadow-[0_10px_24px_rgba(15,23,42,.05)]">
+            <div className="grid grid-cols-7 gap-px">
               {dayData.map(({ day, items }) => {
                 const today = isToday(day);
                 const label = tableDateLabel(day);
