@@ -12,6 +12,7 @@ import { useSchedulePage } from "@/hooks/useSchedulePage";
 export default function SchedulePage() {
   const [dayDisplayMode, setDayDisplayMode] = useState<"time" | "hospital">("time");
   const [weekDisplayMode, setWeekDisplayMode] = useState<"table" | "list">("table");
+  const [monthDisplayMode, setMonthDisplayMode] = useState<"table" | "list">("table");
   const schedule = useSchedulePage();
   const {
     currentUser,
@@ -41,6 +42,8 @@ export default function SchedulePage() {
         onDayDisplayModeChange={setDayDisplayMode}
         weekDisplayMode={weekDisplayMode}
         onWeekDisplayModeChange={setWeekDisplayMode}
+        monthDisplayMode={monthDisplayMode}
+        onMonthDisplayModeChange={setMonthDisplayMode}
         todayMemos={schedule.todayMemos}
         memoSectionOpen={schedule.memoSectionOpen}
         onToggleMemoSection={schedule.toggleMemoSection}
@@ -67,6 +70,7 @@ export default function SchedulePage() {
         <MonthScheduleView
           monthStart={schedule.monthStart}
           reservations={reservations}
+          displayMode={monthDisplayMode}
           onDayClick={schedule.handleDayClick}
           onCardClick={schedule.openDetail}
         />
