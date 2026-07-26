@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import type { ReservationRecord } from "@/features/reservations/domain/reservationModels";
+import type { ReservationRecord, AppointmentType } from "@/features/reservations/domain/reservationModels";
 import { getReservationBirthInfo } from "@/features/reservations/domain/reservationUtils";
 import { getInvoicesByPatientId, getInvoicesByPatientCache } from "@/features/invoices/data/client/invoices";
 import { getCachedPatientSettlements, listPatientSettlements } from "@/features/settlements/data/client/settlements";
@@ -44,7 +44,7 @@ type InlineForm = {
   consultArea: string; reservationDate: string; reservationTime: string;
   coordinators: string; hospital: string;
   doctors: string;
-  appointmentType: string;
+  appointmentType: AppointmentType;
 } | null;
 
 type Props = {
