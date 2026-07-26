@@ -28,7 +28,7 @@ export default function ReservationsPage() {
   const [pageError, setPageError] = useState("");
 
   const list = useReservationsList({ uid, authReady });
-  const { search, patientGroups, pagedGroups, groupPage, totalPages, patientsNextCursor, loadingMore, reloadCurrent } = list;
+  const { search, filterMode, filterCounts, patientGroups, pagedGroups, groupPage, totalPages, patientsNextCursor, loadingMore, reloadCurrent } = list;
 
   const csv = useReservationsCsvExport({ setPageError });
   const memo = useReservationMemoPopover({ currentUser, setPageError });
@@ -87,6 +87,9 @@ export default function ReservationsPage() {
       <ReservationsToolbar
         search={search}
         onSearchChange={list.setSearch}
+        filterMode={filterMode}
+        onFilterModeChange={list.setFilterMode}
+        filterCounts={filterCounts}
         onAddCustomer={() => { setAddPatient(undefined); setDrawerOpen(true); }}
         onImport={() => setImportDrawerOpen(true)}
         downloadOpen={csv.downloadOpen}
