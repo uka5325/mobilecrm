@@ -1,58 +1,126 @@
 "use client";
 
 import { useMemo } from "react";
-import type { ReservationRecord } from "@/features/reservations/domain/reservationModels";
-import { formatLog } from "@/features/reservations/ui/scheduleDates";
-import {
-  buildColumnPositions,
-  CARD_HEIGHT,
-  getAppointmentColor,
-  HOUR_HEIGHT,
-  START_HOUR,
-  TIME_COL_W,
-  TOTAL_HOURS,
-} from "@/features/reservations/ui/scheduleLayout";
-import { ScheduleHourGrid } from "@/components/schedule/ScheduleHourGrid";
+import type { AppointmentType, ReservationRecord } from "@/features/reservations/domain/reservationModels";
+import { getAppointmentColor } from "@/features/reservations/ui/scheduleLayout";
 
-function DayCard({ item, top, col, totalCols, onClick }: { item: ReservationRecord; top: number; col: number; totalCols: number; onClick: () => void }) {
+type DayDisplayMode = "time" | "hospital";
+
+const CANCELLED_COLOR = "#facc15";
+const COMPLETED_COLOR = "#9ca3af";
+const DETAIL_LABELS: Record<AppointmentType, string> = {
+  상담: "상담 항목",
+  수술: "수술 항목",
+  시술: "시술 항목",
+  치료: "수술 항목",
+  경과: "경과 항목",
+  진료: "진료 항목",
+  검진: "검진 항목",
+};
+
+function statusLabel(item: ReservationRecord) {
+  if (item.cancelled) return "취소";
+  if (item.completed) return "완료";
+  return "대기";
+}
+
+function cardColor(item: ReservationRecord) {
+  if (item.cancelled) return CANCELLED_COLOR;
+  if (item.completed) return COMPLETED_COLOR;
+  return getAppointmentColor(item.appointmentType);
+}
+
+function statusColor(item: ReservationRecord) {
+  if (item.cancelled) return CANCELLED_COLOR;
+  if (item.completed) return COMPLETED_COLOR;
+  return getAppointmentColor(item.appointmentType);
+}
+
+function detailLabel(item: ReservationRecord) {
+  return DETAIL_LABELS[item.appointmentType] || "상담 항목";
+}
+
+function AppointmentCard({
+  item,
+  onClick,
+  compact = false,
+  showHospital = true,
+  showTimeInside = false,
+  showTimeWithDetail = false,
+}: {
+  item: ReservationRecord;
+  onClick: () => void;
+  compact?: boolean;
+  showHospital?: boolean;
+  showTimeInside?: boolean;
+  showTimeWithDetail?: boolean;
+}) {
+  const color = cardColor(item);
+  const status = statusLabel(item);
   const cancelled = item.cancelled === true;
-  const color = cancelled ? "#fef08a" : item.completed ? "#9ca3af" : getAppointmentColor(item.appointmentType);
-  const textColor = cancelled ? "#78350f" : "white";
-  const time = item.reservationTime || "";
-  const areaLabel = item.appointmentType === "상담" ? "상담부위" : "수술항목";
-  const logText = formatLog(item.updatedBy, item.updatedAt);
 
   return (
     <button
+      type="button"
       onClick={onClick}
-      className="absolute flex flex-col overflow-hidden rounded-md px-2 py-1 text-left shadow-sm transition hover:brightness-110 active:scale-[0.99]"
+      className={
+        compact
+          ? "flex min-h-[58px] w-full min-w-0 items-center gap-2 overflow-hidden rounded-[30px] py-2 pl-5 pr-3 text-left transition active:scale-[0.99]"
+          : "flex min-h-[82px] w-full min-w-0 items-center gap-2 overflow-hidden rounded-[34px] py-2.5 pl-5 pr-3 text-left transition active:scale-[0.99]"
+      }
       style={{
-        top,
-        height: CARD_HEIGHT,
-        backgroundColor: color,
-        opacity: item.completed ? 0.75 : 1,
-        color: textColor,
-        left: `calc(${(col / totalCols) * 100}% + 2px)`,
-        width: `calc(${(1 / totalCols) * 100}% - 4px)`,
+        background: "linear-gradient(90deg, " + color + "16 0%, rgba(255,255,255,0.92) 42%, rgba(255,255,255,0.98) 100%)",
+        boxShadow: "inset 6px 0 0 " + color + ", 0 10px 18px rgba(15,23,42,.045)",
+        opacity: item.completed ? 0.84 : 1,
       }}
     >
-      <div className={`truncate text-[11px] font-bold leading-tight ${cancelled ? "line-through" : ""}`}>{item.name}</div>
-      <div className={`truncate text-[10px] opacity-85 leading-tight ${cancelled ? "line-through" : ""}`}>
-        {[time, item.hospital].filter(Boolean).join(" · ")}
-      </div>
-      {item.consultArea && (
-        <div className={`truncate text-[9px] opacity-80 leading-tight ${cancelled ? "line-through" : ""}`}>
-          {areaLabel}: {item.consultArea}
+      {showTimeInside ? (
+        <div className="w-[38px] shrink-0 text-xs font-bold tracking-[-0.03em] text-[#101828]">
+          {item.reservationTime ? item.reservationTime.slice(0, 5) : "--:--"}
         </div>
-      )}
-      {logText && (
-        <div className="mt-auto truncate text-[8px] opacity-55 leading-tight">{logText}</div>
-      )}
+      ) : null}
+
+      <div className="min-w-0 flex-1 overflow-hidden">
+        <div
+          className={
+            (compact ? "truncate text-base font-bold tracking-[-0.04em]" : "truncate text-lg font-bold tracking-[-0.04em]") +
+            (cancelled ? " text-[#101828] line-through decoration-2" : " text-[#101828]")
+          }
+        >
+          {item.name || "이름 없음"}
+        </div>
+
+        {showHospital ? (
+          <div className="mt-0.5 truncate text-xs font-semibold text-[#667085]">
+            {item.hospital || "병원 미지정"}
+          </div>
+        ) : null}
+
+        {item.consultArea ? (
+          <div className="mt-1 truncate text-xs font-normal text-[#667085]">
+            {showTimeWithDetail && item.reservationTime ? item.reservationTime.slice(0, 5) + " · " : ""}{detailLabel(item)}: {item.consultArea}
+          </div>
+        ) : showTimeWithDetail && item.reservationTime ? (
+          <div className="mt-1 truncate text-xs font-normal text-[#667085]">{item.reservationTime.slice(0, 5)}</div>
+        ) : null}
+      </div>
+
+      <div className="flex shrink-0 flex-col items-end gap-1">
+        <span className="rounded-full bg-white/78 px-2 py-0.5 text-[10px] font-bold" style={{ color }}>
+          {item.appointmentType}
+        </span>
+        <span
+          className="rounded-full bg-white/78 px-2 py-0.5 text-[10px] font-bold"
+          style={{ color: statusColor(item) }}
+        >
+          {status}
+        </span>
+      </div>
     </button>
   );
 }
 
-export function DayScheduleView({
+function TimeDayView({
   dateStr,
   reservations,
   onCardClick,
@@ -61,96 +129,114 @@ export function DayScheduleView({
   reservations: ReservationRecord[];
   onCardClick: (item: ReservationRecord) => void;
 }) {
-  const hospitals = useMemo(() => {
-    const s = new Set(reservations.map((r) => r.hospital || "미지정"));
-    return Array.from(s).sort();
+  const sorted = useMemo(() => {
+    return [...reservations].sort((a, b) => String(a.reservationTime || "").localeCompare(String(b.reservationTime || "")));
   }, [reservations]);
 
-  const columnData = useMemo(() => {
-    return hospitals.map((hospital) => {
-      const items = reservations.filter((r) => (r.hospital || "미지정") === hospital);
-      const positioned = buildColumnPositions(items);
-      const contentH = positioned.length > 0
-        ? Math.max(...positioned.map((p) => p.top + CARD_HEIGHT + 4))
-        : 0;
-      return { hospital, items, positioned, contentH };
-    });
-  }, [hospitals, reservations]);
+  return (
+    <section className="rounded-[34px] bg-white p-3 shadow-[0_10px_24px_rgba(15,23,42,.05)] sm:p-4">
+      {sorted.length === 0 ? (
+        <div className="rounded-[24px] bg-[#f1f8f5] p-4 text-sm font-normal text-[#667085]">
+          {dateStr} 예약이 없습니다.
+        </div>
+      ) : (
+        <div className="relative space-y-3">
+          <div className="absolute bottom-2 left-[34px] top-2 w-px bg-[#e4ece8]" />
+          {sorted.map((item) => (
+            <div key={item.id} className="relative grid min-w-0 grid-cols-[34px_minmax(0,1fr)] gap-2">
+              <div className="relative z-10 pt-3 pr-1">
+                <div className="text-right text-sm font-bold tracking-[-0.03em] text-[#475467]">
+                  {item.reservationTime ? item.reservationTime.slice(0, 5) : "--:--"}
+                </div>
+                <div className="absolute right-[-4px] top-9 h-2 w-2 rounded-full bg-[#d7e2de]" />
+              </div>
 
-  const baseH = TOTAL_HOURS * HOUR_HEIGHT;
-  const maxH = Math.max(baseH, ...columnData.map((c) => c.contentH));
-  const gridRows = Math.ceil(maxH / HOUR_HEIGHT);
-  const hours = Array.from({ length: gridRows }, (_, i) => START_HOUR + i);
-
-  const HEADER_H = 48;
-
-  if (hospitals.length === 0) {
-    return (
-      <div className="flex min-h-0 flex-1 overflow-auto">
-        {/* Time column */}
-        <div className="sticky left-0 z-10 flex shrink-0 flex-col border-r border-[#edf0f3] bg-white" style={{ width: TIME_COL_W }}>
-          <div className="shrink-0 border-b border-[#edf0f3]" style={{ height: HEADER_H }} />
-          {Array.from({ length: TOTAL_HOURS }, (_, i) => (
-            <div key={i} className="flex items-start justify-center border-b border-[#f1f3f5] pt-1 text-[10px] text-gray-400" style={{ height: HOUR_HEIGHT }}>
-              {String(START_HOUR + i).padStart(2, "0")}:00
+              <AppointmentCard item={item} onClick={() => onCardClick(item)} showHospital />
             </div>
           ))}
         </div>
-        <div className="flex flex-1 items-center justify-center text-sm text-gray-400 p-8">
-          {dateStr} 예약이 없습니다.
-        </div>
-      </div>
+      )}
+    </section>
+  );
+}
+
+function HospitalDayView({
+  reservations,
+  onCardClick,
+}: {
+  reservations: ReservationRecord[];
+  onCardClick: (item: ReservationRecord) => void;
+}) {
+  const hospitalGroups = useMemo(() => {
+    const map = new Map<string, ReservationRecord[]>();
+    reservations.forEach((item) => {
+      const hospital = item.hospital || "병원 미지정";
+      const group = map.get(hospital) || [];
+      group.push(item);
+      map.set(hospital, group);
+    });
+
+    return Array.from(map.entries())
+      .map(([hospital, items]) => ({
+        hospital,
+        items: [...items].sort((a, b) => String(a.reservationTime || "").localeCompare(String(b.reservationTime || ""))),
+      }))
+      .sort((a, b) => a.hospital.localeCompare(b.hospital));
+  }, [reservations]);
+
+  if (hospitalGroups.length === 0) {
+    return (
+      <section className="rounded-[34px] bg-white p-3 shadow-[0_10px_24px_rgba(15,23,42,.05)] sm:p-4">
+        <div className="rounded-[24px] bg-[#f1f8f5] p-4 text-sm font-normal text-[#667085]">예약이 없습니다.</div>
+      </section>
     );
   }
 
   return (
-    /* Single overflow-auto container — everything scrolls together */
-    <div className="min-h-0 flex-1 overflow-auto">
-      <div className="flex" style={{ minWidth: TIME_COL_W + hospitals.length * 200 }}>
-
-        {/* ── Sticky time column ── */}
-        <div
-          className="sticky left-0 z-10 flex shrink-0 flex-col border-r border-[#edf0f3] bg-white"
-          style={{ width: TIME_COL_W }}
-        >
-          {/* corner spacer matches hospital header height */}
-          <div className="shrink-0 border-b border-[#edf0f3]" style={{ height: HEADER_H }} />
-          {hours.map((h) => (
-            <div
-              key={h}
-              className="flex items-start justify-center border-b border-[#f1f3f5] pt-1 text-[10px] text-gray-400"
-              style={{ height: HOUR_HEIGHT }}
-            >
-              {h < 24 ? `${String(h).padStart(2, "0")}:00` : ""}
-            </div>
-          ))}
-        </div>
-
-        {/* ── Hospital columns ── */}
-        {columnData.map(({ hospital, items, positioned }) => (
-          <div
-            key={hospital}
-            className="flex flex-col border-r border-[#edf0f3]"
-            style={{ minWidth: 200, maxWidth: 320, flex: 1 }}
-          >
-            {/* column header */}
-            <div
-              className="sticky top-0 z-10 flex shrink-0 items-center justify-center gap-2 border-b border-[#edf0f3] bg-white px-3"
-              style={{ height: HEADER_H }}
-            >
-              <span className="truncate text-sm font-semibold">{hospital}</span>
-              <span className="shrink-0 text-xs text-gray-400">{items.length}건</span>
-            </div>
-            {/* card + grid area */}
-            <div className="relative" style={{ height: maxH }}>
-              <ScheduleHourGrid rows={gridRows} />
-              {positioned.map(({ item, top, col, totalCols }) => (
-                <DayCard key={item.id} item={item} top={top} col={col} totalCols={totalCols} onClick={() => onCardClick(item)} />
-              ))}
-            </div>
+    <div className="space-y-4">
+      {hospitalGroups.map(({ hospital, items }) => (
+        <section key={hospital} className="rounded-[34px] bg-white p-4 shadow-[0_10px_24px_rgba(15,23,42,.05)]">
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <h2 className="truncate text-3xl font-bold tracking-[-0.05em] text-[#101828]">{hospital}</h2>
+            <span className="shrink-0 text-sm font-semibold text-[#667085]">{items.length}건</span>
           </div>
-        ))}
-      </div>
+
+          <div className="space-y-2.5">
+            {items.map((item) => (
+              <AppointmentCard
+                key={item.id}
+                item={item}
+                compact
+                showHospital={false}
+                showTimeWithDetail
+                onClick={() => onCardClick(item)}
+              />
+            ))}
+          </div>
+        </section>
+      ))}
+    </div>
+  );
+}
+
+export function DayScheduleView({
+  dateStr,
+  reservations,
+  displayMode = "time",
+  onCardClick,
+}: {
+  dateStr: string;
+  reservations: ReservationRecord[];
+  displayMode?: DayDisplayMode;
+  onCardClick: (item: ReservationRecord) => void;
+}) {
+  return (
+    <div className="min-h-0 flex-1 overflow-auto">
+      {displayMode === "hospital" ? (
+        <HospitalDayView reservations={reservations} onCardClick={onCardClick} />
+      ) : (
+        <TimeDayView dateStr={dateStr} reservations={reservations} onCardClick={onCardClick} />
+      )}
     </div>
   );
 }
