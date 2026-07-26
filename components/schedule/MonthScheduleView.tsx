@@ -10,10 +10,7 @@ import {
   formatDate,
   parseDate,
 } from "@/features/reservations/ui/scheduleDates";
-import {
-  getAppointmentColor,
-  SCHEDULE_APPOINTMENT_TYPES,
-} from "@/features/reservations/ui/scheduleLayout";
+import { getAppointmentColor } from "@/features/reservations/ui/scheduleLayout";
 
 type MonthDisplayMode = "table" | "list";
 
@@ -52,24 +49,13 @@ function dateLabel(dateStr: string) {
   return `${d.getMonth() + 1}/${d.getDate()} ${WEEKDAY_LABELS[d.getDay()]}`;
 }
 
-function daySummary(items: ReservationRecord[]) {
-  const summary = SCHEDULE_APPOINTMENT_TYPES.map((type) => ({
-    type,
-    count: items.filter((item) => item.appointmentType === type).length,
-  }))
-    .filter((item) => item.count > 0)
-    .slice(0, 3)
-    .map((item) => `${item.type} ${item.count}`)
-    .join(" · ");
-
-  return summary ? `${items.length}건 · ${summary}` : `${items.length}건`;
-}
-
 function MonthListCard({
   item,
+  dateStr,
   onClick,
 }: {
   item: ReservationRecord;
+  dateStr: string;
   onClick: () => void;
 }) {
   const color = cardColor(item);
@@ -82,7 +68,7 @@ function MonthListCard({
     <button
       type="button"
       onClick={onClick}
-      className="flex min-h-[54px] w-full min-w-0 items-center overflow-hidden rounded-[26px] py-1.5 pl-4 pr-3 text-left transition active:scale-[0.99]"
+      className="flex min-h-[46px] w-full min-w-0 items-center overflow-hidden rounded-[22px] py-1 pl-4 pr-3 text-left transition active:scale-[0.99]"
       style={{
         background: `linear-gradient(90deg, ${color}16 0%, rgba(255,255,255,0.92) 42%, rgba(255,255,255,0.98) 100%)`,
         boxShadow: `inset 5px 0 0 ${color}, 0 8px 16px rgba(15,23,42,.04)`,
@@ -92,14 +78,14 @@ function MonthListCard({
       <div className="min-w-0 flex-1 overflow-hidden">
         <div
           className={
-            "truncate text-sm font-semibold tracking-[-0.035em] text-[#101828]" +
+            "truncate text-[13px] font-semibold leading-4 tracking-[-0.035em] text-[#101828]" +
             (cancelled ? " line-through decoration-2" : "")
           }
         >
           {item.name || "이름 없음"}
         </div>
-        <div className="mt-0.5 truncate text-[11px] font-normal leading-4 text-[#667085]">
-          {time} · {item.hospital || "병원 미지정"}
+        <div className="mt-0.5 truncate text-[10px] font-normal leading-3 text-[#667085]">
+          {dateLabel(dateStr)} · {time} · {item.hospital || "병원 미지정"}
           {item.consultArea
             ? ` · ${detailLabel(item)}: ${item.consultArea}`
             : ""}
@@ -170,10 +156,18 @@ export function MonthScheduleView({
               );
               if (currentMonthDays.length === 0) return null;
 
-              const weekCount = currentMonthDays.reduce(
-                (sum, dateStr) => sum + (dayItems.get(dateStr)?.length || 0),
-                0,
-              );
+              const weekItems = currentMonthDays
+                .flatMap((dateStr) =>
+                  (dayItems.get(dateStr) || []).map((item) => ({
+                    dateStr,
+                    item,
+                  })),
+                )
+                .sort((a, b) =>
+                  `${a.dateStr} ${a.item.reservationTime || ""}`.localeCompare(
+                    `${b.dateStr} ${b.item.reservationTime || ""}`,
+                  ),
+                );
               const rangeStart = dateLabel(currentMonthDays[0]).split(" ")[0];
               const rangeEnd = dateLabel(
                 currentMonthDays[currentMonthDays.length - 1],
@@ -189,55 +183,26 @@ export function MonthScheduleView({
                       {weekIndex + 1}주차
                     </h2>
                     <span className="text-[10px] font-normal text-[#667085]">
-                      {rangeStart} ~ {rangeEnd} · {weekCount}건
+                      {rangeStart} ~ {rangeEnd} · {weekItems.length}건
                     </span>
                   </div>
 
-                  <div className="space-y-3">
-                    {currentMonthDays.map((dateStr) => {
-                      const items = dayItems.get(dateStr) || [];
-                      const isCurrentDay = dateStr === today;
-                      return (
-                        <div
-                          key={dateStr}
-                          className="rounded-[26px] bg-[#f7faf8] p-2.5"
-                        >
-                          <div className="mb-2 flex min-w-0 items-center gap-2">
-                            <button
-                              type="button"
-                              onClick={() => onDayClick(dateStr)}
-                              className={
-                                isCurrentDay
-                                  ? "shrink-0 rounded-[14px] bg-[#e3f2ee] px-2.5 py-1 text-base font-semibold tracking-[-0.035em] text-[#0f9b8e]"
-                                  : "shrink-0 px-1 py-1 text-base font-semibold tracking-[-0.035em] text-[#101828]"
-                              }
-                            >
-                              {dateLabel(dateStr)}
-                            </button>
-                            <span className="min-w-0 truncate text-[10px] font-normal text-[#667085]">
-                              {daySummary(items)}
-                            </span>
-                          </div>
-
-                          {items.length === 0 ? (
-                            <div className="rounded-[20px] bg-white/75 px-4 py-3 text-[11px] font-normal text-[#98a2b3]">
-                              예약 없음
-                            </div>
-                          ) : (
-                            <div className="space-y-2">
-                              {items.map((item) => (
-                                <MonthListCard
-                                  key={item.id}
-                                  item={item}
-                                  onClick={() => onCardClick(item)}
-                                />
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
+                  {weekItems.length === 0 ? (
+                    <div className="rounded-[20px] bg-white/75 px-4 py-3 text-[11px] font-normal text-[#98a2b3]">
+                      예약 없음
+                    </div>
+                  ) : (
+                    <div className="space-y-1.5">
+                      {weekItems.map(({ dateStr, item }) => (
+                        <MonthListCard
+                          key={item.id}
+                          item={item}
+                          dateStr={dateStr}
+                          onClick={() => onCardClick(item)}
+                        />
+                      ))}
+                    </div>
+                  )}
                 </div>
               );
             })}
@@ -275,8 +240,8 @@ export function MonthScheduleView({
                 onClick={() => onDayClick(dateStr)}
                 className={
                   currentMonth
-                    ? "min-h-[80px] min-w-0 cursor-pointer rounded-[18px] bg-[#f7faf8] px-1 py-1.5"
-                    : "min-h-[80px] min-w-0 rounded-[18px] bg-[#fbfcfb] px-1 py-1.5"
+                    ? "min-h-[80px] min-w-0 cursor-pointer px-1 py-1.5"
+                    : "min-h-[80px] min-w-0 px-1 py-1.5"
                 }
               >
                 <div className="mb-1 flex justify-center">
