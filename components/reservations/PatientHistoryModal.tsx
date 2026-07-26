@@ -35,9 +35,9 @@ export function PatientHistoryModal({
 }: Props) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
-      <div className="mx-4 w-full max-w-xl rounded-2xl bg-white p-5 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+      <div className="mx-4 w-full max-w-xl rounded-[28px] bg-white p-5 shadow-[0_24px_80px_rgba(15,23,42,0.24)]" onClick={(e) => e.stopPropagation()}>
         <div className="mb-3 flex items-center justify-between">
-          <span className="text-base font-bold text-gray-800">{patientName} — 전체 예약 이력</span>
+          <span className="text-base font-bold text-[#101828]">{patientName} — 예약목록</span>
           <button onClick={onClose} className="text-2xl leading-none text-gray-400 hover:text-gray-700">×</button>
         </div>
         {error && <div className="mb-2 text-sm text-red-500">{error}</div>}
@@ -52,7 +52,7 @@ export function PatientHistoryModal({
           <div className="py-8 text-center text-sm text-gray-400">예약 이력이 없습니다.</div>
         ) : (
           <>
-            <div className="max-h-[60vh] divide-y divide-gray-100 overflow-y-auto rounded-xl border border-gray-100">
+            <div className="max-h-[60vh] divide-y divide-gray-100 overflow-y-auto rounded-[18px] border border-gray-100">
               {list.map((r) => (
                 <div key={r.id} className="flex items-center gap-2 px-4 py-2.5 text-sm">
                   <span className="w-20 shrink-0 text-xs text-gray-400">{r.reservationDate}</span>
