@@ -86,7 +86,7 @@ export function ScheduleHeader({
 
   return (
     <div className="flex flex-col gap-3">
-      <section className="rounded-[26px] bg-[#eaf8f3] px-3 py-3 shadow-[0_10px_24px_rgba(15,23,42,0.05)] lg:px-4 lg:py-4">
+      <section className="h-[184px] overflow-hidden rounded-[26px] bg-[#eaf8f3] p-5 shadow-[0_18px_50px_rgba(7,56,58,0.08)] lg:h-[196px] lg:p-6">
         <div className="rounded-[20px] bg-white p-1">
           <div className="grid grid-cols-3 gap-1">
             {(["day", "week", "month"] as ViewMode[]).map((mode) => (
@@ -106,7 +106,7 @@ export function ScheduleHeader({
           </div>
         </div>
 
-        <div className="mt-2 grid grid-cols-[30px_minmax(0,1fr)_30px] items-center gap-2">
+        <div className="mt-1.5 grid grid-cols-[30px_minmax(0,1fr)_30px] items-center gap-2">
           <button
             type="button"
             onClick={() => onNavigate(-1)}
@@ -133,7 +133,7 @@ export function ScheduleHeader({
           </button>
         </div>
 
-        <div className="mt-2 rounded-[20px] bg-white p-1">
+        <div className="mt-1.5 rounded-[20px] bg-white p-1">
           <div className="grid grid-cols-[1fr_1fr_auto] gap-1">
             <button
               type="button"
@@ -167,7 +167,7 @@ export function ScheduleHeader({
           </div>
         </div>
 
-        <div className="mt-2 flex items-center gap-2.5 overflow-x-auto whitespace-nowrap [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <div className="mt-1.5 flex items-center gap-2.5 overflow-x-auto whitespace-nowrap [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {SCHEDULE_APPOINTMENT_TYPES.map((type: AppointmentType) => (
             <div key={type} className="flex shrink-0 items-center gap-1.5">
               <span className="h-2 w-2 rounded-full" style={{ backgroundColor: APPOINTMENT_TYPE_COLORS[type] }} />
