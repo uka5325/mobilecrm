@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { DetailDrawer } from "@/components/timeline/DetailDrawer";
 import { NewReservationDrawer } from "@/components/timeline/NewReservationDrawer";
 import { ScheduleHeader } from "@/components/schedule/ScheduleHeader";
@@ -9,6 +10,8 @@ import { MonthScheduleView } from "@/components/schedule/MonthScheduleView";
 import { useSchedulePage } from "@/hooks/useSchedulePage";
 
 export default function SchedulePage() {
+  const [dayDisplayMode, setDayDisplayMode] = useState<"time" | "hospital">("time");
+  const [weekDisplayMode, setWeekDisplayMode] = useState<"table" | "list">("table");
   const schedule = useSchedulePage();
   const {
     currentUser,
@@ -21,7 +24,7 @@ export default function SchedulePage() {
   } = schedule;
 
   return (
-    <div className="-mx-6 -mb-6 mt-5 flex h-[calc(100vh-170px)] min-h-[640px] flex-col overflow-hidden rounded-2xl border border-[#edf0f3] bg-white">
+    <div className="mx-auto flex min-h-[calc(100vh-170px)] max-w-[980px] flex-col gap-6 pb-6">
       <ScheduleHeader
         viewMode={viewMode}
         onViewModeChange={schedule.setViewMode}
@@ -34,6 +37,10 @@ export default function SchedulePage() {
         onNavigate={schedule.navigate}
         onToday={schedule.goToday}
         onNewReservation={schedule.openNew}
+        dayDisplayMode={dayDisplayMode}
+        onDayDisplayModeChange={setDayDisplayMode}
+        weekDisplayMode={weekDisplayMode}
+        onWeekDisplayModeChange={setWeekDisplayMode}
         todayMemos={schedule.todayMemos}
         memoSectionOpen={schedule.memoSectionOpen}
         onToggleMemoSection={schedule.toggleMemoSection}
@@ -41,10 +48,20 @@ export default function SchedulePage() {
 
       {/* 뷰 */}
       {viewMode === "day" && (
-        <DayScheduleView dateStr={baseDate} reservations={reservations} onCardClick={schedule.openDetail} />
+        <DayScheduleView
+          dateStr={baseDate}
+          reservations={reservations}
+          displayMode={dayDisplayMode}
+          onCardClick={schedule.openDetail}
+        />
       )}
       {viewMode === "week" && (
-        <WeekScheduleView weekStart={schedule.weekStart} reservations={reservations} onCardClick={schedule.openDetail} />
+        <WeekScheduleView
+          weekStart={schedule.weekStart}
+          reservations={reservations}
+          displayMode={weekDisplayMode}
+          onCardClick={schedule.openDetail}
+        />
       )}
       {viewMode === "month" && (
         <MonthScheduleView
