@@ -29,6 +29,7 @@ export type PatientGroup = {
   memoCount?: number;
   lastReservationDate?: string;
   lastReservationTime?: string;
+  lastAppointmentType?: AppointmentType | string;
   hasMemo?: boolean;
   hasInvoice?: boolean;
 };
@@ -81,7 +82,7 @@ function recentReservationText(group: PatientGroup) {
   if (!group.lastReservationDate) return "최근 예약 없음";
   const timeText = group.lastReservationTime ? ` ${group.lastReservationTime}` : "";
   const reservation = group.reservations[0];
-  const typeText = reservation?.appointmentType || "예약";
+  const typeText = group.lastAppointmentType || reservation?.appointmentType || "예약";
 
   return `${group.lastReservationDate}${timeText} · ${typeText}`;
 }
@@ -147,7 +148,7 @@ export function ReservationsTable({
     if (!pf) return null;
 
     return (
-      <article key={group.patientKey} className="rounded-[24px] bg-white p-3 shadow-[0_10px_28px_rgba(15,23,42,0.05)]">
+      <article key={group.patientKey} className="rounded-[24px] bg-white p-2.5 shadow-[0_10px_28px_rgba(15,23,42,0.05)]">
         <div className="grid gap-2 sm:grid-cols-4">
           <input
             className="h-9 rounded-[16px] border border-[#dfe3e8] bg-white px-3 text-sm font-semibold text-[#101828] focus:border-[#0f9b8e] focus:outline-none"
@@ -218,11 +219,11 @@ export function ReservationsTable({
     ].filter(Boolean);
 
     return (
-      <article key={group.patientKey} className="rounded-[24px] bg-white p-3 shadow-[0_10px_28px_rgba(15,23,42,0.05)]">
-        <div className="flex min-w-0 items-start gap-3">
+      <article key={group.patientKey} className="rounded-[24px] bg-white p-2.5 shadow-[0_10px_28px_rgba(15,23,42,0.05)]">
+        <div className="flex min-w-0 items-start gap-2.5">
           <div className="min-w-0 flex-1">
-            <h3 className="break-words text-base font-bold tracking-[-0.04em] text-[#101828]">{group.name || "이름 없음"}</h3>
-            <div className="mt-1 flex flex-wrap gap-x-2 gap-y-1 text-[11px] text-[#667085]">
+            <h3 className="break-words text-[15px] font-bold tracking-[-0.04em] text-[#101828]">{group.name || "이름 없음"}</h3>
+            <div className="mt-0.5 flex flex-wrap gap-x-2 gap-y-0.5 text-[11px] text-[#667085]">
               {metaItems.length > 0 ? metaItems.map((item) => <span key={item}>{item}</span>) : <span>기본 정보 없음</span>}
             </div>
           </div>
@@ -230,14 +231,14 @@ export function ReservationsTable({
           <button
             type="button"
             onClick={() => onAddReservation(group)}
-            className="h-8 shrink-0 rounded-[16px] bg-[linear-gradient(135deg,#77dfd1_0%,#40c5b3_50%,#0f9b8e_100%)] px-3 text-xs font-bold text-white shadow-[0_10px_24px_rgba(15,143,131,0.14)] transition active:scale-95"
+            className="h-7 shrink-0 rounded-[14px] bg-[linear-gradient(135deg,#77dfd1_0%,#40c5b3_50%,#0f9b8e_100%)] px-2 text-[10px] font-bold text-white shadow-[0_10px_24px_rgba(15,143,131,0.14)] transition active:scale-95"
           >
             + 예약
           </button>
         </div>
 
-        <div className="mt-2 border-t border-[#edf0f3] pt-2">
-          <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
+        <div className="mt-1.5 border-t border-[#edf0f3] pt-1.5">
+          <div className="flex flex-col gap-1.5 lg:flex-row lg:items-center lg:justify-between">
             <div className="min-w-0">
               <div className="truncate text-xs font-semibold text-[#667085]">{recentReservationText(group)}</div>
             </div>
@@ -246,7 +247,7 @@ export function ReservationsTable({
               <button
                 type="button"
                 onClick={() => onOpenPatientMemo(group)}
-                className="h-7 rounded-[14px] bg-[#f6f7f5] px-2.5 text-[11px] font-semibold text-[#667085] transition active:scale-95"
+                className="h-6 rounded-[13px] bg-[#f6f7f5] px-2 text-[10px] font-semibold text-[#667085] transition active:scale-95"
               >
                 메모{memoCount > 0 ? ` ${memoCount}` : ""}
               </button>
@@ -255,7 +256,7 @@ export function ReservationsTable({
                 onFocus={() => prefetchInvoiceModal(pid)}
                 onMouseEnter={() => prefetchInvoiceModal(pid)}
                 onClick={() => setInvoiceModal({ patientId: pid, patientName: group.name })}
-                className="h-7 rounded-[14px] bg-[#e3f2ee] px-2.5 text-[11px] font-semibold text-[#0f9b8e] transition active:scale-95"
+                className="h-6 rounded-[13px] bg-[#e3f2ee] px-2 text-[10px] font-semibold text-[#0f9b8e] transition active:scale-95"
               >
                 인보이스{invoiceCount > 0 ? ` ${invoiceCount}` : ""}
               </button>
@@ -264,7 +265,7 @@ export function ReservationsTable({
                 onFocus={() => prefetchSettlementModal(pid)}
                 onMouseEnter={() => prefetchSettlementModal(pid)}
                 onClick={() => setSettlementModal({ patientId: pid, patientName: group.name })}
-                className="h-7 rounded-[14px] bg-[#eef4ff] px-2.5 text-[11px] font-semibold text-[#2563eb] transition active:scale-95"
+                className="h-6 rounded-[13px] bg-[#eef4ff] px-2 text-[10px] font-semibold text-[#2563eb] transition active:scale-95"
               >
                 정산{settlementCount > 0 ? ` ${settlementCount}` : ""}
               </button>
@@ -272,7 +273,7 @@ export function ReservationsTable({
                 <button
                   type="button"
                   onClick={() => openReservationList(group)}
-                  className="h-7 rounded-[14px] bg-[#f6f7f5] px-2.5 text-[11px] font-semibold text-[#667085] transition active:scale-95"
+                  className="h-6 rounded-[13px] bg-[#f6f7f5] px-2 text-[10px] font-semibold text-[#667085] transition active:scale-95"
                 >
                   예약{reservationCount > 0 ? ` ${reservationCount}${group.reservationCountCapped ? "+" : ""}` : ""}
                 </button>
@@ -280,7 +281,7 @@ export function ReservationsTable({
               <button
                 type="button"
                 onClick={() => setDetailGroup(group)}
-                className="h-7 rounded-[14px] bg-white px-2.5 text-[11px] font-semibold text-[#344054] shadow-[inset_0_0_0_1px_#dfe3e8] transition active:scale-95"
+                className="h-6 rounded-[13px] bg-white px-2 text-[10px] font-semibold text-[#344054] shadow-[inset_0_0_0_1px_#dfe3e8] transition active:scale-95"
               >
                 더 보기
               </button>
