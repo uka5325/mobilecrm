@@ -149,12 +149,13 @@ export function MonthScheduleView({
     return (
       <div className="min-h-0 flex-1 overflow-auto">
         <section className="rounded-[34px] bg-white p-3 shadow-[0_10px_24px_rgba(15,23,42,.05)]">
-          <div className="space-y-4">
+          <div className="space-y-2">
             {weeks.map((week, weekIndex) => {
               const currentMonthDays = week.filter(
                 (dateStr) => parseDate(dateStr).getMonth() + 1 === month,
               );
               if (currentMonthDays.length === 0) return null;
+              const includesToday = currentMonthDays.includes(today);
 
               const weekItems = currentMonthDays
                 .flatMap((dateStr) =>
@@ -176,10 +177,16 @@ export function MonthScheduleView({
               return (
                 <div
                   key={week[0]}
-                  className="rounded-[30px] bg-[#f1f8f5] p-2.5"
+                  className="rounded-[30px] bg-[#f7faf8] p-2.5"
                 >
                   <div className="mb-2 flex items-center gap-2 px-1">
-                    <h2 className="text-sm font-semibold tracking-[-0.035em] text-[#101828]">
+                    <h2
+                      className={
+                        includesToday
+                          ? "rounded-[14px] bg-[#e3f2ee] px-2.5 py-1 text-sm font-semibold tracking-[-0.035em] text-[#0f9b8e]"
+                          : "px-1 py-1 text-sm font-semibold tracking-[-0.035em] text-[#101828]"
+                      }
+                    >
                       {weekIndex + 1}주차
                     </h2>
                     <span className="text-[10px] font-normal text-[#667085]">
