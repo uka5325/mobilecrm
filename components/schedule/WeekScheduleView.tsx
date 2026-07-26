@@ -78,7 +78,7 @@ function WeekReservationCard({
       <button
         type="button"
         onClick={onClick}
-        className="w-full min-w-0 overflow-hidden rounded-[18px] px-1 py-2 text-center transition active:scale-[0.99]"
+        className="h-[42px] w-full min-w-0 overflow-hidden rounded-[16px] px-1 py-1.5 text-center transition active:scale-[0.99]"
         style={{
           background: `linear-gradient(90deg, ${color}16 0%, rgba(255,255,255,0.94) 48%, rgba(255,255,255,0.98) 100%)`,
           boxShadow: `inset 4px 0 0 ${color}, 0 6px 12px rgba(15,23,42,.035)`,
@@ -90,7 +90,7 @@ function WeekReservationCard({
         </div>
         <div
           className={
-            "mt-1 line-clamp-2 break-all text-[10px] font-semibold leading-[1.25] tracking-[-0.03em] text-[#101828]" +
+            "mt-0.5 truncate whitespace-nowrap text-[10px] font-semibold leading-3 tracking-[-0.03em] text-[#101828]" +
             (cancelled ? " line-through decoration-2" : "")
           }
         >
@@ -153,19 +153,17 @@ export function WeekScheduleView({
     });
   }, [days, reservations]);
 
-  const hasReservations = reservations.length > 0;
-
   return (
     <div className="min-h-0 flex-1 overflow-auto">
       <div className="space-y-4">
         {displayMode === "table" ? (
-          <section className="rounded-[34px] bg-white px-2 py-3 shadow-[0_10px_24px_rgba(15,23,42,.05)]">
-            <div className="grid grid-cols-7 gap-1">
+          <section className="rounded-[34px] bg-white px-1.5 py-3 shadow-[0_10px_24px_rgba(15,23,42,.05)]">
+            <div className="grid grid-cols-7 gap-0.5">
               {dayData.map(({ day, items }) => {
                 const today = isToday(day);
                 const label = tableDateLabel(day);
                 return (
-                  <div key={day} className="min-w-0 px-0.5 py-1">
+                  <div key={day} className="min-w-0 py-1">
                     <div className="mb-2 flex min-h-[50px] flex-col items-center">
                       <div
                         className={
@@ -216,39 +214,39 @@ export function WeekScheduleView({
           </section>
         ) : (
           <section className="rounded-[34px] bg-white p-3 shadow-[0_10px_24px_rgba(15,23,42,.05)]">
-            {!hasReservations ? (
-              <div className="rounded-[24px] bg-[#f1f8f5] p-4 text-sm font-normal text-[#667085]">이번 주 예약이 없습니다.</div>
-            ) : (
-              <div className="space-y-3">
-                {dayData
-                  .filter(({ items }) => items.length > 0)
-                  .map(({ day, items }) => {
-                    const today = isToday(day);
-                    return (
-                      <div key={day} className="rounded-[26px] bg-[#f7faf8] p-2.5">
-                        <div className="mb-2 flex min-w-0 items-center gap-2">
-                          <h2
-                            className={
-                              today
-                                ? "shrink-0 rounded-[14px] bg-[#e3f2ee] px-2.5 py-1 text-base font-semibold tracking-[-0.035em] text-[#0f9b8e]"
-                                : "shrink-0 px-1 py-1 text-base font-semibold tracking-[-0.035em] text-[#101828]"
-                            }
-                          >
-                            {dateLabel(day)}
-                          </h2>
-                          <span className="min-w-0 truncate text-[10px] font-normal text-[#667085]">{daySummary(items)}</span>
-                        </div>
+            <div className="space-y-3">
+              {dayData.map(({ day, items }) => {
+                const today = isToday(day);
+                return (
+                  <div key={day} className="rounded-[26px] bg-[#f7faf8] p-2.5">
+                    <div className="mb-2 flex min-w-0 items-center gap-2">
+                      <h2
+                        className={
+                          today
+                            ? "shrink-0 rounded-[14px] bg-[#e3f2ee] px-2.5 py-1 text-base font-semibold tracking-[-0.035em] text-[#0f9b8e]"
+                            : "shrink-0 px-1 py-1 text-base font-semibold tracking-[-0.035em] text-[#101828]"
+                        }
+                      >
+                        {dateLabel(day)}
+                      </h2>
+                      <span className="min-w-0 truncate text-[10px] font-normal text-[#667085]">{daySummary(items)}</span>
+                    </div>
 
-                        <div className="space-y-2">
-                          {items.map((item) => (
-                            <WeekReservationCard key={item.id} item={item} onClick={() => onCardClick(item)} />
-                          ))}
-                        </div>
+                    {items.length === 0 ? (
+                      <div className="rounded-[20px] bg-white/75 px-4 py-3 text-[11px] font-normal text-[#98a2b3]">
+                        예약 없음
                       </div>
-                    );
-                  })}
-              </div>
-            )}
+                    ) : (
+                      <div className="space-y-2">
+                        {items.map((item) => (
+                          <WeekReservationCard key={item.id} item={item} onClick={() => onCardClick(item)} />
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
           </section>
         )}
       </div>
