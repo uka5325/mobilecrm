@@ -103,12 +103,9 @@ export default function ReservationsPage() {
         onDownload={csv.handleDownload}
       />
 
-      <div className="px-5 pb-3 flex items-center gap-2 text-sm text-gray-500">
-        <span>환자 {patientGroups.length}명</span>
-        {list.tableRefreshing && (
-          <span className="text-xs text-gray-400">새로고침 중...</span>
-        )}
-      </div>
+      {list.tableRefreshing && (
+        <div className="px-1 pb-2 text-xs text-[#8b93a1]">새로고침 중...</div>
+      )}
 
       {/* 환자 전체 이력 모달 */}
       {history.historyPatientId && (
