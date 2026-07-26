@@ -158,19 +158,21 @@ function TimeDayView({
         <div className="relative space-y-3">
           <div className="absolute bottom-2 left-[44px] top-2 w-px bg-[#e4ece8]" />
           {timeGroups.map((group) => (
-            <div key={group.time} className="relative grid min-w-0 grid-cols-[44px_minmax(0,1fr)] gap-2">
-              <div className="relative z-10 pt-3">
-                <div className="whitespace-nowrap text-left text-sm font-bold tracking-[-0.03em] text-[#475467]">
-                  {group.time}
-                </div>
-                <div className="absolute right-[-4px] top-9 h-2 w-2 rounded-full bg-[#d7e2de]" />
-              </div>
+            <div key={group.time} className="space-y-2">
+              {group.items.map((item, index) => (
+                <div key={item.id} className="relative grid min-w-0 grid-cols-[44px_minmax(0,1fr)] gap-2">
+                  <div className="relative z-10 pt-3">
+                    {index === 0 ? (
+                      <div className="whitespace-nowrap text-left text-sm font-bold tracking-[-0.03em] text-[#475467]">
+                        {group.time}
+                      </div>
+                    ) : null}
+                    <div className="absolute right-[-4px] top-9 h-2 w-2 rounded-full bg-[#d7e2de]" />
+                  </div>
 
-              <div className="space-y-2">
-                {group.items.map((item) => (
-                  <AppointmentCard key={item.id} item={item} onClick={() => onCardClick(item)} showHospital />
-                ))}
-              </div>
+                  <AppointmentCard item={item} onClick={() => onCardClick(item)} showHospital />
+                </div>
+              ))}
             </div>
           ))}
         </div>
