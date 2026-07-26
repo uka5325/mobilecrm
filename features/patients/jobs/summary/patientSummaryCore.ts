@@ -11,6 +11,7 @@ export function createEmptyPatientSummary(): Record<string, unknown> {
     reservationCount: 0,
     lastReservationDate: "",
     lastReservationTime: "",
+    lastAppointmentType: "",
     lastReservationAt: "",
     lastReservationDocId: "",
     reservationCountCapped: false,
