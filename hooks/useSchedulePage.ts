@@ -43,7 +43,7 @@ function useScheduleData(startDate: string, endDate: string) {
 
 export function useSchedulePage() {
   const { currentUser, authReady } = useCurrentUser();
-  const [viewMode, setViewMode] = useState<ViewMode>("week");
+  const [viewMode, setViewMode] = useState<ViewMode>("day");
   const [baseDate, setBaseDate] = useState(todayString());
   const [detailOpen, setDetailOpen] = useState(false);
   const [newOpen, setNewOpen] = useState(false);
