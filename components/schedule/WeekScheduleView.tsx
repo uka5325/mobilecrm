@@ -153,7 +153,7 @@ export function WeekScheduleView({
     <div className="min-h-0 flex-1 overflow-auto">
       <div className="space-y-4">
         {displayMode === "table" ? (
-          <section className="rounded-[34px] bg-white px-0.5 py-3 shadow-[0_10px_24px_rgba(15,23,42,.05)]">
+          <section className="rounded-[34px] bg-white px-0.5 pb-6 pt-3 shadow-[0_10px_24px_rgba(15,23,42,.05)]">
             <div className="grid grid-cols-7 gap-px">
               {dayData.map(({ day, items }) => {
                 const today = isToday(day);
@@ -210,7 +210,7 @@ export function WeekScheduleView({
           </section>
         ) : (
           <section className="rounded-[34px] bg-white p-3 shadow-[0_10px_24px_rgba(15,23,42,.05)]">
-            <div className="space-y-3">
+            <div className="space-y-2">
               {dayData.map(({ day, items }) => {
                 const today = isToday(day);
                 return (
