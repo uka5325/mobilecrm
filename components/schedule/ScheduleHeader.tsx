@@ -27,6 +27,8 @@ type Props = {
   onDayDisplayModeChange: (mode: "time" | "hospital") => void;
   weekDisplayMode: "table" | "list";
   onWeekDisplayModeChange: (mode: "table" | "list") => void;
+  monthDisplayMode: "table" | "list";
+  onMonthDisplayModeChange: (mode: "table" | "list") => void;
   todayMemos: ConferenceMemo[];
   memoSectionOpen: boolean;
   onToggleMemoSection: () => void;
@@ -47,10 +49,41 @@ export function ScheduleHeader({
   onDayDisplayModeChange,
   weekDisplayMode,
   onWeekDisplayModeChange,
+  monthDisplayMode,
+  onMonthDisplayModeChange,
   todayMemos,
   memoSectionOpen,
   onToggleMemoSection,
 }: Props) {
+  const firstModeActive =
+    viewMode === "day"
+      ? dayDisplayMode === "time"
+      : viewMode === "week"
+        ? weekDisplayMode === "table"
+        : monthDisplayMode === "table";
+  const secondModeActive =
+    viewMode === "day"
+      ? dayDisplayMode === "hospital"
+      : viewMode === "week"
+        ? weekDisplayMode === "list"
+        : monthDisplayMode === "list";
+  const firstModeLabel =
+    viewMode === "day" ? "시간별 보기" : viewMode === "week" ? "주간표" : "월간표";
+  const secondModeLabel =
+    viewMode === "day" ? "병원별 보기" : "리스트";
+
+  function selectFirstMode() {
+    if (viewMode === "day") onDayDisplayModeChange("time");
+    else if (viewMode === "week") onWeekDisplayModeChange("table");
+    else onMonthDisplayModeChange("table");
+  }
+
+  function selectSecondMode() {
+    if (viewMode === "day") onDayDisplayModeChange("hospital");
+    else if (viewMode === "week") onWeekDisplayModeChange("list");
+    else onMonthDisplayModeChange("list");
+  }
+
   return (
     <section className="rounded-[26px] bg-[#eaf8f3] p-4 shadow-[0_10px_24px_rgba(15,23,42,0.05)] lg:p-5">
       <div className="rounded-[20px] bg-white p-1">
@@ -99,41 +132,39 @@ export function ScheduleHeader({
         </button>
       </div>
 
-      {viewMode === "day" || viewMode === "week" ? (
-        <div className="mt-2 rounded-[20px] bg-white p-1">
-          <div className="grid grid-cols-[1fr_1fr_auto] gap-1">
-            <button
-              type="button"
-              onClick={() => viewMode === "week" ? onWeekDisplayModeChange("table") : onDayDisplayModeChange("time")}
-              className={
-                (viewMode === "week" ? weekDisplayMode === "table" : dayDisplayMode === "time")
-                  ? "h-8 rounded-[16px] bg-[#e3f2ee] px-3 text-[11px] font-semibold text-[#0f9b8e]"
-                  : "h-8 rounded-[16px] px-3 text-[11px] font-semibold text-[#667085] transition hover:bg-[#f6f7f5]"
-              }
-            >
-              {viewMode === "week" ? "주간표" : "시간별 보기"}
-            </button>
-            <button
-              type="button"
-              onClick={() => viewMode === "week" ? onWeekDisplayModeChange("list") : onDayDisplayModeChange("hospital")}
-              className={
-                (viewMode === "week" ? weekDisplayMode === "list" : dayDisplayMode === "hospital")
-                  ? "h-8 rounded-[16px] bg-[#e3f2ee] px-3 text-[11px] font-semibold text-[#0f9b8e]"
-                  : "h-8 rounded-[16px] px-3 text-[11px] font-semibold text-[#667085] transition hover:bg-[#f6f7f5]"
-              }
-            >
-              {viewMode === "week" ? "리스트" : "병원별 보기"}
-            </button>
-            <button
-              type="button"
-              onClick={onNewReservation}
-              className="h-8 whitespace-nowrap rounded-[16px] bg-[linear-gradient(135deg,#77dfd1_0%,#40c5b3_50%,#0f9b8e_100%)] px-3 text-[11px] font-bold text-white shadow-[0_10px_24px_rgba(15,143,131,0.18)] transition active:scale-95"
-            >
-              + 새 예약
-            </button>
-          </div>
+      <div className="mt-2 rounded-[20px] bg-white p-1">
+        <div className="grid grid-cols-[1fr_1fr_auto] gap-1">
+          <button
+            type="button"
+            onClick={selectFirstMode}
+            className={
+              firstModeActive
+                ? "h-8 rounded-[16px] bg-[#e3f2ee] px-3 text-[11px] font-semibold text-[#0f9b8e]"
+                : "h-8 rounded-[16px] px-3 text-[11px] font-semibold text-[#667085] transition hover:bg-[#f6f7f5]"
+            }
+          >
+            {firstModeLabel}
+          </button>
+          <button
+            type="button"
+            onClick={selectSecondMode}
+            className={
+              secondModeActive
+                ? "h-8 rounded-[16px] bg-[#e3f2ee] px-3 text-[11px] font-semibold text-[#0f9b8e]"
+                : "h-8 rounded-[16px] px-3 text-[11px] font-semibold text-[#667085] transition hover:bg-[#f6f7f5]"
+            }
+          >
+            {secondModeLabel}
+          </button>
+          <button
+            type="button"
+            onClick={onNewReservation}
+            className="h-8 whitespace-nowrap rounded-[16px] bg-[linear-gradient(135deg,#77dfd1_0%,#40c5b3_50%,#0f9b8e_100%)] px-3 text-[11px] font-bold text-white shadow-[0_10px_24px_rgba(15,143,131,0.18)] transition active:scale-95"
+          >
+            + 새 예약
+          </button>
         </div>
-      ) : null}
+      </div>
 
       <div className="mt-2 flex items-center gap-2.5 overflow-x-auto whitespace-nowrap pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {SCHEDULE_APPOINTMENT_TYPES.map((type: AppointmentType) => (
