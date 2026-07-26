@@ -129,29 +129,48 @@ function TimeDayView({
   reservations: ReservationRecord[];
   onCardClick: (item: ReservationRecord) => void;
 }) {
-  const sorted = useMemo(() => {
-    return [...reservations].sort((a, b) => String(a.reservationTime || "").localeCompare(String(b.reservationTime || "")));
+  const timeGroups = useMemo(() => {
+    const sorted = [...reservations].sort((a, b) =>
+      String(a.reservationTime || "").localeCompare(String(b.reservationTime || ""))
+    );
+    const groups: Array<{ time: string; items: ReservationRecord[] }> = [];
+
+    sorted.forEach((item) => {
+      const time = item.reservationTime ? item.reservationTime.slice(0, 5) : "--:--";
+      const lastGroup = groups[groups.length - 1];
+      if (lastGroup?.time === time) {
+        lastGroup.items.push(item);
+      } else {
+        groups.push({ time, items: [item] });
+      }
+    });
+
+    return groups;
   }, [reservations]);
 
   return (
     <section className="rounded-[34px] bg-white p-3 shadow-[0_10px_24px_rgba(15,23,42,.05)] sm:p-4">
-      {sorted.length === 0 ? (
+      {timeGroups.length === 0 ? (
         <div className="rounded-[24px] bg-[#f1f8f5] p-4 text-sm font-normal text-[#667085]">
           {dateStr} 예약이 없습니다.
         </div>
       ) : (
         <div className="relative space-y-3">
-          <div className="absolute bottom-2 left-[34px] top-2 w-px bg-[#e4ece8]" />
-          {sorted.map((item) => (
-            <div key={item.id} className="relative grid min-w-0 grid-cols-[34px_minmax(0,1fr)] gap-2">
-              <div className="relative z-10 pt-3 pr-1">
-                <div className="text-right text-sm font-bold tracking-[-0.03em] text-[#475467]">
-                  {item.reservationTime ? item.reservationTime.slice(0, 5) : "--:--"}
+          <div className="absolute bottom-2 left-[44px] top-2 w-px bg-[#e4ece8]" />
+          {timeGroups.map((group) => (
+            <div key={group.time} className="relative grid min-w-0 grid-cols-[44px_minmax(0,1fr)] gap-2">
+              <div className="relative z-10 pt-3">
+                <div className="whitespace-nowrap text-left text-sm font-bold tracking-[-0.03em] text-[#475467]">
+                  {group.time}
                 </div>
                 <div className="absolute right-[-4px] top-9 h-2 w-2 rounded-full bg-[#d7e2de]" />
               </div>
 
-              <AppointmentCard item={item} onClick={() => onCardClick(item)} showHospital />
+              <div className="space-y-2">
+                {group.items.map((item) => (
+                  <AppointmentCard key={item.id} item={item} onClick={() => onCardClick(item)} showHospital />
+                ))}
+              </div>
             </div>
           ))}
         </div>
