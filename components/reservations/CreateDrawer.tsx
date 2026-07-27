@@ -130,11 +130,11 @@ export function CreateDrawer({ open, onClose, currentUser, initialDate, initialP
   return (
     <>
       <div
-        className="fixed inset-0 z-[1001] flex items-start justify-center overflow-y-auto bg-black/35 px-3 py-4 backdrop-blur-[2px] sm:items-center sm:p-6"
+        className="fixed inset-0 z-[1001] flex items-start justify-center overflow-y-auto bg-black/35 px-3 py-8 backdrop-blur-[2px] sm:items-center sm:p-8"
         onClick={onClose}
       >
         <div
-          className="flex h-[calc(100vh-32px)] w-full max-w-[640px] flex-col overflow-hidden rounded-[30px] bg-white shadow-[0_28px_90px_rgba(15,23,42,0.26)] sm:h-[min(760px,calc(100vh-48px))]"
+          className="flex h-[calc(100dvh-64px)] max-h-[calc(100dvh-64px)] w-full max-w-[640px] flex-col overflow-hidden rounded-[30px] bg-white shadow-[0_28px_90px_rgba(15,23,42,0.26)] sm:h-[min(720px,calc(100dvh-64px))]"
           onClick={(e) => e.stopPropagation()}
         >
         <div className="flex shrink-0 items-center justify-between bg-white px-5 pb-4 pt-5 sm:px-6">
