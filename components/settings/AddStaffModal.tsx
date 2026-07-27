@@ -51,11 +51,11 @@ export function AddStaffModal({ onClose, onSubmit }: Props) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4">
-      <div className="w-full max-w-md rounded-2xl bg-white shadow-xl">
-        <div className="flex items-center justify-between border-b border-[#edf0f3] px-6 py-4">
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/35 px-3 py-8 backdrop-blur-[2px]">
+      <div className="w-full max-w-md rounded-[30px] bg-white shadow-[0_28px_90px_rgba(15,23,42,0.22)]">
+        <div className="flex items-center justify-between px-6 py-4">
           <h2 className="text-base font-semibold text-gray-800">직원 추가</h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition">✕</button>
+          <button onClick={onClose} className="flex h-9 w-9 items-center justify-center rounded-full bg-[#f6f7f5] text-gray-400 transition hover:text-gray-600">✕</button>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4 px-6 py-5">
@@ -66,7 +66,7 @@ export function AddStaffModal({ onClose, onSubmit }: Props) {
               value={displayName}
               onChange={(e) => setDisplayName(e.target.value)}
               placeholder="홍길동"
-              className="w-full rounded-xl border border-[#dfe3e8] px-3 py-2 text-sm transition focus:border-emerald-500 focus:outline-none disabled:bg-gray-50"
+              className="w-full rounded-[16px] border border-[#dbe7e3] px-3 py-2 text-sm transition focus:border-[#5bd5c8] focus:outline-none focus:ring-2 focus:ring-[#dff7f3] disabled:bg-gray-50"
               disabled={saving}
             />
           </div>
@@ -78,7 +78,7 @@ export function AddStaffModal({ onClose, onSubmit }: Props) {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="staff@example.com"
-              className="w-full rounded-xl border border-[#dfe3e8] px-3 py-2 text-sm transition focus:border-emerald-500 focus:outline-none disabled:bg-gray-50"
+              className="w-full rounded-[16px] border border-[#dbe7e3] px-3 py-2 text-sm transition focus:border-[#5bd5c8] focus:outline-none focus:ring-2 focus:ring-[#dff7f3] disabled:bg-gray-50"
               disabled={saving}
             />
           </div>
@@ -91,7 +91,7 @@ export function AddStaffModal({ onClose, onSubmit }: Props) {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••"
-                className="w-full rounded-xl border border-[#dfe3e8] px-3 py-2 pr-10 text-sm transition focus:border-emerald-500 focus:outline-none disabled:bg-gray-50"
+                className="w-full rounded-[16px] border border-[#dbe7e3] px-3 py-2 pr-10 text-sm transition focus:border-[#5bd5c8] focus:outline-none focus:ring-2 focus:ring-[#dff7f3] disabled:bg-gray-50"
                 disabled={saving}
               />
               <button
@@ -109,7 +109,7 @@ export function AddStaffModal({ onClose, onSubmit }: Props) {
             <select
               value={role}
               onChange={(e) => setRole(e.target.value as SettingsStaffRole)}
-              className="w-full rounded-xl border border-[#dfe3e8] px-3 py-2 text-sm transition focus:border-emerald-500 focus:outline-none disabled:bg-gray-50"
+              className="w-full rounded-[16px] border border-[#dbe7e3] px-3 py-2 text-sm transition focus:border-[#5bd5c8] focus:outline-none focus:ring-2 focus:ring-[#dff7f3] disabled:bg-gray-50"
               disabled={saving}
             >
               {ROLES.map((r) => (
@@ -125,7 +125,7 @@ export function AddStaffModal({ onClose, onSubmit }: Props) {
               value={staffCode}
               onChange={(e) => setStaffCode(e.target.value)}
               placeholder="내부 관리 코드"
-              className="w-full rounded-xl border border-[#dfe3e8] px-3 py-2 text-sm transition focus:border-emerald-500 focus:outline-none disabled:bg-gray-50"
+              className="w-full rounded-[16px] border border-[#dbe7e3] px-3 py-2 text-sm transition focus:border-[#5bd5c8] focus:outline-none focus:ring-2 focus:ring-[#dff7f3] disabled:bg-gray-50"
               disabled={saving}
             />
           </div>
@@ -139,14 +139,14 @@ export function AddStaffModal({ onClose, onSubmit }: Props) {
               type="button"
               onClick={onClose}
               disabled={saving}
-              className="flex-1 rounded-xl border border-[#dfe3e8] py-2 text-sm font-medium text-gray-600 transition hover:-translate-y-0.5 hover:shadow-sm active:scale-95 disabled:opacity-50"
+              className="flex-1 rounded-[16px] border border-[#dbe7e3] py-2 text-sm font-medium text-gray-600 transition hover:-translate-y-0.5 hover:shadow-sm active:scale-95 disabled:opacity-50"
             >
               취소
             </button>
             <button
               type="submit"
               disabled={saving}
-              className="flex-1 rounded-xl bg-emerald-600 py-2 text-sm font-medium text-white transition hover:-translate-y-0.5 hover:shadow-md active:scale-95 disabled:opacity-50"
+              className="flex-1 rounded-[18px] bg-[linear-gradient(135deg,#77dfd1_0%,#40c5b3_50%,#0f9b8e_100%)] py-2 text-sm font-bold text-white shadow-[0_10px_24px_rgba(15,143,131,0.14)] transition hover:-translate-y-0.5 active:scale-95 disabled:opacity-50"
             >
               {saving ? "추가 중..." : "직원 추가"}
             </button>

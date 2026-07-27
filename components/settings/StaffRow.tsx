@@ -54,7 +54,7 @@ export function StaffRow({
           value={displayName}
           disabled={!canManage || saving}
           onChange={(e) => setDisplayName(e.target.value)}
-          className="h-9 w-[130px] rounded-lg border border-[#dfe3e8] bg-white px-2 text-sm outline-none disabled:bg-gray-50 disabled:text-gray-400"
+          className="h-9 w-[130px] rounded-[14px] border border-[#dbe7e3] bg-white px-2 text-sm outline-none disabled:bg-gray-50 disabled:text-gray-400"
         />
       </Td>
 
@@ -65,7 +65,7 @@ export function StaffRow({
           value={role}
           disabled={!canManage || saving}
           onChange={(e) => setRole(e.target.value as SettingsStaffRole)}
-          className="h-9 rounded-lg border border-[#dfe3e8] bg-white px-2 text-sm outline-none disabled:bg-gray-50 disabled:text-gray-400"
+          className="h-9 rounded-[14px] border border-[#dbe7e3] bg-white px-2 text-sm outline-none disabled:bg-gray-50 disabled:text-gray-400"
         >
           {STAFF_ROLES.map((roleItem) => (
             <option key={roleItem} value={roleItem}>
@@ -81,7 +81,7 @@ export function StaffRow({
           value={orderNo}
           disabled={!canManage || saving}
           onChange={(e) => setOrderNo(Number(e.target.value || 999999))}
-          className="h-9 w-[80px] rounded-lg border border-[#dfe3e8] bg-white px-2 text-sm outline-none disabled:bg-gray-50 disabled:text-gray-400"
+          className="h-9 w-[80px] rounded-[14px] border border-[#dbe7e3] bg-white px-2 text-sm outline-none disabled:bg-gray-50 disabled:text-gray-400"
         />
       </Td>
 
@@ -89,7 +89,7 @@ export function StaffRow({
         <span
           className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
             item.active
-              ? "bg-emerald-50 text-emerald-700"
+              ? "bg-[#e3f2ee] text-[#0f9b8e]"
               : "bg-gray-100 text-gray-500"
           }`}
         >
@@ -108,7 +108,7 @@ export function StaffRow({
                 orderNo,
               })
             }
-            className="rounded-lg bg-black px-3 py-2 text-xs font-medium text-white transition hover:-translate-y-0.5 active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
+            className="rounded-[14px] bg-[#e3f2ee] px-3 py-2 text-xs font-semibold text-[#0f9b8e] transition hover:-translate-y-0.5 active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
           >
             저장
           </button>
@@ -117,7 +117,7 @@ export function StaffRow({
             <button
               disabled={!canManage || saving || isMe}
               onClick={onDeactivate}
-              className="rounded-lg bg-red-50 px-3 py-2 text-xs font-medium text-red-600 transition hover:bg-red-100 active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
+              className="rounded-[14px] bg-red-50 px-3 py-2 text-xs font-semibold text-red-600 transition hover:bg-red-100 active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
             >
               비활성화
             </button>
@@ -125,7 +125,7 @@ export function StaffRow({
             <button
               disabled={!canManage || saving || isMe}
               onClick={onActivate}
-              className="rounded-lg bg-emerald-50 px-3 py-2 text-xs font-medium text-emerald-700 transition hover:bg-emerald-100 active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
+              className="rounded-[14px] bg-[#e3f2ee] px-3 py-2 text-xs font-semibold text-[#0f9b8e] transition hover:bg-[#dff7f3] active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
             >
               활성화
             </button>

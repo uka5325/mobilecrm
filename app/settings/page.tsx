@@ -10,11 +10,11 @@ import { SecurityPanel } from "@/components/settings/SecurityPanel";
 import { useSettingsPageController, type SettingsTab } from "@/hooks/useSettingsPageController";
 
 const TAB_ITEMS: { key: SettingsTab; label: string; icon: string }[] = [
-  { key: "statusColors", label: "유형별 색상", icon: "🎨" },
-  { key: "system", label: "기본 설정", icon: "🌐" },
-  { key: "memo", label: "오늘의 메모", icon: "📝" },
-  { key: "staff", label: "직원 관리", icon: "👥" },
-  { key: "security", label: "보안", icon: "🔐" },
+  { key: "statusColors", label: "유형별 색상", icon: "색" },
+  { key: "system", label: "기본 설정", icon: "기본" },
+  { key: "memo", label: "오늘의 메모", icon: "메모" },
+  { key: "staff", label: "직원 관리", icon: "직원" },
+  { key: "security", label: "보안", icon: "보안" },
 ];
 
 export default function SettingsPage() {
@@ -23,8 +23,8 @@ export default function SettingsPage() {
 
   return (
     <div className="grid max-w-[1180px] grid-cols-1 gap-5 lg:grid-cols-[230px_minmax(0,1fr)]">
-      <nav className="h-fit rounded-[18px] border border-[#edf0f3] bg-white p-3 shadow-[0_2px_14px_rgba(0,0,0,0.04)] lg:sticky lg:top-8">
-        <div className="mb-3 px-2 text-xs font-bold text-gray-400">SETTINGS</div>
+      <nav className="h-fit rounded-[28px] bg-white p-3 shadow-[0_16px_50px_rgba(15,23,42,0.055)] lg:sticky lg:top-8">
+        <div className="mb-3 px-2 text-[11px] font-black tracking-[0.18em] text-[#0f8f83]">SETTINGS</div>
 
         <div className="flex gap-2 overflow-x-auto lg:flex-col lg:overflow-visible">
           {TAB_ITEMS.map((item) => {
@@ -35,7 +35,7 @@ export default function SettingsPage() {
                 key={item.key}
                 onClick={() => s.selectTab(item.key)}
                 className={`flex shrink-0 items-center gap-2 rounded-xl px-3 py-3 text-left text-sm transition hover:-translate-y-0.5 active:scale-95 lg:w-full ${
-                  active ? "bg-emerald-50 font-bold text-emerald-700" : "bg-white text-gray-500 hover:bg-gray-50 hover:text-gray-900"
+                  active ? "bg-[#e3f2ee] font-bold text-[#0f9b8e]" : "bg-white text-gray-500 hover:bg-gray-50 hover:text-gray-900"
                 }`}
               >
                 <span>{item.icon}</span>
@@ -91,7 +91,7 @@ export default function SettingsPage() {
         )}
 
         {activeTab === "staff" && (
-          <section className="rounded-[18px] border border-[#edf0f3] bg-white p-6 shadow-[0_2px_14px_rgba(0,0,0,0.04)]">
+          <section className="rounded-[28px] bg-white p-5 shadow-[0_16px_50px_rgba(15,23,42,0.055)] lg:p-6">
             <div className="flex items-start justify-between gap-4">
               <SectionHeader
                 title="직원 관리"
@@ -102,7 +102,7 @@ export default function SettingsPage() {
               {currentUser?.role === "admin" && (
                 <button
                   onClick={() => s.setShowAddStaff(true)}
-                  className="shrink-0 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-medium text-white transition hover:-translate-y-0.5 hover:shadow-md active:scale-95"
+                  className="shrink-0 rounded-[18px] bg-[linear-gradient(135deg,#77dfd1_0%,#40c5b3_50%,#0f9b8e_100%)] px-4 py-2 text-sm font-bold text-white shadow-[0_10px_24px_rgba(15,143,131,0.14)] transition hover:-translate-y-0.5 active:scale-95"
                 >
                   + 직원 추가
                 </button>

@@ -126,7 +126,7 @@ export default function CommissionPage() {
 
   if (!currentUser) {
     return (
-      <div className="rounded-xl border border-black/10 bg-white p-6 text-gray-500">
+      <div className="rounded-[28px] bg-white p-6 text-gray-500 shadow-[0_16px_50px_rgba(15,23,42,0.055)]">
         로딩 중...
       </div>
     );
@@ -139,21 +139,21 @@ export default function CommissionPage() {
       )}
 
       {/* 컨트롤바 */}
-      <div className="-mx-6 rounded-t-2xl border border-[#edf0f3] bg-[#ecfdf5] px-4 py-4 lg:-mx-8 lg:px-8">
+      <div className="rounded-[26px] bg-[#eaf8f3] p-4 shadow-[0_18px_50px_rgba(7,56,58,0.08)] lg:p-5">
         {/* 1행: 날짜 */}
         <div className="flex items-center gap-2">
           <input
             type="date"
             value={startDate}
             onChange={(e) => setStartDate(e.target.value)}
-            className="h-10 min-w-0 flex-1 appearance-none rounded-xl border border-[#dfe3e8] bg-white px-3 text-sm outline-none transition focus:border-[#1d9e75] focus:ring-4 focus:ring-emerald-100"
+            className="h-9 min-w-0 flex-1 appearance-none rounded-[16px] border border-[#dbe7e3] bg-white px-3 text-xs outline-none transition focus:border-[#5bd5c8] focus:ring-2 focus:ring-[#dff7f3]"
           />
           <span className="shrink-0 text-sm text-gray-400">~</span>
           <input
             type="date"
             value={endDate}
             onChange={(e) => setEndDate(e.target.value)}
-            className="h-10 min-w-0 flex-1 appearance-none rounded-xl border border-[#dfe3e8] bg-white px-3 text-sm outline-none transition focus:border-[#1d9e75] focus:ring-4 focus:ring-emerald-100"
+            className="h-9 min-w-0 flex-1 appearance-none rounded-[16px] border border-[#dbe7e3] bg-white px-3 text-xs outline-none transition focus:border-[#5bd5c8] focus:ring-2 focus:ring-[#dff7f3]"
           />
         </div>
         {/* 2행: 담당자 + 상태 */}
@@ -162,7 +162,7 @@ export default function CommissionPage() {
             <select
               value={selectedStaffUid}
               onChange={(e) => setSelectedStaffUid(e.target.value)}
-              className="h-10 min-w-0 flex-1 rounded-xl border border-[#dfe3e8] bg-white px-2 text-sm outline-none transition focus:border-[#1d9e75] focus:ring-4 focus:ring-emerald-100"
+              className="h-9 min-w-0 flex-1 rounded-[16px] border border-[#dbe7e3] bg-white px-3 text-xs outline-none transition focus:border-[#5bd5c8] focus:ring-2 focus:ring-[#dff7f3]"
             >
               <option value="__all__">전체 직원</option>
               {staffList.map((s) => (
@@ -173,7 +173,7 @@ export default function CommissionPage() {
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)}
-            className="h-10 min-w-0 flex-1 rounded-xl border border-[#dfe3e8] bg-white px-2 text-sm outline-none transition focus:border-[#1d9e75] focus:ring-4 focus:ring-emerald-100"
+            className="h-9 min-w-0 flex-1 rounded-[16px] border border-[#dbe7e3] bg-white px-3 text-xs outline-none transition focus:border-[#5bd5c8] focus:ring-2 focus:ring-[#dff7f3]"
           >
             <option value="">전체 상태</option>
             <option value="confirmed">확정</option>
@@ -187,12 +187,12 @@ export default function CommissionPage() {
             onChange={(e) => setPatientSearch(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && handleSearch()}
             placeholder="환자명 검색"
-            className="h-10 min-w-0 flex-1 rounded-xl border border-[#dfe3e8] bg-white px-3 text-sm outline-none transition focus:border-[#1d9e75] focus:ring-4 focus:ring-emerald-100"
+            className="h-9 min-w-0 flex-1 rounded-[16px] border border-[#dbe7e3] bg-white px-3 text-xs outline-none transition focus:border-[#5bd5c8] focus:ring-2 focus:ring-[#dff7f3]"
           />
           <button
             onClick={() => handleSearch()}
             disabled={loading}
-            className="h-10 shrink-0 rounded-xl bg-black px-5 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:shadow-md active:scale-95 disabled:opacity-50"
+            className="h-9 shrink-0 rounded-[16px] bg-[linear-gradient(135deg,#77dfd1_0%,#40c5b3_50%,#0f9b8e_100%)] text-white shadow-[0_10px_24px_rgba(15,143,131,0.14)] px-5 text-xs font-bold transition hover:-translate-y-0.5 active:scale-95 disabled:opacity-50"
           >
             {loading ? "조회 중..." : "조회"}
           </button>
@@ -207,7 +207,7 @@ export default function CommissionPage() {
 
       {/* 미조회 안내 */}
       {!searched && (
-        <div className="flex items-center justify-center rounded-2xl border border-[#edf0f3] bg-white py-20 text-sm text-gray-400">
+        <div className="flex items-center justify-center rounded-[28px] bg-white py-20 text-sm text-gray-400 shadow-[0_16px_50px_rgba(15,23,42,0.055)]">
           기간을 선택하고 조회를 누르세요.
         </div>
       )}
@@ -222,15 +222,15 @@ export default function CommissionPage() {
           )}
           {/* 합계 카드 */}
           <div className="grid gap-3 sm:grid-cols-3">
-            <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-gray-700">
+            <div className="rounded-[22px] bg-[#f8fbfa] px-4 py-3 shadow-[0_10px_24px_rgba(15,23,42,0.04)] text-gray-700">
               <div className="text-xs font-semibold opacity-60">총 건수</div>
               <div className="mt-0.5 text-lg font-extrabold">{grandTotal.count}건</div>
             </div>
-            <div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-blue-700">
+            <div className="rounded-[22px] bg-blue-50 px-4 py-3 shadow-[0_10px_24px_rgba(15,23,42,0.04)] text-blue-700">
               <div className="text-xs font-semibold opacity-60">총 수술금액</div>
               <div className="mt-0.5 text-lg font-extrabold">{formatMoney(grandTotal.amount)} KRW</div>
             </div>
-            <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-emerald-700">
+            <div className="rounded-xl border border-emerald-200 bg-[#e3f2ee] px-4 py-3 text-[#0f9b8e]">
               <div className="text-xs font-semibold opacity-60">총 커미션</div>
               <div className="mt-0.5 text-lg font-extrabold">{formatMoney(grandTotal.commission)} KRW</div>
             </div>
@@ -238,13 +238,13 @@ export default function CommissionPage() {
 
           {/* 담당자별 소계 */}
           {isAdmin && selectedStaffUid === "__all__" && staffSubtotals.length > 0 && (
-            <div className="-mx-6 border-t border-[#edf0f3] bg-white lg:-mx-8">
+            <div className="overflow-hidden rounded-[28px] bg-white shadow-[0_16px_50px_rgba(15,23,42,0.055)]">
               <div className="flex items-center justify-between px-6 py-4 lg:px-8">
                 <div className="text-sm font-bold text-gray-800">담당자별 소계</div>
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
-                  <thead className="border-b border-[#edf0f3] bg-[#f8fafc]">
+                  <thead className="bg-[#f8fbfa]">
                     <tr className="text-xs text-gray-500">
                       <th className="px-6 py-3 text-left lg:px-8">담당자</th>
                       <th className="px-4 py-3 text-right">건수</th>
@@ -258,7 +258,7 @@ export default function CommissionPage() {
                         <td className="px-6 py-3 font-medium text-gray-800 lg:px-8">{s.name}</td>
                         <td className="px-4 py-3 text-right text-gray-600">{s.count}건</td>
                         <td className="px-4 py-3 text-right text-gray-700">{formatMoney(s.totalAmount)}</td>
-                        <td className="px-4 py-3 text-right font-semibold text-[#1d9e75]">{formatMoney(s.totalCommission)}</td>
+                        <td className="px-4 py-3 text-right font-semibold text-[#0f9b8e]">{formatMoney(s.totalCommission)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -268,13 +268,13 @@ export default function CommissionPage() {
           )}
 
           {/* 상세 테이블 */}
-          <div className="-mx-6 border-t border-[#edf0f3] bg-white lg:-mx-8">
+          <div className="overflow-hidden rounded-[28px] bg-white shadow-[0_16px_50px_rgba(15,23,42,0.055)]">
             <div className="flex items-center justify-between px-6 py-4 lg:px-8">
               <div className="text-sm font-bold text-gray-800">상세 내역</div>
               {records.length > 0 && (
                 <button
                   onClick={() => downloadCSV(records)}
-                  className="rounded-xl border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50"
+                  className="rounded-full bg-[#e3f2ee] px-3 py-1.5 text-xs font-semibold text-[#0f9b8e] transition hover:bg-[#dff7f3]"
                 >
                   CSV 다운로드
                 </button>
@@ -287,7 +287,7 @@ export default function CommissionPage() {
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[900px] text-sm">
-                  <thead className="border-b border-[#edf0f3] bg-[#f8fafc]">
+                  <thead className="bg-[#f8fbfa]">
                     <tr className="text-xs text-gray-500">
                       <th className="px-6 py-3 text-left lg:px-8">환자명</th>
                       <th className="px-4 py-3 text-left">병원명</th>
@@ -303,7 +303,7 @@ export default function CommissionPage() {
                     {records.map((r) => (
                       <tr
                         key={r.id}
-                        className="cursor-pointer whitespace-nowrap transition hover:bg-[#f8fafc]"
+                        className="cursor-pointer whitespace-nowrap transition hover:bg-[#f8fbfa]"
                         onClick={() => setSelectedInvoice(r)}
                       >
                         <td className="px-6 py-3 font-semibold text-gray-800 lg:px-8">{r.patientName}</td>
@@ -324,7 +324,7 @@ export default function CommissionPage() {
                         <td className="px-4 py-3 text-right text-gray-600">
                           {r.commissionRate !== undefined && r.commissionRate !== null ? `${r.commissionRate}%` : "-"}
                         </td>
-                        <td className="px-4 py-3 text-right font-semibold text-[#1d9e75]">
+                        <td className="px-4 py-3 text-right font-semibold text-[#0f9b8e]">
                           {formatMoney(r.commissionAmount)}
                         </td>
                       </tr>

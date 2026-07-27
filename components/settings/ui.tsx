@@ -16,15 +16,15 @@ export function SectionHeader({
   return (
     <div className="mb-5 flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
       <div>
-        <h2 className="text-lg font-bold text-gray-900">{title}</h2>
-        <p className="mt-1 text-sm leading-6 text-gray-500">{description}</p>
+        <h2 className="text-lg font-black tracking-[-0.03em] text-[#101828]">{title}</h2>
+        <p className="mt-1 text-sm leading-6 text-[#667085]">{description}</p>
       </div>
 
       {badge && (
         <span
           className={`w-fit rounded-full px-3 py-1 text-xs font-semibold ${
             badgeActive
-              ? "bg-emerald-50 text-emerald-700"
+              ? "bg-[#e3f2ee] text-[#0f9b8e]"
               : "bg-gray-100 text-gray-500"
           }`}
         >
@@ -53,7 +53,7 @@ export function GlobalAlert({
       )}
 
       {message && (
-        <div className="rounded-xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+        <div className="rounded-xl border border-emerald-100 bg-[#e3f2ee] px-4 py-3 text-sm text-[#0f9b8e]">
           {message}
         </div>
       )}
@@ -63,7 +63,7 @@ export function GlobalAlert({
 
 export function EmptyBox({ text }: { text: string }) {
   return (
-    <div className="rounded-2xl border border-[#edf0f3] bg-gray-50 p-8 text-center text-sm text-gray-400">
+    <div className="rounded-[24px] bg-[#f8fbfa] p-8 text-center text-sm text-[#8b93a1]">
       {text}
     </div>
   );
@@ -71,7 +71,7 @@ export function EmptyBox({ text }: { text: string }) {
 
 export function Th({ children }: { children: React.ReactNode }) {
   return (
-    <th className="whitespace-nowrap border-b border-[#edf0f3] bg-gray-50 px-3 py-2.5 text-left text-[11px] font-semibold text-gray-500">
+    <th className="whitespace-nowrap bg-[#f8fbfa] px-3 py-2.5 text-left text-[11px] font-semibold text-[#667085]">
       {children}
     </th>
   );
@@ -79,7 +79,7 @@ export function Th({ children }: { children: React.ReactNode }) {
 
 export function Td({ children }: { children: React.ReactNode }) {
   return (
-    <td className="whitespace-nowrap border-b border-[#f1f3f5] px-3 py-3 text-gray-700">
+    <td className="whitespace-nowrap px-3 py-3 text-gray-700">
       {children}
     </td>
   );

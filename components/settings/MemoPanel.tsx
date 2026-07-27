@@ -48,7 +48,7 @@ export function MemoPanel({ memoDate, memoText, memos, memoLoading, canEdit, sav
 
   return (
     <section className="space-y-4">
-      <div className="rounded-[18px] border border-[#edf0f3] bg-white p-6 shadow-[0_2px_14px_rgba(0,0,0,0.04)]">
+      <div className="rounded-[28px] bg-white p-5 shadow-[0_16px_50px_rgba(15,23,42,0.055)] lg:p-6">
         <SectionHeader
           title="오늘의 메모"
           description="선택한 날짜의 홈/타임라인에 표시할 운영 메모를 관리합니다."
@@ -63,7 +63,7 @@ export function MemoPanel({ memoDate, memoText, memos, memoLoading, canEdit, sav
               type="date"
               value={memoDate}
               onChange={(e) => onDateChange(e.target.value)}
-              className="h-11 w-full rounded-xl border border-[#dfe3e8] bg-white px-3 text-sm outline-none transition focus:border-[#1d9e75] focus:ring-4 focus:ring-emerald-100"
+              className="h-11 w-full rounded-[16px] border border-[#dbe7e3] bg-white px-3 text-sm outline-none transition focus:border-[#5bd5c8] focus:ring-2 focus:ring-[#dff7f3]"
             />
           </div>
 
@@ -75,7 +75,7 @@ export function MemoPanel({ memoDate, memoText, memos, memoLoading, canEdit, sav
               disabled={!canEdit || saving}
               onChange={(e) => onTextChange(e.target.value)}
               placeholder="전체 공유 메모를 입력하세요."
-              className="w-full resize-none rounded-xl border border-[#dfe3e8] bg-white px-3 py-2 text-sm outline-none transition focus:border-[#1d9e75] focus:ring-4 focus:ring-emerald-100 disabled:bg-gray-50 disabled:text-gray-400"
+              className="w-full resize-none rounded-[16px] border border-[#dbe7e3] bg-white px-3 py-2 text-sm outline-none transition focus:border-[#5bd5c8] focus:ring-2 focus:ring-[#dff7f3] disabled:bg-gray-50 disabled:text-gray-400"
             />
           </div>
         </div>
@@ -84,14 +84,14 @@ export function MemoPanel({ memoDate, memoText, memos, memoLoading, canEdit, sav
           <button
             onClick={onAdd}
             disabled={!canEdit || saving}
-            className="rounded-xl bg-[#1d9e75] px-5 py-3 text-sm font-medium text-white transition hover:-translate-y-0.5 hover:shadow-md active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
+            className="rounded-[18px] bg-[linear-gradient(135deg,#77dfd1_0%,#40c5b3_50%,#0f9b8e_100%)] px-5 py-3 text-sm font-bold text-white shadow-[0_10px_24px_rgba(15,143,131,0.14)] transition hover:-translate-y-0.5 active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {saving ? "저장 중..." : "메모 추가"}
           </button>
         </div>
       </div>
 
-      <div className="rounded-[18px] border border-[#edf0f3] bg-white p-6 shadow-[0_2px_14px_rgba(0,0,0,0.04)]">
+      <div className="rounded-[28px] bg-white p-5 shadow-[0_16px_50px_rgba(15,23,42,0.055)] lg:p-6">
         <div className="mb-3 flex items-center justify-between">
           <h3 className="text-base font-bold text-gray-900">선택 날짜 메모</h3>
           <span className="text-xs text-gray-400">{memos.length}개</span>
@@ -108,7 +108,7 @@ export function MemoPanel({ memoDate, memoText, memos, memoLoading, canEdit, sav
               const isEditing = editingId === memo.id;
 
               return (
-                <div key={memo.id} className="rounded-2xl border border-[#edf0f3] bg-gray-50 p-4">
+                <div key={memo.id} className="rounded-[22px] bg-[#f8fbfa] p-4">
                   <div className="mb-2 flex items-start justify-between gap-3">
                     <div className="text-xs text-gray-400">
                       {memo.createdByName || "시스템"}
@@ -142,21 +142,21 @@ export function MemoPanel({ memoDate, memoText, memos, memoLoading, canEdit, sav
                         value={editText}
                         onChange={(e) => setEditText(e.target.value)}
                         disabled={editSaving}
-                        className="w-full resize-none rounded-xl border border-[#dfe3e8] bg-white px-3 py-2 text-sm outline-none transition focus:border-[#1d9e75] focus:ring-4 focus:ring-emerald-100 disabled:opacity-50"
+                        className="w-full resize-none rounded-[16px] border border-[#dbe7e3] bg-white px-3 py-2 text-sm outline-none transition focus:border-[#5bd5c8] focus:ring-2 focus:ring-[#dff7f3] disabled:opacity-50"
                         autoFocus
                       />
                       <div className="flex justify-end gap-2">
                         <button
                           onClick={cancelEdit}
                           disabled={editSaving}
-                          className="rounded-lg border border-[#dfe3e8] px-3 py-1.5 text-xs font-medium text-gray-500 transition hover:bg-gray-100 active:scale-95 disabled:opacity-50"
+                          className="rounded-[14px] border border-[#dbe7e3] px-3 py-1.5 text-xs font-medium text-gray-500 transition hover:bg-gray-100 active:scale-95 disabled:opacity-50"
                         >
                           취소
                         </button>
                         <button
                           onClick={() => submitEdit(memo.id)}
                           disabled={editSaving || !editText.trim()}
-                          className="rounded-lg bg-[#1d9e75] px-3 py-1.5 text-xs font-medium text-white transition hover:shadow-md active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
+                          className="rounded-lg bg-[linear-gradient(135deg,#77dfd1_0%,#40c5b3_50%,#0f9b8e_100%)] px-3 py-1.5 text-xs font-medium text-white transition hover:shadow-md active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
                         >
                           {editSaving ? "저장 중..." : "저장"}
                         </button>

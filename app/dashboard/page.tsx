@@ -223,20 +223,20 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-5">
-      <section className="-mx-6 mb-4 rounded-t-2xl border border-[#edf0f3] bg-[#ecfdf5] px-4 py-4 lg:-mx-8 lg:px-8">
+      <section className="mb-4 rounded-[26px] bg-[#eaf8f3] p-4 shadow-[0_18px_50px_rgba(7,56,58,0.08)] lg:p-5">
         <div className="flex items-center gap-2">
           <input
             type="date"
             value={startDate}
             onChange={(e) => setStartDate(e.target.value)}
-            className="h-10 min-w-0 flex-1 appearance-none rounded-xl border border-[#dfe3e8] bg-white px-2 text-sm outline-none transition focus:border-[#1d9e75] focus:ring-4 focus:ring-emerald-100"
+            className="h-9 min-w-0 flex-1 appearance-none rounded-[16px] border border-[#dbe7e3] bg-white px-3 text-xs outline-none transition focus:border-[#5bd5c8] focus:ring-2 focus:ring-[#dff7f3]"
           />
           <span className="shrink-0 text-sm text-gray-400">~</span>
           <input
             type="date"
             value={endDate}
             onChange={(e) => setEndDate(e.target.value)}
-            className="h-10 min-w-0 flex-1 appearance-none rounded-xl border border-[#dfe3e8] bg-white px-2 text-sm outline-none transition focus:border-[#1d9e75] focus:ring-4 focus:ring-emerald-100"
+            className="h-9 min-w-0 flex-1 appearance-none rounded-[16px] border border-[#dbe7e3] bg-white px-3 text-xs outline-none transition focus:border-[#5bd5c8] focus:ring-2 focus:ring-[#dff7f3]"
           />
         </div>
 
@@ -244,7 +244,7 @@ export default function DashboardPage() {
           <select
             value={hospitalFilter}
             onChange={(e) => setHospitalFilter(e.target.value)}
-            className="h-10 min-w-0 rounded-xl border border-[#dfe3e8] bg-white px-2 text-sm outline-none transition focus:border-[#1d9e75] focus:ring-4 focus:ring-emerald-100"
+            className="h-9 min-w-0 rounded-[16px] border border-[#dbe7e3] bg-white px-3 text-xs outline-none transition focus:border-[#5bd5c8] focus:ring-2 focus:ring-[#dff7f3]"
           >
             <option value="">전체 병원</option>
             {hospitals.map((h) => (
@@ -254,7 +254,7 @@ export default function DashboardPage() {
           <select
             value={apptTypeFilter}
             onChange={(e) => setApptTypeFilter(e.target.value)}
-            className="h-10 min-w-0 rounded-xl border border-[#dfe3e8] bg-white px-2 text-sm outline-none transition focus:border-[#1d9e75] focus:ring-4 focus:ring-emerald-100"
+            className="h-9 min-w-0 rounded-[16px] border border-[#dbe7e3] bg-white px-3 text-xs outline-none transition focus:border-[#5bd5c8] focus:ring-2 focus:ring-[#dff7f3]"
           >
             <option value="">전체 유형</option>
             {APPOINTMENT_TYPES.map((type) => (
@@ -264,7 +264,7 @@ export default function DashboardPage() {
           <select
             value={itemFilter}
             onChange={(e) => setItemFilter(e.target.value)}
-            className="h-10 min-w-0 rounded-xl border border-[#dfe3e8] bg-white px-2 text-sm outline-none transition focus:border-[#1d9e75] focus:ring-4 focus:ring-emerald-100"
+            className="h-9 min-w-0 rounded-[16px] border border-[#dbe7e3] bg-white px-3 text-xs outline-none transition focus:border-[#5bd5c8] focus:ring-2 focus:ring-[#dff7f3]"
           >
             <option value="">전체 항목</option>
             {itemOptions.map((item) => (
@@ -274,7 +274,7 @@ export default function DashboardPage() {
           <select
             value={doctorFilter}
             onChange={(e) => setDoctorFilter(e.target.value)}
-            className="h-10 min-w-0 rounded-xl border border-[#dfe3e8] bg-white px-2 text-sm outline-none transition focus:border-[#1d9e75] focus:ring-4 focus:ring-emerald-100"
+            className="h-9 min-w-0 rounded-[16px] border border-[#dbe7e3] bg-white px-3 text-xs outline-none transition focus:border-[#5bd5c8] focus:ring-2 focus:ring-[#dff7f3]"
           >
             <option value="">전체 원장</option>
             {doctors.map((doctor) => (
@@ -284,7 +284,7 @@ export default function DashboardPage() {
           <select
             value={coordinatorFilter}
             onChange={(e) => setCoordinatorFilter(e.target.value)}
-            className="h-10 min-w-0 rounded-xl border border-[#dfe3e8] bg-white px-2 text-sm outline-none transition focus:border-[#1d9e75] focus:ring-4 focus:ring-emerald-100"
+            className="h-9 min-w-0 rounded-[16px] border border-[#dbe7e3] bg-white px-3 text-xs outline-none transition focus:border-[#5bd5c8] focus:ring-2 focus:ring-[#dff7f3]"
           >
             <option value="">전체 코디</option>
             {coordinators.map((coordinator) => (
@@ -295,13 +295,13 @@ export default function DashboardPage() {
             <button
               onClick={() => load(startDate, endDate)}
               disabled={loading}
-              className="h-10 min-w-0 flex-1 rounded-xl bg-[#1d9e75] px-2 text-sm font-medium text-white transition active:scale-95 disabled:opacity-60"
+              className="h-9 min-w-0 flex-1 rounded-[16px] bg-[linear-gradient(135deg,#77dfd1_0%,#40c5b3_50%,#0f9b8e_100%)] text-white shadow-[0_10px_24px_rgba(15,143,131,0.14)] px-3 text-xs font-bold transition active:scale-95 disabled:opacity-60"
             >
               {loading ? "조회 중" : "조회"}
             </button>
             <button
               onClick={resetFilters}
-              className="h-10 min-w-0 flex-1 rounded-xl bg-black px-2 text-sm font-medium text-white transition active:scale-95"
+              className="h-9 min-w-0 flex-1 rounded-[16px] bg-[#e3f2ee] text-[#0f9b8e] px-3 text-xs font-bold transition active:scale-95"
             >
               초기화
             </button>
@@ -312,13 +312,13 @@ export default function DashboardPage() {
           <button
             onClick={() => load(startDate, endDate)}
             disabled={loading}
-            className="hidden h-10 shrink-0 rounded-xl bg-[#1d9e75] px-4 text-sm font-medium text-white transition hover:-translate-y-0.5 hover:shadow-md active:scale-95 disabled:opacity-60 lg:block"
+            className="hidden h-9 shrink-0 rounded-[16px] bg-[linear-gradient(135deg,#77dfd1_0%,#40c5b3_50%,#0f9b8e_100%)] text-white shadow-[0_10px_24px_rgba(15,143,131,0.14)] px-4 text-xs font-bold transition hover:-translate-y-0.5 active:scale-95 disabled:opacity-60 lg:block"
           >
             {loading ? "조회 중..." : "조회"}
           </button>
           <button
             onClick={resetFilters}
-            className="hidden h-10 shrink-0 rounded-xl bg-black px-4 text-sm font-medium text-white transition hover:-translate-y-0.5 hover:shadow-md active:scale-95 lg:block"
+            className="hidden h-9 shrink-0 rounded-[16px] bg-[#e3f2ee] text-[#0f9b8e] px-4 text-xs font-bold transition hover:-translate-y-0.5 active:scale-95 lg:block"
           >
             초기화
           </button>
@@ -344,7 +344,7 @@ export default function DashboardPage() {
       </section>
 
       {!searched ? (
-        <div className="flex items-center justify-center rounded-2xl border border-[#edf0f3] bg-white py-20 text-sm text-gray-400">
+        <div className="flex items-center justify-center rounded-[28px] bg-white py-20 text-sm text-gray-400 shadow-[0_16px_50px_rgba(15,23,42,0.055)]">
           기간을 선택하고 조회를 누르세요.
         </div>
       ) : (
@@ -358,7 +358,7 @@ export default function DashboardPage() {
               { label: "취소", value: dashboard.summary.cancelled, helper: rateText(dashboard.summary.cancelled, dashboard.summary.total) },
               { label: "완료율", value: pctText(dashboard.summary.completionRate), helper: "취소 제외 기준" },
             ].map((card) => (
-              <div key={card.label} className="rounded-[14px] border border-black/5 bg-white p-4 shadow-[0_2px_10px_rgba(0,0,0,0.04)]">
+              <div key={card.label} className="rounded-[22px] bg-[#f8fbfa] p-4 shadow-[0_10px_24px_rgba(15,23,42,0.04)]">
                 <div className="text-xs font-bold text-gray-500">{card.label}</div>
                 <div className="mt-1 text-[24px] font-bold text-gray-900">
                   {typeof card.value === "number" ? formatNumber(card.value) : card.value}
@@ -381,7 +381,7 @@ export default function DashboardPage() {
                       { label: "총 환불", value: formatWon(sales.aggregate.totalRefunded), helper: `${formatNumber(sales.aggregate.refundCount)}건` },
                       { label: "정산 건수", value: `${formatNumber(sales.aggregate.count)}건`, helper: `결제 ${formatNumber(sales.aggregate.paymentCount)} · 환불 ${formatNumber(sales.aggregate.refundCount)}` },
                     ].map((card) => (
-                      <div key={card.label} className="rounded-[8px] border border-black/5 bg-[#f8fafc] p-4">
+                      <div key={card.label} className="rounded-[20px] bg-[#f8fbfa] p-4">
                         <div className="text-xs font-bold text-gray-500">{card.label}</div>
                         <div className="mt-1 break-words text-[20px] font-bold text-gray-900">{card.value}</div>
                         <div className="mt-0.5 text-xs text-gray-500">{card.helper}</div>
@@ -434,7 +434,7 @@ export default function DashboardPage() {
                 return (
                   <div
                     key={type}
-                    className="rounded-[14px] border border-black/5 bg-white p-4 shadow-[0_2px_10px_rgba(0,0,0,0.04)]"
+                    className="rounded-[22px] bg-[#f8fbfa] p-4 shadow-[0_10px_24px_rgba(15,23,42,0.04)]"
                     style={{ borderLeftWidth: 4, borderLeftColor: APPT_TYPE_COLORS[type] }}
                   >
                     <div className="text-xs font-bold" style={{ color: APPT_TYPE_COLORS[type] }}>{type}</div>
@@ -491,7 +491,7 @@ export default function DashboardPage() {
                   key={item.label}
                   type="button"
                   onClick={() => router.push("/schedule")}
-                  className="rounded-[14px] border border-[#edf0f3] bg-[#f8fafc] p-4 text-left transition hover:-translate-y-0.5 hover:bg-white hover:shadow-md active:scale-[0.99]"
+                  className="rounded-[22px] bg-[#f8fbfa] p-4 text-left shadow-[0_10px_24px_rgba(15,23,42,0.04)] transition hover:-translate-y-0.5 hover:bg-white active:scale-[0.99]"
                 >
                   <div className="text-xs font-bold text-gray-500">{item.label}</div>
                   <div className="mt-1 text-[22px] font-bold text-gray-900">{formatNumber(item.value)}</div>
@@ -511,7 +511,7 @@ export default function DashboardPage() {
                     <div key={row.date} className="grid grid-cols-[92px_1fr] gap-3 text-xs md:grid-cols-[92px_1fr_160px] md:items-center">
                       <div className="font-medium text-gray-700">{row.date}</div>
                       <div className="h-3 overflow-hidden rounded-full bg-gray-100">
-                        <div className="h-full rounded-full bg-[#1d9e75]" style={{ width: `${Math.max(4, (row.total / max) * 100)}%` }} />
+                        <div className="h-full rounded-full bg-[linear-gradient(135deg,#77dfd1_0%,#40c5b3_50%,#0f9b8e_100%)]" style={{ width: `${Math.max(4, (row.total / max) * 100)}%` }} />
                       </div>
                       <div className="col-span-2 text-gray-500 md:col-span-1 md:text-right">
                         {formatNumber(row.total)}건 · 완료 {formatNumber(row.completed)} · 예정 {formatNumber(row.scheduled)} · 취소 {formatNumber(row.cancelled)}
