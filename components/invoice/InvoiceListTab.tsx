@@ -109,7 +109,14 @@ export function InvoiceListTab() {
 
   return (
     <>
-    {selectedInvoice && <InvoiceDetailModal invoice={selectedInvoice} title="인보이스 상세" onClose={() => setSelectedInvoice(null)} />}
+    {selectedInvoice && (
+      <InvoiceDetailModal
+        invoice={selectedInvoice}
+        title="인보이스 상세"
+        onClose={() => setSelectedInvoice(null)}
+        onEdit={() => router.push(`/invoices/${selectedInvoice.reservationDocId}`)}
+      />
+    )}
     <div className="flex flex-col gap-4">
       {/* 컨트롤바 */}
       <div className="h-[184px] overflow-hidden rounded-[26px] bg-[#eaf8f3] p-5 shadow-[0_18px_50px_rgba(7,56,58,0.08)] lg:h-[196px] lg:p-6">
@@ -237,12 +244,6 @@ export function InvoiceListTab() {
                         className="h-6 rounded-[13px] bg-[#e3f2ee] px-2 text-[10px] font-semibold text-[#0f9b8e] transition active:scale-95"
                       >
                         보기
-                      </button>
-                      <button
-                        onClick={(e) => { e.stopPropagation(); router.push(`/invoices/${inv.reservationDocId}`); }}
-                        className="h-6 rounded-[13px] bg-[#eef4ff] px-2 text-[10px] font-semibold text-[#2563eb] transition active:scale-95"
-                      >
-                        수정
                       </button>
                       <button
                         onClick={(e) => handleDelete(inv, e)}

@@ -8,6 +8,7 @@ type Props = {
   invoice: InvoiceRecord;
   title: string;
   onClose: () => void;
+  onEdit?: () => void;
 };
 
 function DetailField({ label, value }: { label: string; value: string }) {
@@ -19,7 +20,7 @@ function DetailField({ label, value }: { label: string; value: string }) {
   );
 }
 
-export function InvoiceDetailModal({ invoice, title, onClose }: Props) {
+export function InvoiceDetailModal({ invoice, title, onClose, onEdit }: Props) {
   const fullRows: [string, string][] = [
     ["인보이스 ID", invoice.invoiceId],
   ];
@@ -74,10 +75,12 @@ export function InvoiceDetailModal({ invoice, title, onClose }: Props) {
         </div>
 
         <button
-          onClick={onClose}
-          className="mt-5 h-11 w-full rounded-[20px] bg-[#e3f2ee] text-sm font-bold text-[#0f9b8e] transition active:scale-95"
+          onClick={onEdit || onClose}
+          className={onEdit
+            ? "mt-5 h-11 w-full rounded-[20px] bg-[linear-gradient(135deg,#77dfd1_0%,#40c5b3_50%,#0f9b8e_100%)] text-sm font-semibold text-white shadow-[0_10px_24px_rgba(15,143,131,0.12)] transition active:scale-95"
+            : "mt-5 h-11 w-full rounded-[20px] bg-[#e3f2ee] text-sm font-bold text-[#0f9b8e] transition active:scale-95"}
         >
-          닫기
+          {onEdit ? "수정하기" : "닫기"}
         </button>
       </div>
     </div>

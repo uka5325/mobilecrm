@@ -15,13 +15,11 @@ function InvoiceDetailField({ label, value }: { label: string; value: string }) 
 export function PatientInvoiceDetailModal({
   invoice,
   patientName,
-  onBack,
   onEdit,
   onClose,
 }: {
   invoice: InvoiceRecord;
   patientName: string;
-  onBack: () => void;
   onEdit: () => void;
   onClose: () => void;
 }) {
@@ -45,7 +43,6 @@ export function PatientInvoiceDetailModal({
       <div className="my-auto w-full max-w-lg rounded-[30px] bg-white p-5 shadow-[0_28px_90px_rgba(15,23,42,0.22)]" onClick={(event) => event.stopPropagation()}>
         <div className="mb-4 flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <button onClick={onBack} className="mb-2 rounded-full bg-[#e3f2ee] px-3 py-1.5 text-xs font-semibold text-[#0f9b8e]">← 목록</button>
             <div className="text-[11px] font-bold tracking-[0.24em] text-[#0f9b8e]">INVOICE</div>
             <div className="mt-1 flex min-w-0 flex-wrap items-center gap-2">
               <h2 className="min-w-0 text-xl font-extrabold leading-snug text-[#101828]">{patientName} 인보이스 상세</h2>

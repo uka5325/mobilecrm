@@ -144,7 +144,6 @@ export function PatientInvoiceModal({ patientId, patientName, onClose, onCountLo
       <PatientInvoiceDetailModal
         invoice={viewingInvoice}
         patientName={patientName}
-        onBack={() => setViewingInvoice(null)}
         onEdit={() => { setEditingInvoice(viewingInvoice); setViewingInvoice(null); }}
         onClose={onClose}
       />
