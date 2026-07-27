@@ -230,7 +230,7 @@ export function InfoTab({
 
         <div className="mt-3 space-y-2">
           {notesLoading ? (
-            <div className="rounded-[18px] bg-[#eaf8f3] px-4 py-3 text-sm text-gray-400">
+            <div className="rounded-[22px] bg-[#f6f7f5] px-4 py-3 text-sm text-[#8b93a1]">
               메모를 불러오는 중...
             </div>
           ) : notesError ? (
@@ -238,7 +238,7 @@ export function InfoTab({
               {notesError}
             </div>
           ) : recentNotes.length === 0 ? (
-            <div className="rounded-[18px] bg-[#eaf8f3] px-4 py-3 text-sm text-gray-400">
+            <div className="rounded-[22px] bg-[#f6f7f5] px-4 py-3 text-sm text-[#8b93a1]">
               등록된 메모가 없습니다.
             </div>
           ) : (

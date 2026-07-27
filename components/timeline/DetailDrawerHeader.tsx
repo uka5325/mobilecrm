@@ -68,11 +68,11 @@ export function DetailDrawerHeader({
         </button>
       </div>
 
-      <div className={reservation.appointmentType === "상담" ? "grid grid-cols-2 gap-2 sm:grid-cols-4" : "grid grid-cols-3 gap-2"}>
+      <div className={reservation.appointmentType === "상담" ? "grid grid-cols-4 gap-1.5" : "grid grid-cols-3 gap-1.5"}>
         <button
           type="button"
           onClick={onCompletedToggle}
-          className={`h-9 w-full rounded-full px-2 text-xs font-semibold transition active:scale-95 ${
+          className={`h-9 w-full rounded-full px-2 text-[11px] font-semibold transition active:scale-95 ${
             completed
               ? "bg-[#667085] text-white"
               : "bg-[#f6f7f5] text-[#667085]"
@@ -83,7 +83,7 @@ export function DetailDrawerHeader({
         <button
           type="button"
           onClick={onCancelledToggle}
-          className={`h-9 w-full rounded-full px-2 text-xs font-semibold transition active:scale-95 ${
+          className={`h-9 w-full rounded-full px-2 text-[11px] font-semibold transition active:scale-95 ${
             cancelled
               ? "bg-[#fff3c4] text-[#b7791f]"
               : "bg-[#fff9e6] text-[#d69e2e]"
@@ -95,7 +95,7 @@ export function DetailDrawerHeader({
           <button
             type="button"
             onClick={onSurgeryToggle}
-            className={`h-9 w-full rounded-full px-2 text-xs font-semibold transition active:scale-95 ${
+            className={`h-9 w-full rounded-full px-2 text-[11px] font-semibold transition active:scale-95 ${
               reservation.surgeryReserved
                 ? "bg-[#7c3aed] text-white"
                 : "bg-[#f3edff] text-[#7c3aed]"
@@ -107,7 +107,7 @@ export function DetailDrawerHeader({
         <button
           type="button"
           onClick={onAddReservation}
-          className="h-9 w-full rounded-full bg-[linear-gradient(135deg,#77dfd1_0%,#40c5b3_50%,#0f9b8e_100%)] px-2 text-xs font-bold text-white shadow-[0_10px_24px_rgba(15,143,131,0.14)] transition active:scale-95"
+          className="h-9 w-full rounded-full bg-[linear-gradient(135deg,#77dfd1_0%,#40c5b3_50%,#0f9b8e_100%)] px-2 text-[11px] font-bold text-white shadow-[0_10px_24px_rgba(15,143,131,0.14)] transition active:scale-95"
         >
           + 추가 예약
         </button>

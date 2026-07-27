@@ -34,7 +34,7 @@ export function NotesTab({ memoText, notes, notesLoading, notesError, memoError,
 
   return (
     <div className="space-y-4">
-      <div className="rounded-[24px] bg-[#eaf8f3] p-3 shadow-[0_8px_18px_rgba(15,23,42,0.035)]">
+      <div className="rounded-[22px] bg-[#f8fbfa] p-3 shadow-[0_8px_18px_rgba(15,23,42,0.04)]">
       <textarea
         rows={3}
         value={memoText}
@@ -58,7 +58,7 @@ export function NotesTab({ memoText, notes, notesLoading, notesError, memoError,
 
       <div className="space-y-3">
         {notesLoading ? (
-          <div className="rounded-[20px] bg-[#eaf8f3] p-4 text-sm text-gray-400">
+          <div className="rounded-[22px] bg-[#f6f7f5] p-4 text-sm text-[#8b93a1]">
             메모를 불러오는 중...
           </div>
         ) : notesError ? (
@@ -66,7 +66,7 @@ export function NotesTab({ memoText, notes, notesLoading, notesError, memoError,
             {notesError}
           </div>
         ) : notes.length === 0 ? (
-          <div className="rounded-[20px] bg-[#eaf8f3] p-4 text-sm text-gray-400">
+          <div className="rounded-[22px] bg-[#f6f7f5] p-4 text-sm text-[#8b93a1]">
             등록된 메모가 없습니다.
           </div>
         ) : (

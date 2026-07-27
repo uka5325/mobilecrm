@@ -54,8 +54,8 @@ export function NoteCard({ note, compact = false, onUpdate, onDelete }: Props) {
     <div
       className={
         compact
-          ? "rounded-[18px] bg-[#eaf8f3] px-4 py-3 text-sm"
-          : "rounded-[20px] bg-[#eaf8f3] p-4 text-sm shadow-[0_8px_18px_rgba(15,23,42,0.035)]"
+          ? "rounded-[22px] bg-[#f8fbfa] px-4 py-3 text-sm shadow-[0_8px_18px_rgba(15,23,42,0.04)]"
+          : "rounded-[22px] bg-[#f8fbfa] p-4 text-sm shadow-[0_8px_18px_rgba(15,23,42,0.04)]"
       }
     >
       {editing ? (

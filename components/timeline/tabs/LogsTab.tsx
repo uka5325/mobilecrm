@@ -1,7 +1,7 @@
 "use client";
 
 import { type LogRecord } from "@/lib/logs";
-import { formatLogDate } from "@/features/reservations/ui/timelineUtils";
+import { formatLogDate, getLogBadgeClass } from "@/features/reservations/ui/timelineUtils";
 
 type Props = {
   logs: LogRecord[];
@@ -51,7 +51,7 @@ export function LogsTab({ logs, loading, error, canLoadOlder, onLoadOlder }: Pro
       {logs.map((log) => (
         <div key={log.id} className="rounded-[22px] bg-[#f8fbfa] p-3.5 text-sm shadow-[0_8px_18px_rgba(15,23,42,0.04)]">
           <div className="mb-1 flex items-center justify-between gap-2">
-            <span className="rounded-full bg-[#e3f2ee] px-2.5 py-1 text-[10px] font-semibold text-[#0f9b8e]">
+            <span className={`rounded-full px-2.5 py-1 text-[10px] font-semibold ${getLogBadgeClass(String(log.action || ""))}`}>
               {log.action || "LOG"}
             </span>
             <span className="text-[11px] text-[#98a2b3]">{formatLogDate(log.createdAt)}</span>
