@@ -85,7 +85,7 @@ export function DetailDrawerHeader({
           onClick={onCancelledToggle}
           className={`h-8 rounded-full px-3 text-xs font-semibold transition active:scale-95 ${
             cancelled
-              ? "bg-yellow-100 text-yellow-800"
+              ? "bg-[#fff3c4] text-[#b7791f]"
               : "bg-[#f6f7f5] text-[#667085]"
           }`}
         >

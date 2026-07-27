@@ -19,13 +19,13 @@ const TAB_LABELS: Record<DetailTab, string> = {
 export function DetailDrawerTabs({ activeTab, onTabChange }: Props) {
   return (
     <div className="shrink-0 bg-white px-4 pb-3 sm:px-5">
-      <div className="flex gap-1 overflow-x-auto rounded-[20px] bg-[#f6f7f5] p-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      <div className="grid grid-cols-6 gap-1 rounded-[20px] bg-white p-1">
         {(Object.keys(TAB_LABELS) as DetailTab[]).map((key) => (
           <button
             key={key}
             type="button"
             onClick={() => onTabChange(key)}
-            className={`h-8 shrink-0 rounded-[16px] px-3 text-center text-xs transition active:scale-[0.98] ${
+            className={`h-8 min-w-0 rounded-[16px] px-1 text-center text-xs transition active:scale-[0.98] ${
               activeTab === key
                 ? "bg-[#e3f2ee] font-semibold text-[#0f9b8e]"
                 : "text-[#667085]"

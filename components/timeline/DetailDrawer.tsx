@@ -31,11 +31,11 @@ export function DetailDrawer({ open, reservation, currentUser, onClose, onRefres
   return (
     <>
       <div
-        className="fixed inset-0 z-[998] flex items-end justify-center bg-black/35 px-3 pb-3 pt-10 backdrop-blur-[2px] sm:items-center sm:p-6"
+        className="fixed inset-0 z-[998] flex items-start justify-center overflow-y-auto bg-black/35 px-3 pb-4 pt-20 backdrop-blur-[2px] sm:items-center sm:p-6"
         onClick={onClose}
       >
         <div
-          className="flex max-h-[calc(100vh-24px)] w-full max-w-[720px] flex-col overflow-hidden rounded-t-[30px] bg-[#f6f7f5] shadow-[0_28px_90px_rgba(15,23,42,0.26)] sm:max-h-[min(820px,calc(100vh-48px))] sm:rounded-[30px]"
+          className="flex h-[calc(100vh-104px)] w-full max-w-[720px] flex-col overflow-hidden rounded-[30px] bg-white shadow-[0_28px_90px_rgba(15,23,42,0.26)] sm:h-[min(820px,calc(100vh-48px))]"
           onClick={(e) => e.stopPropagation()}
         >
         <DetailDrawerHeader
@@ -51,7 +51,7 @@ export function DetailDrawer({ open, reservation, currentUser, onClose, onRefres
 
         <DetailDrawerTabs activeTab={activeTab} onTabChange={d.setActiveTab} />
 
-        <div className="flex-1 overflow-y-auto px-4 pb-5 pt-4 sm:px-5">
+        <div className="flex-1 overflow-y-auto bg-white px-4 pb-5 pt-4 sm:px-5">
           {activeTab === "info" && (
             <InfoTab
               detailForm={d.detailForm}
