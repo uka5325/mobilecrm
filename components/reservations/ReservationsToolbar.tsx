@@ -137,7 +137,7 @@ export function ReservationsToolbar({
       {downloadOpen && (
         <>
           <div className="fixed inset-0 z-[9990]" onClick={onCloseDownload} />
-          <div className="absolute right-5 top-[calc(100%-8px)] z-[9991] w-[280px] rounded-[22px] bg-white p-4 shadow-[0_18px_50px_rgba(15,23,42,0.18)]">
+          <div className="absolute right-5 top-[calc(100%-8px)] z-[9991] w-[280px] rounded-[24px] bg-white p-4 shadow-[0_24px_70px_rgba(15,23,42,0.18)]">
             <div className="mb-1 text-sm font-bold text-[#101828]">예약 데이터 다운로드</div>
             <div className="mb-3 text-xs text-[#667085]">선택한 기간의 예약을 CSV로 내보냅니다.</div>
             <div className="mb-2 grid grid-cols-2 gap-2">
@@ -147,7 +147,7 @@ export function ReservationsToolbar({
                   type="date"
                   value={dlStart}
                   onChange={(e) => onDlStartChange(e.target.value)}
-                  className="w-full min-w-0 appearance-none rounded-xl border border-[#dfe3e8] px-2 py-2 text-xs focus:border-[#1d9e75] focus:outline-none"
+                  className="w-full min-w-0 appearance-none rounded-[16px] border border-[#dbe7e3] bg-white px-2 py-2 text-xs focus:border-[#5bd5c8] focus:outline-none focus:ring-2 focus:ring-[#dff7f3]"
                 />
               </div>
               <div>
@@ -156,7 +156,7 @@ export function ReservationsToolbar({
                   type="date"
                   value={dlEnd}
                   onChange={(e) => onDlEndChange(e.target.value)}
-                  className="w-full min-w-0 appearance-none rounded-xl border border-[#dfe3e8] px-2 py-2 text-xs focus:border-[#1d9e75] focus:outline-none"
+                  className="w-full min-w-0 appearance-none rounded-[16px] border border-[#dbe7e3] bg-white px-2 py-2 text-xs focus:border-[#5bd5c8] focus:outline-none focus:ring-2 focus:ring-[#dff7f3]"
                 />
               </div>
             </div>
@@ -164,7 +164,7 @@ export function ReservationsToolbar({
               type="button"
               onClick={onDownload}
               disabled={downloading}
-              className="mt-2 w-full rounded-xl bg-[#0f8f83] py-2 text-sm font-semibold text-white transition active:scale-95 disabled:opacity-50"
+              className="mt-2 w-full rounded-[18px] bg-[linear-gradient(135deg,#77dfd1_0%,#40c5b3_50%,#0f9b8e_100%)] py-2 text-sm font-semibold text-white shadow-[0_10px_24px_rgba(15,143,131,0.12)] transition active:scale-95 disabled:opacity-50"
             >
               {downloading ? "생성 중..." : "CSV 다운로드"}
             </button>

@@ -337,8 +337,8 @@ export function ReservationsTable({
       )}
 
       {detailGroup && (
-        <div className="fixed inset-0 z-[997] flex items-end justify-center bg-black/35 px-3 py-4 lg:items-center" onClick={() => setDetailGroup(null)}>
-          <div className="w-full max-w-lg rounded-[28px] bg-white p-5 shadow-[0_24px_80px_rgba(15,23,42,0.24)]" onClick={(e) => e.stopPropagation()}>
+        <div className="fixed inset-0 z-[997] flex items-end justify-center bg-black/35 px-3 py-8 backdrop-blur-[2px] lg:items-center" onClick={() => setDetailGroup(null)}>
+          <div className="w-full max-w-lg rounded-[30px] bg-white p-5 shadow-[0_28px_90px_rgba(15,23,42,0.26)]" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-start justify-between gap-4">
               <div className="min-w-0">
                 <div className="text-xs font-bold tracking-[0.14em] text-[#0f9b8e]">CUSTOMER DETAIL</div>
@@ -373,7 +373,7 @@ export function ReservationsTable({
                   void openPatientLogs(detailGroup);
                   setDetailGroup(null);
                 }}
-                className="rounded-[18px] bg-[#f6f7f5] px-4 py-3 text-sm font-semibold text-[#344054] transition active:scale-95"
+                className="rounded-[18px] bg-[#f8fbfa] px-4 py-3 text-sm font-semibold text-[#344054] shadow-[0_8px_18px_rgba(15,23,42,0.035)] transition active:scale-95"
               >
                 로그 보기
               </button>
@@ -393,8 +393,8 @@ export function ReservationsTable({
       )}
 
       {logModal && (
-        <div className="fixed inset-0 z-[997] flex items-end justify-center bg-black/35 px-3 py-4 lg:items-center" onClick={() => setLogModal(null)}>
-          <div className="w-full max-w-lg rounded-[28px] bg-[#f6f7f5] p-5 shadow-[0_24px_80px_rgba(15,23,42,0.24)]" onClick={(e) => e.stopPropagation()}>
+        <div className="fixed inset-0 z-[997] flex items-end justify-center bg-black/35 px-3 py-8 backdrop-blur-[2px] lg:items-center" onClick={() => setLogModal(null)}>
+          <div className="w-full max-w-lg rounded-[30px] bg-white p-5 shadow-[0_28px_90px_rgba(15,23,42,0.26)]" onClick={(e) => e.stopPropagation()}>
             <div className="mb-4 flex items-start justify-between gap-4">
               <div>
                 <div className="text-xs font-bold tracking-[0.14em] text-[#0f9b8e]">CUSTOMER LOG</div>
@@ -409,7 +409,7 @@ export function ReservationsTable({
               </button>
             </div>
 
-            <div className="max-h-[62vh] overflow-y-auto">
+            <div className="max-h-[calc(100dvh-220px)] overflow-y-auto">
               <LogsTab logs={patientLogs} loading={logsLoading} error={logsError} />
             </div>
           </div>
