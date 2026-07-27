@@ -59,8 +59,8 @@ export function ReservationsToolbar({
     onSearchChange(query.trim());
   }
 
-  const chipClass = "flex h-7 shrink-0 items-center gap-1.5 rounded-full bg-white/72 px-3 text-[11px] font-normal text-[#667085]";
-  const actionChipClass = "h-7 shrink-0 rounded-full bg-white/72 px-3 text-[11px] font-semibold text-[#0f9b8e] transition active:scale-95";
+  const chipClass = "flex h-7 min-w-0 items-center justify-center gap-1.5 rounded-full bg-white/72 px-2 text-[11px] font-normal text-[#667085]";
+  const actionChipClass = "h-7 min-w-0 rounded-full bg-white/72 px-2 text-[11px] font-semibold text-[#0f9b8e] transition active:scale-95";
 
   return (
     <section className="relative mb-4 h-[184px] overflow-visible rounded-[26px] bg-[#eaf8f3] p-5 shadow-[0_18px_50px_rgba(7,56,58,0.08)] lg:h-[196px] lg:p-6">
@@ -111,11 +111,11 @@ export function ReservationsToolbar({
           </div>
         </div>
 
-        <div className="flex items-center gap-2.5 overflow-x-auto whitespace-nowrap [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <div className="grid grid-cols-4 gap-2 whitespace-nowrap">
           {summaryModes.map((mode) => (
             <span key={mode} className={chipClass}>
-              <span className="h-2 w-2 rounded-full bg-[#0f9b8e]" />
-              {FILTER_LABELS[mode]} {filterCounts[mode] || 0}
+              <span className="h-2 w-2 shrink-0 rounded-full bg-[#0f9b8e]" />
+              <span className="min-w-0 truncate">{FILTER_LABELS[mode]} {filterCounts[mode] || 0}</span>
             </span>
           ))}
           <button
