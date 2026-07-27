@@ -226,10 +226,7 @@ export function InvoiceListTab() {
                 <div className="mt-1.5 border-t border-[#edf0f3] pt-1.5">
                   <div className="flex flex-col gap-1.5 lg:flex-row lg:items-center lg:justify-between">
                     <div className="min-w-0 text-xs text-[#667085]">
-                      <div className="truncate">
-                        <span className="text-[#98a2b3]">항목 </span>{inv.surgeryItems || "-"}
-                      </div>
-                      <div className="mt-0.5 flex flex-wrap gap-x-2 gap-y-0.5">
+                      <div className="flex flex-wrap gap-x-2 gap-y-0.5">
                         <span><span className="text-[#98a2b3]">수술비 </span>₩{formatMoney(inv.totalAmount || 0)}</span>
                         <span><span className="text-[#98a2b3]">커미션 </span>{inv.commissionAmount ? `₩${formatMoney(inv.commissionAmount)}` : "-"}</span>
                       </div>
