@@ -157,9 +157,9 @@ export function InvoiceListTab() {
           </div>
           <div className="rounded-[20px] bg-white p-1">
             <div className="grid grid-cols-3 gap-1">
-              <QuickButton tall active={quickOffset === -1} onClick={() => quickRange(-1)}>전달</QuickButton>
-              <QuickButton tall active={quickOffset === 0} onClick={() => quickRange(0)}>이번 달</QuickButton>
-              <QuickButton tall active={quickOffset === 1} onClick={() => quickRange(1)}>다음 달</QuickButton>
+              <QuickButton active={quickOffset === -1} onClick={() => quickRange(-1)}>전달</QuickButton>
+              <QuickButton active={quickOffset === 0} onClick={() => quickRange(0)}>이번 달</QuickButton>
+              <QuickButton active={quickOffset === 1} onClick={() => quickRange(1)}>다음 달</QuickButton>
             </div>
           </div>
         </div>
@@ -205,52 +205,55 @@ export function InvoiceListTab() {
             {filtered.map((inv) => (
               <article
                 key={inv.id}
-                className="cursor-pointer rounded-[24px] bg-[#f8fbfa] p-2.5 shadow-[0_10px_24px_rgba(15,23,42,0.04)] transition active:scale-[0.99]"
+                className="cursor-pointer rounded-[24px] bg-white p-2.5 shadow-[0_10px_28px_rgba(15,23,42,0.05)] transition active:scale-[0.99]"
                 onClick={() => router.push(`/invoices/${inv.reservationDocId}`)}
               >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                      <h3 className="truncate text-base font-extrabold text-[#101828]">{inv.patientName}</h3>
-                      <span className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold ${INVOICE_STATUS_CLASS[inv.status] || "bg-gray-100 text-gray-500"}`}>
+                <div className="flex min-w-0 items-start justify-between gap-2.5">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex min-w-0 items-center gap-2">
+                      <h3 className="truncate text-[15px] font-bold tracking-[-0.04em] text-[#101828]">{inv.patientName}</h3>
+                      <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${INVOICE_STATUS_CLASS[inv.status] || "bg-gray-100 text-gray-500"}`}>
                         {INVOICE_STATUS_LABEL[inv.status] || inv.status}
                       </span>
                     </div>
-                    <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[12px] text-[#667085]">
+                    <div className="mt-0.5 flex flex-wrap gap-x-2 gap-y-0.5 text-[11px] text-[#667085]">
                       <span>{inv.surgeryDate || formatDate(inv.createdAt)}</span>
                       <span>{inv.hospitalName || "-"}</span>
                       <span>{inv.doctors.join(", ") || "-"}</span>
                     </div>
                   </div>
-                  <div className="shrink-0 text-right">
-                    <div className="text-[11px] text-[#98a2b3]">수술비</div>
-                    <div className="text-sm font-bold text-[#101828]">₩{formatMoney(inv.totalAmount || 0)}</div>
-                  </div>
                 </div>
-                <div className="mt-2 grid gap-2 text-[12px] text-[#667085] sm:grid-cols-[minmax(0,1fr)_auto]">
-                  <div className="min-w-0 rounded-[18px] bg-white px-3 py-2">
-                    <div className="truncate"><span className="text-[#98a2b3]">항목 </span>{inv.surgeryItems || "-"}</div>
-                    <div className="mt-0.5"><span className="text-[#98a2b3]">커미션 </span>{inv.commissionAmount ? `₩${formatMoney(inv.commissionAmount)}` : "-"}</div>
-                  </div>
-                  <div className="flex items-center justify-end gap-1.5">
-                    <button
-                      onClick={(e) => { e.stopPropagation(); setSelectedInvoice(inv); }}
-                      className="h-8 rounded-full bg-[#e3f2ee] px-3 text-[11px] font-semibold text-[#0f9b8e] transition active:scale-95"
-                    >
-                      보기
-                    </button>
-                    <button
-                      onClick={(e) => { e.stopPropagation(); router.push(`/invoices/${inv.reservationDocId}`); }}
-                      className="h-8 rounded-full bg-blue-50 px-3 text-[11px] font-semibold text-blue-600 transition active:scale-95"
-                    >
-                      수정
-                    </button>
-                    <button
-                      onClick={(e) => handleDelete(inv, e)}
-                      className="h-8 rounded-full bg-red-50 px-3 text-[11px] font-semibold text-red-500 transition active:scale-95"
-                    >
-                      삭제
-                    </button>
+                <div className="mt-1.5 border-t border-[#edf0f3] pt-1.5">
+                  <div className="flex flex-col gap-1.5 lg:flex-row lg:items-center lg:justify-between">
+                    <div className="min-w-0 text-xs text-[#667085]">
+                      <div className="truncate">
+                        <span className="text-[#98a2b3]">항목 </span>{inv.surgeryItems || "-"}
+                      </div>
+                      <div className="mt-0.5 flex flex-wrap gap-x-2 gap-y-0.5">
+                        <span><span className="text-[#98a2b3]">수술비 </span>₩{formatMoney(inv.totalAmount || 0)}</span>
+                        <span><span className="text-[#98a2b3]">커미션 </span>{inv.commissionAmount ? `₩${formatMoney(inv.commissionAmount)}` : "-"}</span>
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap gap-1.5 lg:justify-end">
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setSelectedInvoice(inv); }}
+                        className="h-6 rounded-[13px] bg-[#e3f2ee] px-2 text-[10px] font-semibold text-[#0f9b8e] transition active:scale-95"
+                      >
+                        보기
+                      </button>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); router.push(`/invoices/${inv.reservationDocId}`); }}
+                        className="h-6 rounded-[13px] bg-[#eef4ff] px-2 text-[10px] font-semibold text-[#2563eb] transition active:scale-95"
+                      >
+                        수정
+                      </button>
+                      <button
+                        onClick={(e) => handleDelete(inv, e)}
+                        className="h-6 rounded-[13px] bg-red-50 px-2 text-[10px] font-semibold text-red-500 transition active:scale-95"
+                      >
+                        삭제
+                      </button>
+                    </div>
                   </div>
                 </div>
               </article>
