@@ -212,8 +212,7 @@ export function InvoiceListTab() {
             {filtered.map((inv) => (
               <article
                 key={inv.id}
-                className="cursor-pointer rounded-[24px] bg-white p-2.5 shadow-[0_10px_28px_rgba(15,23,42,0.05)] transition active:scale-[0.99]"
-                onClick={() => router.push(`/invoices/${inv.reservationDocId}`)}
+                className="rounded-[24px] bg-white p-2.5 shadow-[0_10px_28px_rgba(15,23,42,0.05)]"
               >
                 <div className="flex min-w-0 items-start justify-between gap-2.5">
                   <div className="min-w-0 flex-1">
