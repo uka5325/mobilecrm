@@ -167,7 +167,9 @@ export function ScheduleHeader({
           </div>
         </div>
 
-        <div className="mt-1.5 flex items-center gap-2.5 overflow-x-auto whitespace-nowrap [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <div className="mt-2.5 flex items-center gap-2.5 overflow-x-auto whitespace-nowrap [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          <span className="shrink-0 text-[11px] font-normal text-[#8b93a1]">전체 {totalCount}건</span>
+          {loading ? <span className="shrink-0 animate-pulse text-[11px] font-normal text-[#8b93a1]">로딩 중...</span> : null}
           {SCHEDULE_APPOINTMENT_TYPES.map((type: AppointmentType) => (
             <div key={type} className="flex shrink-0 items-center gap-1.5">
               <span className="h-2 w-2 rounded-full" style={{ backgroundColor: APPOINTMENT_TYPE_COLORS[type] }} />
@@ -175,8 +177,6 @@ export function ScheduleHeader({
               <span className="text-[11px] font-normal text-[#667085]">{kpi[type] || 0}</span>
             </div>
           ))}
-          <span className="shrink-0 text-[11px] font-normal text-[#8b93a1]">전체 {totalCount}건</span>
-          {loading ? <span className="shrink-0 animate-pulse text-[11px] font-normal text-[#8b93a1]">로딩 중...</span> : null}
         </div>
       </section>
 

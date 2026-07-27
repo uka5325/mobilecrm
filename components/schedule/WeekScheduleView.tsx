@@ -90,7 +90,7 @@ function WeekReservationCard({
         </div>
         <div
           className={
-            "truncate whitespace-nowrap pl-1 text-[9px] font-semibold leading-3 tracking-[-0.03em] text-[#101828]" +
+            "overflow-hidden whitespace-nowrap pl-1 text-[9px] font-semibold leading-3 tracking-[-0.03em] text-[#101828]" +
             (cancelled ? " line-through decoration-2" : "")
           }
         >
