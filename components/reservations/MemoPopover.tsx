@@ -3,7 +3,7 @@
 import { useState } from "react";
 import type { ReservationNote, MutationResult } from "@/features/reservations/data/client/reservationNotes";
 import type { ReservationRecord } from "@/features/reservations/domain/reservationModels";
-import { toDate } from "@/lib/dateUtils";
+import { formatLogDate } from "@/features/reservations/ui/timelineUtils";
 
 export type MemoPopoverState = {
   item: ReservationRecord;
@@ -105,24 +105,26 @@ export function MemoPopover({
           <button onClick={onClose} className="flex h-9 w-9 items-center justify-center rounded-full bg-[#f6f7f5] text-[#667085] transition active:scale-95">✕</button>
         </div>
 
-        <div className="shrink-0 bg-[#f8fbfa] px-5 py-3">
-          <textarea
-            rows={2}
-            value={newText}
-            onChange={(e) => setNewText(e.target.value)}
-            placeholder="새 메모 입력..."
-            className="w-full resize-none rounded-[16px] border border-[#dbe7e3] bg-white px-3 py-2 text-base focus:border-[#5bd5c8] focus:outline-none focus:ring-2 focus:ring-[#dff7f3] sm:text-sm"
-          />
-          {mutationError && (
-            <div className="mt-2 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-600">{mutationError}</div>
-          )}
-          <button
-            onClick={handleAdd}
-            disabled={adding || mutatingId !== null}
-            className="mt-2 w-full rounded-[18px] bg-[linear-gradient(135deg,#77dfd1_0%,#40c5b3_50%,#0f9b8e_100%)] py-2 text-sm font-semibold text-white shadow-[0_10px_24px_rgba(15,143,131,0.12)] transition active:scale-95 disabled:opacity-50"
-          >
-            {adding ? "추가 중..." : "메모 추가"}
-          </button>
+        <div className="shrink-0 bg-white px-5 pb-3">
+          <div className="rounded-[22px] bg-[#f8fbfa] p-3 shadow-[0_8px_18px_rgba(15,23,42,0.04)]">
+            <textarea
+              rows={3}
+              value={newText}
+              onChange={(e) => setNewText(e.target.value)}
+              placeholder="메모를 입력하세요..."
+              className="w-full resize-none rounded-[18px] border border-[#dbe7e3] bg-white px-3 py-2 text-base transition focus:border-[#5bd5c8] focus:outline-none focus:ring-2 focus:ring-[#dff7f3] sm:text-sm"
+            />
+            <button
+              onClick={handleAdd}
+              disabled={adding || mutatingId !== null}
+              className="mt-2 w-full rounded-[18px] bg-[linear-gradient(135deg,#77dfd1_0%,#40c5b3_50%,#0f9b8e_100%)] py-2 text-sm font-semibold text-white shadow-[0_10px_24px_rgba(15,143,131,0.12)] transition active:scale-95 disabled:opacity-50"
+            >
+              {adding ? "추가 중..." : "메모 추가"}
+            </button>
+            {mutationError && (
+              <div className="mt-2 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-600">{mutationError}</div>
+            )}
+          </div>
         </div>
 
         <div className="flex-1 overflow-y-auto bg-white p-5">
@@ -139,63 +141,54 @@ export function MemoPopover({
           ) : (
             <div className="space-y-3">
               {pagedNotes.map((note) => (
-                <div key={note.id} className="rounded-[22px] bg-[#f8fbfa] p-3.5 shadow-[0_8px_18px_rgba(15,23,42,0.04)]">
-                  <div className="mb-1.5 flex items-start gap-2">
-                    <span className="mt-0.5 shrink-0 rounded-full bg-[#e3f2ee] px-2.5 py-1 text-[10px] font-semibold text-[#0f9b8e]">
-                      {note.createdBy || "알 수 없음"}
-                    </span>
-                    {editingNoteId === note.id ? (
+                <div key={note.id} className="rounded-[22px] bg-[#f8fbfa] p-4 text-sm shadow-[0_8px_18px_rgba(15,23,42,0.04)]">
+                  {editingNoteId === note.id ? (
+                    <>
                       <textarea
-                        className="flex-1 resize-none rounded-[16px] border border-[#dbe7e3] bg-white px-3 py-2 text-sm transition focus:border-[#5bd5c8] focus:outline-none focus:ring-2 focus:ring-[#dff7f3]"
-                        rows={2}
+                        rows={3}
                         value={editingNoteText}
                         onChange={(e) => onEditTextChange(e.target.value)}
+                        className="w-full resize-none rounded-[16px] border border-[#dbe7e3] bg-white px-3 py-2 text-base transition focus:border-[#5bd5c8] focus:outline-none focus:ring-2 focus:ring-[#dff7f3] sm:text-sm"
                       />
-                    ) : (
-                      <span className="flex-1 whitespace-pre-wrap text-sm leading-relaxed text-[#344054]">{note.memoText}</span>
-                    )}
-                  </div>
-
-                  <div className="flex items-center justify-between">
-                    <div className="flex gap-2">
-                      {editingNoteId === note.id ? (
-                        <>
-                          <button
-                            disabled={mutatingId === note.id}
-                            onClick={() => handleUpdate(note)}
-                            className="text-xs font-semibold text-[#0f9b8e] hover:underline disabled:opacity-50"
-                          >저장</button>
-                          <button onClick={onEditCancel} className="text-xs text-gray-400 hover:underline">취소</button>
-                        </>
-                      ) : (
-                        <>
-                          <button
-                            onClick={() => onEditStart(note.id, note.memoText)}
-                            className="text-xs font-semibold text-[#0f9b8e] hover:underline"
-                          >수정</button>
-                          <button
-                            disabled={mutatingId === note.id}
-                            onClick={() => handleDelete(note)}
-                            className="text-xs text-red-400 hover:underline disabled:opacity-50"
-                          >삭제</button>
-                        </>
-                      )}
-                    </div>
-
-                    <div className="text-xs text-gray-400">
-                      {(() => {
-                        const d = toDate(note.createdAt);
-                        if (!d) return "";
-                        return (
-                          d.getFullYear() + "." +
-                          String(d.getMonth() + 1).padStart(2, "0") + "." +
-                          String(d.getDate()).padStart(2, "0") + " " +
-                          String(d.getHours()).padStart(2, "0") + ":" +
-                          String(d.getMinutes()).padStart(2, "0")
-                        );
-                      })()}
-                    </div>
-                  </div>
+                      <div className="mt-2 flex justify-end gap-3 text-xs">
+                        <button onClick={onEditCancel} className="text-gray-500 hover:underline">
+                          취소
+                        </button>
+                        <button
+                          disabled={mutatingId === note.id}
+                          onClick={() => handleUpdate(note)}
+                          className="font-semibold text-[#0f9b8e] hover:underline disabled:opacity-50"
+                        >
+                          {mutatingId === note.id ? "저장 중..." : "저장"}
+                        </button>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="mb-1 flex items-center justify-between gap-2">
+                        <span className="truncate font-semibold text-[#0f9b8e]">
+                          {note.createdBy || "작성자"}
+                        </span>
+                        <span className="shrink-0 text-xs text-gray-400">{formatLogDate(note.createdAt)}</span>
+                      </div>
+                      <div className="whitespace-pre-line leading-6 text-gray-700">{note.memoText}</div>
+                      <div className="mt-2 flex justify-end gap-3 text-xs">
+                        <button
+                          onClick={() => onEditStart(note.id, note.memoText)}
+                          className="text-[#0f9b8e] hover:underline"
+                        >
+                          수정
+                        </button>
+                        <button
+                          disabled={mutatingId === note.id}
+                          onClick={() => handleDelete(note)}
+                          className="text-red-500 hover:underline disabled:opacity-50"
+                        >
+                          삭제
+                        </button>
+                      </div>
+                    </>
+                  )}
                 </div>
               ))}
             </div>

@@ -110,7 +110,7 @@ export function InvoiceListTab() {
     {selectedInvoice && <InvoiceDetailModal invoice={selectedInvoice} title="인보이스 상세" onClose={() => setSelectedInvoice(null)} />}
     <div className="flex flex-col gap-4">
       {/* 컨트롤바 */}
-      <div className="rounded-[26px] bg-[#eaf8f3] p-4 shadow-[0_18px_50px_rgba(7,56,58,0.08)] lg:p-5">
+      <div className="h-[184px] overflow-hidden rounded-[26px] bg-[#eaf8f3] p-5 shadow-[0_18px_50px_rgba(7,56,58,0.08)] lg:h-[196px] lg:p-6">
         <div className="flex items-center gap-2">
           <input
             type="date"
@@ -153,10 +153,12 @@ export function InvoiceListTab() {
           </button>
         </div>
         {/* 퀵필터 */}
-        <div className="mt-3 flex gap-2 overflow-x-auto [&::-webkit-scrollbar]:hidden">
-          <QuickButton onClick={() => quickRange(-1)}>전달</QuickButton>
-          <QuickButton onClick={() => quickRange(0)}>이번 달</QuickButton>
-          <QuickButton onClick={() => quickRange(1)}>다음 달</QuickButton>
+        <div className="mt-3 rounded-[20px] bg-white p-1">
+          <div className="grid grid-cols-3 gap-1">
+            <QuickButton onClick={() => quickRange(-1)}>전달</QuickButton>
+            <QuickButton onClick={() => quickRange(0)}>이번 달</QuickButton>
+            <QuickButton onClick={() => quickRange(1)}>다음 달</QuickButton>
+          </div>
         </div>
       </div>
 

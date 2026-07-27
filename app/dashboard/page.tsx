@@ -223,7 +223,7 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-5">
-      <section className="mb-4 rounded-[26px] bg-[#eaf8f3] p-4 shadow-[0_18px_50px_rgba(7,56,58,0.08)] lg:p-5">
+      <section className="mb-4 h-[184px] overflow-hidden rounded-[26px] bg-[#eaf8f3] p-5 shadow-[0_18px_50px_rgba(7,56,58,0.08)] lg:h-[196px] lg:p-6">
         <div className="flex items-center gap-2">
           <input
             type="date"
@@ -322,11 +322,13 @@ export default function DashboardPage() {
           >
             초기화
           </button>
-          <div className="flex gap-2 overflow-x-auto [&::-webkit-scrollbar]:hidden">
-            <QuickButton onClick={() => handleQuickRange("today")}>오늘</QuickButton>
-            <QuickButton onClick={() => handleQuickRange("week")}>이번 주</QuickButton>
-            <QuickButton onClick={() => handleQuickRange("month")}>이번 달</QuickButton>
-            <QuickButton onClick={() => handleQuickRange("lastMonth")}>전달</QuickButton>
+          <div className="min-w-0 flex-1 rounded-[20px] bg-white p-1">
+            <div className="grid grid-cols-4 gap-1">
+              <QuickButton onClick={() => handleQuickRange("today")}>오늘</QuickButton>
+              <QuickButton onClick={() => handleQuickRange("week")}>이번 주</QuickButton>
+              <QuickButton onClick={() => handleQuickRange("month")}>이번 달</QuickButton>
+              <QuickButton onClick={() => handleQuickRange("lastMonth")}>전달</QuickButton>
+            </div>
           </div>
         </div>
 
