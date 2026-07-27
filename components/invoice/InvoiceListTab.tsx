@@ -32,6 +32,7 @@ export function InvoiceListTab() {
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState("");
   const [selectedInvoice, setSelectedInvoice] = useState<InvoiceRecord | null>(null);
+  const [quickOffset, setQuickOffset] = useState<-1 | 0 | 1 | null>(0);
   const [capped, setCapped] = useState(false);
   // 온디맨드: 진입 시 자동 조회하지 않는다(읽기 비용 절감). 조회/퀵버튼을 눌러야 읽음.
   const [searched, setSearched] = useState(false);
@@ -63,8 +64,9 @@ export function InvoiceListTab() {
   }
 
   // 퀵버튼: 기간 set + 즉시 해당 기간 조회.
-  function quickRange(offset: number) {
+  function quickRange(offset: -1 | 0 | 1) {
     const r = monthRange(offset);
+    setQuickOffset(offset);
     setStartDate(r.start);
     setEndDate(r.end);
     load({ start: r.start, end: r.end });
@@ -111,53 +113,54 @@ export function InvoiceListTab() {
     <div className="flex flex-col gap-4">
       {/* 컨트롤바 */}
       <div className="h-[184px] overflow-hidden rounded-[26px] bg-[#eaf8f3] p-5 shadow-[0_18px_50px_rgba(7,56,58,0.08)] lg:h-[196px] lg:p-6">
-        <div className="flex items-center gap-2">
-          <input
-            type="date"
-            value={startDate}
-            onChange={(e) => setStartDate(e.target.value)}
-            className="h-9 min-w-0 flex-1 appearance-none rounded-[16px] border border-[#dbe7e3] bg-white px-3 text-xs outline-none transition focus:border-[#5bd5c8] focus:ring-2 focus:ring-[#dff7f3]"
-          />
-          <span className="shrink-0 text-sm text-gray-400">~</span>
-          <input
-            type="date"
-            value={endDate}
-            onChange={(e) => setEndDate(e.target.value)}
-            className="h-9 min-w-0 flex-1 appearance-none rounded-[16px] border border-[#dbe7e3] bg-white px-3 text-xs outline-none transition focus:border-[#5bd5c8] focus:ring-2 focus:ring-[#dff7f3]"
-          />
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)}
-            className="h-9 min-w-0 flex-1 rounded-[16px] border border-[#dbe7e3] bg-white px-3 text-xs outline-none transition focus:border-[#5bd5c8] focus:ring-2 focus:ring-[#dff7f3]"
-          >
-            <option value="">전체 상태</option>
-            <option value="draft">임시저장</option>
-            <option value="confirmed">확정</option>
-            <option value="void">취소</option>
-          </select>
-        </div>
-        <div className="mt-2 flex items-center gap-2">
-          <input
-            type="text"
-            placeholder="환자명 검색"
-            value={nameQuery}
-            onChange={(e) => setNameQuery(e.target.value)}
-            className="h-9 min-w-0 flex-1 rounded-[16px] border border-[#dbe7e3] bg-white px-3 text-xs outline-none transition focus:border-[#5bd5c8] focus:ring-2 focus:ring-[#dff7f3]"
-          />
-          <button
-            onClick={() => load()}
-            disabled={loading}
-            className="h-9 shrink-0 rounded-[16px] bg-[linear-gradient(135deg,#77dfd1_0%,#40c5b3_50%,#0f9b8e_100%)] text-white shadow-[0_10px_24px_rgba(15,143,131,0.14)] px-5 text-xs font-bold transition hover:-translate-y-0.5 active:scale-95 disabled:opacity-60"
-          >
-            {loading ? "조회 중…" : "조회"}
-          </button>
-        </div>
-        {/* 퀵필터 */}
-        <div className="mt-3 rounded-[20px] bg-white p-1">
-          <div className="grid grid-cols-3 gap-1">
-            <QuickButton onClick={() => quickRange(-1)}>전달</QuickButton>
-            <QuickButton onClick={() => quickRange(0)}>이번 달</QuickButton>
-            <QuickButton onClick={() => quickRange(1)}>다음 달</QuickButton>
+        <div className="flex h-full flex-col justify-between">
+          <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)_minmax(96px,0.8fr)] gap-2">
+            <input
+              type="date"
+              value={startDate}
+              onChange={(e) => { setQuickOffset(null); setStartDate(e.target.value); }}
+              className="h-10 min-w-0 appearance-none rounded-[18px] bg-white px-3 text-xs text-[#101828] outline-none transition focus:ring-2 focus:ring-[#bdeee8]"
+            />
+            <span className="flex h-10 items-center text-sm text-[#98a2b3]">~</span>
+            <input
+              type="date"
+              value={endDate}
+              onChange={(e) => { setQuickOffset(null); setEndDate(e.target.value); }}
+              className="h-10 min-w-0 appearance-none rounded-[18px] bg-white px-3 text-xs text-[#101828] outline-none transition focus:ring-2 focus:ring-[#bdeee8]"
+            />
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)}
+              className="h-10 min-w-0 rounded-[18px] bg-white px-3 text-xs text-[#101828] outline-none transition focus:ring-2 focus:ring-[#bdeee8]"
+            >
+              <option value="">전체 상태</option>
+              <option value="draft">임시저장</option>
+              <option value="confirmed">확정</option>
+              <option value="void">취소</option>
+            </select>
+          </div>
+          <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-2">
+            <input
+              type="text"
+              placeholder="환자명 검색"
+              value={nameQuery}
+              onChange={(e) => setNameQuery(e.target.value)}
+              className="h-10 min-w-0 rounded-[18px] bg-white px-3 text-xs text-[#101828] outline-none transition placeholder:text-[#98a2b3] focus:ring-2 focus:ring-[#bdeee8]"
+            />
+            <button
+              onClick={() => load()}
+              disabled={loading}
+              className="h-10 shrink-0 rounded-[18px] bg-[linear-gradient(135deg,#77dfd1_0%,#40c5b3_50%,#0f9b8e_100%)] px-5 text-xs font-bold text-white shadow-[0_10px_24px_rgba(15,143,131,0.14)] transition active:scale-95 disabled:opacity-60"
+            >
+              {loading ? "조회 중…" : "조회"}
+            </button>
+          </div>
+          <div className="rounded-[20px] bg-white p-1">
+            <div className="grid grid-cols-3 gap-1">
+              <QuickButton tall active={quickOffset === -1} onClick={() => quickRange(-1)}>전달</QuickButton>
+              <QuickButton tall active={quickOffset === 0} onClick={() => quickRange(0)}>이번 달</QuickButton>
+              <QuickButton tall active={quickOffset === 1} onClick={() => quickRange(1)}>다음 달</QuickButton>
+            </div>
           </div>
         </div>
       </div>
@@ -179,8 +182,8 @@ export function InvoiceListTab() {
         </div>
       )}
 
-      {/* 테이블 */}
-      <div className="overflow-hidden rounded-[28px] bg-white shadow-[0_16px_50px_rgba(15,23,42,0.055)]">
+      {/* 인보이스 리스트 */}
+      <div className="rounded-[28px] bg-white p-3 shadow-[0_16px_50px_rgba(15,23,42,0.055)]">
         {loading ? (
           <div className="flex items-center justify-center py-16 text-sm text-gray-400">
             데이터 로딩 중...
@@ -198,66 +201,60 @@ export function InvoiceListTab() {
             조건에 맞는 인보이스가 없습니다.
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-[#f8fbfa]">
-                <tr>
-                  {["날짜", "환자명", "병원명", "수술명", "담당원장", "상태", "수술비", "커미션", ""].map((h) => (
-                    <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-500">
-                      {h}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[#f1f3f5]">
-                {filtered.map((inv) => (
-                  <tr
-                    key={inv.id}
-                    className="cursor-pointer whitespace-nowrap transition hover:bg-[#f8fbfa]"
-                    onClick={() => router.push(`/invoices/${inv.reservationDocId}`)}
-                  >
-                    <td className="px-4 py-3 text-gray-500">{inv.surgeryDate || formatDate(inv.createdAt)}</td>
-                    <td className="px-4 py-3 font-semibold text-gray-800">{inv.patientName}</td>
-                    <td className="px-4 py-3 text-gray-600">{inv.hospitalName || "-"}</td>
-                    <td className="max-w-[140px] overflow-hidden text-ellipsis px-4 py-3 text-gray-600">{inv.surgeryItems || "-"}</td>
-                    <td className="px-4 py-3 text-gray-600">{inv.doctors.join(", ") || "-"}</td>
-                    <td className="px-4 py-3">
-                      <span className={`rounded-lg px-2 py-0.5 text-xs font-semibold ${INVOICE_STATUS_CLASS[inv.status] || "bg-gray-100 text-gray-500"}`}>
+          <div className="space-y-2.5">
+            {filtered.map((inv) => (
+              <article
+                key={inv.id}
+                className="cursor-pointer rounded-[24px] bg-[#f8fbfa] p-2.5 shadow-[0_10px_24px_rgba(15,23,42,0.04)] transition active:scale-[0.99]"
+                onClick={() => router.push(`/invoices/${inv.reservationDocId}`)}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <h3 className="truncate text-base font-extrabold text-[#101828]">{inv.patientName}</h3>
+                      <span className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold ${INVOICE_STATUS_CLASS[inv.status] || "bg-gray-100 text-gray-500"}`}>
                         {INVOICE_STATUS_LABEL[inv.status] || inv.status}
                       </span>
-                    </td>
-                    <td className="px-4 py-3 font-medium text-gray-700">
-                      ₩{formatMoney(inv.totalAmount || 0)}
-                    </td>
-                    <td className="px-4 py-3 text-[#0f9b8e]">
-                      {inv.commissionAmount ? `₩${formatMoney(inv.commissionAmount)}` : "-"}
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex gap-1">
-                        <button
-                          onClick={(e) => { e.stopPropagation(); router.push(`/invoices/${inv.reservationDocId}`); }}
-                          className="rounded-full bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-600 transition hover:bg-blue-100"
-                        >
-                          수정
-                        </button>
-                        <button
-                          onClick={(e) => { e.stopPropagation(); setSelectedInvoice(inv); }}
-                          className="rounded-full bg-[#f6f7f5] px-2.5 py-1 text-xs font-semibold text-[#667085] transition hover:bg-[#e3f2ee]"
-                        >
-                          보기
-                        </button>
-                        <button
-                          onClick={(e) => handleDelete(inv, e)}
-                          className="rounded-full bg-red-50 px-2.5 py-1 text-xs font-semibold text-red-500 transition hover:bg-red-100"
-                        >
-                          삭제
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                    </div>
+                    <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[12px] text-[#667085]">
+                      <span>{inv.surgeryDate || formatDate(inv.createdAt)}</span>
+                      <span>{inv.hospitalName || "-"}</span>
+                      <span>{inv.doctors.join(", ") || "-"}</span>
+                    </div>
+                  </div>
+                  <div className="shrink-0 text-right">
+                    <div className="text-[11px] text-[#98a2b3]">수술비</div>
+                    <div className="text-sm font-bold text-[#101828]">₩{formatMoney(inv.totalAmount || 0)}</div>
+                  </div>
+                </div>
+                <div className="mt-2 grid gap-2 text-[12px] text-[#667085] sm:grid-cols-[minmax(0,1fr)_auto]">
+                  <div className="min-w-0 rounded-[18px] bg-white px-3 py-2">
+                    <div className="truncate"><span className="text-[#98a2b3]">항목 </span>{inv.surgeryItems || "-"}</div>
+                    <div className="mt-0.5"><span className="text-[#98a2b3]">커미션 </span>{inv.commissionAmount ? `₩${formatMoney(inv.commissionAmount)}` : "-"}</div>
+                  </div>
+                  <div className="flex items-center justify-end gap-1.5">
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setSelectedInvoice(inv); }}
+                      className="h-8 rounded-full bg-[#e3f2ee] px-3 text-[11px] font-semibold text-[#0f9b8e] transition active:scale-95"
+                    >
+                      보기
+                    </button>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); router.push(`/invoices/${inv.reservationDocId}`); }}
+                      className="h-8 rounded-full bg-blue-50 px-3 text-[11px] font-semibold text-blue-600 transition active:scale-95"
+                    >
+                      수정
+                    </button>
+                    <button
+                      onClick={(e) => handleDelete(inv, e)}
+                      className="h-8 rounded-full bg-red-50 px-3 text-[11px] font-semibold text-red-500 transition active:scale-95"
+                    >
+                      삭제
+                    </button>
+                  </div>
+                </div>
+              </article>
+            ))}
           </div>
         )}
       </div>
