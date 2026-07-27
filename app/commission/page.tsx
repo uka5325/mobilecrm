@@ -140,40 +140,41 @@ export default function CommissionPage() {
 
       {/* 컨트롤바 */}
       <div className="h-[184px] overflow-hidden rounded-[26px] bg-[#eaf8f3] p-5 shadow-[0_18px_50px_rgba(7,56,58,0.08)] lg:h-[196px] lg:p-6">
-        {/* 1행: 날짜 */}
-        <div className="flex items-center gap-2">
+        {/* 1행: 날짜 + 담당자 + 상태 */}
+        <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)_minmax(104px,0.9fr)_minmax(104px,0.9fr)] items-center gap-2">
           <input
             type="date"
             value={startDate}
             onChange={(e) => setStartDate(e.target.value)}
-            className="h-9 min-w-0 flex-1 appearance-none rounded-[16px] border border-[#dbe7e3] bg-white px-3 text-xs outline-none transition focus:border-[#5bd5c8] focus:ring-2 focus:ring-[#dff7f3]"
+            className="h-9 min-w-0 appearance-none rounded-[16px] border border-[#dbe7e3] bg-white px-3 text-xs outline-none transition focus:border-[#5bd5c8] focus:ring-2 focus:ring-[#dff7f3]"
           />
           <span className="shrink-0 text-sm text-gray-400">~</span>
           <input
             type="date"
             value={endDate}
             onChange={(e) => setEndDate(e.target.value)}
-            className="h-9 min-w-0 flex-1 appearance-none rounded-[16px] border border-[#dbe7e3] bg-white px-3 text-xs outline-none transition focus:border-[#5bd5c8] focus:ring-2 focus:ring-[#dff7f3]"
+            className="h-9 min-w-0 appearance-none rounded-[16px] border border-[#dbe7e3] bg-white px-3 text-xs outline-none transition focus:border-[#5bd5c8] focus:ring-2 focus:ring-[#dff7f3]"
           />
-        </div>
-        {/* 2행: 담당자 + 상태 */}
-        <div className="mt-2 flex items-center gap-2">
-          {isAdmin && (
+          {isAdmin ? (
             <select
               value={selectedStaffUid}
               onChange={(e) => setSelectedStaffUid(e.target.value)}
-              className="h-9 min-w-0 flex-1 rounded-[16px] border border-[#dbe7e3] bg-white px-3 text-xs outline-none transition focus:border-[#5bd5c8] focus:ring-2 focus:ring-[#dff7f3]"
+              className="h-9 min-w-0 rounded-[16px] border border-[#dbe7e3] bg-white px-3 text-xs outline-none transition focus:border-[#5bd5c8] focus:ring-2 focus:ring-[#dff7f3]"
             >
               <option value="__all__">전체 직원</option>
               {staffList.map((s) => (
                 <option key={s.uid} value={s.uid}>{s.displayName}</option>
               ))}
             </select>
+          ) : (
+            <div className="h-9 min-w-0 rounded-[16px] border border-[#dbe7e3] bg-white px-3 text-xs leading-9 text-[#667085]">
+              {currentUser.displayName || "내 커미션"}
+            </div>
           )}
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)}
-            className="h-9 min-w-0 flex-1 rounded-[16px] border border-[#dbe7e3] bg-white px-3 text-xs outline-none transition focus:border-[#5bd5c8] focus:ring-2 focus:ring-[#dff7f3]"
+            className="h-9 min-w-0 rounded-[16px] border border-[#dbe7e3] bg-white px-3 text-xs outline-none transition focus:border-[#5bd5c8] focus:ring-2 focus:ring-[#dff7f3]"
           >
             <option value="">전체 상태</option>
             <option value="confirmed">확정</option>
