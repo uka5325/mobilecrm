@@ -31,11 +31,11 @@ export function DetailDrawer({ open, reservation, currentUser, onClose, onRefres
   return (
     <>
       <div
-        className="fixed inset-0 z-[998] flex items-start justify-center overflow-y-auto bg-black/35 px-3 pb-4 pt-20 backdrop-blur-[2px] sm:items-center sm:p-6"
+        className="fixed inset-0 z-[998] flex items-start justify-center overflow-y-auto bg-black/35 px-3 pb-8 pt-24 backdrop-blur-[2px] sm:items-center sm:p-6"
         onClick={onClose}
       >
         <div
-          className="flex h-[calc(100vh-104px)] w-full max-w-[720px] flex-col overflow-hidden rounded-[30px] bg-white shadow-[0_28px_90px_rgba(15,23,42,0.26)] sm:h-[min(820px,calc(100vh-48px))]"
+          className="flex h-[calc(100vh-128px)] w-full max-w-[720px] flex-col overflow-hidden rounded-[32px] bg-white shadow-[0_28px_90px_rgba(15,23,42,0.26)] sm:h-[min(820px,calc(100vh-48px))]"
           onClick={(e) => e.stopPropagation()}
         >
         <DetailDrawerHeader

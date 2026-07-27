@@ -19,7 +19,7 @@ const TAB_LABELS: Record<DetailTab, string> = {
 export function DetailDrawerTabs({ activeTab, onTabChange }: Props) {
   return (
     <div className="shrink-0 bg-white px-4 pb-3 sm:px-5">
-      <div className="grid grid-cols-6 gap-1 rounded-[20px] bg-white p-1">
+      <div className="grid grid-cols-6 gap-1 rounded-[20px] bg-[#f6f7f5] p-1">
         {(Object.keys(TAB_LABELS) as DetailTab[]).map((key) => (
           <button
             key={key}

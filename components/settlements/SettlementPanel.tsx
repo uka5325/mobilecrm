@@ -73,7 +73,7 @@ function money(value: number) {
 // 기본정보 탭의 py-2 입력과 같은 38px 높이. min-w-0/max-w-full은 iOS date input의
 // 고유 최소 너비가 2열 그리드를 밀어내지 않도록 모든 컨트롤에 공통 적용한다.
 const FIELD_CLASS =
-  "mt-1 h-[38px] min-w-0 max-w-full w-full rounded-xl border border-[#dfe3e8] bg-white px-3 text-sm text-gray-800 transition focus:border-[#1d9e75] focus:outline-none";
+  "mt-1 h-[40px] min-w-0 max-w-full w-full rounded-[16px] border border-[#dbe7e3] bg-white px-3 text-base text-gray-800 transition focus:border-[#5bd5c8] focus:outline-none focus:ring-2 focus:ring-[#dff7f3] sm:text-sm";
 
 function categoryFor(appointment?: SettlementAppointment | CurrentReservation): SettlementCategory {
   if (appointment?.appointmentType === "수술") return "surgery_fee";
@@ -249,27 +249,27 @@ export function SettlementPanel({ patientId, patientName, currentReservation, on
       </div>
 
       <div className="grid grid-cols-3 gap-2">
-        <div className="rounded-xl bg-emerald-50 p-3">
-          <div className="text-[11px] text-emerald-700">순 실결제액</div>
-          <div className="mt-1 text-sm font-bold text-emerald-800">{money(aggregate.netAmount)}</div>
+        <div className="rounded-[18px] bg-[#eaf8f3] p-3">
+          <div className="text-[11px] text-[#0f9b8e]">순 실결제액</div>
+          <div className="mt-1 text-sm font-bold text-[#0f766e]">{money(aggregate.netAmount)}</div>
         </div>
-        <div className="rounded-xl bg-blue-50 p-3">
+        <div className="rounded-[18px] bg-blue-50 p-3">
           <div className="text-[11px] text-blue-700">누적 결제</div>
           <div className="mt-1 text-sm font-bold text-blue-800">{money(aggregate.totalPaid)}</div>
         </div>
-        <div className="rounded-xl bg-red-50 p-3">
+        <div className="rounded-[18px] bg-red-50 p-3">
           <div className="text-[11px] text-red-700">누적 환불</div>
           <div className="mt-1 text-sm font-bold text-red-800">{money(aggregate.totalRefunded)}</div>
         </div>
       </div>
 
       {aggregate.count === 0 && (
-        <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs leading-5 text-emerald-800">
+        <div className="rounded-[18px] bg-[#eaf8f3] px-3 py-2 text-xs leading-5 text-[#0f766e]">
           실제 결제·환불 내역만 정산에 등록해 주세요. 청구금액이나 견적금액은 필요한 경우 메모에 기록할 수 있습니다.
         </div>
       )}
 
-      <div className="rounded-2xl border border-gray-200 p-4">
+      <div className="rounded-[24px] bg-[#f1f8f5] p-4 shadow-[0_8px_18px_rgba(15,23,42,0.035)]">
         <div className="mb-3 text-sm font-semibold">{editingId ? "정산 수정" : "정산 등록"}</div>
         <div className="space-y-3">
           <div>
@@ -359,7 +359,7 @@ export function SettlementPanel({ patientId, patientName, currentReservation, on
             </div>
             <div className="min-w-0">
               <label className="text-xs text-gray-500">선택 일정</label>
-              <div className="mt-1 flex h-[38px] min-w-0 items-center truncate rounded-xl bg-gray-50 px-3 text-xs text-gray-500">
+              <div className="mt-1 flex h-[40px] min-w-0 items-center truncate rounded-[16px] bg-white px-3 text-xs text-gray-500">
                 {selectedAppointment ? `${selectedAppointment.appointmentType} · ${selectedAppointment.consultArea || "항목 미지정"}` : "—"}
               </div>
             </div>
@@ -377,12 +377,12 @@ export function SettlementPanel({ patientId, patientName, currentReservation, on
 
           <div className="flex gap-2">
             {editingId && (
-              <button onClick={resetForm} className="flex-1 rounded-xl border border-gray-200 py-2 text-sm text-gray-600">취소</button>
+              <button onClick={resetForm} className="flex-1 rounded-[18px] bg-white py-2 text-sm text-gray-600">취소</button>
             )}
             <button
               onClick={save}
               disabled={saving || loading}
-              className="flex-1 rounded-xl bg-black py-2 text-sm font-medium text-white disabled:opacity-50"
+              className="flex-1 rounded-[18px] bg-[linear-gradient(135deg,#77dfd1_0%,#40c5b3_50%,#0f9b8e_100%)] py-2 text-sm font-semibold text-white shadow-[0_10px_24px_rgba(15,143,131,0.12)] disabled:opacity-50"
             >
               {saving ? "저장 중..." : editingId ? "수정 저장" : "정산 추가"}
             </button>
@@ -391,7 +391,7 @@ export function SettlementPanel({ patientId, patientName, currentReservation, on
       </div>
 
       {error && <div className="rounded-xl bg-red-50 px-3 py-2 text-sm text-red-600">{error}</div>}
-      {message && <div className="rounded-xl bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{message}</div>}
+      {message && <div className="rounded-[18px] bg-[#eaf8f3] px-3 py-2 text-sm text-[#0f9b8e]">{message}</div>}
 
       <div>
         <div className="mb-2 flex items-center justify-between">
@@ -399,13 +399,13 @@ export function SettlementPanel({ patientId, patientName, currentReservation, on
           <div className="text-xs text-gray-400">활성 {aggregate.count}건</div>
         </div>
         {loading ? (
-          <div className="rounded-xl bg-gray-50 p-4 text-center text-sm text-gray-400">불러오는 중...</div>
+          <div className="rounded-[20px] bg-[#eaf8f3] p-4 text-center text-sm text-gray-400">불러오는 중...</div>
         ) : settlements.length === 0 ? (
-          <div className="rounded-xl bg-gray-50 p-4 text-center text-sm text-gray-400">등록된 정산이 없습니다.</div>
+          <div className="rounded-[20px] bg-[#eaf8f3] p-4 text-center text-sm text-gray-400">등록된 정산이 없습니다.</div>
         ) : (
           <div className="space-y-2">
             {settlements.map((row) => (
-              <div key={row.id} className={`rounded-xl border p-3 ${row.status === "void" ? "border-gray-200 bg-gray-50 opacity-60" : "border-gray-200 bg-white"}`}>
+              <div key={row.id} className={`rounded-[20px] p-3 shadow-[0_8px_18px_rgba(15,23,42,0.035)] ${row.status === "void" ? "bg-[#f6f7f5] opacity-60" : "bg-[#f8fbfa]"}`}>
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-1.5 text-xs">

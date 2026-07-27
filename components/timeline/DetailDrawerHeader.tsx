@@ -86,7 +86,7 @@ export function DetailDrawerHeader({
           className={`h-8 rounded-full px-3 text-xs font-semibold transition active:scale-95 ${
             cancelled
               ? "bg-[#fff3c4] text-[#b7791f]"
-              : "bg-[#f6f7f5] text-[#667085]"
+              : "bg-[#fff9e6] text-[#d69e2e]"
           }`}
         >
           취소 {cancelled ? "✓" : "—"}

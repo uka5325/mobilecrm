@@ -117,27 +117,29 @@ export function FilesTab(props: Props) {
 
   return (
     <div className="space-y-4">
-      {error && <div className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">{error}</div>}
-      <div className="flex items-center justify-between">
-        <div className="text-sm font-semibold">사진 {!loading && `${photos.length}장`}</div>
-        <button type="button" disabled={uploading} onClick={() => inputRef.current?.click()} className="rounded-lg border px-3 py-1.5 text-xs disabled:opacity-50">
-          {uploading ? "업로드 중..." : "+ 사진 추가"}
-        </button>
-        <input ref={inputRef} type="file" accept="image/*" multiple className="hidden" onChange={(e) => void upload(e.target.files)} />
+      {error && <div className="rounded-[18px] bg-red-50 px-3 py-2 text-sm text-red-600">{error}</div>}
+      <div className="rounded-[24px] bg-[#eaf8f3] p-3 shadow-[0_8px_18px_rgba(15,23,42,0.035)]">
+        <div className="flex items-center justify-between gap-3">
+          <div className="text-sm font-semibold text-[#101828]">사진 {!loading && `${photos.length}장`}</div>
+          <button type="button" disabled={uploading} onClick={() => inputRef.current?.click()} className="rounded-full bg-[linear-gradient(135deg,#77dfd1_0%,#40c5b3_50%,#0f9b8e_100%)] px-3 py-1.5 text-xs font-semibold text-white shadow-[0_10px_24px_rgba(15,143,131,0.12)] disabled:opacity-50">
+            {uploading ? "업로드 중..." : "+ 사진 추가"}
+          </button>
+          <input ref={inputRef} type="file" accept="image/*" multiple className="hidden" onChange={(e) => void upload(e.target.files)} />
+        </div>
       </div>
 
       {loading ? (
-        <div className="rounded-xl border border-dashed p-4 text-center text-xs text-gray-400">불러오는 중...</div>
+        <div className="rounded-[20px] bg-[#eaf8f3] p-5 text-center text-xs text-gray-400">불러오는 중...</div>
       ) : photos.length === 0 ? (
-        <div className="rounded-xl border border-dashed p-4 text-center text-xs text-gray-400">등록된 사진이 없습니다</div>
+        <div className="rounded-[20px] bg-[#eaf8f3] p-5 text-center text-xs text-gray-400">등록된 사진이 없습니다</div>
       ) : (
-        <ul className="divide-y rounded-xl border bg-white">
+        <ul className="space-y-2">
           {photos.map((photo) => (
-            <li key={photo.id} className="flex items-center gap-2 px-3 py-2.5">
+            <li key={photo.id} className="flex items-center gap-2 rounded-[20px] bg-[#f1f8f5] px-3 py-2.5 shadow-[0_8px_18px_rgba(15,23,42,0.035)]">
               <div className="min-w-0 flex-1 truncate text-sm">{photo.fileName}</div>
               {photo.storageDeleteStatus === "failed" && <span className="text-xs text-amber-600">삭제 실패</span>}
-              <button type="button" onClick={() => void view(photo)} className="rounded border px-2 py-1 text-xs">보기</button>
-              <button type="button" onClick={() => void remove(photo)} className="rounded border px-2 py-1 text-xs text-red-500">
+              <button type="button" onClick={() => void view(photo)} className="rounded-full bg-[#e3f2ee] px-2.5 py-1 text-xs font-semibold text-[#0f9b8e]">보기</button>
+              <button type="button" onClick={() => void remove(photo)} className="rounded-full bg-red-50 px-2.5 py-1 text-xs font-semibold text-red-500">
                 {photo.storageDeleteStatus === "failed" ? "재시도" : "삭제"}
               </button>
             </li>

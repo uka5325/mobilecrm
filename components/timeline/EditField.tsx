@@ -15,7 +15,7 @@ export function EditField({
       <input
         value={value || ""}
         onChange={(e) => onChange(e.target.value)}
-        className="mt-1 w-full rounded-xl border border-[#dfe3e8] bg-white px-3 py-2 text-base transition focus:border-[#0f9b8e] focus:outline-none sm:text-sm"
+        className="mt-1 w-full rounded-[16px] border border-[#dbe7e3] bg-white px-3 py-2 text-base transition focus:border-[#5bd5c8] focus:outline-none focus:ring-2 focus:ring-[#dff7f3] sm:text-sm"
       />
     </div>
   );

@@ -142,67 +142,67 @@ export function InvoiceEditorForm({
       <div className="space-y-2">
         <div>
           <label className="mb-1 block text-xs font-medium text-gray-600">병원명</label>
-          <input value={form.hospitalName} onChange={(event) => setForm((prev) => ({ ...prev, hospitalName: event.target.value }))} className="w-full rounded-xl border border-[#dfe3e8] px-3 py-2 text-sm focus:border-[#1d9e75] focus:outline-none" />
+          <input value={form.hospitalName} onChange={(event) => setForm((prev) => ({ ...prev, hospitalName: event.target.value }))} className="w-full rounded-[16px] border border-[#dbe7e3] bg-white px-3 py-2 text-base focus:border-[#5bd5c8] focus:outline-none focus:ring-2 focus:ring-[#dff7f3] sm:text-sm" />
         </div>
         <div>
           <label className="mb-1 block text-xs font-medium text-gray-600">수술날짜</label>
-          <input type="date" value={form.surgeryDate || ""} onChange={(event) => setForm((prev) => ({ ...prev, surgeryDate: event.target.value }))} className="w-full rounded-xl border border-[#dfe3e8] px-3 py-2 text-sm focus:border-[#1d9e75] focus:outline-none" />
+          <input type="date" value={form.surgeryDate || ""} onChange={(event) => setForm((prev) => ({ ...prev, surgeryDate: event.target.value }))} className="w-full rounded-[16px] border border-[#dbe7e3] bg-white px-3 py-2 text-base focus:border-[#5bd5c8] focus:outline-none focus:ring-2 focus:ring-[#dff7f3] sm:text-sm" />
         </div>
         <div className="grid grid-cols-2 gap-2">
           <div>
             <label className="mb-1 block text-xs font-medium text-gray-600">담당 원장</label>
-            <input value={(form.doctors || []).join(", ")} onChange={(event) => setForm((prev) => ({ ...prev, doctors: event.target.value.split(",").map((value) => value.trim()).filter(Boolean) }))} placeholder="쉼표로 구분" className="w-full rounded-xl border border-[#dfe3e8] px-3 py-2 text-sm focus:border-[#1d9e75] focus:outline-none" />
+            <input value={(form.doctors || []).join(", ")} onChange={(event) => setForm((prev) => ({ ...prev, doctors: event.target.value.split(",").map((value) => value.trim()).filter(Boolean) }))} placeholder="쉼표로 구분" className="w-full rounded-[16px] border border-[#dbe7e3] bg-white px-3 py-2 text-base focus:border-[#5bd5c8] focus:outline-none focus:ring-2 focus:ring-[#dff7f3] sm:text-sm" />
           </div>
           <div>
             <label className="mb-1 block text-xs font-medium text-gray-600">담당자</label>
-            <div className="rounded-xl border border-[#dfe3e8] bg-gray-50 px-3 py-2 text-sm text-gray-600">{invoice.coordinators?.length ? invoice.coordinators.join(", ") : "-"}</div>
+            <div className="rounded-[16px] bg-[#eaf8f3] px-3 py-2 text-sm text-gray-600">{invoice.coordinators?.length ? invoice.coordinators.join(", ") : "-"}</div>
           </div>
         </div>
         <div>
           <label className="mb-1 block text-xs font-medium text-gray-600">수술/시술명</label>
-          <textarea value={form.surgeryItems} onChange={(event) => setForm((prev) => ({ ...prev, surgeryItems: event.target.value }))} rows={2} className="w-full resize-none rounded-xl border border-[#dfe3e8] px-3 py-2 text-sm focus:border-[#1d9e75] focus:outline-none" />
+          <textarea value={form.surgeryItems} onChange={(event) => setForm((prev) => ({ ...prev, surgeryItems: event.target.value }))} rows={2} className="w-full resize-none rounded-[16px] border border-[#dbe7e3] bg-white px-3 py-2 text-base focus:border-[#5bd5c8] focus:outline-none focus:ring-2 focus:ring-[#dff7f3] sm:text-sm" />
         </div>
         <div>
           <label className="mb-1 block text-xs font-medium text-gray-600">수술비 (KRW)</label>
-          <input type="number" value={form.totalAmount || ""} onChange={(event) => setForm((prev) => ({ ...prev, totalAmount: Number(event.target.value) || 0 }))} className="w-full rounded-xl border border-[#dfe3e8] px-3 py-2 text-sm focus:border-[#1d9e75] focus:outline-none" />
+          <input type="number" value={form.totalAmount || ""} onChange={(event) => setForm((prev) => ({ ...prev, totalAmount: Number(event.target.value) || 0 }))} className="w-full rounded-[16px] border border-[#dbe7e3] bg-white px-3 py-2 text-base focus:border-[#5bd5c8] focus:outline-none focus:ring-2 focus:ring-[#dff7f3] sm:text-sm" />
         </div>
         <div>
           <label className="mb-1 block text-xs font-medium text-gray-600">상태</label>
-          <select value={form.status || "draft"} onChange={(event) => setForm((prev) => ({ ...prev, status: event.target.value as "draft" | "confirmed" | "void" }))} className="w-full rounded-xl border border-[#dfe3e8] px-3 py-2 text-sm focus:border-[#1d9e75] focus:outline-none">
+          <select value={form.status || "draft"} onChange={(event) => setForm((prev) => ({ ...prev, status: event.target.value as "draft" | "confirmed" | "void" }))} className="w-full rounded-[16px] border border-[#dbe7e3] bg-white px-3 py-2 text-base focus:border-[#5bd5c8] focus:outline-none focus:ring-2 focus:ring-[#dff7f3] sm:text-sm">
             <option value="draft">임시저장</option><option value="confirmed">확정</option><option value="void">취소</option>
           </select>
         </div>
         <div>
           <label className="mb-1 block text-xs font-medium text-gray-600">메모</label>
-          <textarea value={form.memo || ""} onChange={(event) => setForm((prev) => ({ ...prev, memo: event.target.value }))} rows={2} className="w-full resize-none rounded-xl border border-[#dfe3e8] px-3 py-2 text-sm focus:border-[#1d9e75] focus:outline-none" />
+          <textarea value={form.memo || ""} onChange={(event) => setForm((prev) => ({ ...prev, memo: event.target.value }))} rows={2} className="w-full resize-none rounded-[16px] border border-[#dbe7e3] bg-white px-3 py-2 text-base focus:border-[#5bd5c8] focus:outline-none focus:ring-2 focus:ring-[#dff7f3] sm:text-sm" />
         </div>
       </div>
 
-      <div className="space-y-2 rounded-xl border border-[#edf0f3] bg-gray-50 p-3">
+      <div className="space-y-2 rounded-[22px] bg-[#eaf8f3] p-3 shadow-[0_8px_18px_rgba(15,23,42,0.035)]">
         <div className="text-xs font-semibold text-gray-600">커미션</div>
         <div>
           <label className="mb-1 block text-xs text-gray-500">결제방법</label>
-          <select value={form.paymentMethod || ""} onChange={(event) => setForm((prev) => ({ ...prev, paymentMethod: (event.target.value as "card" | "cash" | "mixed") || undefined }))} className="w-full rounded-xl border border-[#dfe3e8] bg-white px-3 py-2 text-sm focus:border-[#1d9e75] focus:outline-none">
+          <select value={form.paymentMethod || ""} onChange={(event) => setForm((prev) => ({ ...prev, paymentMethod: (event.target.value as "card" | "cash" | "mixed") || undefined }))} className="w-full rounded-[16px] border border-[#dbe7e3] bg-white px-3 py-2 text-base focus:border-[#5bd5c8] focus:outline-none focus:ring-2 focus:ring-[#dff7f3] sm:text-sm">
             <option value="">선택</option><option value="card">카드</option><option value="cash">현금</option><option value="mixed">혼합</option>
           </select>
         </div>
         {form.paymentMethod === "mixed" && (
           <div className="grid grid-cols-2 gap-2">
-            <div><label className="mb-1 block text-xs text-gray-500">카드금액</label><input type="number" value={form.cardAmount || ""} onChange={(event) => setForm((prev) => ({ ...prev, cardAmount: Number(event.target.value) || 0 }))} className="w-full rounded-xl border border-[#dfe3e8] bg-white px-3 py-2 text-sm focus:border-[#1d9e75] focus:outline-none" /></div>
-            <div><label className="mb-1 block text-xs text-gray-500">현금금액</label><input type="number" value={form.cashAmount || ""} onChange={(event) => setForm((prev) => ({ ...prev, cashAmount: Number(event.target.value) || 0 }))} className="w-full rounded-xl border border-[#dfe3e8] bg-white px-3 py-2 text-sm focus:border-[#1d9e75] focus:outline-none" /></div>
+            <div><label className="mb-1 block text-xs text-gray-500">카드금액</label><input type="number" value={form.cardAmount || ""} onChange={(event) => setForm((prev) => ({ ...prev, cardAmount: Number(event.target.value) || 0 }))} className="w-full rounded-[16px] border border-[#dbe7e3] bg-white px-3 py-2 text-base focus:border-[#5bd5c8] focus:outline-none focus:ring-2 focus:ring-[#dff7f3] sm:text-sm" /></div>
+            <div><label className="mb-1 block text-xs text-gray-500">현금금액</label><input type="number" value={form.cashAmount || ""} onChange={(event) => setForm((prev) => ({ ...prev, cashAmount: Number(event.target.value) || 0 }))} className="w-full rounded-[16px] border border-[#dbe7e3] bg-white px-3 py-2 text-base focus:border-[#5bd5c8] focus:outline-none focus:ring-2 focus:ring-[#dff7f3] sm:text-sm" /></div>
           </div>
         )}
         <div>
           <label className="mb-1 block text-xs text-gray-500">커미션 담당자</label>
-          <select value={form.commissionStaffUid || ""} onChange={(event) => { const uid = event.target.value; const staff = staffList.find((item) => item.uid === uid); setForm((prev) => ({ ...prev, commissionStaffUid: uid || undefined, commissionStaffName: staff?.displayName || undefined })); }} className="w-full rounded-xl border border-[#dfe3e8] bg-white px-3 py-2 text-sm focus:border-[#1d9e75] focus:outline-none">
+          <select value={form.commissionStaffUid || ""} onChange={(event) => { const uid = event.target.value; const staff = staffList.find((item) => item.uid === uid); setForm((prev) => ({ ...prev, commissionStaffUid: uid || undefined, commissionStaffName: staff?.displayName || undefined })); }} className="w-full rounded-[16px] border border-[#dbe7e3] bg-white px-3 py-2 text-base focus:border-[#5bd5c8] focus:outline-none focus:ring-2 focus:ring-[#dff7f3] sm:text-sm">
             <option value="">담당자 선택</option>{staffList.map((staff) => <option key={staff.uid} value={staff.uid}>{staff.displayName}</option>)}
           </select>
         </div>
-        <div><label className="mb-1 block text-xs text-gray-500">커미션율 (%)</label><input type="number" value={form.commissionRate ?? ""} onChange={(event) => setForm((prev) => ({ ...prev, commissionRate: event.target.value ? Number(event.target.value) : undefined }))} className="w-full rounded-xl border border-[#dfe3e8] bg-white px-3 py-2 text-sm focus:border-[#1d9e75] focus:outline-none" /></div>
+        <div><label className="mb-1 block text-xs text-gray-500">커미션율 (%)</label><input type="number" value={form.commissionRate ?? ""} onChange={(event) => setForm((prev) => ({ ...prev, commissionRate: event.target.value ? Number(event.target.value) : undefined }))} className="w-full rounded-[16px] border border-[#dbe7e3] bg-white px-3 py-2 text-base focus:border-[#5bd5c8] focus:outline-none focus:ring-2 focus:ring-[#dff7f3] sm:text-sm" /></div>
         {commissionBase !== undefined && (
-          <div className="grid grid-cols-2 gap-2 rounded-xl bg-white p-2.5 text-xs">
+          <div className="grid grid-cols-2 gap-2 rounded-[18px] bg-white p-2.5 text-xs">
             <div><div className="text-gray-400">커미션 기준액</div><div className="font-semibold">{formatMoney(commissionBase)} KRW</div></div>
-            <div><div className="text-gray-400">커미션액</div><div className="font-semibold text-[#1d9e75]">{formatMoney(commissionAmount)} KRW</div></div>
+            <div><div className="text-gray-400">커미션액</div><div className="font-semibold text-[#0f9b8e]">{formatMoney(commissionAmount)} KRW</div></div>
           </div>
         )}
       </div>
@@ -210,9 +210,9 @@ export function InvoiceEditorForm({
       {error && <div className="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-600">{error}</div>}
       {message && <div className="rounded-lg bg-emerald-50 px-3 py-2 text-xs text-emerald-700">{message}</div>}
       <div className="flex gap-2">
-        <button onClick={handleSave} disabled={saving} className="flex-1 rounded-xl bg-[#1d9e75] py-2.5 text-sm font-semibold text-white disabled:opacity-50">{saving ? "저장 중..." : "저장"}</button>
-        <button onClick={handleDelete} disabled={deleting} className="rounded-xl border border-red-200 bg-red-50 px-4 py-2.5 text-sm font-medium text-red-600 disabled:opacity-50">{deleting ? "삭제 중..." : "삭제"}</button>
-        {!showHeader && <button onClick={onCancel} className="rounded-xl border border-gray-200 px-4 py-2.5 text-sm text-gray-500">취소</button>}
+        <button onClick={handleSave} disabled={saving} className="flex-1 rounded-[18px] bg-[linear-gradient(135deg,#77dfd1_0%,#40c5b3_50%,#0f9b8e_100%)] py-2.5 text-sm font-semibold text-white shadow-[0_10px_24px_rgba(15,143,131,0.12)] disabled:opacity-50">{saving ? "저장 중..." : "저장"}</button>
+        <button onClick={handleDelete} disabled={deleting} className="rounded-[18px] bg-red-50 px-4 py-2.5 text-sm font-medium text-red-600 disabled:opacity-50">{deleting ? "삭제 중..." : "삭제"}</button>
+        {!showHeader && <button onClick={onCancel} className="rounded-[18px] bg-[#eaf8f3] px-4 py-2.5 text-sm text-gray-500">취소</button>}
       </div>
     </div>
   );
