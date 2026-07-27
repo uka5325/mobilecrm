@@ -190,7 +190,7 @@ export function InfoTab({
       <button
         onClick={onSave}
         disabled={detailSaving}
-        className="mt-4 w-full rounded-xl bg-black py-3 text-sm font-medium text-white transition hover:-translate-y-0.5 hover:shadow-md active:scale-95 disabled:opacity-50"
+        className="mt-4 w-full rounded-[18px] bg-[linear-gradient(135deg,#77dfd1_0%,#40c5b3_50%,#0f9b8e_100%)] py-3 text-sm font-semibold text-white shadow-[0_10px_24px_rgba(15,143,131,0.14)] transition active:scale-95 disabled:opacity-50"
       >
         {detailSaving ? "저장 중..." : "수정 저장"}
       </button>
@@ -216,7 +216,7 @@ export function InfoTab({
 
         <button
           onClick={onAddMemo}
-          className="mt-2 w-full rounded-xl bg-emerald-600 py-2 text-sm font-medium text-white transition hover:-translate-y-0.5 hover:shadow-md active:scale-95"
+          className="mt-2 w-full rounded-[16px] bg-[#0f9b8e] py-2 text-sm font-semibold text-white transition active:scale-95"
         >
           메모 추가
         </button>
