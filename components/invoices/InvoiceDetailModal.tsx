@@ -11,12 +11,10 @@ type Props = {
 };
 
 export function InvoiceDetailModal({ invoice, title, onClose }: Props) {
-  const details: [string, string][] = [
+  const compactDetails: [string, string][] = [
     ["인보이스 ID", invoice.invoiceId],
     ["병원명", invoice.hospitalName || "-"],
     ["수술날짜", invoice.surgeryDate || "-"],
-    ["담당원장", invoice.doctors?.join(", ") || "-"],
-    ["수술/시술명", invoice.surgeryItems || "-"],
     ["담당자", invoice.commissionStaffName || "-"],
     ["결제방법", paymentMethodLabel(invoice.paymentMethod)],
     ["최종 수술비", formatMoney(invoice.totalAmount) + " KRW"],
@@ -24,6 +22,10 @@ export function InvoiceDetailModal({ invoice, title, onClose }: Props) {
     ["커미션율", invoice.commissionRate !== undefined ? `${invoice.commissionRate}%` : "-"],
     ["커미션액", formatMoney(invoice.commissionAmount) + " KRW"],
     ["상태", INVOICE_STATUS_LABEL[invoice.status] || invoice.status],
+  ];
+  const wideDetails: [string, string][] = [
+    ["담당원장", invoice.doctors?.join(", ") || "-"],
+    ["수술/시술명", invoice.surgeryItems || "-"],
     ["메모", invoice.memo || "-"],
   ];
 
@@ -43,13 +45,21 @@ export function InvoiceDetailModal({ invoice, title, onClose }: Props) {
             ×
           </button>
         </div>
-        <div className="grid gap-2">
-          {details.map(([label, value]) => (
-            <div key={label} className="rounded-[18px] bg-[#f8fbfa] px-4 py-3 text-sm">
+        <div className="grid grid-cols-2 gap-2">
+          {compactDetails.map(([label, value]) => (
+            <div key={label} className="min-w-0 rounded-[18px] bg-[#f8fbfa] px-3 py-2.5 text-sm">
               <div className="text-[11px] font-semibold text-[#98a2b3]">{label}</div>
               <div className={`mt-1 break-words font-semibold text-[#101828] ${label === "상태" ? (INVOICE_STATUS_CLASS[invoice.status] || "") + " inline-block rounded-full px-2.5 py-1 text-[11px]" : ""}`}>
                 {value}
               </div>
+            </div>
+          ))}
+        </div>
+        <div className="mt-2 grid gap-2">
+          {wideDetails.map(([label, value]) => (
+            <div key={label} className="rounded-[18px] bg-[#f8fbfa] px-4 py-3 text-sm">
+              <div className="text-[11px] font-semibold text-[#98a2b3]">{label}</div>
+              <div className="mt-1 break-words font-semibold text-[#101828]">{value}</div>
             </div>
           ))}
         </div>

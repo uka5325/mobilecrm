@@ -183,7 +183,7 @@ export function InvoiceListTab() {
       )}
 
       {/* 인보이스 리스트 */}
-      <div className="rounded-[28px] bg-white p-3 shadow-[0_16px_50px_rgba(15,23,42,0.055)]">
+      <div className="space-y-2.5">
         {loading ? (
           <div className="flex items-center justify-center py-16 text-sm text-gray-400">
             데이터 로딩 중...
@@ -201,7 +201,7 @@ export function InvoiceListTab() {
             조건에 맞는 인보이스가 없습니다.
           </div>
         ) : (
-          <div className="space-y-2.5">
+          <>
             {filtered.map((inv) => (
               <article
                 key={inv.id}
@@ -258,7 +258,7 @@ export function InvoiceListTab() {
                 </div>
               </article>
             ))}
-          </div>
+          </>
         )}
       </div>
 
