@@ -130,11 +130,11 @@ export function MemoPopover({
             <div className="mb-3 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-600">{memoPopover.error}</div>
           )}
           {memoPopover.loading ? (
-            <div className="rounded-[22px] bg-[#f6f7f5] px-4 py-8 text-center text-sm text-[#8b93a1]">메모 로딩 중...</div>
+            <div className="rounded-[22px] bg-[#f8fbfa] px-4 py-8 text-center text-sm text-[#8b93a1] shadow-[0_8px_18px_rgba(15,23,42,0.035)]">메모 로딩 중...</div>
           ) : memoPopover.notes.length === 0 ? (
             // refetch 실패로 목록이 보존됐을 땐 위 에러 배너만, 초기 로드 실패면 배너만(빈목록 문구 숨김)
             memoPopover.error ? null : (
-              <div className="rounded-[22px] bg-[#f6f7f5] px-4 py-8 text-center text-sm text-[#8b93a1]">등록된 메모가 없습니다.</div>
+              <div className="rounded-[22px] bg-[#f8fbfa] px-4 py-8 text-center text-sm text-[#8b93a1] shadow-[0_8px_18px_rgba(15,23,42,0.035)]">등록된 메모가 없습니다.</div>
             )
           ) : (
             <div className="space-y-3">
@@ -146,13 +146,13 @@ export function MemoPopover({
                     </span>
                     {editingNoteId === note.id ? (
                       <textarea
-                        className="flex-1 rounded-lg border border-[#dfe3e8] px-2 py-1 text-sm focus:border-emerald-500 focus:outline-none"
+                        className="flex-1 resize-none rounded-[16px] border border-[#dbe7e3] bg-white px-3 py-2 text-sm transition focus:border-[#5bd5c8] focus:outline-none focus:ring-2 focus:ring-[#dff7f3]"
                         rows={2}
                         value={editingNoteText}
                         onChange={(e) => onEditTextChange(e.target.value)}
                       />
                     ) : (
-                      <span className="flex-1 text-sm leading-relaxed text-gray-700 whitespace-pre-wrap">{note.memoText}</span>
+                      <span className="flex-1 whitespace-pre-wrap text-sm leading-relaxed text-[#344054]">{note.memoText}</span>
                     )}
                   </div>
 
