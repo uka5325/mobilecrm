@@ -127,6 +127,10 @@ function AppShellContent({ children }: AppShellProps) {
 
   const visibleDesktopItems = useMemo(() => filterByRole(desktopMenuItems, roleName), [roleName]);
   const visibleMobileMoreItems = useMemo(() => filterByRole(mobileMoreItems, roleName), [roleName]);
+  const headerFadeClass =
+    pathname === "/"
+      ? "pointer-events-none fixed inset-x-0 top-0 z-30 h-[calc(env(safe-area-inset-top)+230px)] bg-gradient-to-b from-[#f6f7f5] via-[#f6f7f5]/98 to-[#f6f7f5]/0 backdrop-blur-2xl [mask-image:linear-gradient(to_bottom,#000_0%,#000_80%,transparent_100%)] lg:left-[272px]"
+      : "pointer-events-none fixed inset-x-0 top-0 z-30 h-[calc(env(safe-area-inset-top)+210px)] bg-gradient-to-b from-[#f6f7f5] via-[#f6f7f5]/94 to-[#f6f7f5]/0 backdrop-blur-xl [mask-image:linear-gradient(to_bottom,#000_0%,#000_74%,transparent_100%)] lg:left-[272px]";
 
   useEffect(() => {
     setMounted(true);
@@ -193,7 +197,7 @@ function AppShellContent({ children }: AppShellProps) {
       <main className="min-w-0 flex-1 px-4 pb-28 pt-5 sm:px-6 lg:px-8 lg:py-8">
         <div className="mx-auto w-full max-w-[1320px]">
           {showHeaderFade ? (
-            <div className="pointer-events-none fixed inset-x-0 top-0 z-30 h-[calc(env(safe-area-inset-top)+220px)] bg-gradient-to-b from-[#f6f7f5]/95 via-[#f6f7f5]/72 to-[#f6f7f5]/0 backdrop-blur-xl [mask-image:linear-gradient(to_bottom,#000_0%,#000_66%,transparent_100%)] lg:left-[272px]" />
+            <div className={headerFadeClass} />
           ) : null}
 
           <header className="sticky top-[calc(env(safe-area-inset-top)+12px)] z-40 mb-5 rounded-[28px] bg-white px-5 py-4 shadow-[0_16px_50px_rgba(15,23,42,0.06)] lg:top-8 lg:mb-6 lg:px-7">
