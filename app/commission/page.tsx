@@ -228,7 +228,7 @@ export default function CommissionPage() {
                 ))}
               </select>
             ) : (
-              <div className="h-10 min-w-0 truncate rounded-[18px] bg-white px-3 text-xs leading-10 text-[#101828]">
+              <div className="h-10 min-w-0 truncate rounded-[18px] bg-white px-2 text-[11px] leading-10 text-[#101828]">
                 {currentUser.displayName || "내 커미션"}
               </div>
             )}
@@ -249,12 +249,12 @@ export default function CommissionPage() {
               onChange={(e) => setPatientSearch(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleSearch()}
               placeholder="환자명 검색"
-              className="h-10 min-w-0 rounded-[18px] bg-white px-3 text-xs text-[#101828] outline-none transition placeholder:text-[#98a2b3] focus:ring-2 focus:ring-[#bdeee8]"
+              className="h-10 min-w-0 rounded-[18px] bg-white px-2 text-[11px] text-[#101828] outline-none transition placeholder:text-[#98a2b3] focus:ring-2 focus:ring-[#bdeee8]"
             />
             <button
               onClick={() => handleSearch()}
               disabled={loading}
-              className="h-10 shrink-0 rounded-[18px] bg-[linear-gradient(135deg,#77dfd1_0%,#40c5b3_50%,#0f9b8e_100%)] px-5 text-xs font-bold text-white shadow-[0_10px_24px_rgba(15,143,131,0.14)] transition hover:-translate-y-0.5 active:scale-95 disabled:opacity-50"
+              className="h-10 shrink-0 rounded-[18px] bg-[linear-gradient(135deg,#77dfd1_0%,#40c5b3_50%,#0f9b8e_100%)] px-5 text-[11px] font-bold text-white shadow-[0_10px_24px_rgba(15,143,131,0.14)] transition hover:-translate-y-0.5 active:scale-95 disabled:opacity-50"
             >
               {loading ? "조회 중..." : "조회"}
             </button>
