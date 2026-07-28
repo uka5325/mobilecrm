@@ -192,7 +192,7 @@ function AppShellContent({ children }: AppShellProps) {
               </p>
 
               <div className="mt-4 flex min-w-0 flex-nowrap items-center gap-3 overflow-hidden">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[linear-gradient(135deg,#77dfd1_0%,#40c5b3_50%,#0f9b8e_100%)] text-base font-black text-white shadow-[0_10px_24px_rgba(15,143,131,0.18)]">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[linear-gradient(135deg,#77dfd1_0%,#40c5b3_50%,#0f9b8e_100%)] text-base font-black text-white">
                   {avatarText}
                 </div>
 

@@ -81,7 +81,7 @@ export function InfoTab({
           <input
             value={detailForm.birthInput}
             onChange={(e) => onFormChange({ birthInput: e.target.value })}
-            className="mt-1 w-full rounded-[16px] border border-[#dbe7e3] bg-white px-3 py-2 text-base transition focus:border-[#5bd5c8] focus:outline-none focus:ring-2 focus:ring-[#dff7f3] sm:text-sm"
+            className="mt-1 w-full rounded-[16px] bg-[#f8fbfa] px-3 py-2 text-base outline-none transition focus:ring-2 focus:ring-[#bdeee8] sm:text-sm"
             placeholder="891210-1 / 19891210-1"
           />
           {detailForm.birthInput && (
@@ -112,7 +112,7 @@ export function InfoTab({
           <input
             value={detailForm.hospital}
             onChange={(e) => onFormChange({ hospital: e.target.value })}
-            className="mt-1 w-full rounded-[16px] border border-[#dbe7e3] bg-white px-3 py-2 text-base transition focus:border-[#5bd5c8] focus:outline-none focus:ring-2 focus:ring-[#dff7f3] sm:text-sm"
+            className="mt-1 w-full rounded-[16px] bg-[#f8fbfa] px-3 py-2 text-base outline-none transition focus:ring-2 focus:ring-[#bdeee8] sm:text-sm"
           />
         </div>
         <div>
@@ -121,7 +121,7 @@ export function InfoTab({
             value={detailForm.doctors}
             onChange={(e) => onFormChange({ doctors: e.target.value })}
             placeholder="쉼표로 구분"
-            className="mt-1 w-full rounded-[16px] border border-[#dbe7e3] bg-white px-3 py-2 text-base transition focus:border-[#5bd5c8] focus:outline-none focus:ring-2 focus:ring-[#dff7f3] sm:text-sm"
+            className="mt-1 w-full rounded-[16px] bg-[#f8fbfa] px-3 py-2 text-base outline-none transition focus:ring-2 focus:ring-[#bdeee8] sm:text-sm"
           />
         </div>
       </div>
@@ -132,7 +132,7 @@ export function InfoTab({
           <select
             value={detailForm.appointmentType}
             onChange={(e) => onFormChange({ appointmentType: e.target.value as AppointmentType })}
-            className="mt-1 w-full rounded-[16px] border border-[#dbe7e3] bg-white px-3 py-2 text-base transition focus:border-[#5bd5c8] focus:outline-none focus:ring-2 focus:ring-[#dff7f3] sm:text-sm"
+            className="mt-1 w-full rounded-[16px] bg-[#f8fbfa] px-3 py-2 text-base outline-none transition focus:ring-2 focus:ring-[#bdeee8] sm:text-sm"
           >
             {APPOINTMENT_TYPES.map((type) => (
               <option key={type} value={type}>{type}</option>
@@ -155,7 +155,7 @@ export function InfoTab({
             type="date"
             value={detailForm.reservationDate}
             onChange={(e) => onFormChange({ reservationDate: e.target.value })}
-            className="mt-1 min-w-0 w-full appearance-none rounded-[16px] border border-[#dbe7e3] bg-white px-3 py-2 text-base transition focus:border-[#5bd5c8] focus:outline-none focus:ring-2 focus:ring-[#dff7f3] sm:text-sm"
+            className="mt-1 min-w-0 w-full appearance-none rounded-[16px] bg-[#f8fbfa] px-3 py-2 text-base outline-none transition focus:ring-2 focus:ring-[#bdeee8] sm:text-sm"
           />
         </div>
 
@@ -166,7 +166,7 @@ export function InfoTab({
             step={1800}
             value={detailForm.reservationTime}
             onChange={(e) => onFormChange({ reservationTime: e.target.value })}
-            className="mt-1 min-w-0 w-full appearance-none rounded-[16px] border border-[#dbe7e3] bg-white px-3 py-2 text-base transition focus:border-[#5bd5c8] focus:outline-none focus:ring-2 focus:ring-[#dff7f3] sm:text-sm"
+            className="mt-1 min-w-0 w-full appearance-none rounded-[16px] bg-[#f8fbfa] px-3 py-2 text-base outline-none transition focus:ring-2 focus:ring-[#bdeee8] sm:text-sm"
           />
         </div>
       </div>
@@ -210,7 +210,7 @@ export function InfoTab({
           rows={2}
           value={memoText}
           onChange={(e) => onMemoTextChange(e.target.value)}
-          className="w-full resize-none rounded-[16px] border border-[#dbe7e3] bg-white px-3 py-2 text-base transition focus:border-[#5bd5c8] focus:outline-none focus:ring-2 focus:ring-[#dff7f3] sm:text-sm"
+          className="w-full resize-none rounded-[16px] bg-[#f8fbfa] px-3 py-2 text-base outline-none transition focus:ring-2 focus:ring-[#bdeee8] sm:text-sm"
           placeholder="기본정보에서 바로 메모 입력"
         />
 

@@ -127,7 +127,7 @@ export function NewReservationDrawer({ open, onClose, currentUser, initialDate, 
               <input
                 value={form.name}
                 onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))}
-                className="mt-1 w-full rounded-[16px] border border-[#dbe7e3] bg-white px-3 py-2 text-base transition focus:border-[#5bd5c8] focus:outline-none focus:ring-2 focus:ring-[#dff7f3] sm:text-sm"
+                className="mt-1 w-full rounded-[16px] bg-[#f8fbfa] px-3 py-2 text-base outline-none transition focus:ring-2 focus:ring-[#bdeee8] sm:text-sm"
               />
             </div>
 
@@ -137,7 +137,7 @@ export function NewReservationDrawer({ open, onClose, currentUser, initialDate, 
                 value={form.birthInput}
                 onChange={(e) => setForm((p) => ({ ...p, birthInput: e.target.value }))}
                 placeholder="891210-1 / 19891210-1"
-                className="mt-1 w-full rounded-[16px] border border-[#dbe7e3] bg-white px-3 py-2 text-base transition focus:border-[#5bd5c8] focus:outline-none focus:ring-2 focus:ring-[#dff7f3] sm:text-sm"
+                className="mt-1 w-full rounded-[16px] bg-[#f8fbfa] px-3 py-2 text-base outline-none transition focus:ring-2 focus:ring-[#bdeee8] sm:text-sm"
               />
               {form.birthInput && (
                 <div className="mt-1 text-xs text-gray-500">
@@ -153,7 +153,7 @@ export function NewReservationDrawer({ open, onClose, currentUser, initialDate, 
               <input
                 value={form.phone}
                 onChange={(e) => setForm((p) => ({ ...p, phone: e.target.value }))}
-                className="mt-1 w-full rounded-[16px] border border-[#dbe7e3] bg-white px-3 py-2 text-base transition focus:border-[#5bd5c8] focus:outline-none focus:ring-2 focus:ring-[#dff7f3] sm:text-sm"
+                className="mt-1 w-full rounded-[16px] bg-[#f8fbfa] px-3 py-2 text-base outline-none transition focus:ring-2 focus:ring-[#bdeee8] sm:text-sm"
               />
             </div>
 
@@ -163,7 +163,7 @@ export function NewReservationDrawer({ open, onClose, currentUser, initialDate, 
                 value={form.nationality}
                 onChange={(e) => setForm((p) => ({ ...p, nationality: e.target.value }))}
                 placeholder="몽골"
-                className="mt-1 w-full rounded-[16px] border border-[#dbe7e3] bg-white px-3 py-2 text-base transition focus:border-[#5bd5c8] focus:outline-none focus:ring-2 focus:ring-[#dff7f3] sm:text-sm"
+                className="mt-1 w-full rounded-[16px] bg-[#f8fbfa] px-3 py-2 text-base outline-none transition focus:ring-2 focus:ring-[#bdeee8] sm:text-sm"
               />
             </div>
           </div>
@@ -175,7 +175,7 @@ export function NewReservationDrawer({ open, onClose, currentUser, initialDate, 
                 value={form.hospital}
                 onChange={(e) => setForm((p) => ({ ...p, hospital: e.target.value }))}
                 placeholder="예: 강남성형외과"
-                className="mt-1 w-full rounded-[16px] border border-[#dbe7e3] bg-white px-3 py-2 text-base transition focus:border-[#5bd5c8] focus:outline-none focus:ring-2 focus:ring-[#dff7f3] sm:text-sm"
+                className="mt-1 w-full rounded-[16px] bg-[#f8fbfa] px-3 py-2 text-base outline-none transition focus:ring-2 focus:ring-[#bdeee8] sm:text-sm"
               />
             </div>
             <div>
@@ -184,7 +184,7 @@ export function NewReservationDrawer({ open, onClose, currentUser, initialDate, 
                 value={form.doctors}
                 onChange={(e) => setForm((p) => ({ ...p, doctors: e.target.value }))}
                 placeholder="쉼표로 구분"
-                className="mt-1 w-full rounded-[16px] border border-[#dbe7e3] bg-white px-3 py-2 text-base transition focus:border-[#5bd5c8] focus:outline-none focus:ring-2 focus:ring-[#dff7f3] sm:text-sm"
+                className="mt-1 w-full rounded-[16px] bg-[#f8fbfa] px-3 py-2 text-base outline-none transition focus:ring-2 focus:ring-[#bdeee8] sm:text-sm"
               />
             </div>
           </div>
@@ -195,7 +195,7 @@ export function NewReservationDrawer({ open, onClose, currentUser, initialDate, 
               <select
                 value={form.appointmentType}
                 onChange={(e) => setForm((p) => ({ ...p, appointmentType: e.target.value as AppointmentType }))}
-                className="mt-1 w-full rounded-[16px] border border-[#dbe7e3] bg-white px-3 py-2 text-base transition focus:border-[#5bd5c8] focus:outline-none focus:ring-2 focus:ring-[#dff7f3] sm:text-sm"
+                className="mt-1 w-full rounded-[16px] bg-[#f8fbfa] px-3 py-2 text-base outline-none transition focus:ring-2 focus:ring-[#bdeee8] sm:text-sm"
               >
                 {APPOINTMENT_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
               </select>
@@ -207,7 +207,7 @@ export function NewReservationDrawer({ open, onClose, currentUser, initialDate, 
               <input
                 value={form.consultArea}
                 onChange={(e) => setForm((p) => ({ ...p, consultArea: e.target.value }))}
-                className="mt-1 w-full rounded-[16px] border border-[#dbe7e3] bg-white px-3 py-2 text-base transition focus:border-[#5bd5c8] focus:outline-none focus:ring-2 focus:ring-[#dff7f3] sm:text-sm"
+                className="mt-1 w-full rounded-[16px] bg-[#f8fbfa] px-3 py-2 text-base outline-none transition focus:ring-2 focus:ring-[#bdeee8] sm:text-sm"
               />
             </div>
           </div>
@@ -219,7 +219,7 @@ export function NewReservationDrawer({ open, onClose, currentUser, initialDate, 
                 type="date"
                 value={form.reservationDate}
                 onChange={(e) => setForm((p) => ({ ...p, reservationDate: e.target.value }))}
-                className="mt-1 min-w-0 w-full appearance-none rounded-[16px] border border-[#dbe7e3] bg-white px-3 py-2 text-base transition focus:border-[#5bd5c8] focus:outline-none focus:ring-2 focus:ring-[#dff7f3] sm:text-sm"
+                className="mt-1 min-w-0 w-full appearance-none rounded-[16px] bg-[#f8fbfa] px-3 py-2 text-base outline-none transition focus:ring-2 focus:ring-[#bdeee8] sm:text-sm"
               />
             </div>
             <div className="min-w-0">
@@ -228,7 +228,7 @@ export function NewReservationDrawer({ open, onClose, currentUser, initialDate, 
                 type="time"
                 value={form.reservationTime}
                 onChange={(e) => setForm((p) => ({ ...p, reservationTime: e.target.value }))}
-                className="mt-1 min-w-0 w-full appearance-none rounded-[16px] border border-[#dbe7e3] bg-white px-3 py-2 text-base transition focus:border-[#5bd5c8] focus:outline-none focus:ring-2 focus:ring-[#dff7f3] sm:text-sm"
+                className="mt-1 min-w-0 w-full appearance-none rounded-[16px] bg-[#f8fbfa] px-3 py-2 text-base outline-none transition focus:ring-2 focus:ring-[#bdeee8] sm:text-sm"
               />
             </div>
           </div>
@@ -239,7 +239,7 @@ export function NewReservationDrawer({ open, onClose, currentUser, initialDate, 
               value={form.coordinators}
               onChange={(e) => setForm((p) => ({ ...p, coordinators: e.target.value }))}
               placeholder="쉼표로 구분"
-              className="mt-1 w-full rounded-[16px] border border-[#dbe7e3] bg-white px-3 py-2 text-base transition focus:border-[#5bd5c8] focus:outline-none focus:ring-2 focus:ring-[#dff7f3] sm:text-sm"
+              className="mt-1 w-full rounded-[16px] bg-[#f8fbfa] px-3 py-2 text-base outline-none transition focus:ring-2 focus:ring-[#bdeee8] sm:text-sm"
             />
           </div>
 

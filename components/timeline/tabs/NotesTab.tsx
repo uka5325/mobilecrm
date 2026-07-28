@@ -39,7 +39,7 @@ export function NotesTab({ memoText, notes, notesLoading, notesError, memoError,
         rows={3}
         value={memoText}
         onChange={(e) => onMemoTextChange(e.target.value)}
-        className="w-full resize-none rounded-[18px] border border-[#dbe7e3] bg-white px-3 py-2 text-base transition focus:border-[#5bd5c8] focus:outline-none focus:ring-2 focus:ring-[#dff7f3] sm:text-sm"
+        className="w-full resize-none rounded-[18px] bg-[#f8fbfa] px-3 py-2 text-base outline-none transition focus:ring-2 focus:ring-[#bdeee8] sm:text-sm"
         placeholder="메모를 입력하세요..."
       />
       <button

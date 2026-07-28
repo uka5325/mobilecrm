@@ -111,10 +111,10 @@ export default function HomePage() {
       <section className="rounded-[28px] bg-white px-5 py-5 shadow-[0_16px_50px_rgba(15,23,42,0.06)] lg:px-7">
         <div className="text-xs font-black tracking-[0.18em] text-[#0f8f83]">MOBILE CRM</div>
         <h1 className="mt-2 text-[28px] font-black tracking-[-0.04em] text-[#12151f] lg:text-[34px]">홈</h1>
-        <p className="mt-2 text-sm leading-6 text-[#7b8290]">오늘의 운영 현황을 확인하세요.</p>
+        <p className="mt-2 text-sm leading-6 text-[#7b8290]">오늘 필요한 운영 정보를 빠르게 확인합니다.</p>
 
         <div className="mt-4 flex min-w-0 flex-nowrap items-center gap-3 overflow-hidden">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#0f8f83] text-base font-black text-white">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[linear-gradient(135deg,#77dfd1_0%,#40c5b3_50%,#0f9b8e_100%)] text-base font-black text-white">
             {avatarText}
           </div>
 
@@ -126,7 +126,7 @@ export default function HomePage() {
           <button
             type="button"
             onClick={() => void logout()}
-            className="ml-auto shrink-0 rounded-full border border-[#dfe3e8] px-3.5 py-2 text-xs font-black text-[#4b5563] transition hover:border-[#0f8f83] hover:text-[#0f8f83] active:scale-95"
+            className="ml-auto flex h-10 shrink-0 items-center rounded-full bg-[#e3f2ee] px-4 text-xs font-bold text-[#0f9b8e] transition hover:bg-[#d7ede7] active:scale-95"
           >
             로그아웃
           </button>

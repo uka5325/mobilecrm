@@ -51,6 +51,14 @@ select {
   font-family: inherit;
 }
 
+@media (max-width: 640px) {
+  input,
+  textarea,
+  select {
+    font-size: 16px !important;
+  }
+}
+
 button {
   cursor: pointer;
 }

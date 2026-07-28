@@ -160,7 +160,7 @@ export function CreateDrawer({ open, onClose, currentUser, initialDate, initialP
                   ? setResForm((p) => ({ ...p, name: e.target.value }))
                   : setRegForm((p) => ({ ...p, name: e.target.value }))
                 }
-                className="mt-1 w-full rounded-[16px] border border-[#dbe7e3] bg-white px-3 py-2 text-base transition focus:border-[#5bd5c8] focus:outline-none focus:ring-2 focus:ring-[#dff7f3] sm:text-sm"
+                className="mt-1 w-full rounded-[16px] bg-[#f8fbfa] px-3 py-2 text-base outline-none transition focus:ring-2 focus:ring-[#bdeee8] sm:text-sm"
               />
             </div>
             <div>
@@ -172,7 +172,7 @@ export function CreateDrawer({ open, onClose, currentUser, initialDate, initialP
                   : setRegForm((p) => ({ ...p, birthInput: e.target.value }))
                 }
                 placeholder="891210-1 / 19891210-1"
-                className="mt-1 w-full rounded-[16px] border border-[#dbe7e3] bg-white px-3 py-2 text-base transition focus:border-[#5bd5c8] focus:outline-none focus:ring-2 focus:ring-[#dff7f3] sm:text-sm"
+                className="mt-1 w-full rounded-[16px] bg-[#f8fbfa] px-3 py-2 text-base outline-none transition focus:ring-2 focus:ring-[#bdeee8] sm:text-sm"
               />
               {(isReservation ? resForm.birthInput : regForm.birthInput) && (
                 <div className="mt-1 text-xs text-gray-500">
@@ -194,7 +194,7 @@ export function CreateDrawer({ open, onClose, currentUser, initialDate, initialP
                   ? setResForm((p) => ({ ...p, phone: e.target.value }))
                   : setRegForm((p) => ({ ...p, phone: e.target.value }))
                 }
-                className="mt-1 w-full rounded-[16px] border border-[#dbe7e3] bg-white px-3 py-2 text-base transition focus:border-[#5bd5c8] focus:outline-none focus:ring-2 focus:ring-[#dff7f3] sm:text-sm"
+                className="mt-1 w-full rounded-[16px] bg-[#f8fbfa] px-3 py-2 text-base outline-none transition focus:ring-2 focus:ring-[#bdeee8] sm:text-sm"
               />
             </div>
             <div>
@@ -206,7 +206,7 @@ export function CreateDrawer({ open, onClose, currentUser, initialDate, initialP
                   : setRegForm((p) => ({ ...p, nationality: e.target.value }))
                 }
                 placeholder="몽골"
-                className="mt-1 w-full rounded-[16px] border border-[#dbe7e3] bg-white px-3 py-2 text-base transition focus:border-[#5bd5c8] focus:outline-none focus:ring-2 focus:ring-[#dff7f3] sm:text-sm"
+                className="mt-1 w-full rounded-[16px] bg-[#f8fbfa] px-3 py-2 text-base outline-none transition focus:ring-2 focus:ring-[#bdeee8] sm:text-sm"
               />
             </div>
           </div>
@@ -222,7 +222,7 @@ export function CreateDrawer({ open, onClose, currentUser, initialDate, initialP
                     type="date"
                     value={resForm.reservationDate}
                     onChange={(e) => setResForm((p) => ({ ...p, reservationDate: e.target.value }))}
-                    className="mt-1 min-w-0 w-full appearance-none rounded-[16px] border border-[#dbe7e3] bg-white px-3 py-2 text-base transition focus:border-[#5bd5c8] focus:outline-none focus:ring-2 focus:ring-[#dff7f3] sm:text-sm"
+                    className="mt-1 min-w-0 w-full appearance-none rounded-[16px] bg-[#f8fbfa] px-3 py-2 text-base outline-none transition focus:ring-2 focus:ring-[#bdeee8] sm:text-sm"
                   />
                 </div>
                 <div>
@@ -231,7 +231,7 @@ export function CreateDrawer({ open, onClose, currentUser, initialDate, initialP
                     type="time"
                     value={resForm.reservationTime}
                     onChange={(e) => setResForm((p) => ({ ...p, reservationTime: e.target.value }))}
-                    className="mt-1 min-w-0 w-full appearance-none rounded-[16px] border border-[#dbe7e3] bg-white px-3 py-2 text-base transition focus:border-[#5bd5c8] focus:outline-none focus:ring-2 focus:ring-[#dff7f3] sm:text-sm"
+                    className="mt-1 min-w-0 w-full appearance-none rounded-[16px] bg-[#f8fbfa] px-3 py-2 text-base outline-none transition focus:ring-2 focus:ring-[#bdeee8] sm:text-sm"
                   />
                 </div>
               </div>
@@ -243,7 +243,7 @@ export function CreateDrawer({ open, onClose, currentUser, initialDate, initialP
                   <input
                     value={resForm.hospital}
                     onChange={(e) => setResForm((p) => ({ ...p, hospital: e.target.value }))}
-                    className="mt-1 w-full rounded-[16px] border border-[#dbe7e3] bg-white px-3 py-2 text-base transition focus:border-[#5bd5c8] focus:outline-none focus:ring-2 focus:ring-[#dff7f3] sm:text-sm"
+                    className="mt-1 w-full rounded-[16px] bg-[#f8fbfa] px-3 py-2 text-base outline-none transition focus:ring-2 focus:ring-[#bdeee8] sm:text-sm"
                   />
                 </div>
                 <div>
@@ -251,7 +251,7 @@ export function CreateDrawer({ open, onClose, currentUser, initialDate, initialP
                   <input
                     value={resForm.doctors}
                     onChange={(e) => setResForm((p) => ({ ...p, doctors: e.target.value }))}
-                    className="mt-1 w-full rounded-[16px] border border-[#dbe7e3] bg-white px-3 py-2 text-base transition focus:border-[#5bd5c8] focus:outline-none focus:ring-2 focus:ring-[#dff7f3] sm:text-sm"
+                    className="mt-1 w-full rounded-[16px] bg-[#f8fbfa] px-3 py-2 text-base outline-none transition focus:ring-2 focus:ring-[#bdeee8] sm:text-sm"
                   />
                 </div>
               </div>
@@ -263,7 +263,7 @@ export function CreateDrawer({ open, onClose, currentUser, initialDate, initialP
                   <select
                     value={resForm.appointmentType}
                     onChange={(e) => setResForm((p) => ({ ...p, appointmentType: e.target.value as AppointmentType }))}
-                    className="mt-1 w-full rounded-[16px] border border-[#dbe7e3] bg-white px-3 py-2 text-base transition focus:border-[#5bd5c8] focus:outline-none focus:ring-2 focus:ring-[#dff7f3] sm:text-sm"
+                    className="mt-1 w-full rounded-[16px] bg-[#f8fbfa] px-3 py-2 text-base outline-none transition focus:ring-2 focus:ring-[#bdeee8] sm:text-sm"
                   >
                     {APPOINTMENT_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
                   </select>
@@ -275,7 +275,7 @@ export function CreateDrawer({ open, onClose, currentUser, initialDate, initialP
                   <input
                     value={resForm.consultArea}
                     onChange={(e) => setResForm((p) => ({ ...p, consultArea: e.target.value }))}
-                    className="mt-1 w-full rounded-[16px] border border-[#dbe7e3] bg-white px-3 py-2 text-base transition focus:border-[#5bd5c8] focus:outline-none focus:ring-2 focus:ring-[#dff7f3] sm:text-sm"
+                    className="mt-1 w-full rounded-[16px] bg-[#f8fbfa] px-3 py-2 text-base outline-none transition focus:ring-2 focus:ring-[#bdeee8] sm:text-sm"
                   />
                 </div>
               </div>
@@ -286,7 +286,7 @@ export function CreateDrawer({ open, onClose, currentUser, initialDate, initialP
                 <input
                   value={resForm.coordinators}
                   onChange={(e) => setResForm((p) => ({ ...p, coordinators: e.target.value }))}
-                  className="mt-1 w-full rounded-[16px] border border-[#dbe7e3] bg-white px-3 py-2 text-base transition focus:border-[#5bd5c8] focus:outline-none focus:ring-2 focus:ring-[#dff7f3] sm:text-sm"
+                  className="mt-1 w-full rounded-[16px] bg-[#f8fbfa] px-3 py-2 text-base outline-none transition focus:ring-2 focus:ring-[#bdeee8] sm:text-sm"
                 />
               </div>
 

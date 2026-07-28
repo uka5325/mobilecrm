@@ -112,7 +112,7 @@ export function MemoPopover({
               value={newText}
               onChange={(e) => setNewText(e.target.value)}
               placeholder="메모를 입력하세요..."
-              className="w-full resize-none rounded-[18px] border border-[#dbe7e3] bg-white px-3 py-2 text-base transition focus:border-[#5bd5c8] focus:outline-none focus:ring-2 focus:ring-[#dff7f3] sm:text-sm"
+              className="w-full resize-none rounded-[18px] bg-[#f8fbfa] px-3 py-2 text-base outline-none transition focus:ring-2 focus:ring-[#bdeee8] sm:text-sm"
             />
             <button
               onClick={handleAdd}
@@ -148,7 +148,7 @@ export function MemoPopover({
                         rows={3}
                         value={editingNoteText}
                         onChange={(e) => onEditTextChange(e.target.value)}
-                        className="w-full resize-none rounded-[16px] border border-[#dbe7e3] bg-white px-3 py-2 text-base transition focus:border-[#5bd5c8] focus:outline-none focus:ring-2 focus:ring-[#dff7f3] sm:text-sm"
+                        className="w-full resize-none rounded-[16px] bg-[#f8fbfa] px-3 py-2 text-base outline-none transition focus:ring-2 focus:ring-[#bdeee8] sm:text-sm"
                       />
                       <div className="mt-2 flex justify-end gap-3 text-xs">
                         <button onClick={onEditCancel} className="text-gray-500 hover:underline">

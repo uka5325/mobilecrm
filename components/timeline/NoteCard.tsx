@@ -64,7 +64,7 @@ export function NoteCard({ note, compact = false, onUpdate, onDelete }: Props) {
             rows={compact ? 2 : 3}
             value={editText}
             onChange={(e) => setEditText(e.target.value)}
-            className="w-full resize-none rounded-[16px] border border-[#dbe7e3] bg-white px-3 py-2 text-base transition focus:border-[#5bd5c8] focus:outline-none focus:ring-2 focus:ring-[#dff7f3] sm:text-sm"
+            className="w-full resize-none rounded-[16px] bg-[#f8fbfa] px-3 py-2 text-base outline-none transition focus:ring-2 focus:ring-[#bdeee8] sm:text-sm"
           />
           <div className="mt-2 flex justify-end gap-3 text-xs">
             <button disabled={saving} onClick={() => setEditing(false)} className="text-gray-500 hover:underline disabled:opacity-50">
