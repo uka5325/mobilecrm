@@ -101,7 +101,7 @@ export default function HomePage() {
   const nextReservation = todayReservations[0];
 
   return (
-    <div className="mx-auto max-w-[980px] space-y-6">
+    <div className="w-full space-y-6">
       <HomeStats
         dateLabel={todayDisplayString()}
         reservationCount={todayReservations.length}
@@ -111,7 +111,7 @@ export default function HomePage() {
         loading={loading}
       />
 
-      <div className="space-y-6 px-1 lg:px-0">
+      <div className="space-y-6">
         <TodayMemo
           memos={todayMemos}
           loading={memoLoading}

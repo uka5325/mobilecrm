@@ -184,22 +184,20 @@ function AppShellContent({ children }: AppShellProps) {
           <header className="mb-5 rounded-[28px] bg-white px-5 py-4 shadow-[0_16px_50px_rgba(15,23,42,0.06)] lg:mb-6 lg:px-7">
             <div className="text-xs font-black tracking-[0.18em] text-[#0f8f83]">MOBILE CRM</div>
 
-            <div className="mt-2 flex min-w-0 items-end justify-between gap-3">
+            <div className="mt-2 flex min-w-0 items-start justify-between gap-3">
               <h1 className="min-w-0 truncate text-[28px] font-black tracking-[-0.04em] text-[#12151f] lg:text-[34px]">
                 {currentPage.title}
               </h1>
 
-              <div className="flex min-w-0 shrink-0 items-center gap-2 text-right">
+              <div className="flex min-w-0 shrink-0 flex-col items-end text-right">
                 <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[linear-gradient(135deg,#77dfd1_0%,#40c5b3_50%,#0f9b8e_100%)] text-sm font-black text-white">
                   {avatarText}
                 </div>
 
-                <div className="flex min-w-0 items-baseline gap-1.5">
-                  <span className="max-w-[128px] truncate text-sm font-black tracking-[-0.03em] text-[#12151f] sm:max-w-[220px]">
-                    {displayName}
-                  </span>
-                  {roleName ? <span className="shrink-0 text-xs font-semibold text-[#7b8290]">{roleName}</span> : null}
-                </div>
+                <span className="mt-1 max-w-[128px] truncate text-sm font-black tracking-[-0.03em] text-[#12151f] sm:max-w-[220px]">
+                  {displayName}
+                </span>
+                {roleName ? <span className="mt-0.5 shrink-0 text-xs font-semibold text-[#7b8290]">{roleName}</span> : null}
               </div>
             </div>
 
