@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { getInvoices, type InvoiceRecord, type InvoiceListFilter } from "@/features/invoices/data/client/invoices";
 import { QuickButton } from "@/components/dashboard/QuickButton";
@@ -8,6 +8,8 @@ import { toDate } from "@/lib/dateUtils";
 import { monthRange } from "@/lib/dateUtils";
 import { formatMoney, INVOICE_STATUS_CLASS, INVOICE_STATUS_LABEL } from "@/components/invoices/invoiceUi";
 import { InvoiceDetailModal } from "@/components/invoices/InvoiceDetailModal";
+
+const PAGE_SIZE = 10;
 
 function formatDate(value: unknown): string {
   const d = toDate(value);
@@ -36,6 +38,7 @@ export function InvoiceListTab() {
   const [capped, setCapped] = useState(false);
   // 온디맨드: 진입 시 자동 조회하지 않는다(읽기 비용 절감). 조회/퀵버튼을 눌러야 읽음.
   const [searched, setSearched] = useState(false);
+  const [page, setPage] = useState(1);
 
   // 인자로 받은 기간/상태로 조회(퀵버튼은 set 직후 호출 — state 비동기 반영을 우회).
   async function load(opts?: { start?: string; end?: string; status?: typeof statusFilter }) {
@@ -55,6 +58,7 @@ export function InvoiceListTab() {
       setInvoices(result.invoices);
       setCapped(result.capped);
       setSearched(true);
+      setPage(1);
     } catch (e) {
       console.error("[InvoiceListTab] load error:", (e as Error)?.message ?? "");
       setLoadError("인보이스 목록을 불러오지 못했습니다. F12 콘솔에서 오류를 확인하세요.");
@@ -87,6 +91,17 @@ export function InvoiceListTab() {
       totalCommission: confirmed.reduce((s, i) => s + (i.commissionAmount || 0), 0),
     };
   }, [filtered]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const currentPage = Math.min(page, totalPages);
+  const pagedInvoices = useMemo(
+    () => filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE),
+    [filtered, currentPage],
+  );
+
+  useEffect(() => {
+    if (page !== currentPage) setPage(currentPage);
+  }, [currentPage, page]);
 
   async function handleDelete(inv: typeof filtered[0], e: React.MouseEvent) {
     e.stopPropagation();
@@ -151,7 +166,7 @@ export function InvoiceListTab() {
               type="text"
               placeholder="환자명 검색"
               value={nameQuery}
-              onChange={(e) => setNameQuery(e.target.value)}
+              onChange={(e) => { setNameQuery(e.target.value); setPage(1); }}
               className="h-10 min-w-0 rounded-[18px] bg-white px-3 text-xs text-[#101828] outline-none transition placeholder:text-[#98a2b3] focus:ring-2 focus:ring-[#bdeee8]"
             />
             <button
@@ -209,7 +224,7 @@ export function InvoiceListTab() {
           </div>
         ) : (
           <>
-            {filtered.map((inv) => (
+            {pagedInvoices.map((inv) => (
               <article
                 key={inv.id}
                 className="rounded-[24px] bg-white p-2.5 shadow-[0_10px_28px_rgba(15,23,42,0.05)]"
@@ -260,8 +275,27 @@ export function InvoiceListTab() {
       </div>
 
       {/* 건수 / 상한 경고 */}
-      <div className="flex items-center justify-center gap-2 border-t border-[#edf0f3] pt-3 text-xs text-gray-400">
+      <div className="flex flex-wrap items-center justify-center gap-2 border-t border-[#edf0f3] pt-3 text-xs text-gray-400">
         <span>총 {filtered.length}건</span>
+        {filtered.length > PAGE_SIZE && (
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={currentPage === 1}
+              className="h-7 rounded-full bg-[#e3f2ee] px-3 font-semibold text-[#0f9b8e] disabled:opacity-40"
+            >
+              이전
+            </button>
+            <span className="text-[#667085]">{currentPage} / {totalPages}</span>
+            <button
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              disabled={currentPage === totalPages}
+              className="h-7 rounded-full bg-[#e3f2ee] px-3 font-semibold text-[#0f9b8e] disabled:opacity-40"
+            >
+              다음
+            </button>
+          </div>
+        )}
         {capped && (
           <span className="text-amber-600">
             · 결과가 많아 일부만 표시됩니다. 기간을 좁혀 다시 조회하세요.
