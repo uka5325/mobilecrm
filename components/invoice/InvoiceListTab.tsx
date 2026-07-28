@@ -136,24 +136,24 @@ export function InvoiceListTab() {
       {/* 컨트롤바 */}
       <div className="h-[184px] overflow-hidden rounded-[26px] bg-[#eaf8f3] p-5 shadow-[0_18px_50px_rgba(7,56,58,0.08)] lg:h-[196px] lg:p-6">
         <div className="flex h-full flex-col justify-between">
-          <div className="grid grid-cols-[minmax(118px,1fr)_auto_minmax(118px,1fr)_96px] items-center gap-2">
+          <div className="grid grid-cols-[minmax(104px,1fr)_auto_minmax(104px,1fr)_84px] items-center gap-2">
             <input
               type="date"
               value={startDate}
               onChange={(e) => { setQuickOffset(null); setStartDate(e.target.value); }}
-              className="h-10 min-w-0 appearance-none whitespace-nowrap rounded-[18px] bg-white px-2 text-[11px] text-[#101828] outline-none transition focus:ring-2 focus:ring-[#bdeee8]"
+              className="h-10 min-w-0 appearance-none whitespace-nowrap rounded-[18px] bg-white px-1.5 text-[10px] text-[#101828] outline-none transition focus:ring-2 focus:ring-[#bdeee8]"
             />
             <span className="flex h-10 items-center text-sm text-[#98a2b3]">~</span>
             <input
               type="date"
               value={endDate}
               onChange={(e) => { setQuickOffset(null); setEndDate(e.target.value); }}
-              className="h-10 min-w-0 appearance-none whitespace-nowrap rounded-[18px] bg-white px-2 text-[11px] text-[#101828] outline-none transition focus:ring-2 focus:ring-[#bdeee8]"
+              className="h-10 min-w-0 appearance-none whitespace-nowrap rounded-[18px] bg-white px-1.5 text-[10px] text-[#101828] outline-none transition focus:ring-2 focus:ring-[#bdeee8]"
             />
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)}
-              className="h-10 min-w-0 rounded-[18px] bg-white px-2 text-[11px] text-[#101828] outline-none transition focus:ring-2 focus:ring-[#bdeee8]"
+              className="h-10 min-w-0 rounded-[18px] bg-white px-1.5 text-[10px] text-[#101828] outline-none transition focus:ring-2 focus:ring-[#bdeee8]"
             >
               <option value="">전체 상태</option>
               <option value="draft">임시저장</option>
