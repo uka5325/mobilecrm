@@ -55,8 +55,8 @@ export default function MoreMenu({ open, items, onClose, onLogout, isActive }: M
                 onClick={onClose}
                 className={
                   active
-                    ? "rounded-[24px] bg-[#0f9b8e] px-5 py-4 text-sm font-black text-white shadow-[0_10px_24px_rgba(15,155,142,0.18)] transition active:scale-95"
-                    : "rounded-[24px] bg-[#f8fbfa] px-5 py-4 text-sm font-black text-[#12151f] transition hover:bg-[#e3f2ee] active:scale-95"
+                    ? "rounded-[24px] bg-[#e3f2ee] px-5 py-4 text-sm font-black text-[#0f8f83] transition active:scale-95"
+                    : "rounded-[24px] bg-[#f8fbfa] px-5 py-4 text-sm font-black text-[#667085] transition hover:bg-[#e3f2ee] hover:text-[#0f8f83] active:scale-95 active:bg-[#e3f2ee] active:text-[#0f8f83]"
                 }
               >
                 {item.label}

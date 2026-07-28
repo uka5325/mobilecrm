@@ -185,9 +185,15 @@ function AppShellContent({ children }: AppShellProps) {
             <div className="text-xs font-black tracking-[0.18em] text-[#0f8f83]">MOBILE CRM</div>
 
             <div className="mt-2 flex min-w-0 items-start justify-between gap-3">
-              <h1 className="min-w-0 truncate text-[28px] font-black tracking-[-0.04em] text-[#12151f] lg:text-[34px]">
-                {currentPage.title}
-              </h1>
+              <div className="min-w-0">
+                <h1 className="min-w-0 truncate text-[28px] font-black tracking-[-0.04em] text-[#12151f] lg:text-[34px]">
+                  {currentPage.title}
+                </h1>
+
+                <p className="mt-2 text-sm leading-6 text-[#7b8290]">
+                  {currentPage.description}
+                </p>
+              </div>
 
               <div className="flex min-w-0 shrink-0 flex-col items-end text-right">
                 <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[linear-gradient(135deg,#77dfd1_0%,#40c5b3_50%,#0f9b8e_100%)] text-sm font-black text-white">
@@ -200,10 +206,6 @@ function AppShellContent({ children }: AppShellProps) {
                 {roleName ? <span className="mt-0.5 shrink-0 text-xs font-semibold text-[#7b8290]">{roleName}</span> : null}
               </div>
             </div>
-
-            <p className="mt-2 text-sm leading-6 text-[#7b8290]">
-              {currentPage.description}
-            </p>
           </header>
 
           <PatientSummaryProvider>
