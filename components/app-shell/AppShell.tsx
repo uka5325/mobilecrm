@@ -102,6 +102,7 @@ function AppShellContent({ children }: AppShellProps) {
   const [mounted, setMounted] = useState(false);
   const [isOnline, setIsOnline] = useState(true);
   const [moreOpen, setMoreOpen] = useState(false);
+  const [showHeaderFade, setShowHeaderFade] = useState(false);
 
   const isLoginPage = pathname === "/login";
   const loading = !authReady;
@@ -144,6 +145,16 @@ function AppShellContent({ children }: AppShellProps) {
     setMoreOpen(false);
   }, [pathname]);
 
+  useEffect(() => {
+    const updateHeaderFade = () => {
+      setShowHeaderFade(window.scrollY > 12);
+    };
+
+    updateHeaderFade();
+    window.addEventListener("scroll", updateHeaderFade, { passive: true });
+    return () => window.removeEventListener("scroll", updateHeaderFade);
+  }, [pathname]);
+
   async function handleLogout() {
     await logout();
   }
@@ -181,7 +192,14 @@ function AppShellContent({ children }: AppShellProps) {
 
       <main className="min-w-0 flex-1 px-4 pb-28 pt-5 sm:px-6 lg:px-8 lg:py-8">
         <div className="mx-auto w-full max-w-[1320px]">
-          <header className="sticky top-[calc(env(safe-area-inset-top)+12px)] z-40 mb-5 rounded-[28px] bg-white px-5 py-4 shadow-[0_16px_50px_rgba(15,23,42,0.06)] after:pointer-events-none after:absolute after:inset-x-4 after:-bottom-8 after:h-8 after:rounded-b-[28px] after:bg-gradient-to-b after:from-[#f6f7f5]/85 after:to-[#f6f7f5]/0 after:backdrop-blur-sm after:content-[''] lg:top-8 lg:mb-6 lg:px-7">
+          <header
+            className={
+              "sticky top-[calc(env(safe-area-inset-top)+12px)] z-40 mb-5 rounded-[28px] bg-white px-5 py-4 shadow-[0_16px_50px_rgba(15,23,42,0.06)] lg:top-8 lg:mb-6 lg:px-7" +
+              (showHeaderFade
+                ? " after:pointer-events-none after:absolute after:inset-x-4 after:-bottom-8 after:h-8 after:rounded-b-[28px] after:bg-gradient-to-b after:from-[#f6f7f5]/90 after:to-[#f6f7f5]/0 after:backdrop-blur-sm after:content-['']"
+                : "")
+            }
+          >
             <div className="text-xs font-black tracking-[0.18em] text-[#0f8f83]">MOBILE CRM</div>
 
             <div className="mt-2 flex min-w-0 items-start justify-between gap-3">
