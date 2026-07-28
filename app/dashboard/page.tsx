@@ -227,24 +227,23 @@ export default function DashboardPage() {
     <div className="space-y-5">
       <section className="mb-4 rounded-[26px] bg-[#eaf8f3] p-5 shadow-[0_18px_50px_rgba(7,56,58,0.08)] lg:p-6">
         <div className="space-y-2">
-          <div className="grid grid-cols-1 items-center gap-2 sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)_minmax(0,1fr)]">
+          <div className="grid grid-cols-3 items-center gap-2">
             <input
               type="date"
               value={startDate}
               onChange={(e) => { setQuickRangeType(null); setStartDate(e.target.value); }}
-              className="h-10 min-w-0 appearance-none rounded-[18px] bg-white px-3 text-xs text-[#101828] outline-none transition focus:ring-2 focus:ring-[#bdeee8]"
+              className="h-10 min-w-0 appearance-none rounded-[18px] bg-white px-2 text-[11px] text-[#101828] outline-none transition focus:ring-2 focus:ring-[#bdeee8]"
             />
-            <span className="hidden h-10 items-center text-sm text-[#98a2b3] sm:flex">~</span>
             <input
               type="date"
               value={endDate}
               onChange={(e) => { setQuickRangeType(null); setEndDate(e.target.value); }}
-              className="h-10 min-w-0 appearance-none rounded-[18px] bg-white px-3 text-xs text-[#101828] outline-none transition focus:ring-2 focus:ring-[#bdeee8]"
+              className="h-10 min-w-0 appearance-none rounded-[18px] bg-white px-2 text-[11px] text-[#101828] outline-none transition focus:ring-2 focus:ring-[#bdeee8]"
             />
             <select
               value={hospitalFilter}
               onChange={(e) => setHospitalFilter(e.target.value)}
-              className="h-10 min-w-0 rounded-[18px] bg-white px-3 text-xs text-[#101828] outline-none transition focus:ring-2 focus:ring-[#bdeee8]"
+              className="h-10 min-w-0 rounded-[18px] bg-white px-2 text-[11px] text-[#101828] outline-none transition focus:ring-2 focus:ring-[#bdeee8]"
             >
               <option value="">전체 병원</option>
               {hospitals.map((h) => (
@@ -253,11 +252,11 @@ export default function DashboardPage() {
             </select>
           </div>
 
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+          <div className="grid grid-cols-3 gap-2">
             <select
               value={apptTypeFilter}
               onChange={(e) => setApptTypeFilter(e.target.value)}
-              className="h-10 min-w-0 rounded-[18px] bg-white px-3 text-xs text-[#101828] outline-none transition focus:ring-2 focus:ring-[#bdeee8]"
+              className="h-10 min-w-0 rounded-[18px] bg-white px-2 text-[11px] text-[#101828] outline-none transition focus:ring-2 focus:ring-[#bdeee8]"
             >
               <option value="">전체 유형</option>
               {APPOINTMENT_TYPES.map((type) => (
@@ -267,7 +266,7 @@ export default function DashboardPage() {
             <select
               value={itemFilter}
               onChange={(e) => setItemFilter(e.target.value)}
-              className="h-10 min-w-0 rounded-[18px] bg-white px-3 text-xs text-[#101828] outline-none transition focus:ring-2 focus:ring-[#bdeee8]"
+              className="h-10 min-w-0 rounded-[18px] bg-white px-2 text-[11px] text-[#101828] outline-none transition focus:ring-2 focus:ring-[#bdeee8]"
             >
               <option value="">전체 항목</option>
               {itemOptions.map((item) => (
@@ -277,7 +276,7 @@ export default function DashboardPage() {
             <select
               value={doctorFilter}
               onChange={(e) => setDoctorFilter(e.target.value)}
-              className="h-10 min-w-0 rounded-[18px] bg-white px-3 text-xs text-[#101828] outline-none transition focus:ring-2 focus:ring-[#bdeee8]"
+              className="h-10 min-w-0 rounded-[18px] bg-white px-2 text-[11px] text-[#101828] outline-none transition focus:ring-2 focus:ring-[#bdeee8]"
             >
               <option value="">전체 원장</option>
               {doctors.map((doctor) => (
@@ -286,11 +285,11 @@ export default function DashboardPage() {
             </select>
           </div>
 
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+          <div className="grid grid-cols-3 gap-2">
             <select
               value={coordinatorFilter}
               onChange={(e) => setCoordinatorFilter(e.target.value)}
-              className="h-10 min-w-0 rounded-[18px] bg-white px-3 text-xs text-[#101828] outline-none transition focus:ring-2 focus:ring-[#bdeee8]"
+              className="h-10 min-w-0 rounded-[18px] bg-white px-2 text-[11px] text-[#101828] outline-none transition focus:ring-2 focus:ring-[#bdeee8]"
             >
               <option value="">전체 코디</option>
               {coordinators.map((coordinator) => (
@@ -300,13 +299,13 @@ export default function DashboardPage() {
             <button
               onClick={() => load(startDate, endDate)}
               disabled={loading}
-              className="h-10 min-w-0 rounded-[18px] bg-[linear-gradient(135deg,#77dfd1_0%,#40c5b3_50%,#0f9b8e_100%)] px-4 text-xs font-bold text-white shadow-[0_10px_24px_rgba(15,143,131,0.14)] transition hover:-translate-y-0.5 active:scale-95 disabled:opacity-60"
+              className="h-10 min-w-0 rounded-[18px] bg-[linear-gradient(135deg,#77dfd1_0%,#40c5b3_50%,#0f9b8e_100%)] px-2 text-[11px] font-bold text-white shadow-[0_10px_24px_rgba(15,143,131,0.14)] transition hover:-translate-y-0.5 active:scale-95 disabled:opacity-60"
             >
               {loading ? "조회 중..." : "조회"}
             </button>
             <button
               onClick={resetFilters}
-              className="h-10 min-w-0 rounded-[18px] bg-[#e3f2ee] px-4 text-xs font-bold text-[#0f9b8e] transition hover:-translate-y-0.5 active:scale-95"
+              className="h-10 min-w-0 rounded-[18px] bg-[#e3f2ee] px-2 text-[11px] font-bold text-[#0f9b8e] transition hover:-translate-y-0.5 active:scale-95"
             >
               초기화
             </button>
