@@ -198,7 +198,7 @@ function AppShellContent({ children }: AppShellProps) {
             className={
               "sticky top-[calc(env(safe-area-inset-top)+12px)] z-40 mb-5 rounded-[28px] bg-white px-5 py-4 shadow-[0_16px_50px_rgba(15,23,42,0.06)] lg:top-8 lg:mb-6 lg:px-7" +
               (showHeaderFade
-                ? " after:pointer-events-none after:absolute after:inset-x-4 after:-bottom-4 after:h-4 after:bg-gradient-to-b after:from-[#f6f7f5]/85 after:to-[#f6f7f5]/0 after:content-['']"
+                ? " after:pointer-events-none after:absolute after:inset-x-0 after:-bottom-8 after:h-8 after:rounded-b-[28px] after:bg-gradient-to-b after:from-[#f6f7f5]/75 after:via-[#f6f7f5]/35 after:to-[#f6f7f5]/0 after:backdrop-blur-md after:content-['']"
                 : "")
             }
           >
