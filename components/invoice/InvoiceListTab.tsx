@@ -215,7 +215,7 @@ export function InvoiceListTab() {
             {loadError}
           </div>
         ) : !searched ? (
-          <div className="flex items-center justify-center py-16 text-sm text-gray-400">
+          <div className="flex items-center justify-center rounded-[28px] bg-white py-20 text-sm text-gray-400 shadow-[0_16px_50px_rgba(15,23,42,0.055)]">
             기간을 선택하고 조회를 누르세요.
           </div>
         ) : filtered.length === 0 ? (

@@ -202,7 +202,7 @@ export default function CommissionPage() {
       <div className="h-[184px] overflow-hidden rounded-[26px] bg-[#eaf8f3] p-5 shadow-[0_18px_50px_rgba(7,56,58,0.08)] lg:h-[196px] lg:p-6">
         <div className="flex h-full flex-col justify-between">
           {/* 1행: 날짜 + 담당자 */}
-          <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)_minmax(132px,0.85fr)] items-center gap-2">
+          <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)_132px] items-center gap-2">
             <input
               type="date"
               value={startDate}
@@ -234,7 +234,7 @@ export default function CommissionPage() {
             )}
           </div>
           {/* 2행: 상태 + 환자명 검색 + 조회 */}
-          <div className="grid grid-cols-[minmax(112px,0.34fr)_minmax(0,1fr)_auto] gap-2">
+          <div className="grid grid-cols-[132px_minmax(0,1fr)_auto] gap-2">
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)}
