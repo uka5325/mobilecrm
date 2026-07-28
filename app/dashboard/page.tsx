@@ -227,22 +227,20 @@ export default function DashboardPage() {
     <div className="space-y-5">
       <section className="mb-4 rounded-[26px] bg-[#eaf8f3] p-5 shadow-[0_18px_50px_rgba(7,56,58,0.08)] lg:p-6">
         <div className="space-y-2">
-          <div className="grid grid-cols-1 gap-2 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-            <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2">
-              <input
-                type="date"
-                value={startDate}
-                onChange={(e) => { setQuickRangeType(null); setStartDate(e.target.value); }}
-                className="h-10 min-w-0 appearance-none rounded-[18px] bg-white px-3 text-xs text-[#101828] outline-none transition focus:ring-2 focus:ring-[#bdeee8]"
-              />
-              <span className="flex h-10 items-center text-sm text-[#98a2b3]">~</span>
-              <input
-                type="date"
-                value={endDate}
-                onChange={(e) => { setQuickRangeType(null); setEndDate(e.target.value); }}
-                className="h-10 min-w-0 appearance-none rounded-[18px] bg-white px-3 text-xs text-[#101828] outline-none transition focus:ring-2 focus:ring-[#bdeee8]"
-              />
-            </div>
+          <div className="grid grid-cols-1 items-center gap-2 sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)_minmax(0,1fr)]">
+            <input
+              type="date"
+              value={startDate}
+              onChange={(e) => { setQuickRangeType(null); setStartDate(e.target.value); }}
+              className="h-10 min-w-0 appearance-none rounded-[18px] bg-white px-3 text-xs text-[#101828] outline-none transition focus:ring-2 focus:ring-[#bdeee8]"
+            />
+            <span className="hidden h-10 items-center text-sm text-[#98a2b3] sm:flex">~</span>
+            <input
+              type="date"
+              value={endDate}
+              onChange={(e) => { setQuickRangeType(null); setEndDate(e.target.value); }}
+              className="h-10 min-w-0 appearance-none rounded-[18px] bg-white px-3 text-xs text-[#101828] outline-none transition focus:ring-2 focus:ring-[#bdeee8]"
+            />
             <select
               value={hospitalFilter}
               onChange={(e) => setHospitalFilter(e.target.value)}
