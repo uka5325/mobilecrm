@@ -182,33 +182,25 @@ function AppShellContent({ children }: AppShellProps) {
       <main className="min-w-0 flex-1 px-4 pb-28 pt-5 sm:px-6 lg:px-8 lg:py-8">
         <div className="mx-auto w-full max-w-[1320px]">
           {pathname !== "/" ? (
-            <header className="mb-5 rounded-[28px] bg-white px-5 py-5 shadow-[0_16px_50px_rgba(15,23,42,0.06)] lg:mb-6 lg:px-7">
+            <header className="mb-5 rounded-[28px] bg-white px-5 py-4 shadow-[0_16px_50px_rgba(15,23,42,0.06)] lg:mb-6 lg:px-7">
               <div className="text-xs font-black tracking-[0.18em] text-[#0f8f83]">MOBILE CRM</div>
-              <h1 className="mt-2 text-[28px] font-black tracking-[-0.04em] text-[#12151f] lg:text-[34px]">
-                {currentPage.title}
-              </h1>
+
+              <div className="mt-2 flex min-w-0 items-end justify-between gap-3">
+                <h1 className="min-w-0 truncate text-[28px] font-black tracking-[-0.04em] text-[#12151f] lg:text-[34px]">
+                  {currentPage.title}
+                </h1>
+
+                <div className="flex min-w-0 shrink-0 items-baseline gap-1.5 text-right">
+                  <span className="max-w-[128px] truncate text-sm font-black tracking-[-0.03em] text-[#12151f] sm:max-w-[220px]">
+                    {displayName}
+                  </span>
+                  {roleName ? <span className="shrink-0 text-xs font-semibold text-[#7b8290]">{roleName}</span> : null}
+                </div>
+              </div>
+
               <p className="mt-2 text-sm leading-6 text-[#7b8290]">
                 {currentPage.description}
               </p>
-
-              <div className="mt-4 flex min-w-0 flex-nowrap items-center gap-3 overflow-hidden">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[linear-gradient(135deg,#77dfd1_0%,#40c5b3_50%,#0f9b8e_100%)] text-base font-black text-white">
-                  {avatarText}
-                </div>
-
-                <div className="min-w-0 shrink">
-                  <div className="truncate text-sm font-black tracking-[-0.03em] text-[#12151f]">{displayName}</div>
-                  {roleName ? <div className="mt-0.5 truncate text-xs font-semibold text-[#7b8290]">{roleName}</div> : null}
-                </div>
-
-                <button
-                  type="button"
-                  onClick={handleLogout}
-                  className="ml-auto flex h-10 shrink-0 items-center rounded-full bg-[#e3f2ee] px-4 text-xs font-bold text-[#0f9b8e] transition hover:bg-[#d7ede7] active:scale-95"
-                >
-                  로그아웃
-                </button>
-              </div>
             </header>
           ) : null}
 
@@ -222,6 +214,7 @@ function AppShellContent({ children }: AppShellProps) {
         open={moreOpen}
         items={visibleMobileMoreItems}
         onClose={() => setMoreOpen(false)}
+        onLogout={handleLogout}
         isActive={isActive}
       />
 

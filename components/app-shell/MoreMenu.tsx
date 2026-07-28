@@ -7,11 +7,17 @@ type MoreMenuProps = {
   open: boolean;
   items: AppMenuItem[];
   onClose: () => void;
+  onLogout: () => Promise<void> | void;
   isActive: (item: AppMenuItem) => boolean;
 };
 
-export default function MoreMenu({ open, items, onClose, isActive }: MoreMenuProps) {
+export default function MoreMenu({ open, items, onClose, onLogout, isActive }: MoreMenuProps) {
   if (!open) return null;
+
+  async function handleLogout() {
+    onClose();
+    await onLogout();
+  }
 
   return (
     <div className="fixed inset-0 z-40 lg:hidden">
@@ -58,6 +64,14 @@ export default function MoreMenu({ open, items, onClose, isActive }: MoreMenuPro
             );
           })}
         </div>
+
+        <button
+          type="button"
+          onClick={() => void handleLogout()}
+          className="mt-3 h-11 w-full rounded-[18px] bg-[#e3f2ee] text-sm font-bold text-[#0f9b8e] transition hover:bg-[#d7ede7] active:scale-95"
+        >
+          로그아웃
+        </button>
       </div>
     </div>
   );
