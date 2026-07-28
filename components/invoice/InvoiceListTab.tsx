@@ -136,7 +136,7 @@ export function InvoiceListTab() {
       {/* 컨트롤바 */}
       <div className="h-[184px] overflow-hidden rounded-[26px] bg-[#eaf8f3] p-5 shadow-[0_18px_50px_rgba(7,56,58,0.08)] lg:h-[196px] lg:p-6">
         <div className="flex h-full flex-col justify-between">
-          <div className="grid grid-cols-[minmax(104px,1fr)_auto_minmax(104px,1fr)_84px] items-center gap-2">
+          <div className="grid grid-cols-[minmax(88px,1fr)_auto_minmax(88px,1fr)_104px] items-center gap-1.5">
             <input
               type="date"
               value={startDate}
@@ -153,7 +153,7 @@ export function InvoiceListTab() {
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)}
-              className="h-10 min-w-0 rounded-[18px] bg-white px-1.5 text-[10px] text-[#101828] outline-none transition focus:ring-2 focus:ring-[#bdeee8]"
+              className="h-10 min-w-0 rounded-[18px] bg-white px-2 text-[10px] text-[#101828] outline-none transition focus:ring-2 focus:ring-[#bdeee8]"
             >
               <option value="">전체 상태</option>
               <option value="draft">임시저장</option>
