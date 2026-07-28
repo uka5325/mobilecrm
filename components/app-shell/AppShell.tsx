@@ -192,14 +192,11 @@ function AppShellContent({ children }: AppShellProps) {
 
       <main className="min-w-0 flex-1 px-4 pb-28 pt-5 sm:px-6 lg:px-8 lg:py-8">
         <div className="mx-auto w-full max-w-[1320px]">
-          <header
-            className={
-              "sticky top-[calc(env(safe-area-inset-top)+12px)] z-40 mb-5 rounded-[28px] bg-white px-5 py-4 shadow-[0_16px_50px_rgba(15,23,42,0.06)] lg:top-8 lg:mb-6 lg:px-7" +
-              (showHeaderFade
-                ? " after:pointer-events-none after:absolute after:inset-x-4 after:-bottom-8 after:h-8 after:rounded-b-[28px] after:bg-gradient-to-b after:from-[#f6f7f5]/90 after:to-[#f6f7f5]/0 after:backdrop-blur-sm after:content-['']"
-                : "")
-            }
-          >
+          {showHeaderFade ? (
+            <div className="pointer-events-none fixed inset-x-0 top-0 z-30 h-[calc(env(safe-area-inset-top)+220px)] bg-gradient-to-b from-[#f6f7f5]/95 via-[#f6f7f5]/72 to-[#f6f7f5]/0 backdrop-blur-xl [mask-image:linear-gradient(to_bottom,#000_0%,#000_66%,transparent_100%)] lg:left-[272px]" />
+          ) : null}
+
+          <header className="sticky top-[calc(env(safe-area-inset-top)+12px)] z-40 mb-5 rounded-[28px] bg-white px-5 py-4 shadow-[0_16px_50px_rgba(15,23,42,0.06)] lg:top-8 lg:mb-6 lg:px-7">
             <div className="text-xs font-black tracking-[0.18em] text-[#0f8f83]">MOBILE CRM</div>
 
             <div className="mt-2 flex min-w-0 items-start justify-between gap-3">
