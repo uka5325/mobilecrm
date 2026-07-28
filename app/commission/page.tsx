@@ -140,70 +140,72 @@ export default function CommissionPage() {
 
       {/* 컨트롤바 */}
       <div className="h-[184px] overflow-hidden rounded-[26px] bg-[#eaf8f3] p-5 shadow-[0_18px_50px_rgba(7,56,58,0.08)] lg:h-[196px] lg:p-6">
-        {/* 1행: 날짜 + 담당자 + 상태 */}
-        <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)_minmax(104px,0.9fr)_minmax(104px,0.9fr)] items-center gap-2">
-          <input
-            type="date"
-            value={startDate}
-            onChange={(e) => setStartDate(e.target.value)}
-            className="h-9 min-w-0 appearance-none rounded-[16px] border border-[#dbe7e3] bg-white px-3 text-xs outline-none transition focus:border-[#5bd5c8] focus:ring-2 focus:ring-[#dff7f3]"
-          />
-          <span className="shrink-0 text-sm text-gray-400">~</span>
-          <input
-            type="date"
-            value={endDate}
-            onChange={(e) => setEndDate(e.target.value)}
-            className="h-9 min-w-0 appearance-none rounded-[16px] border border-[#dbe7e3] bg-white px-3 text-xs outline-none transition focus:border-[#5bd5c8] focus:ring-2 focus:ring-[#dff7f3]"
-          />
-          {isAdmin ? (
+        <div className="flex h-full flex-col justify-between">
+          {/* 1행: 날짜 + 담당자 + 상태 */}
+          <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)] items-center gap-2">
+            <input
+              type="date"
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+              className="h-10 min-w-0 appearance-none rounded-[18px] bg-white px-3 text-xs text-[#101828] outline-none transition focus:ring-2 focus:ring-[#bdeee8]"
+            />
+            <span className="flex h-10 items-center text-sm text-[#98a2b3]">~</span>
+            <input
+              type="date"
+              value={endDate}
+              onChange={(e) => setEndDate(e.target.value)}
+              className="h-10 min-w-0 appearance-none rounded-[18px] bg-white px-3 text-xs text-[#101828] outline-none transition focus:ring-2 focus:ring-[#bdeee8]"
+            />
+            {isAdmin ? (
+              <select
+                value={selectedStaffUid}
+                onChange={(e) => setSelectedStaffUid(e.target.value)}
+                className="h-10 min-w-0 rounded-[18px] bg-white px-3 text-xs text-[#101828] outline-none transition focus:ring-2 focus:ring-[#bdeee8]"
+              >
+                <option value="__all__">전체 직원</option>
+                {staffList.map((s) => (
+                  <option key={s.uid} value={s.uid}>{s.displayName}</option>
+                ))}
+              </select>
+            ) : (
+              <div className="h-10 min-w-0 truncate rounded-[18px] bg-white px-3 text-xs leading-10 text-[#101828]">
+                {currentUser.displayName || "내 커미션"}
+              </div>
+            )}
             <select
-              value={selectedStaffUid}
-              onChange={(e) => setSelectedStaffUid(e.target.value)}
-              className="h-9 min-w-0 rounded-[16px] border border-[#dbe7e3] bg-white px-3 text-xs outline-none transition focus:border-[#5bd5c8] focus:ring-2 focus:ring-[#dff7f3]"
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)}
+              className="h-10 min-w-0 rounded-[18px] bg-white px-3 text-xs text-[#101828] outline-none transition focus:ring-2 focus:ring-[#bdeee8]"
             >
-              <option value="__all__">전체 직원</option>
-              {staffList.map((s) => (
-                <option key={s.uid} value={s.uid}>{s.displayName}</option>
-              ))}
+              <option value="">전체 상태</option>
+              <option value="confirmed">확정</option>
+              <option value="draft">임시저장</option>
             </select>
-          ) : (
-            <div className="h-9 min-w-0 rounded-[16px] border border-[#dbe7e3] bg-white px-3 text-xs leading-9 text-[#667085]">
-              {currentUser.displayName || "내 커미션"}
+          </div>
+          {/* 2행: 환자명 검색 + 조회 */}
+          <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-2">
+            <input
+              value={patientSearch}
+              onChange={(e) => setPatientSearch(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && handleSearch()}
+              placeholder="환자명 검색"
+              className="h-10 min-w-0 rounded-[18px] bg-white px-3 text-xs text-[#101828] outline-none transition placeholder:text-[#98a2b3] focus:ring-2 focus:ring-[#bdeee8]"
+            />
+            <button
+              onClick={() => handleSearch()}
+              disabled={loading}
+              className="h-10 shrink-0 rounded-[18px] bg-[linear-gradient(135deg,#77dfd1_0%,#40c5b3_50%,#0f9b8e_100%)] px-5 text-xs font-bold text-white shadow-[0_10px_24px_rgba(15,143,131,0.14)] transition hover:-translate-y-0.5 active:scale-95 disabled:opacity-50"
+            >
+              {loading ? "조회 중..." : "조회"}
+            </button>
+          </div>
+          {/* 퀵필터 */}
+          <div className="rounded-[20px] bg-white p-1">
+            <div className="grid grid-cols-3 gap-1">
+              <QuickButton onClick={() => quickRange(-1)}>전달</QuickButton>
+              <QuickButton onClick={() => quickRange(0)}>이번 달</QuickButton>
+              <QuickButton onClick={() => quickRange(1)}>다음 달</QuickButton>
             </div>
-          )}
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)}
-            className="h-9 min-w-0 rounded-[16px] border border-[#dbe7e3] bg-white px-3 text-xs outline-none transition focus:border-[#5bd5c8] focus:ring-2 focus:ring-[#dff7f3]"
-          >
-            <option value="">전체 상태</option>
-            <option value="confirmed">확정</option>
-            <option value="draft">임시저장</option>
-          </select>
-        </div>
-        {/* 3행: 환자명 검색 + 조회 */}
-        <div className="mt-2 flex items-center gap-2">
-          <input
-            value={patientSearch}
-            onChange={(e) => setPatientSearch(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && handleSearch()}
-            placeholder="환자명 검색"
-            className="h-9 min-w-0 flex-1 rounded-[16px] border border-[#dbe7e3] bg-white px-3 text-xs outline-none transition focus:border-[#5bd5c8] focus:ring-2 focus:ring-[#dff7f3]"
-          />
-          <button
-            onClick={() => handleSearch()}
-            disabled={loading}
-            className="h-9 shrink-0 rounded-[16px] bg-[linear-gradient(135deg,#77dfd1_0%,#40c5b3_50%,#0f9b8e_100%)] text-white shadow-[0_10px_24px_rgba(15,143,131,0.14)] px-5 text-xs font-bold transition hover:-translate-y-0.5 active:scale-95 disabled:opacity-50"
-          >
-            {loading ? "조회 중..." : "조회"}
-          </button>
-        </div>
-        {/* 퀵필터 */}
-        <div className="mt-3 rounded-[20px] bg-white p-1">
-          <div className="grid grid-cols-3 gap-1">
-            <QuickButton onClick={() => quickRange(-1)}>전달</QuickButton>
-            <QuickButton onClick={() => quickRange(0)}>이번 달</QuickButton>
-            <QuickButton onClick={() => quickRange(1)}>다음 달</QuickButton>
           </div>
         </div>
       </div>
