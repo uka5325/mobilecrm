@@ -102,7 +102,6 @@ function AppShellContent({ children }: AppShellProps) {
   const [mounted, setMounted] = useState(false);
   const [isOnline, setIsOnline] = useState(true);
   const [moreOpen, setMoreOpen] = useState(false);
-  const [showHeaderFade, setShowHeaderFade] = useState(false);
 
   const isLoginPage = pathname === "/login";
   const loading = !authReady;
@@ -145,16 +144,6 @@ function AppShellContent({ children }: AppShellProps) {
     setMoreOpen(false);
   }, [pathname]);
 
-  useEffect(() => {
-    const updateHeaderFade = () => {
-      setShowHeaderFade(window.scrollY > 12);
-    };
-
-    updateHeaderFade();
-    window.addEventListener("scroll", updateHeaderFade, { passive: true });
-    return () => window.removeEventListener("scroll", updateHeaderFade);
-  }, [pathname]);
-
   async function handleLogout() {
     await logout();
   }
@@ -194,14 +183,7 @@ function AppShellContent({ children }: AppShellProps) {
         <div className="mx-auto w-full max-w-[1320px]">
           <div className="pointer-events-none fixed inset-x-0 top-0 z-30 h-[calc(env(safe-area-inset-top)+12px)] bg-[#f6f7f5] lg:left-[272px] lg:h-8" />
 
-          <header
-            className={
-              "sticky top-[calc(env(safe-area-inset-top)+12px)] z-40 mb-5 rounded-[28px] bg-white px-5 py-4 shadow-[0_16px_50px_rgba(15,23,42,0.06)] lg:top-8 lg:mb-6 lg:px-7" +
-              (showHeaderFade
-                ? " after:pointer-events-none after:absolute after:inset-x-0 after:-bottom-8 after:h-8 after:rounded-b-[28px] after:bg-gradient-to-b after:from-[#f6f7f5]/75 after:via-[#f6f7f5]/35 after:to-[#f6f7f5]/0 after:backdrop-blur-md after:content-['']"
-                : "")
-            }
-          >
+          <header className="sticky top-[calc(env(safe-area-inset-top)+12px)] z-40 mb-5 rounded-[28px] bg-white px-5 py-4 shadow-[0_16px_50px_rgba(15,23,42,0.06)] lg:top-8 lg:mb-6 lg:px-7">
             <div className="text-xs font-black tracking-[0.18em] text-[#0f8f83]">MOBILE CRM</div>
 
             <div className="mt-2 flex min-w-0 items-start justify-between gap-3">
