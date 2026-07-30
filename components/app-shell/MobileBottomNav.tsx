@@ -17,7 +17,7 @@ export default function MobileBottomNav({
   isActive,
 }: MobileBottomNavProps) {
   return (
-    <nav className="fixed inset-x-4 bottom-4 z-50 rounded-[22px] bg-white p-1 shadow-[0_10px_24px_rgba(15,23,42,0.12)] lg:hidden">
+    <nav className="fixed inset-x-4 bottom-4 z-50 rounded-[22px] border border-white/50 bg-white/70 p-1 shadow-[0_10px_24px_rgba(15,23,42,0.12)] backdrop-blur-lg backdrop-saturate-150 lg:hidden">
       <div className="grid grid-cols-4 gap-1">
         {items.map((item) => {
           const active = isActive(item);
