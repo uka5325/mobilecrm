@@ -22,27 +22,37 @@ export default function SettingsPage() {
   const { currentUser, activeTab, canManageSettings } = s;
 
   return (
-    <div className="grid max-w-[1180px] grid-cols-1 gap-5 lg:grid-cols-[230px_minmax(0,1fr)]">
-      <nav className="h-fit rounded-[28px] bg-white p-3 shadow-[0_16px_50px_rgba(15,23,42,0.055)] lg:sticky lg:top-8">
-        <div className="mb-3 px-2 text-[11px] font-black tracking-[0.18em] text-[#0f8f83]">SETTINGS</div>
+    <div className="max-w-[1180px] space-y-5">
+      <nav className="h-[184px] overflow-hidden rounded-[26px] bg-[#eaf8f3] p-5 shadow-[0_18px_50px_rgba(7,56,58,0.08)] lg:h-[196px] lg:p-6">
+        <div className="flex h-full flex-col justify-between">
+          <div>
+            <div className="text-[11px] font-black tracking-[0.18em] text-[#0f8f83]">SETTINGS</div>
+            <p className="mt-2 text-sm font-medium leading-5 text-[#667085]">
+              시스템 설정과 운영 기준을 관리합니다.
+            </p>
+          </div>
 
-        <div className="flex gap-2 overflow-x-auto lg:flex-col lg:overflow-visible">
-          {TAB_ITEMS.map((item) => {
-            if (item.key === "staff" && !canManageSettings) return null;
-            const active = activeTab === item.key;
-            return (
-              <button
-                key={item.key}
-                onClick={() => s.selectTab(item.key)}
-                className={`flex shrink-0 items-center gap-2 rounded-xl px-3 py-3 text-left text-sm transition hover:-translate-y-0.5 active:scale-95 lg:w-full ${
-                  active ? "bg-[#e3f2ee] font-bold text-[#0f9b8e]" : "bg-white text-gray-500 hover:bg-gray-50 hover:text-gray-900"
-                }`}
-              >
-                <span>{item.icon}</span>
-                <span>{item.label}</span>
-              </button>
-            );
-          })}
+          <div className="rounded-[20px] bg-white p-1">
+            <div className="grid grid-cols-2 gap-1 sm:grid-cols-3 lg:grid-cols-5">
+              {TAB_ITEMS.map((item) => {
+                if (item.key === "staff" && !canManageSettings) return null;
+                const active = activeTab === item.key;
+                return (
+                  <button
+                    key={item.key}
+                    onClick={() => s.selectTab(item.key)}
+                    className={`h-10 min-w-0 rounded-[16px] px-2 text-[11px] font-semibold transition active:scale-95 ${
+                      active
+                        ? "bg-[#e3f2ee] text-[#0f9b8e]"
+                        : "text-[#667085] hover:bg-[#f6f7f5] hover:text-[#0f9b8e]"
+                    }`}
+                  >
+                    <span className="block truncate">{item.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
         </div>
       </nav>
 
