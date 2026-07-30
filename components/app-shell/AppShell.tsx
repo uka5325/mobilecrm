@@ -181,7 +181,7 @@ function AppShellContent({ children }: AppShellProps) {
 
       <main className="min-w-0 flex-1 px-4 pb-28 pt-5 sm:px-6 lg:px-8 lg:py-8">
         <div className="mx-auto w-full max-w-[1320px]">
-          <div className="pointer-events-none fixed inset-x-0 top-0 z-30 h-[calc(env(safe-area-inset-top)+12px)] bg-[#f6f7f5]/70 backdrop-blur-lg backdrop-saturate-150 lg:left-[272px] lg:h-8" />
+          <div className="pointer-events-none fixed inset-x-0 top-0 z-30 h-[calc(env(safe-area-inset-top)+12px)] bg-[#f6f7f5] lg:left-[272px] lg:h-8" />
 
           <header className="sticky top-[calc(env(safe-area-inset-top)+12px)] z-40 mb-5 rounded-[28px] border border-white/50 bg-white/70 px-5 py-4 shadow-[0_16px_50px_rgba(15,23,42,0.06)] backdrop-blur-lg backdrop-saturate-150 lg:top-8 lg:mb-6 lg:px-7">
             <div className="text-xs font-black tracking-[0.18em] text-[#0f8f83]">MOBILE CRM</div>
