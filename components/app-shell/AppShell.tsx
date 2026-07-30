@@ -183,6 +183,10 @@ function AppShellContent({ children }: AppShellProps) {
         <div className="mx-auto w-full max-w-[1320px]">
           <div className="pointer-events-none fixed inset-x-0 top-0 z-30 h-[calc(env(safe-area-inset-top)+12px)] bg-[#f6f7f5] lg:left-[272px] lg:h-8" />
 
+          {/* 헤더 둥근 상단 모서리 뒤로 원래 바탕색을 깔고 아래로 페이드시켜
+              모서리 틈으로 콘텐츠가 비치는 것을 경계선(띠) 없이 가린다. */}
+          <div className="pointer-events-none fixed inset-x-0 top-[calc(env(safe-area-inset-top)+12px)] z-30 h-14 bg-[linear-gradient(180deg,#f6f7f5_0%,#f6f7f5_50%,rgba(246,247,245,0)_100%)] lg:left-[272px] lg:top-8" />
+
           <header className="sticky top-[calc(env(safe-area-inset-top)+12px)] z-40 mb-5 rounded-[28px] border border-white/50 bg-white/70 px-5 py-4 shadow-[0_16px_50px_rgba(15,23,42,0.06)] backdrop-blur-lg backdrop-saturate-150 lg:top-8 lg:mb-6 lg:px-7">
             <div className="text-xs font-black tracking-[0.18em] text-[#0f8f83]">MOBILE CRM</div>
 
