@@ -416,7 +416,7 @@ export function ReservationsTable({
         </div>
       )}
 
-      <div className="space-y-2.5 px-1 lg:grid lg:grid-cols-2 lg:gap-3 lg:space-y-0 lg:px-0">
+      <div className="space-y-2.5 lg:grid lg:grid-cols-2 lg:gap-3 lg:space-y-0">
         {renderList()}
       </div>
     </>
