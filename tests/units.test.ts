@@ -10,12 +10,21 @@ import {
   applySettlementDelta,
   surgeryCaseAggregatePatch,
 } from "../lib/surgeryCaseAggregates";
+import { isAutomaticSurgeryCaseCandidate } from "../lib/surgeryCaseBackfill";
 import {
   calculateDashboardKpi,
   getConsultAreas,
   getDemandAreas,
   getPatientKey,
 } from "../features/dashboard/domain/dashboardKpi";
+
+test("surgery case backfill: 취소된 상담·수술 예약은 자동 연결 후보에서 제외한다", () => {
+  assert.equal(isAutomaticSurgeryCaseCandidate({ appointmentType: "상담", cancelled: true }), false);
+  assert.equal(isAutomaticSurgeryCaseCandidate({ appointmentType: "수술", cancelled: true }), false);
+  assert.equal(isAutomaticSurgeryCaseCandidate({ appointmentType: "상담", cancelled: false }), true);
+  assert.equal(isAutomaticSurgeryCaseCandidate({ appointmentType: "수술" }), true);
+  assert.equal(isAutomaticSurgeryCaseCandidate({ appointmentType: "시술", cancelled: false }), false);
+});
 
 test("dashboard items: 복수 항목을 각각 분리하고 중복 항목은 한 번만 센다", () => {
   assert.deepEqual(

@@ -2,8 +2,9 @@
  * reservations/settlements/invoices를 surgeryCases 기준으로 백필한다.
  *
  * 기본은 dry-run이며 --apply를 명시해야만 쓴다.
- * 자동 병합은 같은 환자 + 같은 병원 + 같은 항목이고, 상담 뒤 365일 안의 수술 후보가
- * 정확히 하나인 경우에만 수행한다. 다중 활성 인보이스가 생기는 그룹은 건너뛴다.
+ * 자동 병합은 취소되지 않은 예약 중 같은 환자 + 같은 병원 + 같은 항목이고,
+ * 상담 뒤 365일 안의 수술 후보가 정확히 하나인 경우에만 수행한다.
+ * 다중 활성 인보이스가 생기는 그룹은 건너뛴다.
  *
  * 예:
  *   npm run backfill:surgery-cases -- --project <project-id> --key ./serviceAccount.json
@@ -14,6 +15,7 @@ import { readFileSync } from "node:fs";
 import * as admin from "firebase-admin";
 import { aggregateSettlementRows } from "../lib/settlementMath";
 import { surgeryCaseAggregatePatch } from "../lib/surgeryCaseAggregates";
+import { isAutomaticSurgeryCaseCandidate } from "../lib/surgeryCaseBackfill";
 import { calcCommission } from "../lib/commissionUtils";
 
 type Item = {
@@ -142,11 +144,12 @@ async function main() {
 
   const candidateBuckets = new Map<string, { consultations: Item[]; surgeries: Item[] }>();
   for (const reservation of reservations) {
+    if (!isAutomaticSurgeryCaseCandidate(reservation.data)) continue;
     const patientId = clean(reservation.data.patientId);
     const hospital = normalized(reservation.data.hospital);
     const area = normalized(reservation.data.consultArea);
     const appointmentType = clean(reservation.data.appointmentType);
-    if (!patientId || !hospital || !area || (appointmentType !== "상담" && appointmentType !== "수술")) continue;
+    if (!patientId || !hospital || !area) continue;
     const key = `${patientId}|${hospital}|${area}`;
     const bucket = candidateBuckets.get(key) || { consultations: [], surgeries: [] };
     (appointmentType === "상담" ? bucket.consultations : bucket.surgeries).push(reservation);
