@@ -80,11 +80,11 @@ export function ScheduleHeader({
 
   return (
     <div className="flex flex-col gap-3 lg:gap-2">
-      <section className="h-[184px] overflow-hidden rounded-[26px] bg-[#eaf8f3] p-5 shadow-[0_18px_50px_rgba(7,56,58,0.08)] lg:grid lg:h-auto lg:grid-cols-[minmax(240px,1fr)_minmax(320px,1fr)_minmax(280px,1fr)] lg:items-center lg:gap-x-4 lg:rounded-[20px] lg:p-3 lg:shadow-none">
-        <div className="rounded-[20px] bg-white p-1 lg:rounded-[12px]">
+      <section className="h-[184px] overflow-hidden rounded-[26px] bg-[#eaf8f3] p-5 shadow-[0_18px_50px_rgba(7,56,58,0.08)] lg:grid lg:h-auto lg:grid-cols-[minmax(240px,1fr)_minmax(320px,1fr)_minmax(280px,1fr)] lg:items-center lg:gap-x-4 lg:rounded-[26px] lg:p-3 lg:shadow-none">
+        <div className="rounded-[20px] bg-white p-1 lg:rounded-[20px]">
           <div className="grid grid-cols-3 gap-1">
             {(["day", "week", "month"] as ViewMode[]).map((mode) => (
-              <button key={mode} type="button" onClick={() => onViewModeChange(mode)} className={viewMode === mode ? "h-8 rounded-[16px] bg-[#e3f2ee] text-[11px] font-semibold text-[#0f9b8e] lg:rounded-[9px] lg:text-xs" : "h-8 rounded-[16px] text-[11px] font-semibold text-[#667085] transition hover:bg-[#f6f7f5] lg:rounded-[9px] lg:text-xs"}>
+              <button key={mode} type="button" onClick={() => onViewModeChange(mode)} className={viewMode === mode ? "h-8 rounded-[16px] bg-[#e3f2ee] text-[11px] font-semibold text-[#0f9b8e] lg:rounded-[16px] lg:text-xs" : "h-8 rounded-[16px] text-[11px] font-semibold text-[#667085] transition hover:bg-[#f6f7f5] lg:rounded-[16px] lg:text-xs"}>
                 {VIEW_LABELS[mode]}
               </button>
             ))}
@@ -92,24 +92,24 @@ export function ScheduleHeader({
         </div>
 
         <div className="mt-1.5 grid grid-cols-[30px_minmax(0,1fr)_30px] items-center gap-2 lg:mt-0 lg:grid-cols-[36px_minmax(0,1fr)_36px] lg:gap-3">
-          <button type="button" onClick={() => onNavigate(-1)} className="flex h-[30px] w-[30px] items-center justify-center rounded-[12px] bg-white text-lg font-bold text-[#101828] transition active:scale-95 lg:h-9 lg:w-9 lg:rounded-[10px]">‹</button>
-          <label className="relative flex min-w-0 cursor-pointer flex-col items-center justify-center overflow-hidden rounded-[16px] px-2 py-1 text-center text-base font-bold tracking-[-0.04em] text-[#101828] active:scale-[0.99] lg:text-sm">
+          <button type="button" onClick={() => onNavigate(-1)} className="flex h-[30px] w-[30px] items-center justify-center rounded-[12px] bg-white text-lg font-bold text-[#101828] transition active:scale-95 lg:h-9 lg:w-9 lg:rounded-[12px]">‹</button>
+          <label className="relative flex min-w-0 cursor-pointer flex-col items-center justify-center overflow-hidden rounded-[20px] px-2 py-1 text-center text-base font-bold tracking-[-0.04em] text-[#101828] active:scale-[0.99] lg:text-sm">
             <span className="truncate">{titleText}</span>
             {isToday ? <span className="mt-0.5 text-[10px] font-bold tracking-normal text-[#0f9b8e]">오늘</span> : null}
             <input type="date" value={baseDate} onChange={(e) => onBaseDateChange(e.target.value)} className="absolute inset-0 h-full w-full cursor-pointer opacity-0" aria-label="날짜 선택" />
           </label>
-          <button type="button" onClick={() => onNavigate(1)} className="flex h-[30px] w-[30px] items-center justify-center rounded-[12px] bg-white text-lg font-bold text-[#101828] transition active:scale-95 lg:h-9 lg:w-9 lg:rounded-[10px]">›</button>
+          <button type="button" onClick={() => onNavigate(1)} className="flex h-[30px] w-[30px] items-center justify-center rounded-[12px] bg-white text-lg font-bold text-[#101828] transition active:scale-95 lg:h-9 lg:w-9 lg:rounded-[12px]">›</button>
         </div>
 
-        <div className="mt-1.5 rounded-[20px] bg-white p-1 lg:mt-0 lg:rounded-[12px]">
+        <div className="mt-1.5 rounded-[20px] bg-white p-1 lg:mt-0 lg:rounded-[20px]">
           <div className="grid grid-cols-[1fr_1fr_auto] gap-1">
-            <button type="button" onClick={selectFirstMode} className={firstModeActive ? "h-8 rounded-[16px] bg-[#e3f2ee] px-3 text-[11px] font-semibold text-[#0f9b8e] lg:rounded-[9px] lg:text-xs" : "h-8 rounded-[16px] px-3 text-[11px] font-semibold text-[#667085] transition hover:bg-[#f6f7f5] lg:rounded-[9px] lg:text-xs"}>
+            <button type="button" onClick={selectFirstMode} className={firstModeActive ? "h-8 rounded-[16px] bg-[#e3f2ee] px-3 text-[11px] font-semibold text-[#0f9b8e] lg:rounded-[16px] lg:text-xs" : "h-8 rounded-[16px] px-3 text-[11px] font-semibold text-[#667085] transition hover:bg-[#f6f7f5] lg:rounded-[16px] lg:text-xs"}>
               <span className="lg:hidden">{firstModeLabel}</span><span className="hidden lg:inline">{viewMode === "day" ? "시간별" : firstModeLabel}</span>
             </button>
-            <button type="button" onClick={selectSecondMode} className={secondModeActive ? "h-8 rounded-[16px] bg-[#e3f2ee] px-3 text-[11px] font-semibold text-[#0f9b8e] lg:rounded-[9px] lg:text-xs" : "h-8 rounded-[16px] px-3 text-[11px] font-semibold text-[#667085] transition hover:bg-[#f6f7f5] lg:rounded-[9px] lg:text-xs"}>
+            <button type="button" onClick={selectSecondMode} className={secondModeActive ? "h-8 rounded-[16px] bg-[#e3f2ee] px-3 text-[11px] font-semibold text-[#0f9b8e] lg:rounded-[16px] lg:text-xs" : "h-8 rounded-[16px] px-3 text-[11px] font-semibold text-[#667085] transition hover:bg-[#f6f7f5] lg:rounded-[16px] lg:text-xs"}>
               <span className="lg:hidden">{secondModeLabel}</span><span className="hidden lg:inline">{viewMode === "day" ? "병원별" : secondModeLabel}</span>
             </button>
-            <button type="button" onClick={onNewReservation} className="h-8 whitespace-nowrap rounded-[16px] bg-[linear-gradient(135deg,#77dfd1_0%,#40c5b3_50%,#0f9b8e_100%)] px-3 text-[11px] font-bold text-white shadow-[0_10px_24px_rgba(15,143,131,0.18)] transition active:scale-95 lg:rounded-[10px] lg:px-4 lg:text-xs">+ 새 예약</button>
+            <button type="button" onClick={onNewReservation} className="h-8 whitespace-nowrap rounded-[16px] bg-[linear-gradient(135deg,#77dfd1_0%,#40c5b3_50%,#0f9b8e_100%)] px-3 text-[11px] font-bold text-white shadow-[0_10px_24px_rgba(15,143,131,0.18)] transition active:scale-95 lg:rounded-[16px] lg:px-4 lg:text-xs">+ 새 예약</button>
           </div>
         </div>
 
@@ -127,7 +127,7 @@ export function ScheduleHeader({
         </div>
       </section>
 
-      <section className="rounded-[24px] bg-white px-4 py-3 shadow-[0_10px_24px_rgba(15,23,42,0.045)] lg:rounded-[16px] lg:border lg:border-[#e4ece8] lg:px-4 lg:py-2.5 lg:shadow-none">
+      <section className="rounded-[24px] bg-white px-4 py-3 shadow-[0_10px_24px_rgba(15,23,42,0.045)] lg:rounded-[24px] lg:border lg:border-[#e4ece8] lg:px-4 lg:py-2.5 lg:shadow-none">
         <button type="button" onClick={onToggleMemoSection} className="flex w-full items-center justify-between gap-3 text-left">
           <span className="text-sm font-semibold text-[#101828] lg:text-xs">오늘의 메모</span>
           <span className="text-[11px] font-semibold text-[#667085]">{memoSectionOpen ? "⌃" : "⌄"}</span>
