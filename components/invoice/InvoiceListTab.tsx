@@ -9,7 +9,8 @@ import { monthRange } from "@/lib/dateUtils";
 import { formatMoney, INVOICE_STATUS_CLASS, INVOICE_STATUS_LABEL } from "@/components/invoices/invoiceUi";
 import { InvoiceDetailModal } from "@/components/invoices/InvoiceDetailModal";
 
-const PAGE_SIZE = 10;
+const MOBILE_PAGE_SIZE = 10;
+const DESKTOP_PAGE_SIZE = 12;
 
 function formatDate(value: unknown): string {
   const d = toDate(value);
@@ -38,6 +39,15 @@ export function InvoiceListTab() {
   const [capped, setCapped] = useState(false);
   const [searched, setSearched] = useState(false);
   const [page, setPage] = useState(1);
+  const [isDesktop, setIsDesktop] = useState(false);
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia("(min-width: 1024px)");
+    const syncViewport = () => setIsDesktop(mediaQuery.matches);
+    syncViewport();
+    mediaQuery.addEventListener("change", syncViewport);
+    return () => mediaQuery.removeEventListener("change", syncViewport);
+  }, []);
 
   async function load(opts?: { start?: string; end?: string; status?: typeof statusFilter }) {
     const s = opts?.start ?? startDate;
@@ -88,11 +98,12 @@ export function InvoiceListTab() {
     };
   }, [filtered]);
 
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const pageSize = isDesktop ? DESKTOP_PAGE_SIZE : MOBILE_PAGE_SIZE;
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
   const currentPage = Math.min(page, totalPages);
   const pagedInvoices = useMemo(
-    () => filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE),
-    [filtered, currentPage],
+    () => filtered.slice((currentPage - 1) * pageSize, currentPage * pageSize),
+    [filtered, currentPage, pageSize],
   );
 
   useEffect(() => {
@@ -215,15 +226,15 @@ export function InvoiceListTab() {
           </div>
         )}
 
-        <div className="space-y-2.5">
+        <div className="space-y-2.5 lg:grid lg:grid-cols-2 lg:gap-3 lg:space-y-0 2xl:grid-cols-3">
           {loading ? (
-            <div className="flex items-center justify-center py-16 text-sm text-gray-400">데이터 로딩 중...</div>
+            <div className="flex items-center justify-center py-16 text-sm text-gray-400 lg:col-span-2 2xl:col-span-3">데이터 로딩 중...</div>
           ) : loadError ? (
-            <div className="flex items-center justify-center py-16 text-sm text-red-500">{loadError}</div>
+            <div className="flex items-center justify-center py-16 text-sm text-red-500 lg:col-span-2 2xl:col-span-3">{loadError}</div>
           ) : !searched ? (
-            <div className="flex items-center justify-center rounded-[28px] bg-white py-20 text-sm text-gray-400 shadow-[0_16px_50px_rgba(15,23,42,0.055)]">기간을 선택하고 조회를 누르세요.</div>
+            <div className="flex items-center justify-center rounded-[28px] bg-white py-20 text-sm text-gray-400 shadow-[0_16px_50px_rgba(15,23,42,0.055)] lg:col-span-2 2xl:col-span-3">기간을 선택하고 조회를 누르세요.</div>
           ) : filtered.length === 0 ? (
-            <div className="flex items-center justify-center py-16 text-sm text-gray-400">조건에 맞는 인보이스가 없습니다.</div>
+            <div className="flex items-center justify-center py-16 text-sm text-gray-400 lg:col-span-2 2xl:col-span-3">조건에 맞는 인보이스가 없습니다.</div>
           ) : (
             <>
               {pagedInvoices.map((inv) => (
@@ -265,7 +276,7 @@ export function InvoiceListTab() {
 
         <div className="flex flex-wrap items-center justify-center gap-2 border-t border-[#edf0f3] pt-3 text-xs text-gray-400">
           <span>총 {filtered.length}건</span>
-          {filtered.length > PAGE_SIZE && (
+          {filtered.length > pageSize && (
             <div className="flex items-center gap-2">
               <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={currentPage === 1} className="h-7 rounded-full bg-[#e3f2ee] px-3 font-semibold text-[#0f9b8e] disabled:opacity-40">이전</button>
               <span className="text-[#667085]">{currentPage} / {totalPages}</span>
