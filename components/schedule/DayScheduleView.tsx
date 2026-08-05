@@ -80,17 +80,20 @@ function DesktopTimeDayView({ reservations, onCardClick }: { reservations: Reser
             <div className="flex items-start justify-center border-b border-r border-[#e7ecea] bg-white pt-3 text-[10px] font-bold text-[#52606d]">{String(hour).padStart(2, "0")}:00</div>
             <div className="relative border-b border-[#e7ecea] bg-white p-2 before:absolute before:left-0 before:right-0 before:top-1/2 before:border-t before:border-dashed before:border-[#edf2ef]">
               <div className="relative z-10 space-y-2">
-                {groups.map(([time, items]) => (
-                  <div key={time} className="min-w-0">
-                    <div className="grid min-w-0 grid-cols-3 gap-2 xl:grid-cols-4">
-                      {items.map((item: ReservationRecord) => (
-                        <div key={item.id} className="min-w-0">
-                          <AppointmentCard item={item} compact showHospital showTimeWithDetail onClick={() => onCardClick(item)} />
-                        </div>
-                      ))}
+                {groups.map(([time, items]) => {
+                  const columns = Math.min(items.length, 3);
+                  return (
+                    <div key={time} className="min-w-0">
+                      <div className="grid min-w-0 justify-start gap-2" style={{ gridTemplateColumns: `repeat(${Math.max(columns, 1)}, minmax(300px, 460px))` }}>
+                        {items.map((item: ReservationRecord) => (
+                          <div key={item.id} className="min-w-0">
+                            <AppointmentCard item={item} compact showHospital showTimeWithDetail onClick={() => onCardClick(item)} />
+                          </div>
+                        ))}
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           </div>
@@ -103,17 +106,18 @@ function DesktopTimeDayView({ reservations, onCardClick }: { reservations: Reser
 function DesktopHospitalDayView({ reservations, onCardClick }: { reservations: ReservationRecord[]; onCardClick: (item: ReservationRecord) => void }) {
   const hospitals = useMemo(() => Array.from(new Set(reservations.map((item) => item.hospital || "병원 미지정"))).sort((a, b) => a.localeCompare(b)), [reservations]);
   const hours = Array.from({ length: END_HOUR - START_HOUR + 1 }, (_, index) => START_HOUR + index);
-  const columnStyle = { gridTemplateColumns: `64px repeat(${Math.max(hospitals.length, 1)}, minmax(220px, 1fr))` };
+  const visibleHospitals = hospitals.length ? hospitals : ["병원 미지정"];
+  const columnStyle = { gridTemplateColumns: `64px repeat(${Math.max(visibleHospitals.length, 1)}, minmax(220px, 1fr))` };
   return (
     <section className="hidden overflow-x-auto rounded-[18px] border border-[#dfe7e4] bg-white lg:block">
       <div className="grid min-w-[760px]" style={columnStyle}>
         <div className="h-9 border-b border-r border-[#dfe7e4]" />
-        {(hospitals.length ? hospitals : ["병원 미지정"]).map((hospital) => <div key={hospital} className="flex h-9 items-center justify-center border-b border-l border-[#dfe7e4] text-xs font-semibold text-[#101828]">{hospital}</div>)}
+        {visibleHospitals.map((hospital, hospitalIndex) => <div key={hospital} className={`flex h-9 items-center justify-center border-b border-[#dfe7e4] text-xs font-semibold text-[#101828] ${hospitalIndex === 0 ? "" : "border-l"}`}>{hospital}</div>)}
         {hours.flatMap((hour) => {
-          const cells = (hospitals.length ? hospitals : ["병원 미지정"]).map((hospital) => {
+          const cells = visibleHospitals.map((hospital, hospitalIndex) => {
             const items: ReservationRecord[] = reservations.filter((item) => hourOf(item) === hour && (item.hospital || "병원 미지정") === hospital).sort((a, b) => exactTime(a).localeCompare(exactTime(b)));
             return (
-              <div key={`${hour}-${hospital}`} className="relative min-h-[88px] border-b border-l border-[#e7ecea] bg-white p-2 before:absolute before:left-0 before:right-0 before:top-1/2 before:border-t before:border-dashed before:border-[#edf2ef]">
+              <div key={`${hour}-${hospital}`} className={`relative min-h-[88px] border-b border-[#e7ecea] bg-white p-2 before:absolute before:left-0 before:right-0 before:top-1/2 before:border-t before:border-dashed before:border-[#edf2ef] ${hospitalIndex === 0 ? "" : "border-l"}`}>
                 <div className="relative z-10 space-y-2">
                   {items.map((item: ReservationRecord) => <AppointmentCard key={item.id} item={item} compact showHospital showTimeWithDetail onClick={() => onCardClick(item)} />)}
                 </div>
