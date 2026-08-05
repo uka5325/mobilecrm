@@ -239,10 +239,12 @@ export async function getOrCreateInvoiceDraft(
   if (!result.success || !result.invoice) {
     return { success: false as const, message: result.message || "인보이스 생성 실패" };
   }
+  const invoice = mapInvoiceDoc(result.invoice as Record<string, unknown>);
   invalidateInvoiceListCache();
+  invalidateInvoicesByPatientCache(invoice.patientId);
   return {
     success: true as const,
-    invoice: mapInvoiceDoc(result.invoice as Record<string, unknown>),
+    invoice,
     alreadyExists: !!result.alreadyExists,
   };
 }
@@ -278,10 +280,12 @@ export async function updateInvoice(
   if (!result.success || !result.invoice) {
     return { success: false as const, message: result.message || "저장 실패" };
   }
+  const invoice = mapInvoiceDoc(result.invoice as Record<string, unknown>);
   invalidateInvoiceListCache();
+  invalidateInvoicesByPatientCache(invoice.patientId);
   return {
     success: true as const,
-    invoice: mapInvoiceDoc(result.invoice as Record<string, unknown>),
+    invoice,
   };
 }
 
