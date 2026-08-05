@@ -178,7 +178,6 @@ export function InvoiceListTab() {
                 placeholder="환자명 검색"
                 value={nameQuery}
                 onChange={(e) => { setNameQuery(e.target.value); setPage(1); }}
-                onKeyDown={(e) => { if (e.key === "Enter") void load(); }}
                 className="h-10 min-w-0 rounded-[18px] bg-white px-3 text-xs text-[#101828] outline-none transition placeholder:text-[#98a2b3] focus:ring-2 focus:ring-[#bdeee8]"
               />
               <button
