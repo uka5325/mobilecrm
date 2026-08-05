@@ -89,6 +89,20 @@ a {
 
   main section[class~="mb-4"][class~="rounded-[26px]"] > div:first-child > div:nth-child(4) {
     grid-column: 1 / -1;
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    overflow-x: auto;
+    border-radius: 0;
+    background: transparent;
+    padding: 0;
+    white-space: nowrap;
+  }
+
+  main section[class~="mb-4"][class~="rounded-[26px]"] > div:first-child > div:nth-child(4) > div {
+    display: flex;
+    align-items: center;
+    gap: 20px;
   }
 }
 
