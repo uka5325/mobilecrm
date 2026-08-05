@@ -29,7 +29,7 @@ export default function DesktopSidebar({
   isActive,
 }: DesktopSidebarProps) {
   return (
-    <aside className="hidden min-h-screen w-[220px] shrink-0 flex-col justify-between bg-[#062c31] px-5 py-5 lg:flex">
+    <aside className="hidden min-h-screen w-[220px] shrink-0 flex-col justify-between bg-[rgb(6,44,49)] px-5 py-5 lg:flex">
       <div>
         <div className="mb-7">
           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#15a99b] text-sm font-black text-white">
@@ -38,7 +38,7 @@ export default function DesktopSidebar({
           <div className="mt-4 text-base font-black tracking-[-0.03em] text-white">
             모바일 CRM
           </div>
-          <p className="mt-1 text-xs leading-5 text-white/58">
+          <p className="mt-1 text-xs leading-5 text-white/50">
             예약, 고객관리, 정산을
             <br />
             한곳에서 관리합니다.
