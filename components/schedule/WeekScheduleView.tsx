@@ -73,7 +73,7 @@ function WeekReservationCard({ item, compact = false, onClick }: { item: Reserva
   if (compact) {
     return (
       <button type="button" onClick={onClick} className="h-[36px] w-full min-w-0 overflow-hidden rounded-[15px] px-1 py-1 text-left transition active:scale-[0.99]" style={{ background: `linear-gradient(90deg, ${color}16 0%, rgba(255,255,255,0.94) 48%, rgba(255,255,255,0.98) 100%)`, boxShadow: `inset 4px 0 0 ${color}, 0 6px 12px rgba(15,23,42,.035)`, opacity: item.completed ? 0.84 : 1 }}>
-        <div className="whitespace-nowrap pl-1 text-[8px] font-semibold leading-3" style={{ color }}>{time}</div>
+        <div className="overflow-hidden whitespace-nowrap pl-1 text-[8px] font-semibold leading-3" style={{ color }}>{time} · {item.hospital || "병원 미지정"}</div>
         <div className={"overflow-hidden whitespace-nowrap pl-1 text-[9px] font-semibold leading-3 tracking-[-0.03em] text-[#101828]" + (cancelled ? " line-through decoration-2" : "")}>{item.name || "이름 없음"}</div>
       </button>
     );
