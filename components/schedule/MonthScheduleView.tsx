@@ -110,19 +110,19 @@ export function MonthScheduleView({ monthStart, reservations, displayMode, onDay
 
   return (
     <div className="min-h-0 flex-1 overflow-auto">
-      <section className="rounded-[34px] bg-white p-2 shadow-[0_10px_24px_rgba(15,23,42,.05)]">
-        <div className="grid grid-cols-7 gap-1 px-1 pb-1">
-          {DAY_LABELS.map((label) => <div key={label} className="py-1.5 text-center text-[10px] font-medium text-[#667085]">{label}</div>)}
+      <section className="rounded-[34px] bg-white p-2 shadow-[0_10px_24px_rgba(15,23,42,.05)] lg:overflow-hidden lg:rounded-[18px] lg:border lg:border-[#dfe7e4] lg:p-0">
+        <div className="grid grid-cols-7 gap-1 px-1 pb-1 lg:gap-0 lg:px-0 lg:pb-0">
+          {DAY_LABELS.map((label, index) => <div key={label} className={`py-1.5 text-center text-[10px] font-medium text-[#667085] lg:border-b lg:border-[#dfe7e4] ${index < DAY_LABELS.length - 1 ? "lg:border-r" : ""}`}>{label}</div>)}
         </div>
-        <div className="grid grid-cols-7 gap-1">
-          {cells.map((dateStr) => {
+        <div className="grid grid-cols-7 gap-1 lg:gap-0">
+          {cells.map((dateStr, index) => {
             const currentMonth = parseDate(dateStr).getMonth() + 1 === month;
             const items = dayItems.get(dateStr) || [];
             const shown = items.slice(0, 3);
             const more = items.length - shown.length;
             const isCurrentDay = dateStr === today;
             return (
-              <div key={dateStr} onClick={() => onDayClick(dateStr)} className={`${currentMonth ? "cursor-pointer" : ""} min-h-[104px] min-w-0 rounded-[16px] px-1 py-1.5 ${isCurrentDay ? "bg-[#f3fbf8]" : "bg-white"}`}>
+              <div key={dateStr} onClick={() => onDayClick(dateStr)} className={`${currentMonth ? "cursor-pointer" : ""} min-h-[104px] min-w-0 rounded-[16px] px-1 py-1.5 lg:rounded-none ${index % 7 !== 6 ? "lg:border-r" : ""} ${index < 35 ? "lg:border-b" : ""} lg:border-[#e7ecea] ${isCurrentDay ? "bg-[#fbfefd]" : "bg-white"}`}>
                 <div className="mb-1 flex justify-center">
                   <span className={isCurrentDay ? "rounded-[11px] bg-[#e3f2ee] px-2 py-0.5 text-[10px] font-semibold text-[#0f9b8e]" : currentMonth ? "px-2 py-0.5 text-[10px] font-medium text-[#344054]" : "px-2 py-0.5 text-[10px] font-medium text-[#c5cad3]"}>{parseDate(dateStr).getDate()}</span>
                 </div>
