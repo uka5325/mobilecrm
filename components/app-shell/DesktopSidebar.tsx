@@ -38,8 +38,10 @@ export default function DesktopSidebar({
           <div className="mt-4 text-base font-black tracking-[-0.03em] text-white">
             모바일 CRM
           </div>
-          <p className="mt-1 text-xs leading-5 text-white/50">
-            예약 · 고객 · 정산
+          <p className="mt-1 text-xs leading-5 text-white/58">
+            예약, 고객관리, 정산을
+            <br />
+            한곳에서 관리합니다.
           </p>
         </div>
 
@@ -55,7 +57,7 @@ export default function DesktopSidebar({
                 className={
                   active
                     ? "flex items-center rounded-xl bg-white px-3 py-2.5 text-sm font-bold text-[#073238]"
-                    : "flex items-center rounded-xl px-3 py-2.5 text-sm font-semibold text-white/55 transition hover:bg-white/8 hover:text-white"
+                    : "flex items-center rounded-xl px-3 py-2.5 text-sm font-semibold text-white/72 transition hover:bg-white/8 hover:text-white"
                 }
               >
                 <span>{item.label}</span>
