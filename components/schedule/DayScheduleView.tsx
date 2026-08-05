@@ -76,17 +76,16 @@ function DesktopTimeDayView({ reservations, onCardClick }: { reservations: Reser
       {hours.map((hour) => {
         const groups = Array.from((byHour.get(hour) || new Map<string, ReservationRecord[]>()).entries()).sort(([a], [b]) => a.localeCompare(b));
         return (
-          <div key={hour} className="grid min-h-[88px] grid-cols-[64px_minmax(0,1fr)]">
+          <div key={hour} className="grid min-h-[96px] grid-cols-[64px_minmax(0,1fr)]">
             <div className="flex items-start justify-center border-b border-r border-[#e7ecea] bg-white pt-3 text-[10px] font-bold text-[#52606d]">{String(hour).padStart(2, "0")}:00</div>
             <div className="relative border-b border-[#e7ecea] bg-white p-2 before:absolute before:left-0 before:right-0 before:top-1/2 before:border-t before:border-dashed before:border-[#edf2ef]">
               <div className="relative z-10 space-y-2">
                 {groups.map(([time, items]) => (
-                  <div key={time} className="flex items-start gap-2">
-                    <span className="w-10 shrink-0 pt-2 text-[10px] font-bold text-[#667085]">{time}</span>
-                    <div className="flex min-w-0 flex-1 flex-wrap gap-2">
+                  <div key={time} className="min-w-0">
+                    <div className="grid min-w-0 grid-cols-3 gap-2 xl:grid-cols-4">
                       {items.map((item: ReservationRecord) => (
-                        <div key={item.id} className="min-w-[220px] basis-[calc(25%-6px)] max-w-[310px]">
-                          <AppointmentCard item={item} compact showHospital onClick={() => onCardClick(item)} />
+                        <div key={item.id} className="min-w-0">
+                          <AppointmentCard item={item} compact showHospital showTimeWithDetail onClick={() => onCardClick(item)} />
                         </div>
                       ))}
                     </div>
