@@ -65,7 +65,6 @@ function downloadCSV(records: InvoiceRecord[]) {
     r.commissionRate ?? "",
     r.commissionAmount ?? "",
   ]);
-  // formula injection 방어 + 안전한 quoting/BOM은 공통 유틸에서 처리.
   const csv = buildCsvContent([header, ...rows]);
   const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
   const url = URL.createObjectURL(blob);
@@ -77,7 +76,6 @@ function downloadCSV(records: InvoiceRecord[]) {
 }
 
 export default function CommissionPage() {
-  // 직원정보는 sessionStorage 캐시 기반 훅으로 즉시 렌더(진입 "로딩 중..." 깜빡임 제거 + verify-staff 읽기 절감).
   const { currentUser } = useCurrentUser();
   const [staffList, setStaffList] = useState<SettingsStaffRecord[]>([]);
 
@@ -102,7 +100,6 @@ export default function CommissionPage() {
     }).catch(() => {});
   }, []);
 
-  // 퀵버튼은 날짜 set 직후 즉시 조회하므로(state 비동기 반영 우회) 날짜 오버라이드를 허용.
   async function handleSearch(override?: { start?: string; end?: string }) {
     const s = override?.start ?? startDate;
     const e = override?.end ?? endDate;
@@ -132,7 +129,6 @@ export default function CommissionPage() {
     }
   }
 
-  // 퀵버튼: 기간 set + 즉시 해당 기간 조회(인보이스·KPI와 동일 모델).
   function quickRange(offset: -1 | 0 | 1) {
     const r = monthRange(offset);
     setQuickOffset(offset);
@@ -198,29 +194,27 @@ export default function CommissionPage() {
         <InvoiceDetailModal invoice={selectedInvoice} title="정산 상세" onClose={() => setSelectedInvoice(null)} />
       )}
 
-      {/* 컨트롤바 */}
-      <div className="h-[184px] overflow-hidden rounded-[26px] bg-[#eaf8f3] p-5 shadow-[0_18px_50px_rgba(7,56,58,0.08)] lg:h-[196px] lg:p-6">
-        <div className="flex h-full flex-col justify-between">
-          {/* 1행: 날짜 + 담당자 */}
-          <div className="grid grid-cols-[minmax(88px,1fr)_auto_minmax(88px,1fr)_104px] items-center gap-1.5">
+      <div className="h-[184px] overflow-hidden rounded-[26px] bg-[#eaf8f3] p-5 shadow-[0_18px_50px_rgba(7,56,58,0.08)] lg:h-auto lg:p-3 lg:shadow-none">
+        <div className="flex h-full flex-col justify-between lg:gap-2">
+          <div className="grid grid-cols-[minmax(88px,1fr)_auto_minmax(88px,1fr)_104px] items-center gap-1.5 lg:grid-cols-[minmax(130px,1fr)_auto_minmax(130px,1fr)_minmax(120px,0.8fr)_minmax(110px,0.7fr)_minmax(180px,1.2fr)_auto] lg:gap-2">
             <input
               type="date"
               value={startDate}
               onChange={(e) => { setQuickOffset(null); setStartDate(e.target.value); }}
-              className="h-10 min-w-0 appearance-none whitespace-nowrap rounded-[18px] bg-white px-1.5 text-[10px] text-[#101828] outline-none transition focus:ring-2 focus:ring-[#bdeee8]"
+              className="h-10 min-w-0 appearance-none whitespace-nowrap rounded-[18px] bg-white px-1.5 text-[10px] text-[#101828] outline-none transition focus:ring-2 focus:ring-[#bdeee8] lg:px-3 lg:text-xs"
             />
             <span className="flex h-10 items-center text-sm text-[#98a2b3]">~</span>
             <input
               type="date"
               value={endDate}
               onChange={(e) => { setQuickOffset(null); setEndDate(e.target.value); }}
-              className="h-10 min-w-0 appearance-none whitespace-nowrap rounded-[18px] bg-white px-1.5 text-[10px] text-[#101828] outline-none transition focus:ring-2 focus:ring-[#bdeee8]"
+              className="h-10 min-w-0 appearance-none whitespace-nowrap rounded-[18px] bg-white px-1.5 text-[10px] text-[#101828] outline-none transition focus:ring-2 focus:ring-[#bdeee8] lg:px-3 lg:text-xs"
             />
             {isAdmin ? (
               <select
                 value={selectedStaffUid}
                 onChange={(e) => setSelectedStaffUid(e.target.value)}
-                className="h-10 min-w-0 rounded-[18px] bg-white px-2 text-[10px] text-[#101828] outline-none transition focus:ring-2 focus:ring-[#bdeee8]"
+                className="h-10 min-w-0 rounded-[18px] bg-white px-2 text-[10px] text-[#101828] outline-none transition focus:ring-2 focus:ring-[#bdeee8] lg:text-xs"
               >
                 <option value="__all__">전체 직원</option>
                 {staffList.map((s) => (
@@ -228,13 +222,36 @@ export default function CommissionPage() {
                 ))}
               </select>
             ) : (
-              <div className="h-10 min-w-0 truncate rounded-[18px] bg-white px-2 text-[10px] leading-10 text-[#101828]">
+              <div className="h-10 min-w-0 truncate rounded-[18px] bg-white px-2 text-[10px] leading-10 text-[#101828] lg:text-xs">
                 {currentUser.displayName || "내 커미션"}
               </div>
             )}
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)}
+              className="hidden h-10 min-w-0 rounded-[18px] bg-white px-2 text-xs text-[#101828] outline-none transition focus:ring-2 focus:ring-[#bdeee8] lg:block"
+            >
+              <option value="">전체 상태</option>
+              <option value="confirmed">확정</option>
+              <option value="draft">임시저장</option>
+            </select>
+            <input
+              value={patientSearch}
+              onChange={(e) => setPatientSearch(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && handleSearch()}
+              placeholder="환자명 검색"
+              className="hidden h-10 min-w-0 rounded-[18px] bg-white px-3 text-xs text-[#101828] outline-none transition placeholder:text-[#98a2b3] focus:ring-2 focus:ring-[#bdeee8] lg:block"
+            />
+            <button
+              onClick={() => handleSearch()}
+              disabled={loading}
+              className="hidden h-10 shrink-0 rounded-[18px] bg-[linear-gradient(135deg,#77dfd1_0%,#40c5b3_50%,#0f9b8e_100%)] px-5 text-xs font-bold text-white shadow-[0_10px_24px_rgba(15,143,131,0.14)] transition hover:-translate-y-0.5 active:scale-95 disabled:opacity-50 lg:block"
+            >
+              {loading ? "조회 중..." : "조회"}
+            </button>
           </div>
-          {/* 2행: 상태 + 환자명 검색 + 조회 */}
-          <div className="grid grid-cols-[96px_minmax(0,1fr)_auto] gap-2">
+
+          <div className="grid grid-cols-[96px_minmax(0,1fr)_auto] gap-2 lg:hidden">
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)}
@@ -259,9 +276,9 @@ export default function CommissionPage() {
               {loading ? "조회 중..." : "조회"}
             </button>
           </div>
-          {/* 퀵필터 */}
-          <div className="rounded-[20px] bg-white p-1">
-            <div className="grid grid-cols-3 gap-1">
+
+          <div className="rounded-[20px] bg-white p-1 lg:flex lg:items-center lg:gap-5 lg:overflow-x-auto lg:rounded-none lg:bg-transparent lg:p-0 lg:whitespace-nowrap">
+            <div className="grid grid-cols-3 gap-1 lg:flex lg:items-center lg:gap-5">
               <QuickButton active={quickOffset === -1} onClick={() => quickRange(-1)}>전달</QuickButton>
               <QuickButton active={quickOffset === 0} onClick={() => quickRange(0)}>이번 달</QuickButton>
               <QuickButton active={quickOffset === 1} onClick={() => quickRange(1)}>다음 달</QuickButton>
@@ -270,14 +287,12 @@ export default function CommissionPage() {
         </div>
       </div>
 
-      {/* 미조회 안내 */}
       {!searched && (
         <div className="flex items-center justify-center rounded-[28px] bg-white py-20 text-sm text-gray-400 shadow-[0_16px_50px_rgba(15,23,42,0.055)]">
           기간을 선택하고 조회를 누르세요.
         </div>
       )}
 
-      {/* 결과 */}
       {searched && (
         <>
           {capped && (
@@ -285,7 +300,6 @@ export default function CommissionPage() {
               결과가 많아 일부만 집계되었습니다. 기간을 좁혀 다시 조회하면 정확한 합계를 볼 수 있습니다.
             </div>
           )}
-          {/* 합계 카드 */}
           <div className="grid gap-3 sm:grid-cols-3">
             <div className="rounded-[22px] bg-[#f8fbfa] px-4 py-3 shadow-[0_10px_24px_rgba(15,23,42,0.04)] text-gray-700">
               <div className="text-xs font-semibold opacity-60">총 건수</div>
@@ -301,7 +315,6 @@ export default function CommissionPage() {
             </div>
           </div>
 
-          {/* 담당자별 소계 */}
           {isAdmin && selectedStaffUid === "__all__" && staffSubtotals.length > 0 && (
             <div className="space-y-2.5">
               <div className="flex items-center justify-between px-1">
@@ -331,7 +344,6 @@ export default function CommissionPage() {
             </div>
           )}
 
-          {/* 환자별 목록 */}
           <div className="space-y-2.5">
             <div className="flex items-center justify-between px-1">
               <div className="text-sm font-bold text-gray-800">환자별 목록</div>
