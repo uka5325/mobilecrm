@@ -124,7 +124,12 @@ export function MonthScheduleView({ monthStart, reservations, displayMode, onDay
             const columnIndex = index % 7;
             const rowIndex = Math.floor(index / 7);
             return (
-              <div key={dateStr} onClick={() => onDayClick(dateStr)} className={`${currentMonth ? "cursor-pointer" : ""} min-h-[104px] min-w-0 px-1 py-1.5 ${columnIndex === 0 ? "" : "border-l border-[#e7ecea]"} ${rowIndex === 0 ? "" : "border-t border-[#e7ecea]"} ${isCurrentDay ? "bg-[#f3fbf8]" : "bg-white"}`}>
+              <div
+                key={dateStr}
+                onClick={() => onDayClick(dateStr)}
+                className={`${currentMonth ? "cursor-pointer" : ""} min-h-[104px] min-w-0 px-1 py-1.5 ${columnIndex === 0 ? "" : "border-l border-[#e7ecea]"} ${rowIndex === 0 ? "" : "border-t border-[#e7ecea]"}`}
+                style={{ backgroundColor: isCurrentDay ? "#f3fbf8" : "#ffffff" }}
+              >
                 <div className="mb-1 flex justify-center">
                   <span className={isCurrentDay ? "rounded-[11px] bg-[#e3f2ee] px-2 py-0.5 text-[10px] font-semibold text-[#0f9b8e]" : currentMonth ? "px-2 py-0.5 text-[10px] font-medium text-[#344054]" : "px-2 py-0.5 text-[10px] font-medium text-[#c5cad3]"}>{parseDate(dateStr).getDate()}</span>
                 </div>
