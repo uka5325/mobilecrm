@@ -58,7 +58,7 @@ function hourOf(item: ReservationRecord) {
 function exactTime(item: ReservationRecord) { return item.reservationTime ? item.reservationTime.slice(0, 5) : "--:--"; }
 
 function DesktopTimeDayView({ reservations, onCardClick }: { reservations: ReservationRecord[]; onCardClick: (item: ReservationRecord) => void }) {
-  const byHour = useMemo(() => {
+  const byHour = useMemo<Map<number, Map<string, ReservationRecord[]>>>(() => {
     const map = new Map<number, Map<string, ReservationRecord[]>>();
     reservations.forEach((item) => {
       const hour = hourOf(item);
@@ -74,7 +74,7 @@ function DesktopTimeDayView({ reservations, onCardClick }: { reservations: Reser
     <section className="hidden overflow-hidden rounded-[18px] border border-[#dfe7e4] bg-white lg:block">
       <div className="grid grid-cols-[64px_minmax(0,1fr)]"><div className="h-9 border-b border-r border-[#dfe7e4]" /><div className="h-9 border-b border-[#dfe7e4]" /></div>
       {hours.map((hour) => {
-        const groups = Array.from((byHour.get(hour) || new Map()).entries()).sort(([a], [b]) => a.localeCompare(b));
+        const groups = Array.from((byHour.get(hour) || new Map<string, ReservationRecord[]>()).entries()).sort(([a], [b]) => a.localeCompare(b));
         return (
           <div key={hour} className="grid min-h-[88px] grid-cols-[64px_minmax(0,1fr)]">
             <div className="flex items-start justify-center border-b border-r border-[#e7ecea] bg-white pt-3 text-[10px] font-bold text-[#52606d]">{String(hour).padStart(2, "0")}:00</div>
@@ -84,7 +84,7 @@ function DesktopTimeDayView({ reservations, onCardClick }: { reservations: Reser
                   <div key={time} className="flex items-start gap-2">
                     <span className="w-10 shrink-0 pt-2 text-[10px] font-bold text-[#667085]">{time}</span>
                     <div className="flex min-w-0 flex-1 flex-wrap gap-2">
-                      {items.map((item) => (
+                      {items.map((item: ReservationRecord) => (
                         <div key={item.id} className="min-w-[220px] basis-[calc(25%-6px)] max-w-[310px]">
                           <AppointmentCard item={item} compact showHospital onClick={() => onCardClick(item)} />
                         </div>
@@ -112,11 +112,11 @@ function DesktopHospitalDayView({ reservations, onCardClick }: { reservations: R
         {(hospitals.length ? hospitals : ["병원 미지정"]).map((hospital) => <div key={hospital} className="flex h-9 items-center justify-center border-b border-l border-[#dfe7e4] text-xs font-semibold text-[#101828]">{hospital}</div>)}
         {hours.flatMap((hour) => {
           const cells = (hospitals.length ? hospitals : ["병원 미지정"]).map((hospital) => {
-            const items = reservations.filter((item) => hourOf(item) === hour && (item.hospital || "병원 미지정") === hospital).sort((a, b) => exactTime(a).localeCompare(exactTime(b)));
+            const items: ReservationRecord[] = reservations.filter((item) => hourOf(item) === hour && (item.hospital || "병원 미지정") === hospital).sort((a, b) => exactTime(a).localeCompare(exactTime(b)));
             return (
               <div key={`${hour}-${hospital}`} className="relative min-h-[88px] border-b border-l border-[#e7ecea] bg-white p-2 before:absolute before:left-0 before:right-0 before:top-1/2 before:border-t before:border-dashed before:border-[#edf2ef]">
                 <div className="relative z-10 space-y-2">
-                  {items.map((item) => <AppointmentCard key={item.id} item={item} compact showHospital showTimeWithDetail onClick={() => onCardClick(item)} />)}
+                  {items.map((item: ReservationRecord) => <AppointmentCard key={item.id} item={item} compact showHospital showTimeWithDetail onClick={() => onCardClick(item)} />)}
                 </div>
               </div>
             );
