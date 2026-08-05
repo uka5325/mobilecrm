@@ -104,6 +104,11 @@ a {
     align-items: center;
     gap: 20px;
   }
+
+  main section[class~="mb-4"][class~="rounded-[26px]"] > div:first-child > div:nth-child(-n + 3) > :is(input, select, button),
+  main div[class~="h-[184px]"][class~="rounded-[26px]"] > div:first-child > div:first-child > :is(input, select, button, span) {
+    height: 36px;
+  }
 }
 
 @media (min-width: 1536px) {
