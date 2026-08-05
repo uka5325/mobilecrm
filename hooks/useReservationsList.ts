@@ -9,7 +9,7 @@ import { todayString } from "@/lib/dateUtils";
 
 export type CustomerFilterMode = "all" | "today" | "recent";
 
-const PAGE_SIZE = 10;
+const PAGE_SIZE = 12;
 
 // 예약관리 환자 목록 상태 머신: Provider 요약 동기화 + 명시 검색 + 커서 페이지네이션 + 그룹 페이지.
 export function useReservationsList({ uid, authReady }: { uid: string | undefined; authReady: boolean }) {
