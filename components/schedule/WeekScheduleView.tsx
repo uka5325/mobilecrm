@@ -129,7 +129,7 @@ function DesktopWeekTable({ dayData, onCardClick }: { dayData: Array<{ day: stri
           return (
             <div key={day} className={`flex h-[66px] min-w-0 flex-col items-center justify-center border-b border-[#dfe7e4] ${index === 0 ? "" : "border-l"} ${today ? "bg-[#f3fbf8]" : "bg-white"}`}>
               <div className={today ? "rounded-[14px] bg-[#e3f2ee] px-3 py-1 text-center" : "px-3 py-1 text-center"}>
-                <div className="text-xs font-semibold leading-4 tracking-[-0.03em] text-[#101828]">{label.day}</div>
+                <div className={today ? "text-xs font-semibold leading-4 tracking-[-0.03em] text-[#0f9b8e]" : "text-xs font-semibold leading-4 tracking-[-0.03em] text-[#101828]"}>{label.day}</div>
                 <div className={today ? "text-[9px] font-medium leading-3 text-[#0f9b8e]" : "text-[9px] font-medium leading-3 text-[#667085]"}>{label.weekday}</div>
               </div>
               <div className={items.length > 0 ? "mt-1 text-[9px] font-normal leading-3 text-[#667085]" : "mt-1 text-[9px] font-normal leading-3 text-[#b4bcc8]"}>{items.length}건</div>
