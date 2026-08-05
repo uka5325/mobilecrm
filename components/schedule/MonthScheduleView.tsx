@@ -40,10 +40,10 @@ function MonthListCard({ item, dateStr, onClick }: { item: ReservationRecord; da
   const cancelled = item.cancelled === true;
   const time = item.reservationTime ? item.reservationTime.slice(0, 5) : "--:--";
   return (
-    <button type="button" onClick={onClick} className="flex min-h-[46px] w-full min-w-0 items-center overflow-hidden rounded-[22px] py-1 pl-4 pr-3 text-left transition active:scale-[0.99]" style={{ background: `linear-gradient(90deg, ${color}16 0%, rgba(255,255,255,0.92) 42%, rgba(255,255,255,0.98) 100%)`, boxShadow: `inset 5px 0 0 ${color}, 0 8px 16px rgba(15,23,42,.04)`, opacity: item.completed ? 0.84 : 1 }}>
+    <button type="button" onClick={onClick} className="flex min-h-[54px] w-full min-w-0 items-center overflow-hidden rounded-[26px] py-1.5 pl-4 pr-3 text-left transition active:scale-[0.99]" style={{ background: `linear-gradient(90deg, ${color}16 0%, rgba(255,255,255,0.92) 42%, rgba(255,255,255,0.98) 100%)`, boxShadow: `inset 5px 0 0 ${color}, 0 8px 16px rgba(15,23,42,.04)`, opacity: item.completed ? 0.84 : 1 }}>
       <div className="min-w-0 flex-1 overflow-hidden">
-        <div className={"truncate text-[13px] font-semibold leading-4 tracking-[-0.035em] text-[#101828]" + (cancelled ? " line-through decoration-2" : "")}>{item.name || "이름 없음"}</div>
-        <div className="mt-0.5 truncate text-[10px] font-normal leading-3 text-[#667085]">{dateLabel(dateStr)} · {time} · {item.hospital || "병원 미지정"}{item.consultArea ? ` · ${detailLabel(item)}: ${item.consultArea}` : ""}</div>
+        <div className={"truncate text-sm font-semibold tracking-[-0.035em] text-[#101828]" + (cancelled ? " line-through decoration-2" : "")}>{item.name || "이름 없음"}</div>
+        <div className="mt-0.5 truncate text-[11px] font-normal leading-4 text-[#667085]">{dateLabel(dateStr)} · {time} · {item.hospital || "병원 미지정"}{item.consultArea ? ` · ${detailLabel(item)}: ${item.consultArea}` : ""}</div>
       </div>
     </button>
   );
@@ -81,28 +81,55 @@ export function MonthScheduleView({ monthStart, reservations, displayMode, onDay
   const weeks = useMemo(() => Array.from({ length: 6 }, (_, index) => cells.slice(index * 7, index * 7 + 7)), [cells]);
 
   if (displayMode === "list") {
+    const weekGroups = weeks.map((week, weekIndex) => {
+      const currentMonthDays = week.filter((dateStr) => parseDate(dateStr).getMonth() + 1 === month);
+      if (currentMonthDays.length === 0) return null;
+      const items = currentMonthDays
+        .flatMap((dateStr) => (dayItems.get(dateStr) || []).map((item) => ({ dateStr, item })))
+        .sort((a, b) => `${a.dateStr} ${a.item.reservationTime || ""}`.localeCompare(`${b.dateStr} ${b.item.reservationTime || ""}`));
+      return {
+        key: week[0],
+        weekIndex,
+        currentMonthDays,
+        includesToday: currentMonthDays.includes(today),
+        items,
+        rangeStart: dateLabel(currentMonthDays[0]).split(" ")[0],
+        rangeEnd: dateLabel(currentMonthDays[currentMonthDays.length - 1]).split(" ")[0],
+      };
+    }).filter((group): group is NonNullable<typeof group> => group !== null);
+
     return (
       <div className="min-h-0 flex-1 overflow-auto">
-        <section className="rounded-[34px] bg-white p-3 shadow-[0_10px_24px_rgba(15,23,42,.05)]">
+        <section className="rounded-[34px] bg-white p-3 shadow-[0_10px_24px_rgba(15,23,42,.05)] lg:hidden">
           <div className="space-y-2">
-            {weeks.map((week, weekIndex) => {
-              const currentMonthDays = week.filter((dateStr) => parseDate(dateStr).getMonth() + 1 === month);
-              if (currentMonthDays.length === 0) return null;
-              const includesToday = currentMonthDays.includes(today);
-              const weekItems = currentMonthDays.flatMap((dateStr) => (dayItems.get(dateStr) || []).map((item) => ({ dateStr, item }))).sort((a, b) => `${a.dateStr} ${a.item.reservationTime || ""}`.localeCompare(`${b.dateStr} ${b.item.reservationTime || ""}`));
-              const rangeStart = dateLabel(currentMonthDays[0]).split(" ")[0];
-              const rangeEnd = dateLabel(currentMonthDays[currentMonthDays.length - 1]).split(" ")[0];
-              return (
-                <div key={week[0]} className="rounded-[30px] bg-[#f7faf8] p-2.5">
-                  <div className="mb-2 flex items-center gap-2 px-1">
-                    <h2 className={includesToday ? "rounded-[14px] bg-[#e3f2ee] px-2.5 py-1 text-sm font-semibold tracking-[-0.035em] text-[#0f9b8e]" : "px-1 py-1 text-sm font-semibold tracking-[-0.035em] text-[#101828]"}>{weekIndex + 1}주차</h2>
-                    <span className="text-[10px] font-normal text-[#667085]">{rangeStart} ~ {rangeEnd} · {weekItems.length}건</span>
-                  </div>
-                  {weekItems.length === 0 ? <div className="rounded-[20px] bg-white/75 px-4 py-3 text-[11px] font-normal text-[#98a2b3]">예약 없음</div> : <div className="space-y-1.5">{weekItems.map(({ dateStr, item }) => <MonthListCard key={item.id} item={item} dateStr={dateStr} onClick={() => onCardClick(item)} />)}</div>}
+            {weekGroups.map((group) => (
+              <div key={group.key} className="rounded-[30px] bg-[#f7faf8] p-2.5">
+                <div className="mb-2 flex items-center gap-2 px-1">
+                  <h2 className={group.includesToday ? "rounded-[14px] bg-[#e3f2ee] px-2.5 py-1 text-sm font-semibold tracking-[-0.035em] text-[#0f9b8e]" : "px-1 py-1 text-sm font-semibold tracking-[-0.035em] text-[#101828]"}>{group.weekIndex + 1}주차</h2>
+                  <span className="text-[10px] font-normal text-[#667085]">{group.rangeStart} ~ {group.rangeEnd} · {group.items.length}건</span>
                 </div>
-              );
-            })}
+                {group.items.length === 0 ? <div className="rounded-[20px] bg-white/75 px-4 py-3 text-[11px] font-normal text-[#98a2b3]">예약 없음</div> : <div className="space-y-1.5">{group.items.map(({ dateStr, item }) => <MonthListCard key={item.id} item={item} dateStr={dateStr} onClick={() => onCardClick(item)} />)}</div>}
+              </div>
+            ))}
           </div>
+        </section>
+
+        <section className="hidden overflow-hidden rounded-[18px] border border-[#dfe7e4] bg-white lg:block">
+          {weekGroups.map((group, index) => (
+            <div key={group.key} className={`${index === weekGroups.length - 1 ? "px-4 py-4" : "border-b border-[#e7ecea] px-4 py-4"} ${group.includesToday ? "bg-[#f3fbf8]" : "bg-white"}`}>
+              <div className="mb-3 flex min-w-0 items-center gap-2.5">
+                <h2 className={group.includesToday ? "shrink-0 rounded-[14px] bg-[#e3f2ee] px-3 py-1.5 text-sm font-semibold tracking-[-0.035em] text-[#0f9b8e]" : "shrink-0 px-1 py-1.5 text-sm font-semibold tracking-[-0.035em] text-[#101828]"}>{group.weekIndex + 1}주차</h2>
+                <span className="min-w-0 truncate text-[11px] font-normal text-[#667085]">{group.rangeStart} ~ {group.rangeEnd} · {group.items.length}건</span>
+              </div>
+              {group.items.length === 0 ? (
+                <div className="rounded-[18px] border border-dashed border-[#dfe7e4] px-4 py-3 text-[11px] font-normal text-[#98a2b3]">예약 없음</div>
+              ) : (
+                <div className="grid grid-cols-2 gap-2">
+                  {group.items.map(({ dateStr, item }) => <MonthListCard key={item.id} item={item} dateStr={dateStr} onClick={() => onCardClick(item)} />)}
+                </div>
+              )}
+            </div>
+          ))}
         </section>
       </div>
     );
