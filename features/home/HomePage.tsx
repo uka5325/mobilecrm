@@ -101,26 +101,26 @@ export default function HomePage() {
   const nextReservation = todayReservations[0];
 
   return (
-    <div className="w-full space-y-6">
-      <HomeStats
-        dateLabel={todayDisplayString()}
-        reservationCount={todayReservations.length}
-        nextTime={nextReservation?.reservationTime}
-        nextName={nextReservation?.name}
-        nextType={nextReservation?.consultArea}
-        loading={loading}
-      />
+    <div className="w-full space-y-6 lg:space-y-5">
+      <div className="space-y-6 lg:grid lg:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.9fr)] lg:items-stretch lg:gap-5 lg:space-y-0">
+        <HomeStats
+          dateLabel={todayDisplayString()}
+          reservationCount={todayReservations.length}
+          nextTime={nextReservation?.reservationTime}
+          nextName={nextReservation?.name}
+          nextType={nextReservation?.consultArea}
+          loading={loading}
+        />
 
-      <div className="space-y-6">
         <TodayMemo
           memos={todayMemos}
           loading={memoLoading}
           onRefresh={refreshTodayMemos}
           formatTime={formatMemoTime}
         />
-
-        <OperatingGuide />
       </div>
+
+      <OperatingGuide />
     </div>
   );
 }
