@@ -90,7 +90,7 @@ export default function CommissionPage() {
   const [loading, setLoading] = useState(false);
   const [searched, setSearched] = useState(false);
   const [selectedInvoice, setSelectedInvoice] = useState<InvoiceRecord | null>(null);
-  const [quickOffset, setQuickOffset] = useState<-1 | 0 | 1 | null>(null);
+  const [quickOffset, setQuickOffset] = useState<-1 | 0 | 1 | null>(0);
   const [recordPage, setRecordPage] = useState(1);
   const [staffPage, setStaffPage] = useState(1);
 
@@ -189,7 +189,7 @@ export default function CommissionPage() {
   }
 
   return (
-    <div className="space-y-5 pb-12">
+    <div className="flex flex-col gap-4 pb-12">
       {selectedInvoice && (
         <InvoiceDetailModal invoice={selectedInvoice} title="정산 상세" onClose={() => setSelectedInvoice(null)} />
       )}
@@ -362,45 +362,47 @@ export default function CommissionPage() {
               </div>
             ) : (
               <>
-                {pagedRecords.map((r) => (
-                  <article
-                    key={r.id}
-                    onClick={() => setSelectedInvoice(r)}
-                    className="cursor-pointer rounded-[24px] bg-white p-2.5 shadow-[0_10px_28px_rgba(15,23,42,0.05)] transition active:scale-[0.99]"
-                  >
-                    <div className="flex min-w-0 items-start justify-between gap-2.5">
-                      <div className="min-w-0 flex-1">
-                        <div className="flex min-w-0 items-center gap-2">
-                          <h3 className="truncate text-[15px] font-bold tracking-[-0.04em] text-[#101828]">{r.patientName}</h3>
-                          <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${
-                            r.paymentMethod === "card" ? "bg-blue-50 text-blue-700" :
-                            r.paymentMethod === "cash" ? "bg-green-50 text-green-700" :
-                            r.paymentMethod === "mixed" ? "bg-orange-50 text-orange-700" :
-                            "bg-gray-100 text-gray-500"
-                          }`}>
-                            {paymentMethodLabel(r.paymentMethod)}
-                          </span>
-                        </div>
-                        <div className="mt-0.5 flex flex-wrap gap-x-2 gap-y-0.5 text-[11px] text-[#667085]">
-                          <span>{r.hospitalName || "-"}</span>
-                          <span>{r.commissionStaffName || "-"}</span>
-                          <span>{r.commissionRate !== undefined && r.commissionRate !== null ? `${r.commissionRate}%` : "커미션율 -"}</span>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="mt-1.5 border-t border-[#edf0f3] pt-1.5">
-                      <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-[#667085]">
-                        <div className="flex flex-wrap gap-x-2 gap-y-0.5">
-                          <span><span className="text-[#98a2b3]">수술비 </span>₩{formatMoney(r.totalAmount || 0)}</span>
-                          <span><span className="text-[#98a2b3]">기준액 </span>₩{formatMoney(r.commissionBase || 0)}</span>
-                        </div>
-                        <div className="font-semibold text-[#0f9b8e]">
-                          <span className="text-[#98a2b3]">커미션 </span>₩{formatMoney(r.commissionAmount || 0)}
+                <div className="space-y-2.5 lg:grid lg:grid-cols-2 lg:gap-3 lg:space-y-0 2xl:grid-cols-3">
+                  {pagedRecords.map((r) => (
+                    <article
+                      key={r.id}
+                      onClick={() => setSelectedInvoice(r)}
+                      className="cursor-pointer rounded-[24px] bg-white p-2.5 shadow-[0_10px_28px_rgba(15,23,42,0.05)] transition active:scale-[0.99]"
+                    >
+                      <div className="flex min-w-0 items-start justify-between gap-2.5">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex min-w-0 items-center gap-2">
+                            <h3 className="truncate text-[15px] font-bold tracking-[-0.04em] text-[#101828]">{r.patientName}</h3>
+                            <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                              r.paymentMethod === "card" ? "bg-blue-50 text-blue-700" :
+                              r.paymentMethod === "cash" ? "bg-green-50 text-green-700" :
+                              r.paymentMethod === "mixed" ? "bg-orange-50 text-orange-700" :
+                              "bg-gray-100 text-gray-500"
+                            }`}>
+                              {paymentMethodLabel(r.paymentMethod)}
+                            </span>
+                          </div>
+                          <div className="mt-0.5 flex flex-wrap gap-x-2 gap-y-0.5 text-[11px] text-[#667085]">
+                            <span>{r.hospitalName || "-"}</span>
+                            <span>{r.commissionStaffName || "-"}</span>
+                            <span>{r.commissionRate !== undefined && r.commissionRate !== null ? `${r.commissionRate}%` : "커미션율 -"}</span>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  </article>
-                ))}
+                      <div className="mt-1.5 border-t border-[#edf0f3] pt-1.5">
+                        <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-[#667085]">
+                          <div className="flex flex-wrap gap-x-2 gap-y-0.5">
+                            <span><span className="text-[#98a2b3]">수술비 </span>₩{formatMoney(r.totalAmount || 0)}</span>
+                            <span><span className="text-[#98a2b3]">기준액 </span>₩{formatMoney(r.commissionBase || 0)}</span>
+                          </div>
+                          <div className="font-semibold text-[#0f9b8e]">
+                            <span className="text-[#98a2b3]">커미션 </span>₩{formatMoney(r.commissionAmount || 0)}
+                          </div>
+                        </div>
+                      </div>
+                    </article>
+                  ))}
+                </div>
                 <div className="flex flex-wrap items-center justify-center gap-2 pt-1 text-xs text-gray-400">
                   <span>총 {records.length}건</span>
                   <PageControls page={currentRecordPage} totalPages={recordTotalPages} onPageChange={setRecordPage} />
