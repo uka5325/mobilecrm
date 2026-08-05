@@ -5,11 +5,7 @@ import type { ConferenceMemo } from "@/features/settings/data/client/settings";
 import { SCHEDULE_APPOINTMENT_TYPES } from "@/features/reservations/ui/scheduleLayout";
 import type { ViewMode } from "@/hooks/useSchedulePage";
 
-const VIEW_LABELS: Record<ViewMode, string> = {
-  day: "일간",
-  week: "주간",
-  month: "월간",
-};
+const VIEW_LABELS: Record<ViewMode, string> = { day: "일간", week: "주간", month: "월간" };
 
 type Props = {
   viewMode: ViewMode;
@@ -34,6 +30,14 @@ type Props = {
   onToggleMemoSection: () => void;
 };
 
+function localDateString() {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
 export function ScheduleHeader({
   viewMode,
   onViewModeChange,
@@ -44,6 +48,7 @@ export function ScheduleHeader({
   kpi,
   loading,
   onNavigate,
+  onToday,
   onNewReservation,
   dayDisplayMode,
   onDayDisplayModeChange,
@@ -55,22 +60,11 @@ export function ScheduleHeader({
   memoSectionOpen,
   onToggleMemoSection,
 }: Props) {
-  const firstModeActive =
-    viewMode === "day"
-      ? dayDisplayMode === "time"
-      : viewMode === "week"
-        ? weekDisplayMode === "table"
-        : monthDisplayMode === "table";
-  const secondModeActive =
-    viewMode === "day"
-      ? dayDisplayMode === "hospital"
-      : viewMode === "week"
-        ? weekDisplayMode === "list"
-        : monthDisplayMode === "list";
-  const firstModeLabel =
-    viewMode === "day" ? "시간별 보기" : viewMode === "week" ? "주간표" : "월간표";
-  const secondModeLabel =
-    viewMode === "day" ? "병원별 보기" : "리스트";
+  const firstModeActive = viewMode === "day" ? dayDisplayMode === "time" : viewMode === "week" ? weekDisplayMode === "table" : monthDisplayMode === "table";
+  const secondModeActive = viewMode === "day" ? dayDisplayMode === "hospital" : viewMode === "week" ? weekDisplayMode === "list" : monthDisplayMode === "list";
+  const firstModeLabel = viewMode === "day" ? "시간별 보기" : viewMode === "week" ? "주간표" : "월간표";
+  const secondModeLabel = viewMode === "day" ? "병원별 보기" : "리스트";
+  const isToday = baseDate === localDateString();
 
   function selectFirstMode() {
     if (viewMode === "day") onDayDisplayModeChange("time");
@@ -85,89 +79,41 @@ export function ScheduleHeader({
   }
 
   return (
-    <div className="flex flex-col gap-3">
-      <section className="h-[184px] overflow-hidden rounded-[26px] bg-[#eaf8f3] p-5 shadow-[0_18px_50px_rgba(7,56,58,0.08)] lg:h-[196px] lg:p-6">
-        <div className="rounded-[20px] bg-white p-1">
+    <div className="flex flex-col gap-3 lg:gap-2">
+      <section className="h-[184px] overflow-hidden rounded-[26px] bg-[#eaf8f3] p-5 shadow-[0_18px_50px_rgba(7,56,58,0.08)] lg:grid lg:h-auto lg:grid-cols-[minmax(240px,1fr)_minmax(320px,1fr)_minmax(280px,1fr)] lg:items-center lg:gap-x-4 lg:rounded-[20px] lg:p-3 lg:shadow-none">
+        <div className="rounded-[20px] bg-white p-1 lg:rounded-[12px]">
           <div className="grid grid-cols-3 gap-1">
             {(["day", "week", "month"] as ViewMode[]).map((mode) => (
-              <button
-                key={mode}
-                type="button"
-                onClick={() => onViewModeChange(mode)}
-                className={
-                  viewMode === mode
-                    ? "h-8 rounded-[16px] bg-[#e3f2ee] text-[11px] font-semibold text-[#0f9b8e]"
-                    : "h-8 rounded-[16px] text-[11px] font-semibold text-[#667085] transition hover:bg-[#f6f7f5]"
-                }
-              >
+              <button key={mode} type="button" onClick={() => onViewModeChange(mode)} className={viewMode === mode ? "h-8 rounded-[16px] bg-[#e3f2ee] text-[11px] font-semibold text-[#0f9b8e] lg:rounded-[9px] lg:text-xs" : "h-8 rounded-[16px] text-[11px] font-semibold text-[#667085] transition hover:bg-[#f6f7f5] lg:rounded-[9px] lg:text-xs"}>
                 {VIEW_LABELS[mode]}
               </button>
             ))}
           </div>
         </div>
 
-        <div className="mt-1.5 grid grid-cols-[30px_minmax(0,1fr)_30px] items-center gap-2">
-          <button
-            type="button"
-            onClick={() => onNavigate(-1)}
-            className="flex h-[30px] w-[30px] items-center justify-center rounded-[12px] bg-white text-lg font-bold text-[#101828] transition active:scale-95"
-          >
-            ‹
-          </button>
-          <label className="relative flex min-w-0 cursor-pointer items-center justify-center overflow-hidden rounded-[16px] px-2 py-1 text-center text-base font-bold tracking-[-0.04em] text-[#101828] active:scale-[0.99] lg:text-lg">
+        <div className="mt-1.5 grid grid-cols-[30px_minmax(0,1fr)_30px] items-center gap-2 lg:mt-0 lg:grid-cols-[36px_minmax(0,1fr)_36px] lg:gap-3">
+          <button type="button" onClick={() => onNavigate(-1)} className="flex h-[30px] w-[30px] items-center justify-center rounded-[12px] bg-white text-lg font-bold text-[#101828] transition active:scale-95 lg:h-9 lg:w-9 lg:rounded-[10px]">‹</button>
+          <label className="relative flex min-w-0 cursor-pointer flex-col items-center justify-center overflow-hidden rounded-[16px] px-2 py-1 text-center text-base font-bold tracking-[-0.04em] text-[#101828] active:scale-[0.99] lg:text-sm">
             <span className="truncate">{titleText}</span>
-            <input
-              type="date"
-              value={baseDate}
-              onChange={(e) => onBaseDateChange(e.target.value)}
-              className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
-              aria-label="날짜 선택"
-            />
+            {isToday ? <span className="mt-0.5 text-[10px] font-bold tracking-normal text-[#0f9b8e]">오늘</span> : null}
+            <input type="date" value={baseDate} onChange={(e) => onBaseDateChange(e.target.value)} className="absolute inset-0 h-full w-full cursor-pointer opacity-0" aria-label="날짜 선택" />
           </label>
-          <button
-            type="button"
-            onClick={() => onNavigate(1)}
-            className="flex h-[30px] w-[30px] items-center justify-center rounded-[12px] bg-white text-lg font-bold text-[#101828] transition active:scale-95"
-          >
-            ›
-          </button>
+          <button type="button" onClick={() => onNavigate(1)} className="flex h-[30px] w-[30px] items-center justify-center rounded-[12px] bg-white text-lg font-bold text-[#101828] transition active:scale-95 lg:h-9 lg:w-9 lg:rounded-[10px]">›</button>
         </div>
 
-        <div className="mt-1.5 rounded-[20px] bg-white p-1">
+        <div className="mt-1.5 rounded-[20px] bg-white p-1 lg:mt-0 lg:rounded-[12px]">
           <div className="grid grid-cols-[1fr_1fr_auto] gap-1">
-            <button
-              type="button"
-              onClick={selectFirstMode}
-              className={
-                firstModeActive
-                  ? "h-8 rounded-[16px] bg-[#e3f2ee] px-3 text-[11px] font-semibold text-[#0f9b8e]"
-                  : "h-8 rounded-[16px] px-3 text-[11px] font-semibold text-[#667085] transition hover:bg-[#f6f7f5]"
-              }
-            >
-              {firstModeLabel}
+            <button type="button" onClick={selectFirstMode} className={firstModeActive ? "h-8 rounded-[16px] bg-[#e3f2ee] px-3 text-[11px] font-semibold text-[#0f9b8e] lg:rounded-[9px] lg:text-xs" : "h-8 rounded-[16px] px-3 text-[11px] font-semibold text-[#667085] transition hover:bg-[#f6f7f5] lg:rounded-[9px] lg:text-xs"}>
+              <span className="lg:hidden">{firstModeLabel}</span><span className="hidden lg:inline">{viewMode === "day" ? "시간별" : firstModeLabel}</span>
             </button>
-            <button
-              type="button"
-              onClick={selectSecondMode}
-              className={
-                secondModeActive
-                  ? "h-8 rounded-[16px] bg-[#e3f2ee] px-3 text-[11px] font-semibold text-[#0f9b8e]"
-                  : "h-8 rounded-[16px] px-3 text-[11px] font-semibold text-[#667085] transition hover:bg-[#f6f7f5]"
-              }
-            >
-              {secondModeLabel}
+            <button type="button" onClick={selectSecondMode} className={secondModeActive ? "h-8 rounded-[16px] bg-[#e3f2ee] px-3 text-[11px] font-semibold text-[#0f9b8e] lg:rounded-[9px] lg:text-xs" : "h-8 rounded-[16px] px-3 text-[11px] font-semibold text-[#667085] transition hover:bg-[#f6f7f5] lg:rounded-[9px] lg:text-xs"}>
+              <span className="lg:hidden">{secondModeLabel}</span><span className="hidden lg:inline">{viewMode === "day" ? "병원별" : secondModeLabel}</span>
             </button>
-            <button
-              type="button"
-              onClick={onNewReservation}
-              className="h-8 whitespace-nowrap rounded-[16px] bg-[linear-gradient(135deg,#77dfd1_0%,#40c5b3_50%,#0f9b8e_100%)] px-3 text-[11px] font-bold text-white shadow-[0_10px_24px_rgba(15,143,131,0.18)] transition active:scale-95"
-            >
-              + 새 예약
-            </button>
+            <button type="button" onClick={onNewReservation} className="h-8 whitespace-nowrap rounded-[16px] bg-[linear-gradient(135deg,#77dfd1_0%,#40c5b3_50%,#0f9b8e_100%)] px-3 text-[11px] font-bold text-white shadow-[0_10px_24px_rgba(15,143,131,0.18)] transition active:scale-95 lg:rounded-[10px] lg:px-4 lg:text-xs">+ 새 예약</button>
           </div>
         </div>
 
-        <div className="mt-2.5 flex items-center gap-2.5 overflow-x-auto whitespace-nowrap [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <div className="mt-2.5 flex items-center gap-2.5 overflow-x-auto whitespace-nowrap [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden lg:col-span-3 lg:mt-2">
           <span className="shrink-0 text-[11px] font-normal text-[#8b93a1]">전체 {totalCount}건</span>
           {loading ? <span className="shrink-0 animate-pulse text-[11px] font-normal text-[#8b93a1]">로딩 중...</span> : null}
           {SCHEDULE_APPOINTMENT_TYPES.map((type: AppointmentType) => (
@@ -177,24 +123,18 @@ export function ScheduleHeader({
               <span className="text-[11px] font-normal text-[#667085]">{kpi[type] || 0}</span>
             </div>
           ))}
+          {!isToday ? <button type="button" onClick={onToday} className="ml-auto hidden shrink-0 text-[11px] font-bold text-[#0f9b8e] lg:block">오늘</button> : null}
         </div>
       </section>
 
-      <section className="rounded-[24px] bg-white px-4 py-3 shadow-[0_10px_24px_rgba(15,23,42,0.045)]">
-        <button
-          type="button"
-          onClick={onToggleMemoSection}
-          className="flex w-full items-center justify-between gap-3 text-left"
-        >
-          <span className="text-sm font-semibold text-[#101828]">오늘의 메모</span>
+      <section className="rounded-[24px] bg-white px-4 py-3 shadow-[0_10px_24px_rgba(15,23,42,0.045)] lg:rounded-[16px] lg:border lg:border-[#e4ece8] lg:px-4 lg:py-2.5 lg:shadow-none">
+        <button type="button" onClick={onToggleMemoSection} className="flex w-full items-center justify-between gap-3 text-left">
+          <span className="text-sm font-semibold text-[#101828] lg:text-xs">오늘의 메모</span>
           <span className="text-[11px] font-semibold text-[#667085]">{memoSectionOpen ? "⌃" : "⌄"}</span>
         </button>
-
         {memoSectionOpen ? (
           <div className="mt-1.5">
-            {todayMemos.length === 0 ? (
-              <p className="text-xs font-normal text-[#667085]">오늘 등록된 메모가 없습니다.</p>
-            ) : (
+            {todayMemos.length === 0 ? <p className="text-xs font-normal text-[#667085]">오늘 등록된 메모가 없습니다.</p> : (
               <div className="flex gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                 {todayMemos.map((memo) => (
                   <div key={memo.id} className="min-w-[180px] max-w-[260px] shrink-0 rounded-[18px] bg-[#f7faf8] px-3 py-2 text-xs">

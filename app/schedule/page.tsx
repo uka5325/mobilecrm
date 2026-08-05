@@ -25,7 +25,7 @@ export default function SchedulePage() {
   } = schedule;
 
   return (
-    <div className="mx-auto flex min-h-[calc(100vh-170px)] max-w-[980px] flex-col gap-6 pb-6">
+    <div className="mx-auto flex min-h-[calc(100vh-170px)] max-w-[980px] flex-col gap-6 pb-6 lg:max-w-none lg:gap-3 lg:pb-4">
       <ScheduleHeader
         viewMode={viewMode}
         onViewModeChange={schedule.setViewMode}
@@ -49,7 +49,6 @@ export default function SchedulePage() {
         onToggleMemoSection={schedule.toggleMemoSection}
       />
 
-      {/* 뷰 */}
       {viewMode === "day" && (
         <DayScheduleView
           dateStr={baseDate}
