@@ -80,20 +80,17 @@ function DesktopTimeDayView({ reservations, onCardClick }: { reservations: Reser
             <div className="flex items-start justify-center border-b border-r border-[#e7ecea] bg-white pt-3 text-[10px] font-bold text-[#52606d]">{String(hour).padStart(2, "0")}:00</div>
             <div className="relative border-b border-[#e7ecea] bg-white p-2 before:absolute before:left-0 before:right-0 before:top-1/2 before:border-t before:border-dashed before:border-[#edf2ef]">
               <div className="relative z-10 space-y-2">
-                {groups.map(([time, items]) => {
-                  const columns = Math.min(items.length, 3);
-                  return (
-                    <div key={time} className="min-w-0">
-                      <div className="grid min-w-0 justify-start gap-2" style={{ gridTemplateColumns: `repeat(${Math.max(columns, 1)}, minmax(300px, 460px))` }}>
-                        {items.map((item: ReservationRecord) => (
-                          <div key={item.id} className="min-w-0">
-                            <AppointmentCard item={item} compact showHospital showTimeWithDetail onClick={() => onCardClick(item)} />
-                          </div>
-                        ))}
-                      </div>
+                {groups.map(([time, items]) => (
+                  <div key={time} className="min-w-0">
+                    <div className="grid min-w-0 grid-cols-2 gap-2">
+                      {items.map((item: ReservationRecord) => (
+                        <div key={item.id} className="min-w-0">
+                          <AppointmentCard item={item} compact showHospital showTimeWithDetail onClick={() => onCardClick(item)} />
+                        </div>
+                      ))}
                     </div>
-                  );
-                })}
+                  </div>
+                ))}
               </div>
             </div>
           </div>
