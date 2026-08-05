@@ -93,17 +93,24 @@ export function ScheduleHeader({
 
         <div className="mt-1.5 grid grid-cols-[30px_minmax(0,1fr)_30px] items-center gap-2 lg:mt-0 lg:grid-cols-[36px_minmax(0,1fr)_36px] lg:gap-3">
           <button type="button" onClick={() => onNavigate(-1)} className="flex h-[30px] w-[30px] items-center justify-center rounded-[12px] bg-white text-lg font-bold text-[#101828] transition active:scale-95 lg:h-9 lg:w-9 lg:rounded-[12px]">‹</button>
-          <label className="relative flex min-w-0 cursor-pointer flex-col items-center justify-center overflow-hidden rounded-[20px] px-2 py-1 text-center text-base font-bold tracking-[-0.04em] text-[#101828] active:scale-[0.99] lg:text-sm">
-            <span className="pointer-events-none truncate">{titleText}</span>
-            {isToday ? <span className="pointer-events-none mt-0.5 text-[10px] font-bold tracking-normal text-[#0f9b8e]">오늘</span> : null}
-            <input
-              type="date"
-              value={baseDate}
-              onChange={(e) => onBaseDateChange(e.target.value)}
-              className="absolute inset-0 z-10 h-full w-full cursor-pointer opacity-0"
-              aria-label="날짜 선택"
-            />
-          </label>
+          <div className="flex min-w-0 flex-col items-center justify-center">
+            <label className="relative flex min-w-0 cursor-pointer flex-col items-center justify-center overflow-hidden rounded-[20px] px-2 py-1 text-center text-base font-bold tracking-[-0.04em] text-[#101828] active:scale-[0.99] lg:text-sm">
+              <span className="pointer-events-none truncate">{titleText}</span>
+              {isToday ? <span className="pointer-events-none mt-0.5 text-[10px] font-bold tracking-normal text-[#0f9b8e] lg:hidden">오늘</span> : null}
+              <input
+                type="date"
+                value={baseDate}
+                onChange={(e) => onBaseDateChange(e.target.value)}
+                className="absolute inset-0 z-10 h-full w-full cursor-pointer opacity-0"
+                aria-label="날짜 선택"
+              />
+            </label>
+            {isToday ? (
+              <span className="hidden text-[11px] font-bold leading-none text-[#0f9b8e] lg:block">오늘</span>
+            ) : (
+              <button type="button" onClick={onToday} className="hidden text-[11px] font-bold leading-none text-[#0f9b8e] lg:block">오늘</button>
+            )}
+          </div>
           <button type="button" onClick={() => onNavigate(1)} className="flex h-[30px] w-[30px] items-center justify-center rounded-[12px] bg-white text-lg font-bold text-[#101828] transition active:scale-95 lg:h-9 lg:w-9 lg:rounded-[12px]">›</button>
         </div>
 
@@ -129,7 +136,6 @@ export function ScheduleHeader({
               <span className="text-[11px] font-normal text-[#667085]">{kpi[type] || 0}</span>
             </div>
           ))}
-          {!isToday ? <button type="button" onClick={onToday} className="ml-auto hidden shrink-0 text-[11px] font-bold text-[#0f9b8e] lg:block">오늘</button> : null}
         </div>
       </section>
 
