@@ -1,5 +1,6 @@
 "use client";
 
+import { useRef } from "react";
 import { type AppointmentType, APPOINTMENT_TYPE_COLORS } from "@/features/reservations/domain/reservationModels";
 import type { ConferenceMemo } from "@/features/settings/data/client/settings";
 import { SCHEDULE_APPOINTMENT_TYPES } from "@/features/reservations/ui/scheduleLayout";
@@ -60,6 +61,7 @@ export function ScheduleHeader({
   memoSectionOpen,
   onToggleMemoSection,
 }: Props) {
+  const dateInputRef = useRef<HTMLInputElement>(null);
   const firstModeActive = viewMode === "day" ? dayDisplayMode === "time" : viewMode === "week" ? weekDisplayMode === "table" : monthDisplayMode === "table";
   const secondModeActive = viewMode === "day" ? dayDisplayMode === "hospital" : viewMode === "week" ? weekDisplayMode === "list" : monthDisplayMode === "list";
   const firstModeLabel = viewMode === "day" ? "시간별 보기" : viewMode === "week" ? "주간표" : "월간표";
@@ -78,6 +80,13 @@ export function ScheduleHeader({
     else onMonthDisplayModeChange("list");
   }
 
+  function openDatePicker() {
+    const input = dateInputRef.current;
+    if (!input) return;
+    if (typeof input.showPicker === "function") input.showPicker();
+    else input.click();
+  }
+
   return (
     <div className="flex flex-col gap-3 lg:gap-2">
       <section className="h-[184px] overflow-hidden rounded-[26px] bg-[#eaf8f3] p-5 shadow-[0_18px_50px_rgba(7,56,58,0.08)] lg:grid lg:h-auto lg:grid-cols-[minmax(240px,1fr)_minmax(320px,1fr)_minmax(280px,1fr)] lg:items-center lg:gap-x-4 lg:rounded-[26px] lg:p-3 lg:shadow-none">
@@ -93,11 +102,11 @@ export function ScheduleHeader({
 
         <div className="mt-1.5 grid grid-cols-[30px_minmax(0,1fr)_30px] items-center gap-2 lg:mt-0 lg:grid-cols-[36px_minmax(0,1fr)_36px] lg:gap-3">
           <button type="button" onClick={() => onNavigate(-1)} className="flex h-[30px] w-[30px] items-center justify-center rounded-[12px] bg-white text-lg font-bold text-[#101828] transition active:scale-95 lg:h-9 lg:w-9 lg:rounded-[12px]">‹</button>
-          <label className="relative flex min-w-0 cursor-pointer flex-col items-center justify-center overflow-hidden rounded-[20px] px-2 py-1 text-center text-base font-bold tracking-[-0.04em] text-[#101828] active:scale-[0.99] lg:text-sm">
+          <button type="button" onClick={openDatePicker} className="relative flex min-w-0 cursor-pointer flex-col items-center justify-center overflow-hidden rounded-[20px] px-2 py-1 text-center text-base font-bold tracking-[-0.04em] text-[#101828] active:scale-[0.99] lg:text-sm">
             <span className="truncate">{titleText}</span>
             {isToday ? <span className="mt-0.5 text-[10px] font-bold tracking-normal text-[#0f9b8e]">오늘</span> : null}
-            <input type="date" value={baseDate} onChange={(e) => onBaseDateChange(e.target.value)} className="absolute inset-0 h-full w-full cursor-pointer opacity-0" aria-label="날짜 선택" />
-          </label>
+            <input ref={dateInputRef} type="date" value={baseDate} onChange={(e) => onBaseDateChange(e.target.value)} className="pointer-events-none absolute h-px w-px opacity-0" tabIndex={-1} aria-label="날짜 선택" />
+          </button>
           <button type="button" onClick={() => onNavigate(1)} className="flex h-[30px] w-[30px] items-center justify-center rounded-[12px] bg-white text-lg font-bold text-[#101828] transition active:scale-95 lg:h-9 lg:w-9 lg:rounded-[12px]">›</button>
         </div>
 
