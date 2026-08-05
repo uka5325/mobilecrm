@@ -9,7 +9,8 @@ import { todayString } from "@/lib/dateUtils";
 
 export type CustomerFilterMode = "all" | "today" | "recent";
 
-const PAGE_SIZE = 12;
+const MOBILE_PAGE_SIZE = 10;
+const DESKTOP_PAGE_SIZE = 12;
 
 // 예약관리 환자 목록 상태 머신: Provider 요약 동기화 + 명시 검색 + 커서 페이지네이션 + 그룹 페이지.
 export function useReservationsList({ uid, authReady }: { uid: string | undefined; authReady: boolean }) {
@@ -36,11 +37,20 @@ export function useReservationsList({ uid, authReady }: { uid: string | undefine
   const [search, setSearch] = useState("");
   const [filterMode, setFilterMode] = useState<CustomerFilterMode>("all");
   const [groupPage, setGroupPage] = useState(1);
+  const [isDesktop, setIsDesktop] = useState(false);
   const [patients, setPatients] = useState<PatientRecord[]>(() => summaryPatients);
   const [patientsNextCursor, setPatientsNextCursor] = useState<string | null>(
     () => summaryNextCursor
   );
   const hasPatientsRef = useRef(patients.length > 0);
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia("(min-width: 1024px)");
+    const syncViewport = () => setIsDesktop(mediaQuery.matches);
+    syncViewport();
+    mediaQuery.addEventListener("change", syncViewport);
+    return () => mediaQuery.removeEventListener("change", syncViewport);
+  }, []);
 
   useEffect(() => {
     hasPatientsRef.current = patients.length > 0;
@@ -219,16 +229,17 @@ export function useReservationsList({ uid, authReady }: { uid: string | undefine
       .finally(() => { if (searchSeqRef.current === seq) { setInitialLoading(false); setRefreshing(false); } });
   }, [authReady, uid, search, reloadPatients]);
 
-  const totalPages = Math.max(1, Math.ceil(patientGroups.length / PAGE_SIZE));
+  const pageSize = isDesktop ? DESKTOP_PAGE_SIZE : MOBILE_PAGE_SIZE;
+  const totalPages = Math.max(1, Math.ceil(patientGroups.length / pageSize));
 
   useEffect(() => {
     setGroupPage((page) => Math.min(Math.max(1, page), totalPages));
   }, [totalPages]);
 
   const pagedGroups = useMemo(() => {
-    const start = (groupPage - 1) * PAGE_SIZE;
-    return patientGroups.slice(start, start + PAGE_SIZE);
-  }, [patientGroups, groupPage]);
+    const start = (groupPage - 1) * pageSize;
+    return patientGroups.slice(start, start + pageSize);
+  }, [patientGroups, groupPage, pageSize]);
 
   return {
     search,
