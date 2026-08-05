@@ -117,6 +117,7 @@ function DesktopHospitalDayView({ dateStr, reservations, onCardClick }: { dateSt
   const currentHour = new Date().getHours();
   const viewingToday = dateStr === localDateString();
   const visibleHospitals = hospitals.length ? hospitals : ["병원 미지정"];
+  const singleHospital = visibleHospitals.length === 1;
   const columnStyle = { gridTemplateColumns: `64px repeat(${Math.max(visibleHospitals.length, 1)}, minmax(220px, 1fr))` };
   return (
     <section className="hidden overflow-x-auto rounded-[18px] border border-[#dfe7e4] bg-white lg:block">
@@ -129,7 +130,7 @@ function DesktopHospitalDayView({ dateStr, reservations, onCardClick }: { dateSt
             const items: ReservationRecord[] = reservations.filter((item) => hourOf(item) === hour && (item.hospital || "병원 미지정") === hospital).sort((a, b) => exactTime(a).localeCompare(exactTime(b)));
             return (
               <div key={`${hour}-${hospital}`} className={`relative min-h-[88px] border-b border-[#e7ecea] p-2 ${hospitalIndex === 0 ? "" : "border-l"} ${current ? "bg-[#f3fbf8]" : "bg-white"}`}>
-                <div className="relative z-10 space-y-2">
+                <div className={singleHospital ? "relative z-10 grid grid-cols-2 gap-2" : "relative z-10 space-y-2"}>
                   {items.map((item: ReservationRecord) => <AppointmentCard key={item.id} item={item} compact showHospital showTimeWithDetail onClick={() => onCardClick(item)} />)}
                 </div>
               </div>

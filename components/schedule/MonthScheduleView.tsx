@@ -124,7 +124,7 @@ export function MonthScheduleView({ monthStart, reservations, displayMode, onDay
               {group.items.length === 0 ? (
                 <div className="rounded-[18px] border border-dashed border-[#dfe7e4] px-4 py-3 text-[11px] font-normal text-[#98a2b3]">예약 없음</div>
               ) : (
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-3 gap-2">
                   {group.items.map(({ dateStr, item }) => <MonthListCard key={item.id} item={item} dateStr={dateStr} onClick={() => onCardClick(item)} />)}
                 </div>
               )}
