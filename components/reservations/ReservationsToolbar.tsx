@@ -59,19 +59,20 @@ export function ReservationsToolbar({
     onSearchChange(query.trim());
   }
 
-  const chipClass = "flex h-7 min-w-0 items-center justify-center gap-1.5 rounded-full bg-white/72 px-2 text-[11px] font-normal text-[#667085]";
-  const actionChipClass = "h-7 min-w-0 rounded-full bg-white/72 px-2 text-[11px] font-semibold text-[#0f9b8e] transition active:scale-95";
+  const chipClass = "flex h-7 min-w-0 items-center justify-center gap-1.5 rounded-full bg-white/72 px-2 text-[11px] font-normal text-[#667085] lg:h-auto lg:justify-start lg:rounded-none lg:bg-transparent lg:px-0";
+  const actionChipClass = "h-7 min-w-0 rounded-full bg-white/72 px-2 text-[11px] font-semibold text-[#0f9b8e] transition active:scale-95 lg:h-auto lg:rounded-none lg:bg-transparent lg:px-0 lg:font-normal";
 
   return (
-    <section className="relative mb-4 h-[184px] overflow-visible rounded-[26px] bg-[#eaf8f3] p-5 shadow-[0_18px_50px_rgba(7,56,58,0.08)] lg:h-[196px] lg:p-6">
-      <div className="flex h-full flex-col justify-between">
+    <section className="relative mb-4 h-[184px] overflow-visible rounded-[26px] bg-[#eaf8f3] p-5 shadow-[0_18px_50px_rgba(7,56,58,0.08)] lg:h-auto lg:p-3 lg:shadow-none">
+      <div className="flex h-full flex-col justify-between lg:grid lg:grid-cols-[minmax(300px,1.2fr)_minmax(420px,1fr)] lg:items-center lg:gap-x-4 lg:gap-y-2">
         <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-2">
-          <div className="flex h-10 items-center gap-2 rounded-[20px] bg-white px-4">
+          <div className="flex h-10 items-center gap-2 rounded-[20px] bg-white px-4 lg:h-9">
             <span className="text-base text-[#98a2b3]">⌕</span>
             <input
               type="text"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") submitSearch(); }}
               placeholder="한글 이름 / 영문 성·이름 검색"
               className="h-full min-w-0 flex-1 bg-transparent text-sm text-[#101828] outline-none placeholder:text-[#98a2b3]"
             />
@@ -79,13 +80,13 @@ export function ReservationsToolbar({
           <button
             type="button"
             onClick={submitSearch}
-            className="h-10 rounded-[20px] bg-white px-4 text-xs font-semibold text-[#0f9b8e] transition active:scale-95"
+            className="h-10 rounded-[20px] bg-white px-4 text-xs font-semibold text-[#0f9b8e] transition active:scale-95 lg:h-9 lg:rounded-[16px]"
           >
             검색
           </button>
         </div>
 
-        <div className="rounded-[20px] bg-white p-1">
+        <div className="rounded-[20px] bg-white p-1 lg:rounded-[20px]">
           <div className="grid grid-cols-4 gap-1">
             {filterModes.map((mode) => (
               <button
@@ -94,8 +95,8 @@ export function ReservationsToolbar({
                 onClick={() => onFilterModeChange(mode)}
                 className={
                   filterMode === mode
-                    ? "h-8 rounded-[16px] bg-[#e3f2ee] px-2 text-[11px] font-semibold text-[#0f9b8e]"
-                    : "h-8 rounded-[16px] px-2 text-[11px] font-semibold text-[#667085] transition hover:bg-[#f6f7f5]"
+                    ? "h-8 rounded-[16px] bg-[#e3f2ee] px-2 text-[11px] font-semibold text-[#0f9b8e] lg:text-xs"
+                    : "h-8 rounded-[16px] px-2 text-[11px] font-semibold text-[#667085] transition hover:bg-[#f6f7f5] lg:text-xs"
                 }
               >
                 {FILTER_LABELS[mode]}
@@ -104,32 +105,24 @@ export function ReservationsToolbar({
             <button
               type="button"
               onClick={onAddCustomer}
-              className="h-8 whitespace-nowrap rounded-[16px] bg-[linear-gradient(135deg,#77dfd1_0%,#40c5b3_50%,#0f9b8e_100%)] px-2 text-[11px] font-bold text-white shadow-[0_10px_24px_rgba(15,143,131,0.18)] transition active:scale-95"
+              className="h-8 whitespace-nowrap rounded-[16px] bg-[linear-gradient(135deg,#77dfd1_0%,#40c5b3_50%,#0f9b8e_100%)] px-2 text-[11px] font-bold text-white shadow-[0_10px_24px_rgba(15,143,131,0.18)] transition active:scale-95 lg:px-4 lg:text-xs"
             >
               + 고객등록
             </button>
           </div>
         </div>
 
-        <div className="grid grid-cols-4 gap-2 whitespace-nowrap">
+        <div className="grid grid-cols-4 gap-2 whitespace-nowrap lg:col-span-2 lg:flex lg:items-center lg:gap-5 lg:overflow-x-auto lg:[-ms-overflow-style:none] lg:[scrollbar-width:none] lg:[&::-webkit-scrollbar]:hidden">
           {summaryModes.map((mode) => (
             <span key={mode} className={chipClass}>
               <span className="h-2 w-2 shrink-0 rounded-full bg-[#0f9b8e]" />
               <span className="min-w-0 truncate">{FILTER_LABELS[mode]} {filterCounts[mode] || 0}</span>
             </span>
           ))}
-          <button
-            type="button"
-            onClick={onImport}
-            className={actionChipClass}
-          >
+          <button type="button" onClick={onImport} className={actionChipClass}>
             외부 링크
           </button>
-          <button
-            type="button"
-            onClick={onToggleDownload}
-            className={actionChipClass}
-          >
+          <button type="button" onClick={onToggleDownload} className={actionChipClass}>
             CSV
           </button>
         </div>
@@ -138,7 +131,7 @@ export function ReservationsToolbar({
       {downloadOpen && (
         <>
           <div className="fixed inset-0 z-[9990]" onClick={onCloseDownload} />
-          <div className="absolute right-5 top-[calc(100%-8px)] z-[9991] w-[280px] rounded-[24px] bg-white p-4 shadow-[0_24px_70px_rgba(15,23,42,0.18)]">
+          <div className="absolute right-5 top-[calc(100%-8px)] z-[9991] w-[280px] rounded-[24px] bg-white p-4 shadow-[0_24px_70px_rgba(15,23,42,0.18)] lg:right-3">
             <div className="mb-1 text-sm font-bold text-[#101828]">예약 데이터 다운로드</div>
             <div className="mb-3 text-xs text-[#667085]">선택한 기간의 예약을 CSV로 내보냅니다.</div>
             <div className="mb-2 grid grid-cols-2 gap-2">
