@@ -183,7 +183,7 @@ function DesktopWeekList({ dayData, onCardClick }: { dayData: Array<{ day: strin
       {dayData.map(({ day, items }, index) => {
         const today = isToday(day);
         return (
-          <div key={day} className={index === dayData.length - 1 ? "px-4 py-4" : "border-b border-[#e7ecea] px-4 py-4"}>
+          <div key={day} className={`${index === dayData.length - 1 ? "px-4 py-4" : "border-b border-[#e7ecea] px-4 py-4"} ${today ? "bg-[#fbfefd]" : "bg-white"}`}>
             <div className="mb-3 flex min-w-0 items-center gap-2.5">
               <h2 className={today ? "shrink-0 rounded-[14px] bg-[#e3f2ee] px-3 py-1.5 text-sm font-semibold tracking-[-0.035em] text-[#0f9b8e]" : "shrink-0 px-1 py-1.5 text-sm font-semibold tracking-[-0.035em] text-[#101828]"}>{dateLabel(day)}</h2>
               <span className="min-w-0 truncate text-[11px] font-normal text-[#667085]">{daySummary(items)}</span>
