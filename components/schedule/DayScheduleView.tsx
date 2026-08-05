@@ -57,7 +57,15 @@ function hourOf(item: ReservationRecord) {
 }
 function exactTime(item: ReservationRecord) { return item.reservationTime ? item.reservationTime.slice(0, 5) : "--:--"; }
 
-function DesktopTimeDayView({ reservations, onCardClick }: { reservations: ReservationRecord[]; onCardClick: (item: ReservationRecord) => void }) {
+function localDateString() {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function DesktopTimeDayView({ dateStr, reservations, onCardClick }: { dateStr: string; reservations: ReservationRecord[]; onCardClick: (item: ReservationRecord) => void }) {
   const byHour = useMemo<Map<number, Map<string, ReservationRecord[]>>>(() => {
     const map = new Map<number, Map<string, ReservationRecord[]>>();
     reservations.forEach((item) => {
@@ -70,15 +78,18 @@ function DesktopTimeDayView({ reservations, onCardClick }: { reservations: Reser
     return map;
   }, [reservations]);
   const hours = Array.from({ length: END_HOUR - START_HOUR + 1 }, (_, index) => START_HOUR + index);
+  const currentHour = new Date().getHours();
+  const viewingToday = dateStr === localDateString();
   return (
     <section className="hidden overflow-hidden rounded-[18px] border border-[#dfe7e4] bg-white lg:block">
       <div className="grid grid-cols-[64px_minmax(0,1fr)]"><div className="h-9 border-b border-r border-[#dfe7e4]" /><div className="h-9 border-b border-[#dfe7e4]" /></div>
       {hours.map((hour) => {
         const groups = Array.from((byHour.get(hour) || new Map<string, ReservationRecord[]>()).entries()).sort(([a], [b]) => a.localeCompare(b));
+        const current = viewingToday && hour === currentHour;
         return (
           <div key={hour} className="grid min-h-[88px] grid-cols-[64px_minmax(0,1fr)]">
-            <div className="flex items-start justify-center border-b border-r border-[#e7ecea] bg-white pt-3 text-[10px] font-bold text-[#52606d]">{String(hour).padStart(2, "0")}:00</div>
-            <div className="relative border-b border-[#e7ecea] bg-white p-2 before:absolute before:left-0 before:right-0 before:top-1/2 before:border-t before:border-dashed before:border-[#edf2ef]">
+            <div className={`flex items-start justify-center border-b border-r border-[#e7ecea] pt-3 text-[10px] font-bold text-[#52606d] ${current ? "bg-[#fbfefd]" : "bg-white"}`}>{String(hour).padStart(2, "0")}:00</div>
+            <div className={`relative border-b border-[#e7ecea] p-2 before:absolute before:left-0 before:right-0 before:top-1/2 before:border-t before:border-dashed before:border-[#edf2ef] ${current ? "bg-[#fbfefd]" : "bg-white"}`}>
               <div className="relative z-10 space-y-2">
                 {groups.map(([time, items]) => (
                   <div key={time} className="min-w-0">
@@ -100,9 +111,11 @@ function DesktopTimeDayView({ reservations, onCardClick }: { reservations: Reser
   );
 }
 
-function DesktopHospitalDayView({ reservations, onCardClick }: { reservations: ReservationRecord[]; onCardClick: (item: ReservationRecord) => void }) {
+function DesktopHospitalDayView({ dateStr, reservations, onCardClick }: { dateStr: string; reservations: ReservationRecord[]; onCardClick: (item: ReservationRecord) => void }) {
   const hospitals = useMemo(() => Array.from(new Set(reservations.map((item) => item.hospital || "병원 미지정"))).sort((a, b) => a.localeCompare(b)), [reservations]);
   const hours = Array.from({ length: END_HOUR - START_HOUR + 1 }, (_, index) => START_HOUR + index);
+  const currentHour = new Date().getHours();
+  const viewingToday = dateStr === localDateString();
   const visibleHospitals = hospitals.length ? hospitals : ["병원 미지정"];
   const columnStyle = { gridTemplateColumns: `64px repeat(${Math.max(visibleHospitals.length, 1)}, minmax(220px, 1fr))` };
   return (
@@ -111,17 +124,18 @@ function DesktopHospitalDayView({ reservations, onCardClick }: { reservations: R
         <div className="h-9 border-b border-r border-[#dfe7e4]" />
         {visibleHospitals.map((hospital, hospitalIndex) => <div key={hospital} className={`flex h-9 items-center justify-center border-b border-[#dfe7e4] text-xs font-semibold text-[#101828] ${hospitalIndex === 0 ? "" : "border-l"}`}>{hospital}</div>)}
         {hours.flatMap((hour) => {
+          const current = viewingToday && hour === currentHour;
           const cells = visibleHospitals.map((hospital, hospitalIndex) => {
             const items: ReservationRecord[] = reservations.filter((item) => hourOf(item) === hour && (item.hospital || "병원 미지정") === hospital).sort((a, b) => exactTime(a).localeCompare(exactTime(b)));
             return (
-              <div key={`${hour}-${hospital}`} className={`relative min-h-[88px] border-b border-[#e7ecea] bg-white p-2 ${hospitalIndex === 0 ? "" : "border-l"}`}>
+              <div key={`${hour}-${hospital}`} className={`relative min-h-[88px] border-b border-[#e7ecea] p-2 ${hospitalIndex === 0 ? "" : "border-l"} ${current ? "bg-[#fbfefd]" : "bg-white"}`}>
                 <div className="relative z-10 space-y-2">
                   {items.map((item: ReservationRecord) => <AppointmentCard key={item.id} item={item} compact showHospital showTimeWithDetail onClick={() => onCardClick(item)} />)}
                 </div>
               </div>
             );
           });
-          return [<div key={`${hour}-label`} className="flex min-h-[88px] items-start justify-center border-b border-r border-[#e7ecea] bg-white pt-3 text-[10px] font-bold text-[#52606d]">{String(hour).padStart(2, "0")}:00</div>, ...cells];
+          return [<div key={`${hour}-label`} className={`flex min-h-[88px] items-start justify-center border-b border-r border-[#e7ecea] pt-3 text-[10px] font-bold text-[#52606d] ${current ? "bg-[#fbfefd]" : "bg-white"}`}>{String(hour).padStart(2, "0")}:00</div>, ...cells];
         })}
       </div>
     </section>
@@ -158,7 +172,7 @@ function HospitalDayView({ reservations, onCardClick }: { reservations: Reservat
 export function DayScheduleView({ dateStr, reservations, displayMode = "time", onCardClick }: { dateStr: string; reservations: ReservationRecord[]; displayMode?: DayDisplayMode; onCardClick: (item: ReservationRecord) => void }) {
   return (
     <div className="min-h-0 flex-1 overflow-auto">
-      {displayMode === "hospital" ? <><HospitalDayView reservations={reservations} onCardClick={onCardClick} /><DesktopHospitalDayView reservations={reservations} onCardClick={onCardClick} /></> : <><TimeDayView dateStr={dateStr} reservations={reservations} onCardClick={onCardClick} /><DesktopTimeDayView reservations={reservations} onCardClick={onCardClick} /></>}
+      {displayMode === "hospital" ? <><HospitalDayView reservations={reservations} onCardClick={onCardClick} /><DesktopHospitalDayView dateStr={dateStr} reservations={reservations} onCardClick={onCardClick} /></> : <><TimeDayView dateStr={dateStr} reservations={reservations} onCardClick={onCardClick} /><DesktopTimeDayView dateStr={dateStr} reservations={reservations} onCardClick={onCardClick} /></>}
     </div>
   );
 }
