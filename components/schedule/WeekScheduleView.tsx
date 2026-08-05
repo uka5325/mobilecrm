@@ -156,6 +156,52 @@ function DesktopWeekTable({ dayData, onCardClick }: { dayData: Array<{ day: stri
   );
 }
 
+function MobileWeekList({ dayData, onCardClick }: { dayData: Array<{ day: string; items: ReservationRecord[] }>; onCardClick: (item: ReservationRecord) => void }) {
+  return (
+    <section className="rounded-[34px] bg-white p-3 shadow-[0_10px_24px_rgba(15,23,42,.05)] lg:hidden">
+      <div className="space-y-2">
+        {dayData.map(({ day, items }) => {
+          const today = isToday(day);
+          return (
+            <div key={day} className="rounded-[26px] bg-[#f7faf8] p-2.5">
+              <div className="mb-2 flex min-w-0 items-center gap-2">
+                <h2 className={today ? "shrink-0 rounded-[14px] bg-[#e3f2ee] px-2.5 py-1 text-base font-semibold tracking-[-0.035em] text-[#0f9b8e]" : "shrink-0 px-1 py-1 text-base font-semibold tracking-[-0.035em] text-[#101828]"}>{dateLabel(day)}</h2>
+                <span className="min-w-0 truncate text-[10px] font-normal text-[#667085]">{daySummary(items)}</span>
+              </div>
+              {items.length === 0 ? <div className="rounded-[20px] bg-white/75 px-4 py-3 text-[11px] font-normal text-[#98a2b3]">예약 없음</div> : <div className="space-y-2">{items.map((item) => <WeekReservationCard key={item.id} item={item} onClick={() => onCardClick(item)} />)}</div>}
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+function DesktopWeekList({ dayData, onCardClick }: { dayData: Array<{ day: string; items: ReservationRecord[] }>; onCardClick: (item: ReservationRecord) => void }) {
+  return (
+    <section className="hidden overflow-hidden rounded-[18px] border border-[#dfe7e4] bg-white lg:block">
+      {dayData.map(({ day, items }, index) => {
+        const today = isToday(day);
+        return (
+          <div key={day} className={index === dayData.length - 1 ? "px-4 py-4" : "border-b border-[#e7ecea] px-4 py-4"}>
+            <div className="mb-3 flex min-w-0 items-center gap-2.5">
+              <h2 className={today ? "shrink-0 rounded-[14px] bg-[#e3f2ee] px-3 py-1.5 text-sm font-semibold tracking-[-0.035em] text-[#0f9b8e]" : "shrink-0 px-1 py-1.5 text-sm font-semibold tracking-[-0.035em] text-[#101828]"}>{dateLabel(day)}</h2>
+              <span className="min-w-0 truncate text-[11px] font-normal text-[#667085]">{daySummary(items)}</span>
+            </div>
+            {items.length === 0 ? (
+              <div className="rounded-[18px] border border-dashed border-[#dfe7e4] px-4 py-3 text-[11px] font-normal text-[#98a2b3]">예약 없음</div>
+            ) : (
+              <div className="grid grid-cols-2 gap-2">
+                {items.map((item) => <WeekReservationCard key={item.id} item={item} onClick={() => onCardClick(item)} />)}
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </section>
+  );
+}
+
 export function WeekScheduleView({ weekStart, reservations, displayMode, onCardClick }: { weekStart: string; reservations: ReservationRecord[]; displayMode: WeekDisplayMode; onCardClick: (item: ReservationRecord) => void }) {
   const days = useMemo(() => Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)), [weekStart]);
   const dayData = useMemo(() => days.map((day) => ({ day, items: reservations.filter((item) => item.reservationDate === day).sort(sortByTime) })), [days, reservations]);
@@ -169,22 +215,10 @@ export function WeekScheduleView({ weekStart, reservations, displayMode, onCardC
             <DesktopWeekTable dayData={dayData} onCardClick={onCardClick} />
           </>
         ) : (
-          <section className="rounded-[34px] bg-white p-3 shadow-[0_10px_24px_rgba(15,23,42,.05)]">
-            <div className="space-y-2">
-              {dayData.map(({ day, items }) => {
-                const today = isToday(day);
-                return (
-                  <div key={day} className="rounded-[26px] bg-[#f7faf8] p-2.5">
-                    <div className="mb-2 flex min-w-0 items-center gap-2">
-                      <h2 className={today ? "shrink-0 rounded-[14px] bg-[#e3f2ee] px-2.5 py-1 text-base font-semibold tracking-[-0.035em] text-[#0f9b8e]" : "shrink-0 px-1 py-1 text-base font-semibold tracking-[-0.035em] text-[#101828]"}>{dateLabel(day)}</h2>
-                      <span className="min-w-0 truncate text-[10px] font-normal text-[#667085]">{daySummary(items)}</span>
-                    </div>
-                    {items.length === 0 ? <div className="rounded-[20px] bg-white/75 px-4 py-3 text-[11px] font-normal text-[#98a2b3]">예약 없음</div> : <div className="space-y-2">{items.map((item) => <WeekReservationCard key={item.id} item={item} onClick={() => onCardClick(item)} />)}</div>}
-                  </div>
-                );
-              })}
-            </div>
-          </section>
+          <>
+            <MobileWeekList dayData={dayData} onCardClick={onCardClick} />
+            <DesktopWeekList dayData={dayData} onCardClick={onCardClick} />
+          </>
         )}
       </div>
     </div>
