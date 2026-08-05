@@ -88,8 +88,8 @@ function DesktopTimeDayView({ dateStr, reservations, onCardClick }: { dateStr: s
         const current = viewingToday && hour === currentHour;
         return (
           <div key={hour} className="grid min-h-[88px] grid-cols-[64px_minmax(0,1fr)]">
-            <div className={`flex items-start justify-center border-b border-r border-[#e7ecea] pt-3 text-[10px] font-bold text-[#52606d] ${current ? "bg-[#fbfefd]" : "bg-white"}`}>{String(hour).padStart(2, "0")}:00</div>
-            <div className={`relative border-b border-[#e7ecea] p-2 before:absolute before:left-0 before:right-0 before:top-1/2 before:border-t before:border-dashed before:border-[#edf2ef] ${current ? "bg-[#fbfefd]" : "bg-white"}`}>
+            <div className={`flex items-start justify-center border-b border-r border-[#e7ecea] pt-3 text-[10px] font-bold text-[#52606d] ${current ? "bg-[#f3fbf8]" : "bg-white"}`}>{String(hour).padStart(2, "0")}:00</div>
+            <div className={`relative border-b border-[#e7ecea] p-2 before:absolute before:left-0 before:right-0 before:top-1/2 before:border-t before:border-dashed before:border-[#edf2ef] ${current ? "bg-[#f3fbf8]" : "bg-white"}`}>
               <div className="relative z-10 space-y-2">
                 {groups.map(([time, items]) => (
                   <div key={time} className="min-w-0">
@@ -128,14 +128,14 @@ function DesktopHospitalDayView({ dateStr, reservations, onCardClick }: { dateSt
           const cells = visibleHospitals.map((hospital, hospitalIndex) => {
             const items: ReservationRecord[] = reservations.filter((item) => hourOf(item) === hour && (item.hospital || "병원 미지정") === hospital).sort((a, b) => exactTime(a).localeCompare(exactTime(b)));
             return (
-              <div key={`${hour}-${hospital}`} className={`relative min-h-[88px] border-b border-[#e7ecea] p-2 ${hospitalIndex === 0 ? "" : "border-l"} ${current ? "bg-[#fbfefd]" : "bg-white"}`}>
+              <div key={`${hour}-${hospital}`} className={`relative min-h-[88px] border-b border-[#e7ecea] p-2 ${hospitalIndex === 0 ? "" : "border-l"} ${current ? "bg-[#f3fbf8]" : "bg-white"}`}>
                 <div className="relative z-10 space-y-2">
                   {items.map((item: ReservationRecord) => <AppointmentCard key={item.id} item={item} compact showHospital showTimeWithDetail onClick={() => onCardClick(item)} />)}
                 </div>
               </div>
             );
           });
-          return [<div key={`${hour}-label`} className={`flex min-h-[88px] items-start justify-center border-b border-r border-[#e7ecea] pt-3 text-[10px] font-bold text-[#52606d] ${current ? "bg-[#fbfefd]" : "bg-white"}`}>{String(hour).padStart(2, "0")}:00</div>, ...cells];
+          return [<div key={`${hour}-label`} className={`flex min-h-[88px] items-start justify-center border-b border-r border-[#e7ecea] pt-3 text-[10px] font-bold text-[#52606d] ${current ? "bg-[#f3fbf8]" : "bg-white"}`}>{String(hour).padStart(2, "0")}:00</div>, ...cells];
         })}
       </div>
     </section>
