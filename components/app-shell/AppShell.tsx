@@ -179,20 +179,18 @@ function AppShellContent({ children }: AppShellProps) {
         isActive={isActive}
       />
 
-      <main className="min-w-0 flex-1 px-4 pb-28 pt-5 sm:px-6 lg:px-8 lg:py-8">
-        <div className="mx-auto w-full max-w-[1320px]">
-          <div className="pointer-events-none fixed inset-x-0 top-0 z-30 h-[calc(env(safe-area-inset-top)+12px)] bg-[#f6f7f5] lg:left-[272px] lg:h-8" />
+      <main className="min-w-0 flex-1 px-4 pb-28 pt-5 sm:px-6 lg:px-7 lg:py-6 xl:px-8">
+        <div className="w-full">
+          <div className="pointer-events-none fixed inset-x-0 top-0 z-30 h-[calc(env(safe-area-inset-top)+12px)] bg-[#f6f7f5] lg:hidden" />
 
-          {/* 헤더 둥근 상단 모서리 뒤로 원래 바탕색을 깔고 아래로 페이드시켜
-              모서리 틈으로 콘텐츠가 비치는 것을 경계선(띠) 없이 가린다. */}
-          <div className="pointer-events-none fixed inset-x-0 top-[calc(env(safe-area-inset-top)+12px)] z-30 h-14 bg-[linear-gradient(180deg,#f6f7f5_0%,#f6f7f5_50%,rgba(246,247,245,0)_100%)] lg:left-[272px] lg:top-8" />
+          <div className="pointer-events-none fixed inset-x-0 top-[calc(env(safe-area-inset-top)+12px)] z-30 h-14 bg-[linear-gradient(180deg,#f6f7f5_0%,#f6f7f5_50%,rgba(246,247,245,0)_100%)] lg:hidden" />
 
-          <header className="sticky top-[calc(env(safe-area-inset-top)+12px)] z-40 mb-5 rounded-[28px] border border-white/50 bg-white/70 px-5 py-4 shadow-[0_16px_50px_rgba(15,23,42,0.06)] backdrop-blur-lg backdrop-saturate-150 lg:top-8 lg:mb-6 lg:px-7">
+          <header className="sticky top-[calc(env(safe-area-inset-top)+12px)] z-40 mb-5 rounded-[28px] border border-white/50 bg-white/70 px-5 py-4 shadow-[0_16px_50px_rgba(15,23,42,0.06)] backdrop-blur-lg backdrop-saturate-150 lg:static lg:mb-5 lg:rounded-none lg:border-0 lg:border-b lg:border-[#dde4e2] lg:bg-transparent lg:px-0 lg:pb-4 lg:pt-0 lg:shadow-none lg:backdrop-blur-0 lg:backdrop-saturate-100">
             <div className="text-xs font-black tracking-[0.18em] text-[#0f8f83]">MOBILE CRM</div>
 
             <div className="mt-2 flex min-w-0 items-start justify-between gap-3">
               <div className="min-w-0">
-                <h1 className="min-w-0 truncate text-[28px] font-black tracking-[-0.04em] text-[#12151f] lg:text-[34px]">
+                <h1 className="min-w-0 truncate text-[28px] font-black tracking-[-0.04em] text-[#12151f] lg:text-[30px]">
                   {currentPage.title}
                 </h1>
 
@@ -201,7 +199,7 @@ function AppShellContent({ children }: AppShellProps) {
                 </p>
               </div>
 
-              <div className="flex min-w-0 shrink-0 flex-col items-end text-right">
+              <div className="flex min-w-0 shrink-0 flex-col items-end text-right lg:hidden">
                 <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[linear-gradient(135deg,#77dfd1_0%,#40c5b3_50%,#0f9b8e_100%)] text-sm font-black text-white">
                   {avatarText}
                 </div>
