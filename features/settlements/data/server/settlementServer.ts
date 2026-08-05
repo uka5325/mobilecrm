@@ -11,14 +11,21 @@ import {
   type SettlementMathRow,
 } from "@/lib/settlementMath";
 import type { requireActiveStaff } from "@/lib/apiAuth";
+import {
+  aggregateFromSurgeryCase,
+  applySettlementDelta,
+  emptySettlementAggregate,
+  surgeryCaseAggregatePatch,
+} from "@/lib/surgeryCaseAggregates";
 
 const MAX_SETTLEMENTS_PER_PATIENT = 500;
+const MAX_SETTLEMENTS_PER_CASE = 500;
 const MAX_SALES_ROWS = 5000;
 const CATEGORIES = new Set<SettlementCategory>(["deposit", "surgery_fee", "procedure_fee", "other"]);
 const DIRECTIONS = new Set<SettlementDirection>(["payment", "refund"]);
 
 type StaffContext = Awaited<ReturnType<typeof requireActiveStaff>>;
-type SettlementDoc = Record<string, unknown> & { id?: string };
+type SettlementDoc = Record<string, unknown> & SettlementMathRow & { id?: string };
 
 type NormalizedInput = {
   patientId: string;
@@ -251,6 +258,7 @@ export async function listSettlements(payload: Record<string, unknown>) {
         id: doc.id,
         reservationId: cleanText(data.reservationId),
         patientId: cleanText(data.patientId),
+        surgeryCaseId: cleanText(data.surgeryCaseId),
         reservationDate: cleanText(data.reservationDate),
         reservationTime: cleanText(data.reservationTime),
         appointmentType: cleanText(data.appointmentType) || "상담",
@@ -277,6 +285,8 @@ async function mutateSettlement(mode: MutationMode, payload: Record<string, unkn
   if (!settlementId) return error("정산 식별자가 없습니다.");
   const settlementRef = settlements.doc(settlementId);
 
+  const generatedTargetCaseRef = adminDb.collection("surgeryCases").doc();
+  const generatedOldCaseRef = adminDb.collection("surgeryCases").doc();
   const outcome = await adminDb.runTransaction(async (tx) => {
     const existingSnap = mode === "create" ? null : await tx.get(settlementRef);
     if (existingSnap && !existingSnap.exists) return { kind: "missing" as const };
@@ -292,31 +302,115 @@ async function mutateSettlement(mode: MutationMode, payload: Record<string, unkn
       : cleanText(payload.reservationDocId || existing?.reservationDocId);
     if (!patientId || !reservationDocId) return { kind: "invalid" as const };
 
-    const reservationRef = adminDb.collection("reservations").doc(reservationDocId);
-    const reservationSnap = await tx.get(reservationRef);
-    if (!reservationSnap.exists) return { kind: "reservationMissing" as const };
-    const reservation = reservationSnap.data() as Record<string, unknown>;
-    if (reservation.isDeleted === true || cleanText(reservation.patientId) !== patientId) {
-      return { kind: "reservationMismatch" as const };
-    }
-
     const oldReservationDocId = cleanText(existing?.reservationDocId);
     const affectedReservationIds = [...new Set([oldReservationDocId, reservationDocId].filter(Boolean))];
-    const patientSettlementSnap = await tx.get(
-      settlements.where("patientId", "==", patientId).limit(MAX_SETTLEMENTS_PER_PATIENT + 1)
-    );
-    if (patientSettlementSnap.docs.length > MAX_SETTLEMENTS_PER_PATIENT) {
-      return { kind: "limit" as const };
+    const reservationRefs = new Map<string, FirebaseFirestore.DocumentReference>();
+    const reservationData = new Map<string, Record<string, unknown>>();
+    for (const id of affectedReservationIds) {
+      const ref = adminDb.collection("reservations").doc(id);
+      const snap = await tx.get(ref);
+      if (!snap.exists) return { kind: "reservationMissing" as const };
+      const data = snap.data() as Record<string, unknown>;
+      if (data.isDeleted === true || cleanText(data.patientId) !== patientId) {
+        return { kind: "reservationMismatch" as const };
+      }
+      reservationRefs.set(id, ref);
+      reservationData.set(id, data);
     }
+    const reservation = reservationData.get(reservationDocId)!;
+
+    const targetCaseId = cleanText(reservation.surgeryCaseId)
+      || (mode === "void" ? cleanText(existing?.surgeryCaseId) : "")
+      || generatedTargetCaseRef.id;
+    const oldReservation = oldReservationDocId ? reservationData.get(oldReservationDocId) : undefined;
+    const oldCaseId = existing
+      ? cleanText(existing.surgeryCaseId)
+        || cleanText(oldReservation?.surgeryCaseId)
+        || (oldReservationDocId && oldReservationDocId !== reservationDocId
+          ? generatedOldCaseRef.id
+          : targetCaseId)
+      : "";
+    const affectedCaseIds = [...new Set([oldCaseId, targetCaseId].filter(Boolean))];
+    const caseRefs = new Map<string, FirebaseFirestore.DocumentReference>();
+    const caseData = new Map<string, Record<string, unknown> | undefined>();
+    for (const caseId of affectedCaseIds) {
+      const ref = caseId === generatedTargetCaseRef.id
+        ? generatedTargetCaseRef
+        : caseId === generatedOldCaseRef.id
+          ? generatedOldCaseRef
+          : adminDb.collection("surgeryCases").doc(caseId);
+      caseRefs.set(caseId, ref);
+      if (caseId === generatedTargetCaseRef.id || caseId === generatedOldCaseRef.id) {
+        caseData.set(caseId, undefined);
+      } else {
+        const snap = await tx.get(ref);
+        const data = snap.exists ? snap.data() as Record<string, unknown> : undefined;
+        if (data && cleanText(data.patientId) !== patientId) return { kind: "caseMismatch" as const };
+        caseData.set(caseId, data);
+      }
+    }
+
+    const caseReservationIds = new Map<string, Set<string>>();
+    for (const caseId of affectedCaseIds) {
+      const ids = new Set<string>(
+        Array.isArray(caseData.get(caseId)?.reservationDocIds)
+          ? (caseData.get(caseId)!.reservationDocIds as unknown[]).map(cleanText).filter(Boolean)
+          : []
+      );
+      if (caseId === targetCaseId) ids.add(reservationDocId);
+      if (caseId === oldCaseId && oldReservationDocId) ids.add(oldReservationDocId);
+      caseReservationIds.set(caseId, ids);
+    }
+
+    const caseRowsByCase = new Map<string, SettlementDoc[]>();
+    const aggregatesByCase = new Map<string, ReturnType<typeof aggregateSettlementRows>>();
+    for (const caseId of affectedCaseIds) {
+      // 신규 결제는 케이스 캐시에 증분 반영해 settlement 재조회를 없앤다.
+      // 수정/무효는 latest 날짜까지 정확히 되돌리기 위해 해당 케이스만 제한적으로 재검산한다.
+      const cached = mode === "create" ? aggregateFromSurgeryCase(caseData.get(caseId)) : null;
+      if (cached) {
+        aggregatesByCase.set(caseId, cached);
+        continue;
+      }
+      const docs = new Map<string, SettlementDoc>();
+      const byCase = await tx.get(
+        settlements.where("surgeryCaseId", "==", caseId).limit(MAX_SETTLEMENTS_PER_CASE + 1)
+      );
+      if (byCase.docs.length > MAX_SETTLEMENTS_PER_CASE) return { kind: "caseLimit" as const };
+      byCase.docs.forEach((doc) => docs.set(doc.id, { id: doc.id, ...(doc.data() as Record<string, unknown>) }));
+      for (const id of caseReservationIds.get(caseId) || []) {
+        const byReservation = await tx.get(
+          settlements.where("reservationDocId", "==", id).limit(MAX_SETTLEMENTS_PER_CASE + 1)
+        );
+        if (byReservation.docs.length > MAX_SETTLEMENTS_PER_CASE) return { kind: "caseLimit" as const };
+        byReservation.docs.forEach((doc) => docs.set(doc.id, { id: doc.id, ...(doc.data() as Record<string, unknown>) }));
+      }
+      const rows = [...docs.values()];
+      caseRowsByCase.set(caseId, rows);
+      aggregatesByCase.set(caseId, aggregateSettlementRows(asMathRows(rows)));
+    }
+
     const patientSnap = await tx.get(
       adminDb.collection("patients").where("patientId", "==", patientId).limit(10)
     );
     if (patientSnap.empty) return { kind: "patientMissing" as const };
+    const patientSettlementSnap = mode === "create"
+      ? null
+      : await tx.get(settlements.where("patientId", "==", patientId).limit(MAX_SETTLEMENTS_PER_PATIENT + 1));
+    if (patientSettlementSnap && patientSettlementSnap.docs.length > MAX_SETTLEMENTS_PER_PATIENT) {
+      return { kind: "limit" as const };
+    }
 
-    const invoiceDocsByReservation = new Map<string, FirebaseFirestore.QueryDocumentSnapshot[]>();
-    for (const id of affectedReservationIds) {
-      const invoiceSnap = await tx.get(adminDb.collection("invoices").where("reservationDocId", "==", id));
-      invoiceDocsByReservation.set(id, invoiceSnap.docs);
+    const invoiceDocs = new Map<string, FirebaseFirestore.QueryDocumentSnapshot>();
+    for (const caseId of affectedCaseIds) {
+      const snap = await tx.get(adminDb.collection("invoices").where("surgeryCaseId", "==", caseId));
+      snap.docs.forEach((doc) => invoiceDocs.set(doc.id, doc));
+      if (snap.empty) {
+        for (const id of caseReservationIds.get(caseId) || []) {
+          const legacy = await tx.get(adminDb.collection("invoices").where("reservationDocId", "==", id));
+          legacy.docs.forEach((doc) => invoiceDocs.set(doc.id, doc));
+        }
+      }
     }
 
     const normalized = mode === "void" ? null : normalizeInput({ ...payload, patientId, reservationDocId });
@@ -326,6 +420,7 @@ async function mutateSettlement(mode: MutationMode, payload: Record<string, unkn
       ? {
           ...(existing || {}),
           id: settlementId,
+          surgeryCaseId: oldCaseId || targetCaseId,
           status: "void",
           voidReason: cleanText(payload.reason),
           voidedAt: now,
@@ -339,6 +434,7 @@ async function mutateSettlement(mode: MutationMode, payload: Record<string, unkn
           ...(existing || {}),
           ...normalized,
           id: settlementId,
+          surgeryCaseId: targetCaseId,
           reservationId: cleanText(reservation.reservationId),
           appointmentDate: cleanText(reservation.reservationDate),
           appointmentType: cleanText(reservation.appointmentType) || "상담",
@@ -363,25 +459,106 @@ async function mutateSettlement(mode: MutationMode, payload: Record<string, unkn
           } : {}),
         };
 
-    const allRows: SettlementDoc[] = patientSettlementSnap.docs
-      .filter((doc) => doc.id !== settlementId)
-      .map((doc) => ({ id: doc.id, ...(doc.data() as Record<string, unknown>) }));
-    allRows.push(next);
-    const patientAggregate = aggregateSettlementRows(asMathRows(allRows));
-    if (patientAggregate.netAmount < 0) return { kind: "negative" as const };
-
-    const aggregatesByReservation = new Map<string, ReturnType<typeof aggregateSettlementRows>>();
-    for (const id of affectedReservationIds) {
-      const rows = allRows.filter((row) => cleanText(row.reservationDocId) === id);
-      const aggregate = aggregateSettlementRows(asMathRows(rows));
+    const applyToCase = (
+      caseId: string,
+      before: SettlementDoc | null | undefined,
+      after: SettlementDoc | null | undefined
+    ) => {
+      const base = aggregatesByCase.get(caseId) || emptySettlementAggregate();
+      const changed = applySettlementDelta(base, before, after);
+      aggregatesByCase.set(caseId, changed.aggregate);
+    };
+    if (mode === "create") {
+      applyToCase(targetCaseId, null, next);
+    } else {
+      // 수정/무효는 해당 케이스에서 현재 문서를 교체해 lastPaidAt까지 정확히 재계산한다.
+      for (const caseId of affectedCaseIds) {
+        const rows = (caseRowsByCase.get(caseId) || [])
+          .filter((row) => cleanText(row.id) !== settlementId);
+        if (cleanText(next.surgeryCaseId) === caseId) rows.push(next);
+        aggregatesByCase.set(caseId, aggregateSettlementRows(asMathRows(rows)));
+      }
+    }
+    for (const aggregate of aggregatesByCase.values()) {
       if (aggregate.netAmount < 0) return { kind: "negative" as const };
-      aggregatesByReservation.set(id, aggregate);
+    }
+
+    let patientAggregate: ReturnType<typeof aggregateSettlementRows>;
+    if (patientSettlementSnap) {
+      const allRows: SettlementDoc[] = patientSettlementSnap.docs
+        .filter((doc) => doc.id !== settlementId)
+        .map((doc) => ({ id: doc.id, ...(doc.data() as Record<string, unknown>) }));
+      allRows.push(next);
+      patientAggregate = aggregateSettlementRows(asMathRows(allRows));
+    } else {
+      const patient = patientSnap.docs[0].data() as Record<string, unknown>;
+      const base = emptySettlementAggregate();
+      base.count = Math.max(0, Number(patient.settlementCount) || 0);
+      base.totalPaid = Math.max(0, Number(patient.totalSettlementPaid) || 0);
+      base.totalRefunded = Math.max(0, Number(patient.totalSettlementRefunded) || 0);
+      base.netAmount = Number(patient.netSettlementAmount) || 0;
+      base.lastPaidAt = cleanText(patient.lastSettlementAt);
+      patientAggregate = applySettlementDelta(base, null, next).aggregate;
     }
 
     const storedNext = { ...next };
     delete storedNext.id;
     if (mode === "create") tx.set(settlementRef, storedNext);
     else tx.update(settlementRef, storedNext);
+
+    for (const [id, ref] of reservationRefs) {
+      const caseId = id === reservationDocId ? targetCaseId : oldCaseId;
+      if (caseId && cleanText(reservationData.get(id)?.surgeryCaseId) !== caseId) {
+        tx.update(ref, {
+          surgeryCaseId: caseId,
+          updatedAt: now,
+          updatedBy: ctx.name,
+          updatedByUid: ctx.uid,
+        });
+      }
+    }
+
+    const activeInvoicesByCase = new Map<string, FirebaseFirestore.QueryDocumentSnapshot[]>();
+    for (const invoiceDoc of invoiceDocs.values()) {
+      const invoice = invoiceDoc.data() as Record<string, unknown>;
+      if (invoice.isDeleted === true) continue;
+      const invoiceCaseId = cleanText(invoice.surgeryCaseId)
+        || (cleanText(invoice.reservationDocId) === reservationDocId ? targetCaseId : oldCaseId);
+      if (!invoiceCaseId) continue;
+      const list = activeInvoicesByCase.get(invoiceCaseId) || [];
+      list.push(invoiceDoc);
+      activeInvoicesByCase.set(invoiceCaseId, list);
+    }
+
+    for (const caseId of affectedCaseIds) {
+      const ref = caseRefs.get(caseId)!;
+      const current = caseData.get(caseId);
+      const reservationIds = [...(caseReservationIds.get(caseId) || [])];
+      const activeInvoice = activeInvoicesByCase.get(caseId)?.[0];
+      const casePatch = {
+        patientId,
+        reservationDocIds: reservationIds,
+        ...surgeryCaseAggregatePatch(aggregatesByCase.get(caseId) || emptySettlementAggregate()),
+        ...(activeInvoice ? {
+          invoiceDocId: activeInvoice.id,
+          invoiceId: cleanText(activeInvoice.data().invoiceId),
+        } : {}),
+        updatedAt: now,
+        updatedBy: ctx.name,
+        updatedByUid: ctx.uid,
+      };
+      if (current) tx.update(ref, casePatch);
+      else tx.set(ref, {
+        ...casePatch,
+        primaryReservationDocId: reservationIds[0] || reservationDocId,
+        invoiceDocId: activeInvoice?.id || "",
+        invoiceId: activeInvoice ? cleanText(activeInvoice.data().invoiceId) : "",
+        isDeleted: false,
+        createdAt: now,
+        createdBy: ctx.name,
+        createdByUid: ctx.uid,
+      });
+    }
 
     const patientPatch = {
       settlementCount: patientAggregate.count,
@@ -394,12 +571,16 @@ async function mutateSettlement(mode: MutationMode, payload: Record<string, unkn
     };
     for (const patientDoc of patientSnap.docs) tx.update(patientDoc.ref, patientPatch);
 
-    for (const reservationId of affectedReservationIds) {
-      const aggregate = aggregatesByReservation.get(reservationId) || aggregateSettlementRows([]);
-      for (const invoiceDoc of invoiceDocsByReservation.get(reservationId) || []) {
+    for (const [caseId, docs] of activeInvoicesByCase) {
+      const aggregate = aggregatesByCase.get(caseId) || emptySettlementAggregate();
+      const reservationIds = [...(caseReservationIds.get(caseId) || [])];
+      for (const invoiceDoc of docs) {
         const invoice = invoiceDoc.data() as Record<string, unknown>;
-        if (invoice.isDeleted === true) continue;
-        const patch = invoicePatch(invoice, aggregate, ctx, now);
+        const patch = {
+          ...invoicePatch(invoice, aggregate, ctx, now),
+          surgeryCaseId: caseId,
+          reservationDocIds: reservationIds,
+        };
         tx.update(invoiceDoc.ref, patch);
         tx.set(adminDb.collection("logs").doc(), buildAuditLog(ctx, {
           action: "invoice_settlement_auto_sync",
@@ -408,7 +589,7 @@ async function mutateSettlement(mode: MutationMode, payload: Record<string, unkn
           patientId,
           reservationId: cleanText(invoice.reservationId),
           invoiceId: cleanText(invoice.invoiceId),
-          message: `${ctx.name}님이 정산 변경에 따라 인보이스 실결제액과 커미션을 자동 재계산했습니다.`,
+          message: `${ctx.name}님이 같은 수술 케이스의 정산 변경에 따라 인보이스 실결제액과 커미션을 자동 재계산했습니다.`,
           before: {
             totalAmount: invoice.totalAmount,
             commissionBase: invoice.commissionBase,
@@ -443,6 +624,7 @@ async function mutateSettlement(mode: MutationMode, payload: Record<string, unkn
       kind: "ok" as const,
       settlementId,
       patientId,
+      surgeryCaseId: targetCaseId,
       aggregate: patientAggregate,
     };
   });
@@ -452,13 +634,16 @@ async function mutateSettlement(mode: MutationMode, payload: Record<string, unkn
   if (outcome.kind === "invalid") return error("정산 입력값을 확인해주세요.");
   if (outcome.kind === "reservationMissing") return error("연결할 예약을 찾을 수 없습니다.", 404, "RESERVATION_NOT_FOUND");
   if (outcome.kind === "reservationMismatch") return error("예약과 환자 연결 정보가 일치하지 않습니다.", 409, "SETTLEMENT_RESERVATION_MISMATCH");
+  if (outcome.kind === "caseMismatch") return error("수술 케이스와 환자 연결 정보가 일치하지 않습니다.", 409, "SURGERY_CASE_PATIENT_MISMATCH");
   if (outcome.kind === "patientMissing") return error("환자 정보를 찾을 수 없습니다.", 404, "PATIENT_NOT_FOUND");
   if (outcome.kind === "limit") return error("정산 내역이 너무 많아 처리할 수 없습니다.", 409, "SETTLEMENT_LIMIT_EXCEEDED");
-  if (outcome.kind === "negative") return error("환불액은 해당 예약의 누적 실결제액을 초과할 수 없습니다.", 409, "SETTLEMENT_NEGATIVE_BALANCE");
+  if (outcome.kind === "caseLimit") return error("수술 케이스의 정산 내역이 너무 많아 처리할 수 없습니다.", 409, "SURGERY_CASE_SETTLEMENT_LIMIT_EXCEEDED");
+  if (outcome.kind === "negative") return error("환불액은 해당 수술 케이스의 누적 실결제액을 초과할 수 없습니다.", 409, "SETTLEMENT_NEGATIVE_BALANCE");
   return NextResponse.json({
     success: true,
     settlementId: outcome.settlementId,
     patientId: outcome.patientId,
+    surgeryCaseId: outcome.surgeryCaseId,
     aggregate: outcome.aggregate,
   });
 }

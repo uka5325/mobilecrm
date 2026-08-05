@@ -311,7 +311,11 @@ export async function createReservation(
     isDeleted: false,
   };
 
-  const basePayload = { patient, reservation };
+  const basePayload = {
+    patient,
+    reservation,
+    sourceReservationDocId: cleanText(params.sourceReservationDocId),
+  };
   let result = await callApi("create", { ...basePayload, ...(decision || {}) });
   result = await resolveCandidate("create", basePayload, result, decision);
   if (!result.success) {
@@ -330,6 +334,7 @@ export async function createReservation(
     reservation: mapReservationDoc(String(result.reservationDocId || ""), {
       ...reservation,
       patientId: savedPatientId,
+      surgeryCaseId: cleanText(result.surgeryCaseId),
       createdAt: null,
       updatedAt: null,
     }),

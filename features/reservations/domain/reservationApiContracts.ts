@@ -4,6 +4,7 @@ export type ReservationApiPayloadMap = {
   create: {
     patient: JsonRecord;
     reservation: JsonRecord;
+    sourceReservationDocId?: string;
     confirmNewPatient?: boolean;
     linkToPatientId?: string;
   };

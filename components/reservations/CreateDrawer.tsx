@@ -20,6 +20,7 @@ type InitialPatient = {
   appointmentType?: AppointmentType;
   coordinators?: string;
   doctors?: string;
+  sourceReservationDocId?: string;
 };
 
 type Props = {
@@ -109,6 +110,7 @@ export function CreateDrawer({ open, onClose, currentUser, initialDate, initialP
             appointmentType: resForm.appointmentType,
             coordinators: resForm.coordinators ? resForm.coordinators.split(",").map((s) => s.trim()).filter(Boolean) : [],
             patientId: initialPatient?.patientId,
+            sourceReservationDocId: initialPatient?.sourceReservationDocId,
           },
           currentUser
         );
@@ -214,6 +216,11 @@ export function CreateDrawer({ open, onClose, currentUser, initialDate, initialP
           {/* 예약 전용 필드 */}
           {isReservation && (
             <>
+              {initialPatient?.sourceReservationDocId && (
+                <div className="rounded-[18px] bg-[#eaf8f3] px-3 py-2 text-xs leading-5 text-[#0f766e]">
+                  현재 예약과 같은 수술 케이스로 연결됩니다. 예약금과 잔금은 하나의 인보이스에 자동 합산됩니다.
+                </div>
+              )}
               {/* 예약날짜 + 예약시간 */}
               <div className="grid grid-cols-2 gap-3">
                 <div className="min-w-0">

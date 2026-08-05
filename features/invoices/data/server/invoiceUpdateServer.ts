@@ -2,6 +2,10 @@ import { NextResponse } from "next/server";
 import { adminDb, FieldValue } from "@/lib/firebaseAdmin";
 import { cleanText, docToObj } from "@/lib/adminUtils";
 import { aggregateSettlementRows } from "@/lib/settlementMath";
+import {
+  aggregateFromSurgeryCase,
+  surgeryCaseAggregatePatch,
+} from "@/lib/surgeryCaseAggregates";
 import { calcCommission } from "@/lib/commissionUtils";
 import {
   invoiceLog,
@@ -39,6 +43,7 @@ export async function updateInvoiceAtomic(
   }
 
   const invoiceRef = adminDb.collection("invoices").doc(invoiceDocId);
+  const generatedCaseRef = adminDb.collection("surgeryCases").doc();
   const result = await adminDb.runTransaction(async (tx) => {
     const invoiceSnap = await tx.get(invoiceRef);
     if (!invoiceSnap.exists) return { kind: "missing" as const };
@@ -53,12 +58,49 @@ export async function updateInvoiceAtomic(
     if (!reservationSnap.exists) return { kind: "linkMissing" as const };
     const reservation = reservationSnap.data() as Record<string, unknown>;
     if (!invoiceReservationMatches(current, reservation)) return { kind: "linkMismatch" as const };
-    const settlementSnap = await tx.get(
-      adminDb.collection("settlements").where("reservationDocId", "==", reservationDocId).limit(501)
-    );
-    const settlementAggregate = aggregateSettlementRows(
-      settlementSnap.docs.map((doc) => doc.data() as Record<string, unknown>)
-    );
+    const surgeryCaseId = cleanText(current.surgeryCaseId)
+      || cleanText(reservation.surgeryCaseId)
+      || generatedCaseRef.id;
+    const surgeryCaseRef = surgeryCaseId === generatedCaseRef.id
+      ? generatedCaseRef
+      : adminDb.collection("surgeryCases").doc(surgeryCaseId);
+    const surgeryCaseSnap = surgeryCaseId === generatedCaseRef.id
+      ? null
+      : await tx.get(surgeryCaseRef);
+    const surgeryCase = surgeryCaseSnap?.exists
+      ? surgeryCaseSnap.data() as Record<string, unknown>
+      : undefined;
+    if (surgeryCase && cleanText(surgeryCase.patientId) !== cleanText(current.patientId)) {
+      return { kind: "caseMismatch" as const };
+    }
+    const reservationDocIds = Array.from(new Set([
+      ...(Array.isArray(surgeryCase?.reservationDocIds)
+        ? surgeryCase.reservationDocIds.map(String).filter(Boolean)
+        : []),
+      ...(Array.isArray(current.reservationDocIds)
+        ? current.reservationDocIds.map(String).filter(Boolean)
+        : []),
+      reservationDocId,
+    ]));
+    let settlementAggregate = aggregateFromSurgeryCase(surgeryCase);
+    if (!settlementAggregate) {
+      const settlementDocs = new Map<string, FirebaseFirestore.QueryDocumentSnapshot>();
+      const byCase = await tx.get(
+        adminDb.collection("settlements").where("surgeryCaseId", "==", surgeryCaseId).limit(501)
+      );
+      if (byCase.docs.length > 500) return { kind: "settlementLimit" as const };
+      byCase.docs.forEach((doc) => settlementDocs.set(doc.id, doc));
+      for (const id of reservationDocIds) {
+        const byReservation = await tx.get(
+          adminDb.collection("settlements").where("reservationDocId", "==", id).limit(501)
+        );
+        if (byReservation.docs.length > 500) return { kind: "settlementLimit" as const };
+        byReservation.docs.forEach((doc) => settlementDocs.set(doc.id, doc));
+      }
+      settlementAggregate = aggregateSettlementRows(
+        [...settlementDocs.values()].map((doc) => doc.data() as Record<string, unknown>)
+      );
+    }
     const hasSettlements = settlementAggregate.count > 0;
     const commissionRate = payload.commissionRate !== undefined
       ? toNumber(payload.commissionRate)
@@ -68,6 +110,8 @@ export async function updateInvoiceAtomic(
 
     const now = FieldValue.serverTimestamp();
     const patch: Record<string, unknown> = {
+      surgeryCaseId,
+      reservationDocIds,
       hospitalName: cleanText(payload.hospitalName),
       surgeryItems: cleanText(payload.surgeryItems),
       surgeryDate: cleanText(payload.surgeryDate ?? ""),
@@ -99,7 +143,29 @@ export async function updateInvoiceAtomic(
     };
 
     tx.update(invoiceRef, patch);
+    if (!surgeryCase || !aggregateFromSurgeryCase(surgeryCase)) {
+      const casePatch = {
+        patientId: cleanText(current.patientId),
+        reservationDocIds,
+        primaryReservationDocId: reservationDocId,
+        invoiceId: cleanText(current.invoiceId),
+        invoiceDocId,
+        ...surgeryCaseAggregatePatch(settlementAggregate),
+        updatedAt: now,
+        updatedBy: ctx.name,
+        updatedByUid: ctx.uid,
+      };
+      if (surgeryCase) tx.update(surgeryCaseRef, casePatch);
+      else tx.set(surgeryCaseRef, {
+        ...casePatch,
+        isDeleted: false,
+        createdAt: now,
+        createdBy: ctx.name,
+        createdByUid: ctx.uid,
+      });
+    }
     tx.update(reservationRef, {
+      surgeryCaseId,
       invoiceId: current.invoiceId,
       invoiceDocId,
       invoiceStatus: patch.status,
@@ -137,6 +203,12 @@ export async function updateInvoiceAtomic(
   }
   if (result.kind === "linkMissing") return invoiceReservationLinkError("missing");
   if (result.kind === "linkMismatch") return invoiceReservationLinkError("mismatch");
+  if (result.kind === "caseMismatch") {
+    return NextResponse.json({ success: false, message: "수술 케이스와 환자 정보가 일치하지 않습니다." }, { status: 409 });
+  }
+  if (result.kind === "settlementLimit") {
+    return NextResponse.json({ success: false, message: "수술 케이스의 정산 내역이 너무 많습니다." }, { status: 409 });
+  }
 
   const updated = await invoiceRef.get();
   return NextResponse.json({ success: true, invoice: docToObj(updated) });

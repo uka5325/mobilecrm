@@ -6,6 +6,8 @@ import { INVOICE_LIST_CACHE_PREFIX } from "@/lib/clientCache";
 export type InvoiceRecord = {
   id: string;
   invoiceId: string;
+  surgeryCaseId?: string;
+  reservationDocIds?: string[];
 
   reservationDocId: string;
   reservationId: string;
@@ -132,6 +134,10 @@ function mapInvoiceDoc(data: Record<string, unknown>): InvoiceRecord {
   return {
     id: cleanText(data.id),
     invoiceId: cleanText(data.invoiceId || data.id),
+    surgeryCaseId: cleanText(data.surgeryCaseId) || undefined,
+    reservationDocIds: Array.isArray(data.reservationDocIds)
+      ? data.reservationDocIds.map(cleanText).filter(Boolean)
+      : undefined,
 
     reservationDocId: cleanText(data.reservationDocId),
     reservationId: cleanText(data.reservationId),

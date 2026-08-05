@@ -48,10 +48,19 @@ export async function handleInvoiceReadAction(
 
   if (action === "get_by_reservation") {
     const reservationDocId = String(payload.reservationDocId || "");
-    const snap = await adminDb.collection("invoices")
-      .where("reservationDocId", "==", reservationDocId)
+    const byCase = await adminDb.collection("invoices")
+      .where("reservationDocIds", "array-contains", reservationDocId)
       .get();
-    for (const doc of snap.docs) {
+    const docs = new Map<string, FirebaseFirestore.QueryDocumentSnapshot>();
+    byCase.docs.forEach((doc) => docs.set(doc.id, doc));
+    // 백필 전 레거시 인보이스만 두 번째 쿼리를 사용한다. 신규 케이스 문서는 1 query로 끝난다.
+    if (docs.size === 0) {
+      const legacy = await adminDb.collection("invoices")
+        .where("reservationDocId", "==", reservationDocId)
+        .get();
+      legacy.docs.forEach((doc) => docs.set(doc.id, doc));
+    }
+    for (const doc of docs.values()) {
       const invoice = docToObj(doc);
       if (!invoice.isDeleted && access.canAccess(invoice)) {
         return NextResponse.json({ success: true, invoice });

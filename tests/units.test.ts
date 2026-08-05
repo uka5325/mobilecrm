@@ -6,6 +6,11 @@ import { calcCommissionBase, calcCommission, paymentMethodLabel } from "../lib/c
 import { cleanText, toSerializable } from "../lib/adminUtils";
 import { aggregateSettlementRows } from "../lib/settlementMath";
 import {
+  aggregateFromSurgeryCase,
+  applySettlementDelta,
+  surgeryCaseAggregatePatch,
+} from "../lib/surgeryCaseAggregates";
+import {
   calculateDashboardKpi,
   getConsultAreas,
   getDemandAreas,
@@ -220,6 +225,32 @@ test("settlement aggregate: void 기록 제외", () => {
   assert.equal(result.count, 1);
   assert.equal(result.netAmount, 200000);
   assert.equal(result.methodTotals.bank_transfer, 200000);
+});
+
+test("surgery case aggregate: 상담 예약금과 수술 잔금을 증분 합산한다", () => {
+  const deposit = { direction: "payment", amount: 500000, paymentMethod: "cash", paidAt: "2026-08-01" };
+  const balance = { direction: "payment", amount: 3000000, paymentMethod: "card", paidAt: "2026-08-15" };
+  const afterDeposit = applySettlementDelta(aggregateSettlementRows([]), null, deposit).aggregate;
+  const afterBalance = applySettlementDelta(afterDeposit, null, balance).aggregate;
+
+  assert.equal(afterBalance.count, 2);
+  assert.equal(afterBalance.netAmount, 3500000);
+  assert.equal(afterBalance.paymentMethod, "mixed");
+  assert.equal(afterBalance.lastPaidAt, "2026-08-15");
+});
+
+test("surgery case aggregate: 캐시 직렬화 후에도 결제수단별 합계가 보존된다", () => {
+  const original = aggregateSettlementRows([
+    { direction: "payment", amount: 550000, paymentMethod: "card", paidAt: "2026-08-01" },
+    { direction: "payment", amount: 400000, paymentMethod: "bank_transfer", paidAt: "2026-08-02" },
+    { direction: "refund", amount: 50000, paymentMethod: "card", paidAt: "2026-08-03" },
+  ]);
+  const restored = aggregateFromSurgeryCase(surgeryCaseAggregatePatch(original));
+
+  assert.ok(restored);
+  assert.deepEqual(restored?.methodTotals, original.methodTotals);
+  assert.equal(restored?.netAmount, original.netAmount);
+  assert.equal(restored?.commissionBase, original.commissionBase);
 });
 
 test("cleanText: null/undefined 안전", () => {

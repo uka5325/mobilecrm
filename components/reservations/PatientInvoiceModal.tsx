@@ -183,7 +183,13 @@ export function PatientInvoiceModal({ patientId, patientName, onClose, onCountLo
     );
   }
 
-  const invoiceByReservation = new Map(invoices.map((invoice) => [invoice.reservationDocId, invoice]));
+  const invoiceByReservation = new Map<string, InvoiceRecord>();
+  for (const invoice of invoices) {
+    const linkedReservationIds = invoice.reservationDocIds?.length
+      ? invoice.reservationDocIds
+      : [invoice.reservationDocId];
+    linkedReservationIds.forEach((id) => invoiceByReservation.set(id, invoice));
+  }
   const availableReservations = reservations.filter(
     (reservation) => (reservation.appointmentType === "수술" || reservation.appointmentType === "시술") && !invoiceByReservation.has(reservation.id)
   );
@@ -199,13 +205,23 @@ export function PatientInvoiceModal({ patientId, patientName, onClose, onCountLo
           {error && <div className="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-600">{error}</div>}
           {loading ? <div className="py-12 text-center text-sm text-gray-400">로딩 중...</div> : (
             <>
-              {reservations.map((reservation) => {
-                const invoice = invoiceByReservation.get(reservation.id);
-                return invoice ? <PatientInvoiceCard key={reservation.id} invoice={invoice} reservation={reservation} onView={() => setViewingInvoice(invoice)} onEdit={() => setEditingInvoice(invoice)} onDelete={() => void handleDelete(invoice)} /> : null;
+              {invoices.map((invoice) => {
+                const linkedIds = invoice.reservationDocIds?.length
+                  ? invoice.reservationDocIds
+                  : [invoice.reservationDocId];
+                const reservation = reservations.find((item) => item.id === invoice.reservationDocId)
+                  || reservations.find((item) => linkedIds.includes(item.id));
+                return (
+                  <PatientInvoiceCard
+                    key={invoice.id}
+                    invoice={invoice}
+                    reservation={reservation}
+                    onView={() => setViewingInvoice(invoice)}
+                    onEdit={() => setEditingInvoice(invoice)}
+                    onDelete={() => void handleDelete(invoice)}
+                  />
+                );
               })}
-              {invoices.filter((invoice) => !reservations.some((reservation) => reservation.id === invoice.reservationDocId)).map((invoice) => (
-                <PatientInvoiceCard key={invoice.id} invoice={invoice} onView={() => setViewingInvoice(invoice)} onEdit={() => setEditingInvoice(invoice)} onDelete={() => void handleDelete(invoice)} />
-              ))}
               <div className="mt-1">
                 <button onClick={() => { if (!showCreatePanel) void loadReservations(); setShowCreatePanel((current) => !current); }} className="w-full rounded-[18px] bg-[#e3f2ee] px-3 py-2 text-sm font-semibold text-[#0f9b8e] transition active:scale-95">
                   {showCreatePanel ? "닫기" : "+ 인보이스 생성"}
