@@ -38,7 +38,7 @@ export default function DesktopSidebar({
           <div className="mt-4 text-base font-black tracking-[-0.03em] text-white">
             모바일 CRM
           </div>
-          <p className="mt-1 text-xs leading-5 text-white/50">
+          <p className="mt-1 text-xs leading-5 text-white/55">
             예약, 고객관리, 정산을
             <br />
             한곳에서 관리합니다.
@@ -56,8 +56,8 @@ export default function DesktopSidebar({
                 aria-current={active ? "page" : undefined}
                 className={
                   active
-                    ? "flex items-center rounded-xl bg-white px-3 py-2.5 text-sm font-bold text-[#073238]"
-                    : "flex items-center rounded-xl px-3 py-2.5 text-sm font-semibold text-white/72 transition hover:bg-white/8 hover:text-white"
+                    ? "flex items-center rounded-xl bg-white px-3 py-2.5 text-sm font-semibold text-[#062c31]"
+                    : "flex items-center rounded-xl px-3 py-2.5 text-sm font-semibold text-white/72 transition hover:bg-white/6 hover:text-white"
                 }
               >
                 <span>{item.label}</span>
