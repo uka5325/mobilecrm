@@ -161,6 +161,15 @@ a {
     min-height: 36px;
   }
 
+  main section.relative[class~="mb-4"][class~="rounded-[26px]"]:not(:has(input[type="date"])) > div:first-child > div:nth-child(1) > button {
+    width: 72px;
+    min-width: 72px;
+    flex-shrink: 0;
+    border-radius: 16px;
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+
   /* 인보이스·커미션: 상단 필터행 + 하단 퀵 선택행 */
   main div[class~="h-[184px]"][class~="rounded-[26px]"]:has(input[type="date"]) > div:first-child {
     display: grid;
