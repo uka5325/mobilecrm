@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { AppointmentType, ReservationRecord } from "@/features/reservations/domain/reservationModels";
 import { getAppointmentColor, START_HOUR, END_HOUR, SCHEDULE_APPOINTMENT_TYPES } from "@/features/reservations/ui/scheduleLayout";
 
@@ -8,6 +8,7 @@ type DayDisplayMode = "time" | "hospital";
 
 const CANCELLED_COLOR = "#facc15";
 const COMPLETED_COLOR = "#9ca3af";
+const DESKTOP_TWO_COLUMN_MIN_WIDTH = 728;
 const DETAIL_LABELS: Record<AppointmentType, string> = {
   상담: "상담 항목", 수술: "수술 항목", 시술: "시술 항목", 치료: "수술 항목", 경과: "경과 항목", 진료: "진료 항목", 검진: "검진 항목",
 };
@@ -29,7 +30,7 @@ function statusColor(item: ReservationRecord) {
 }
 function detailLabel(item: ReservationRecord) { return DETAIL_LABELS[item.appointmentType] || "상담 항목"; }
 
-function AppointmentCard({ item, onClick, compact = false, showHospital = true, showTimeInside = false, showTimeWithDetail = false, showTypeBadge = true }: {
+function AppointmentCard({ item, onClick, compact = false, showHospital = true, showTimeInside = false, showTimeWithDetail = false, showTypeBadge = true, desktopFullWidth = false }: {
   item: ReservationRecord;
   onClick: () => void;
   compact?: boolean;
@@ -37,12 +38,14 @@ function AppointmentCard({ item, onClick, compact = false, showHospital = true, 
   showTimeInside?: boolean;
   showTimeWithDetail?: boolean;
   showTypeBadge?: boolean;
+  desktopFullWidth?: boolean;
 }) {
   const color = cardColor(item);
   const status = statusLabel(item);
   const cancelled = item.cancelled === true;
+  const desktopWidthClass = desktopFullWidth ? "lg:max-w-none" : "lg:max-w-[360px]";
   return (
-    <button type="button" onClick={onClick} className={compact ? "flex min-h-[58px] w-full min-w-0 items-center gap-2 overflow-hidden rounded-[26px] py-2 pl-5 pr-3 text-left transition active:scale-[0.99] lg:max-w-[360px]" : "flex min-h-[82px] w-full min-w-0 items-center gap-2 overflow-hidden rounded-[26px] py-2.5 pl-5 pr-3 text-left transition active:scale-[0.99] lg:max-w-[360px]"} style={{ background: "linear-gradient(90deg, " + color + "16 0%, rgba(255,255,255,0.92) 42%, rgba(255,255,255,0.98) 100%)", boxShadow: "inset 6px 0 0 " + color + ", 0 10px 18px rgba(15,23,42,.045)", opacity: item.completed ? 0.84 : 1 }}>
+    <button type="button" onClick={onClick} className={`${compact ? "flex min-h-[58px] w-full min-w-0 items-center gap-2 overflow-hidden rounded-[26px] py-2 pl-5 pr-3 text-left transition active:scale-[0.99]" : "flex min-h-[82px] w-full min-w-0 items-center gap-2 overflow-hidden rounded-[26px] py-2.5 pl-5 pr-3 text-left transition active:scale-[0.99]"} ${desktopWidthClass}`} style={{ background: "linear-gradient(90deg, " + color + "16 0%, rgba(255,255,255,0.92) 42%, rgba(255,255,255,0.98) 100%)", boxShadow: "inset 6px 0 0 " + color + ", 0 10px 18px rgba(15,23,42,.045)", opacity: item.completed ? 0.84 : 1 }}>
       {showTimeInside ? <div className="w-[38px] shrink-0 text-xs font-bold tracking-[-0.03em] text-[#101828]">{item.reservationTime ? item.reservationTime.slice(0, 5) : "--:--"}</div> : null}
       <div className="min-w-0 flex-1 overflow-hidden">
         <div className={"truncate text-sm font-semibold tracking-[-0.035em]" + (cancelled ? " text-[#101828] line-through decoration-2" : " text-[#101828]")}>{item.name || "이름 없음"}</div>
@@ -54,6 +57,41 @@ function AppointmentCard({ item, onClick, compact = false, showHospital = true, 
         <span className="rounded-full bg-white/78 px-2 py-0.5 text-[10px] font-bold" style={{ color: statusColor(item) }}>{status}</span>
       </div>
     </button>
+  );
+}
+
+function DesktopResponsiveCardGrid({ items, showHospital, showTypeBadge, onCardClick }: {
+  items: ReservationRecord[];
+  showHospital: boolean;
+  showTypeBadge: boolean;
+  onCardClick: (item: ReservationRecord) => void;
+}) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [twoColumns, setTwoColumns] = useState(false);
+
+  useEffect(() => {
+    const element = containerRef.current;
+    if (!element) return;
+
+    const updateLayout = () => setTwoColumns(element.clientWidth >= DESKTOP_TWO_COLUMN_MIN_WIDTH);
+    updateLayout();
+
+    const observer = new ResizeObserver(updateLayout);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
+
+  return (
+    <div ref={containerRef} className={twoColumns && items.length > 1 ? "grid grid-cols-2 gap-2" : "space-y-2"}>
+      {items.map((item, index) => {
+        const isLastOddCard = twoColumns && items.length > 1 && items.length % 2 === 1 && index === items.length - 1;
+        return (
+          <div key={item.id} className={isLastOddCard ? "col-span-2" : "min-w-0"}>
+            <AppointmentCard item={item} compact showHospital={showHospital} showTimeWithDetail showTypeBadge={showTypeBadge} desktopFullWidth={isLastOddCard} onClick={() => onCardClick(item)} />
+          </div>
+        );
+      })}
+    </div>
   );
 }
 
@@ -119,18 +157,10 @@ function DesktopTimeDayView({ dateStr, reservations, onCardClick }: { dateStr: s
             return (
               <div key={`${hour}-${type || "empty"}`} className={`${typeIndex === 0 ? "" : "border-l"} border-b border-[#e7ecea] ${current ? "bg-[#f3fbf8]" : "bg-white"}`}>
                 <div className="min-h-[56px] p-2">
-                  <div className="space-y-2">
-                    {(slots?.first || []).map((item) => (
-                      <AppointmentCard key={item.id} item={item} compact showHospital showTimeWithDetail showTypeBadge={false} onClick={() => onCardClick(item)} />
-                    ))}
-                  </div>
+                  <DesktopResponsiveCardGrid items={slots?.first || []} showHospital showTypeBadge={false} onCardClick={onCardClick} />
                 </div>
                 <div className="min-h-[56px] border-t border-dashed border-[#edf2ef] p-2">
-                  <div className="space-y-2">
-                    {(slots?.second || []).map((item) => (
-                      <AppointmentCard key={item.id} item={item} compact showHospital showTimeWithDetail showTypeBadge={false} onClick={() => onCardClick(item)} />
-                    ))}
-                  </div>
+                  <DesktopResponsiveCardGrid items={slots?.second || []} showHospital showTypeBadge={false} onCardClick={onCardClick} />
                 </div>
               </div>
             );
@@ -151,7 +181,6 @@ function DesktopHospitalDayView({ dateStr, reservations, onCardClick }: { dateSt
   const currentHour = new Date().getHours();
   const viewingToday = dateStr === localDateString();
   const visibleHospitals = hospitals.length ? hospitals : ["병원 미지정"];
-  const singleHospital = visibleHospitals.length === 1;
   const columnStyle = { gridTemplateColumns: `64px repeat(${Math.max(visibleHospitals.length, 1)}, minmax(220px, 1fr))` };
   return (
     <section className="hidden overflow-x-auto rounded-[18px] border border-[#dfe7e4] bg-white lg:block">
@@ -164,9 +193,7 @@ function DesktopHospitalDayView({ dateStr, reservations, onCardClick }: { dateSt
             const items: ReservationRecord[] = reservations.filter((item) => hourOf(item) === hour && (item.hospital || "병원 미지정") === hospital).sort((a, b) => exactTime(a).localeCompare(exactTime(b)));
             return (
               <div key={`${hour}-${hospital}`} className={`relative min-h-[88px] border-b border-[#e7ecea] p-2 ${hospitalIndex === 0 ? "" : "border-l"} ${current ? "bg-[#f3fbf8]" : "bg-white"}`}>
-                <div className={singleHospital ? "relative z-10 grid grid-cols-2 gap-2" : "relative z-10 space-y-2"}>
-                  {items.map((item: ReservationRecord) => <AppointmentCard key={item.id} item={item} compact showHospital showTimeWithDetail onClick={() => onCardClick(item)} />)}
-                </div>
+                <DesktopResponsiveCardGrid items={items} showHospital showTypeBadge onCardClick={onCardClick} />
               </div>
             );
           });
