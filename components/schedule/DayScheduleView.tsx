@@ -2,7 +2,7 @@
 
 import { useMemo } from "react";
 import type { AppointmentType, ReservationRecord } from "@/features/reservations/domain/reservationModels";
-import { getAppointmentColor, START_HOUR, END_HOUR } from "@/features/reservations/ui/scheduleLayout";
+import { getAppointmentColor, START_HOUR, END_HOUR, SCHEDULE_APPOINTMENT_TYPES } from "@/features/reservations/ui/scheduleLayout";
 
 type DayDisplayMode = "time" | "hospital";
 
@@ -66,47 +66,53 @@ function localDateString() {
 }
 
 function DesktopTimeDayView({ dateStr, reservations, onCardClick }: { dateStr: string; reservations: ReservationRecord[]; onCardClick: (item: ReservationRecord) => void }) {
-  const byHour = useMemo<Map<number, Map<string, ReservationRecord[]>>>(() => {
-    const map = new Map<number, Map<string, ReservationRecord[]>>();
-    reservations.forEach((item) => {
-      const hour = hourOf(item);
-      const time = exactTime(item);
-      const times = map.get(hour) || new Map<string, ReservationRecord[]>();
-      const items = times.get(time) || [];
-      items.push(item); times.set(time, items); map.set(hour, times);
-    });
-    return map;
-  }, [reservations]);
   const hours = Array.from({ length: END_HOUR - START_HOUR + 1 }, (_, index) => START_HOUR + index);
   const currentHour = new Date().getHours();
   const viewingToday = dateStr === localDateString();
+  const columnStyle = { gridTemplateColumns: `64px repeat(${SCHEDULE_APPOINTMENT_TYPES.length}, minmax(220px, 1fr))` };
+
+  const grouped = useMemo(() => {
+    const map = new Map<number, Map<AppointmentType, ReservationRecord[]>>();
+    reservations.forEach((item) => {
+      const hour = hourOf(item);
+      const byType = map.get(hour) || new Map<AppointmentType, ReservationRecord[]>();
+      const items = byType.get(item.appointmentType) || [];
+      items.push(item);
+      items.sort((a, b) => exactTime(a).localeCompare(exactTime(b)));
+      byType.set(item.appointmentType, items);
+      map.set(hour, byType);
+    });
+    return map;
+  }, [reservations]);
+
   return (
-    <section className="hidden overflow-hidden rounded-[18px] border border-[#dfe7e4] bg-white lg:block">
-      <div className="grid grid-cols-[64px_minmax(0,1fr)]"><div className="h-9 border-b border-r border-[#dfe7e4]" /><div className="h-9 border-b border-[#dfe7e4]" /></div>
-      {hours.map((hour) => {
-        const groups = Array.from((byHour.get(hour) || new Map<string, ReservationRecord[]>()).entries()).sort(([a], [b]) => a.localeCompare(b));
-        const current = viewingToday && hour === currentHour;
-        return (
-          <div key={hour} className="grid min-h-[88px] grid-cols-[64px_minmax(0,1fr)]">
-            <div className={`flex items-start justify-center border-b border-r border-[#e7ecea] pt-3 text-[10px] font-bold text-[#52606d] ${current ? "bg-[#f3fbf8]" : "bg-white"}`}>{String(hour).padStart(2, "0")}:00</div>
-            <div className={`relative border-b border-[#e7ecea] p-2 before:absolute before:left-0 before:right-0 before:top-1/2 before:border-t before:border-dashed before:border-[#edf2ef] ${current ? "bg-[#f3fbf8]" : "bg-white"}`}>
-              <div className="relative z-10 space-y-2">
-                {groups.map(([time, items]) => (
-                  <div key={time} className="min-w-0">
-                    <div className="grid min-w-0 grid-cols-2 gap-2">
-                      {items.map((item: ReservationRecord) => (
-                        <div key={item.id} className="min-w-0">
-                          <AppointmentCard item={item} compact showHospital showTimeWithDetail onClick={() => onCardClick(item)} />
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ))}
+    <section className="hidden overflow-x-auto rounded-[18px] border border-[#dfe7e4] bg-white lg:block">
+      <div className="grid min-w-[1600px]" style={columnStyle}>
+        <div className="h-9 border-b border-r border-[#dfe7e4]" />
+        {SCHEDULE_APPOINTMENT_TYPES.map((type, typeIndex) => (
+          <div key={type} className={`flex h-9 items-center justify-center border-b border-[#dfe7e4] text-xs font-semibold text-[#101828] ${typeIndex === 0 ? "" : "border-l"}`}>{type}</div>
+        ))}
+
+        {hours.flatMap((hour) => {
+          const current = viewingToday && hour === currentHour;
+          const cells = SCHEDULE_APPOINTMENT_TYPES.map((type, typeIndex) => {
+            const items = grouped.get(hour)?.get(type) || [];
+            return (
+              <div key={`${hour}-${type}`} className={`relative min-h-[88px] border-b border-[#e7ecea] p-2 before:absolute before:left-0 before:right-0 before:top-1/2 before:border-t before:border-dashed before:border-[#edf2ef] ${typeIndex === 0 ? "" : "border-l"} ${current ? "bg-[#f3fbf8]" : "bg-white"}`}>
+                <div className="relative z-10 space-y-2">
+                  {items.map((item) => (
+                    <AppointmentCard key={item.id} item={item} compact showHospital showTimeWithDetail onClick={() => onCardClick(item)} />
+                  ))}
+                </div>
               </div>
-            </div>
-          </div>
-        );
-      })}
+            );
+          });
+          return [
+            <div key={`${hour}-label`} className={`flex min-h-[88px] items-start justify-center border-b border-r border-[#e7ecea] pt-3 text-[10px] font-bold text-[#52606d] ${current ? "bg-[#f3fbf8]" : "bg-white"}`}>{String(hour).padStart(2, "0")}:00</div>,
+            ...cells,
+          ];
+        })}
+      </div>
     </section>
   );
 }
