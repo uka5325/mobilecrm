@@ -8,7 +8,8 @@ type DayDisplayMode = "time" | "hospital";
 
 const CANCELLED_COLOR = "#facc15";
 const COMPLETED_COLOR = "#9ca3af";
-const DESKTOP_TWO_COLUMN_MIN_WIDTH = 728;
+const DESKTOP_TIME_TWO_COLUMN_MIN_WIDTH = 340;
+const DESKTOP_HOSPITAL_TWO_COLUMN_MIN_WIDTH = 728;
 const DETAIL_LABELS: Record<AppointmentType, string> = {
   상담: "상담 항목", 수술: "수술 항목", 시술: "시술 항목", 치료: "수술 항목", 경과: "경과 항목", 진료: "진료 항목", 검진: "검진 항목",
 };
@@ -60,10 +61,11 @@ function AppointmentCard({ item, onClick, compact = false, showHospital = true, 
   );
 }
 
-function DesktopResponsiveCardGrid({ items, showHospital, showTypeBadge, onCardClick }: {
+function DesktopResponsiveCardGrid({ items, showHospital, showTypeBadge, twoColumnMinWidth, onCardClick }: {
   items: ReservationRecord[];
   showHospital: boolean;
   showTypeBadge: boolean;
+  twoColumnMinWidth: number;
   onCardClick: (item: ReservationRecord) => void;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -73,13 +75,13 @@ function DesktopResponsiveCardGrid({ items, showHospital, showTypeBadge, onCardC
     const element = containerRef.current;
     if (!element) return;
 
-    const updateLayout = () => setTwoColumns(element.clientWidth >= DESKTOP_TWO_COLUMN_MIN_WIDTH);
+    const updateLayout = () => setTwoColumns(element.clientWidth >= twoColumnMinWidth);
     updateLayout();
 
     const observer = new ResizeObserver(updateLayout);
     observer.observe(element);
     return () => observer.disconnect();
-  }, []);
+  }, [twoColumnMinWidth]);
 
   return (
     <div ref={containerRef} className={twoColumns && items.length > 1 ? "grid grid-cols-2 gap-2" : "space-y-2"}>
@@ -157,10 +159,10 @@ function DesktopTimeDayView({ dateStr, reservations, onCardClick }: { dateStr: s
             return (
               <div key={`${hour}-${type || "empty"}`} className={`${typeIndex === 0 ? "" : "border-l"} border-b border-[#e7ecea] ${current ? "bg-[#f3fbf8]" : "bg-white"}`}>
                 <div className="min-h-[56px] p-2">
-                  <DesktopResponsiveCardGrid items={slots?.first || []} showHospital showTypeBadge={false} onCardClick={onCardClick} />
+                  <DesktopResponsiveCardGrid items={slots?.first || []} showHospital showTypeBadge={false} twoColumnMinWidth={DESKTOP_TIME_TWO_COLUMN_MIN_WIDTH} onCardClick={onCardClick} />
                 </div>
                 <div className="min-h-[56px] border-t border-dashed border-[#edf2ef] p-2">
-                  <DesktopResponsiveCardGrid items={slots?.second || []} showHospital showTypeBadge={false} onCardClick={onCardClick} />
+                  <DesktopResponsiveCardGrid items={slots?.second || []} showHospital showTypeBadge={false} twoColumnMinWidth={DESKTOP_TIME_TWO_COLUMN_MIN_WIDTH} onCardClick={onCardClick} />
                 </div>
               </div>
             );
@@ -193,7 +195,7 @@ function DesktopHospitalDayView({ dateStr, reservations, onCardClick }: { dateSt
             const items: ReservationRecord[] = reservations.filter((item) => hourOf(item) === hour && (item.hospital || "병원 미지정") === hospital).sort((a, b) => exactTime(a).localeCompare(exactTime(b)));
             return (
               <div key={`${hour}-${hospital}`} className={`relative min-h-[88px] border-b border-[#e7ecea] p-2 ${hospitalIndex === 0 ? "" : "border-l"} ${current ? "bg-[#f3fbf8]" : "bg-white"}`}>
-                <DesktopResponsiveCardGrid items={items} showHospital showTypeBadge onCardClick={onCardClick} />
+                <DesktopResponsiveCardGrid items={items} showHospital showTypeBadge twoColumnMinWidth={DESKTOP_HOSPITAL_TWO_COLUMN_MIN_WIDTH} onCardClick={onCardClick} />
               </div>
             );
           });
