@@ -73,21 +73,22 @@ a {
 }
 
 @media (min-width: 1024px) {
-  main section[class~="mb-4"][class~="rounded-[26px]"] {
+  /* 대시보드 컨트롤 패널: 기존 압축 배치 유지 */
+  main section[class~="mb-4"][class~="rounded-[26px]"]:has(input[type="date"]) {
     padding: 12px;
   }
 
-  main section[class~="mb-4"][class~="rounded-[26px]"] > div:first-child {
+  main section[class~="mb-4"][class~="rounded-[26px]"]:has(input[type="date"]) > div:first-child {
     display: grid;
     grid-template-columns: repeat(5, minmax(0, 1fr));
     gap: 8px;
   }
 
-  main section[class~="mb-4"][class~="rounded-[26px]"] > div:first-child > div:nth-child(-n + 3) {
+  main section[class~="mb-4"][class~="rounded-[26px]"]:has(input[type="date"]) > div:first-child > div:nth-child(-n + 3) {
     display: contents;
   }
 
-  main section[class~="mb-4"][class~="rounded-[26px]"] > div:first-child > div:nth-child(4) {
+  main section[class~="mb-4"][class~="rounded-[26px]"]:has(input[type="date"]) > div:first-child > div:nth-child(4) {
     grid-column: 1 / -1;
     display: flex;
     align-items: center;
@@ -99,20 +100,85 @@ a {
     white-space: nowrap;
   }
 
-  main section[class~="mb-4"][class~="rounded-[26px]"] > div:first-child > div:nth-child(4) > div {
+  main section[class~="mb-4"][class~="rounded-[26px]"]:has(input[type="date"]) > div:first-child > div:nth-child(4) > div {
     display: flex;
     align-items: center;
     gap: 20px;
   }
 
-  main section[class~="mb-4"][class~="rounded-[26px]"] > div:first-child > div:nth-child(-n + 3) > :is(input, select, button),
-  main div[class~="h-[184px]"][class~="rounded-[26px]"] > div:first-child > div:first-child > :is(input, select, button, span) {
+  /* 고객관리: 스케줄 패널과 동일한 3열 + 하단 보조행 */
+  main section.relative[class~="mb-4"][class~="rounded-[26px]"]:not(:has(input[type="date"])) {
+    height: auto;
+    padding: 12px;
+    box-shadow: none;
+  }
+
+  main section.relative[class~="mb-4"][class~="rounded-[26px]"]:not(:has(input[type="date"])) > div:first-child {
+    display: grid;
+    grid-template-columns: minmax(240px, 1fr) minmax(320px, 1fr) minmax(280px, 1fr);
+    align-items: center;
+    column-gap: 16px;
+    row-gap: 8px;
+  }
+
+  main section.relative[class~="mb-4"][class~="rounded-[26px]"]:not(:has(input[type="date"])) > div:first-child > div:nth-child(1),
+  main section.relative[class~="mb-4"][class~="rounded-[26px]"]:not(:has(input[type="date"])) > div:first-child > div:nth-child(2) {
+    min-width: 0;
+  }
+
+  main section.relative[class~="mb-4"][class~="rounded-[26px]"]:not(:has(input[type="date"])) > div:first-child > div:nth-child(2) {
+    min-width: 0;
+  }
+
+  main section.relative[class~="mb-4"][class~="rounded-[26px]"]:not(:has(input[type="date"])) > div:first-child > div:nth-child(2) button {
+    white-space: nowrap;
+  }
+
+  main section.relative[class~="mb-4"][class~="rounded-[26px]"]:not(:has(input[type="date"])) > div:first-child > div:nth-child(3) {
+    grid-column: 1 / -1;
+    justify-content: flex-start;
+    overflow-x: auto;
+    gap: 20px;
+  }
+
+  /* 인보이스·커미션: 스케줄 패널과 동일한 높이·패딩·행 간격 */
+  main div[class~="h-[184px]"][class~="rounded-[26px]"]:has(input[type="date"]) {
+    height: auto;
+    padding: 12px;
+    box-shadow: none;
+  }
+
+  main div[class~="h-[184px]"][class~="rounded-[26px]"]:has(input[type="date"]) > div:first-child {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+  }
+
+  main div[class~="h-[184px]"][class~="rounded-[26px]"]:has(input[type="date"]) > div:first-child > div:first-child {
+    width: 100%;
+    gap: 8px;
+  }
+
+  main div[class~="h-[184px]"][class~="rounded-[26px]"]:has(input[type="date"]) > div:first-child > div:last-child {
+    width: 100%;
+    margin-top: 0;
+  }
+
+  /* 스케줄 기준 데스크톱 컨트롤 높이 36px */
+  main section[class~="rounded-[26px]"] :is(input, select, button),
+  main div[class~="h-[184px]"][class~="rounded-[26px]"]:has(input[type="date"]) > div:first-child > div:first-child > :is(input, select, button, span) {
+    min-height: 36px;
     height: 36px;
   }
 }
 
 @media (min-width: 1536px) {
-  main section[class~="mb-4"][class~="rounded-[26px]"] > div:first-child {
+  main section[class~="mb-4"][class~="rounded-[26px]"]:has(input[type="date"]) > div:first-child {
     grid-template-columns: repeat(9, minmax(0, 1fr));
+  }
+
+  /* lg와 2xl에서 동일한 스케줄형 3열 구조 유지 */
+  main section.relative[class~="mb-4"][class~="rounded-[26px]"]:not(:has(input[type="date"])) > div:first-child {
+    grid-template-columns: minmax(240px, 1fr) minmax(320px, 1fr) minmax(280px, 1fr);
   }
 }
