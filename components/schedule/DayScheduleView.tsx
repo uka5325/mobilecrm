@@ -29,8 +29,14 @@ function statusColor(item: ReservationRecord) {
 }
 function detailLabel(item: ReservationRecord) { return DETAIL_LABELS[item.appointmentType] || "상담 항목"; }
 
-function AppointmentCard({ item, onClick, compact = false, showHospital = true, showTimeInside = false, showTimeWithDetail = false }: {
-  item: ReservationRecord; onClick: () => void; compact?: boolean; showHospital?: boolean; showTimeInside?: boolean; showTimeWithDetail?: boolean;
+function AppointmentCard({ item, onClick, compact = false, showHospital = true, showTimeInside = false, showTimeWithDetail = false, showTypeBadge = true }: {
+  item: ReservationRecord;
+  onClick: () => void;
+  compact?: boolean;
+  showHospital?: boolean;
+  showTimeInside?: boolean;
+  showTimeWithDetail?: boolean;
+  showTypeBadge?: boolean;
 }) {
   const color = cardColor(item);
   const status = statusLabel(item);
@@ -44,7 +50,7 @@ function AppointmentCard({ item, onClick, compact = false, showHospital = true, 
         {item.consultArea ? <div className="mt-0.5 truncate text-[11px] font-normal text-[#667085]">{showTimeWithDetail && item.reservationTime ? item.reservationTime.slice(0, 5) + " · " : ""}{detailLabel(item)}: {item.consultArea}</div> : showTimeWithDetail && item.reservationTime ? <div className="mt-0.5 truncate text-[11px] font-normal text-[#667085]">{item.reservationTime.slice(0, 5)}</div> : null}
       </div>
       <div className="flex shrink-0 flex-col items-end gap-1">
-        <span className="rounded-full bg-white/78 px-2 py-0.5 text-[10px] font-bold" style={{ color }}>{item.appointmentType}</span>
+        {showTypeBadge ? <span className="rounded-full bg-white/78 px-2 py-0.5 text-[10px] font-bold" style={{ color }}>{item.appointmentType}</span> : null}
         <span className="rounded-full bg-white/78 px-2 py-0.5 text-[10px] font-bold" style={{ color: statusColor(item) }}>{status}</span>
       </div>
     </button>
@@ -54,6 +60,10 @@ function AppointmentCard({ item, onClick, compact = false, showHospital = true, 
 function hourOf(item: ReservationRecord) {
   const value = Number(String(item.reservationTime || "").slice(0, 2));
   return Number.isFinite(value) ? value : START_HOUR;
+}
+function minuteOf(item: ReservationRecord) {
+  const value = Number(String(item.reservationTime || "").slice(3, 5));
+  return Number.isFinite(value) ? value : 0;
 }
 function exactTime(item: ReservationRecord) { return item.reservationTime ? item.reservationTime.slice(0, 5) : "--:--"; }
 
@@ -69,17 +79,23 @@ function DesktopTimeDayView({ dateStr, reservations, onCardClick }: { dateStr: s
   const hours = Array.from({ length: END_HOUR - START_HOUR + 1 }, (_, index) => START_HOUR + index);
   const currentHour = new Date().getHours();
   const viewingToday = dateStr === localDateString();
-  const columnStyle = { gridTemplateColumns: `64px repeat(${SCHEDULE_APPOINTMENT_TYPES.length}, minmax(220px, 1fr))` };
+  const visibleTypes = useMemo(
+    () => SCHEDULE_APPOINTMENT_TYPES.filter((type) => reservations.some((item) => item.appointmentType === type)),
+    [reservations],
+  );
+  const columnStyle = { gridTemplateColumns: `64px repeat(${Math.max(visibleTypes.length, 1)}, minmax(220px, 1fr))` };
+  const minWidth = 64 + Math.max(visibleTypes.length, 1) * 220;
 
   const grouped = useMemo(() => {
-    const map = new Map<number, Map<AppointmentType, ReservationRecord[]>>();
+    const map = new Map<number, Map<AppointmentType, { first: ReservationRecord[]; second: ReservationRecord[] }>>();
     reservations.forEach((item) => {
       const hour = hourOf(item);
-      const byType = map.get(hour) || new Map<AppointmentType, ReservationRecord[]>();
-      const items = byType.get(item.appointmentType) || [];
-      items.push(item);
-      items.sort((a, b) => exactTime(a).localeCompare(exactTime(b)));
-      byType.set(item.appointmentType, items);
+      const byType = map.get(hour) || new Map<AppointmentType, { first: ReservationRecord[]; second: ReservationRecord[] }>();
+      const slots = byType.get(item.appointmentType) || { first: [], second: [] };
+      const target = minuteOf(item) < 30 ? slots.first : slots.second;
+      target.push(item);
+      target.sort((a, b) => exactTime(a).localeCompare(exactTime(b)));
+      byType.set(item.appointmentType, slots);
       map.set(hour, byType);
     });
     return map;
@@ -87,28 +103,40 @@ function DesktopTimeDayView({ dateStr, reservations, onCardClick }: { dateStr: s
 
   return (
     <section className="hidden overflow-x-auto rounded-[18px] border border-[#dfe7e4] bg-white lg:block">
-      <div className="grid min-w-[1600px]" style={columnStyle}>
+      <div className="grid" style={{ ...columnStyle, minWidth }}>
         <div className="h-9 border-b border-r border-[#dfe7e4]" />
-        {SCHEDULE_APPOINTMENT_TYPES.map((type, typeIndex) => (
+        {visibleTypes.length === 0 ? (
+          <div className="flex h-9 items-center justify-center border-b border-[#dfe7e4] text-xs font-semibold text-[#101828]">예약 없음</div>
+        ) : visibleTypes.map((type, typeIndex) => (
           <div key={type} className={`flex h-9 items-center justify-center border-b border-[#dfe7e4] text-xs font-semibold text-[#101828] ${typeIndex === 0 ? "" : "border-l"}`}>{type}</div>
         ))}
 
         {hours.flatMap((hour) => {
           const current = viewingToday && hour === currentHour;
-          const cells = SCHEDULE_APPOINTMENT_TYPES.map((type, typeIndex) => {
-            const items = grouped.get(hour)?.get(type) || [];
+          const cellTypes = visibleTypes.length ? visibleTypes : [null];
+          const cells = cellTypes.map((type, typeIndex) => {
+            const slots = type ? grouped.get(hour)?.get(type) : undefined;
             return (
-              <div key={`${hour}-${type}`} className={`relative min-h-[88px] border-b border-[#e7ecea] p-2 before:absolute before:left-0 before:right-0 before:top-1/2 before:border-t before:border-dashed before:border-[#edf2ef] ${typeIndex === 0 ? "" : "border-l"} ${current ? "bg-[#f3fbf8]" : "bg-white"}`}>
-                <div className="relative z-10 space-y-2">
-                  {items.map((item) => (
-                    <AppointmentCard key={item.id} item={item} compact showHospital showTimeWithDetail onClick={() => onCardClick(item)} />
-                  ))}
+              <div key={`${hour}-${type || "empty"}`} className={`${typeIndex === 0 ? "" : "border-l"} border-b border-[#e7ecea] ${current ? "bg-[#f3fbf8]" : "bg-white"}`}>
+                <div className="min-h-[56px] p-2">
+                  <div className="space-y-2">
+                    {(slots?.first || []).map((item) => (
+                      <AppointmentCard key={item.id} item={item} compact showHospital showTimeWithDetail showTypeBadge={false} onClick={() => onCardClick(item)} />
+                    ))}
+                  </div>
+                </div>
+                <div className="min-h-[56px] border-t border-dashed border-[#edf2ef] p-2">
+                  <div className="space-y-2">
+                    {(slots?.second || []).map((item) => (
+                      <AppointmentCard key={item.id} item={item} compact showHospital showTimeWithDetail showTypeBadge={false} onClick={() => onCardClick(item)} />
+                    ))}
+                  </div>
                 </div>
               </div>
             );
           });
           return [
-            <div key={`${hour}-label`} className={`flex min-h-[88px] items-start justify-center border-b border-r border-[#e7ecea] pt-3 text-[10px] font-bold text-[#52606d] ${current ? "bg-[#f3fbf8]" : "bg-white"}`}>{String(hour).padStart(2, "0")}:00</div>,
+            <div key={`${hour}-label`} className={`flex min-h-[112px] items-start justify-center border-b border-r border-[#e7ecea] pt-3 text-[10px] font-bold text-[#52606d] ${current ? "bg-[#f3fbf8]" : "bg-white"}`}>{String(hour).padStart(2, "0")}:00</div>,
             ...cells,
           ];
         })}
