@@ -80,7 +80,7 @@ export function ReservationsToolbar({
           <button
             type="button"
             onClick={submitSearch}
-            className="h-10 rounded-[20px] bg-white px-4 text-xs font-semibold text-[#0f9b8e] transition active:scale-95 lg:h-9 lg:rounded-[16px]"
+            className="h-10 rounded-[20px] bg-white px-4 text-xs font-semibold text-[#0f9b8e] transition active:scale-95 lg:!h-9 lg:!min-h-9 lg:min-w-[72px] lg:rounded-[16px]"
           >
             검색
           </button>
