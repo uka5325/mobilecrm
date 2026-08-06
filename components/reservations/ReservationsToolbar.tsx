@@ -59,13 +59,13 @@ export function ReservationsToolbar({
     onSearchChange(query.trim());
   }
 
-  const chipClass = "flex h-7 min-w-0 items-center justify-center gap-1.5 rounded-full bg-white/72 px-2 text-[11px] font-normal text-[#667085] lg:h-auto lg:justify-start lg:rounded-none lg:bg-transparent lg:px-0 2xl:shrink-0";
-  const actionChipClass = "h-7 min-w-0 rounded-full bg-white/72 px-2 text-[11px] font-semibold text-[#0f9b8e] transition active:scale-95 lg:h-auto lg:rounded-none lg:bg-transparent lg:px-0 lg:font-normal 2xl:shrink-0";
+  const chipClass = "flex h-7 min-w-0 items-center justify-center gap-1.5 rounded-full bg-white/72 px-2 text-[11px] font-normal text-[#667085] lg:h-auto lg:justify-start lg:rounded-none lg:bg-transparent lg:px-0 xl:shrink-0";
+  const actionChipClass = "h-7 min-w-0 rounded-full bg-white/72 px-2 text-[11px] font-semibold text-[#0f9b8e] transition active:scale-95 lg:h-auto lg:rounded-none lg:bg-transparent lg:px-0 lg:font-normal xl:shrink-0";
 
   return (
     <section className="relative mb-4 h-[184px] overflow-visible rounded-[26px] bg-[#eaf8f3] p-5 shadow-[0_18px_50px_rgba(7,56,58,0.08)] lg:h-auto lg:p-3 lg:shadow-none">
-      <div className="flex h-full flex-col justify-between lg:grid lg:grid-cols-[minmax(300px,1.2fr)_minmax(420px,1fr)] lg:items-center lg:gap-x-4 lg:gap-y-2 2xl:grid-cols-[minmax(360px,0.95fr)_minmax(520px,1.25fr)_minmax(360px,0.9fr)] 2xl:gap-x-5">
-        <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-2 2xl:min-w-0">
+      <div className="flex h-full flex-col justify-between lg:grid lg:grid-cols-[minmax(300px,1.2fr)_minmax(420px,1fr)] lg:items-center lg:gap-x-4 lg:gap-y-2 xl:grid-cols-[minmax(300px,0.9fr)_minmax(440px,1.15fr)_auto] xl:gap-x-4">
+        <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-2 xl:min-w-0">
           <div className="flex h-10 items-center gap-2 rounded-[20px] bg-white px-4 lg:h-9">
             <span className="text-base text-[#98a2b3]">⌕</span>
             <input
@@ -86,7 +86,7 @@ export function ReservationsToolbar({
           </button>
         </div>
 
-        <div className="rounded-[20px] bg-white p-1 lg:rounded-[20px] 2xl:min-w-[520px]">
+        <div className="rounded-[20px] bg-white p-1 lg:rounded-[20px] xl:min-w-[440px]">
           <div className="grid grid-cols-4 gap-1">
             {filterModes.map((mode) => (
               <button
@@ -95,8 +95,8 @@ export function ReservationsToolbar({
                 onClick={() => onFilterModeChange(mode)}
                 className={
                   filterMode === mode
-                    ? "h-8 rounded-[16px] bg-[#e3f2ee] px-2 text-[11px] font-semibold text-[#0f9b8e] lg:text-xs 2xl:whitespace-nowrap"
-                    : "h-8 rounded-[16px] px-2 text-[11px] font-semibold text-[#667085] transition hover:bg-[#f6f7f5] lg:text-xs 2xl:whitespace-nowrap"
+                    ? "h-8 whitespace-nowrap rounded-[16px] bg-[#e3f2ee] px-2 text-[11px] font-semibold text-[#0f9b8e] lg:text-xs"
+                    : "h-8 whitespace-nowrap rounded-[16px] px-2 text-[11px] font-semibold text-[#667085] transition hover:bg-[#f6f7f5] lg:text-xs"
                 }
               >
                 {FILTER_LABELS[mode]}
@@ -112,11 +112,11 @@ export function ReservationsToolbar({
           </div>
         </div>
 
-        <div className="grid grid-cols-4 gap-2 whitespace-nowrap lg:col-span-2 lg:flex lg:items-center lg:gap-5 lg:overflow-x-auto lg:[-ms-overflow-style:none] lg:[scrollbar-width:none] lg:[&::-webkit-scrollbar]:hidden 2xl:col-span-1 2xl:justify-end 2xl:overflow-visible">
+        <div className="grid grid-cols-4 gap-2 whitespace-nowrap lg:col-span-2 lg:flex lg:items-center lg:gap-5 lg:overflow-x-auto lg:[-ms-overflow-style:none] lg:[scrollbar-width:none] lg:[&::-webkit-scrollbar]:hidden xl:col-span-1 xl:justify-end xl:gap-4 xl:overflow-visible">
           {summaryModes.map((mode) => (
             <span key={mode} className={chipClass}>
               <span className="h-2 w-2 shrink-0 rounded-full bg-[#0f9b8e]" />
-              <span className="min-w-0 truncate 2xl:shrink-0 2xl:overflow-visible 2xl:text-clip">{FILTER_LABELS[mode]} {filterCounts[mode] || 0}</span>
+              <span className="whitespace-nowrap">{FILTER_LABELS[mode]} {filterCounts[mode] || 0}</span>
             </span>
           ))}
           <button type="button" onClick={onImport} className={actionChipClass}>
