@@ -64,14 +64,14 @@ function daySummary(items: ReservationRecord[]) {
   return summary ? `${items.length}건 · ${summary}` : `${items.length}건`;
 }
 
-function WeekReservationCard({ item, compact = false, onClick }: { item: ReservationRecord; compact?: boolean; onClick: () => void }) {
+function WeekReservationCard({ item, compact = false, showType = false, onClick }: { item: ReservationRecord; compact?: boolean; showType?: boolean; onClick: () => void }) {
   const color = cardColor(item);
   const cancelled = item.cancelled === true;
   const time = item.reservationTime ? item.reservationTime.slice(0, 5) : "--:--";
   if (compact) {
     return (
       <button type="button" onClick={onClick} className="h-[36px] w-full min-w-0 overflow-hidden rounded-[15px] px-1 py-1 text-left transition active:scale-[0.99]" style={{ background: `linear-gradient(90deg, ${color}16 0%, rgba(255,255,255,0.94) 48%, rgba(255,255,255,0.98) 100%)`, boxShadow: `inset 4px 0 0 ${color}, 0 6px 12px rgba(15,23,42,.035)`, opacity: item.completed ? 0.84 : 1 }}>
-        <div className="overflow-hidden whitespace-nowrap pl-1 text-[8px] font-semibold leading-3" style={{ color }}>{time} · {item.hospital || "병원 미지정"}</div>
+        <div className="overflow-hidden whitespace-nowrap pl-1 text-[8px] font-semibold leading-3" style={{ color }}>{time} · {item.hospital || "병원 미지정"}{showType ? ` · ${item.appointmentType}` : ""}</div>
         <div className={"overflow-hidden whitespace-nowrap pl-1 text-[9px] font-semibold leading-3 tracking-[-0.03em] text-[#101828]" + (cancelled ? " line-through decoration-2" : "")}>{item.name || "이름 없음"}</div>
       </button>
     );
@@ -136,7 +136,7 @@ function DesktopWeekTable({ dayData, onCardClick }: { dayData: Array<{ day: stri
             const hourItems = items.filter((item) => hourOf(item) === hour);
             return (
               <div key={`${day}-${hour}`} className={`min-h-[88px] border-b border-[#e7ecea] p-1.5 ${index === 0 ? "" : "border-l"} ${today ? "bg-[#f3fbf8]" : "bg-white"}`}>
-                <div className="space-y-1.5">{hourItems.map((item) => <WeekReservationCard key={item.id} item={item} compact onClick={() => onCardClick(item)} />)}</div>
+                <div className="space-y-1.5">{hourItems.map((item) => <WeekReservationCard key={item.id} item={item} compact showType onClick={() => onCardClick(item)} />)}</div>
               </div>
             );
           });
