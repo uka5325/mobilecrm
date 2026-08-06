@@ -167,7 +167,7 @@ export function MonthScheduleView({ monthStart, reservations, displayMode, onDay
                     const time = item.reservationTime ? item.reservationTime.slice(0, 5) : "--:--";
                     return (
                       <button key={item.id} type="button" onClick={(event) => { event.stopPropagation(); onCardClick(item); }} className="w-full min-w-0 overflow-hidden rounded-[11px] px-1 py-1 text-left" style={{ background: `linear-gradient(90deg, ${color}1f 0%, rgba(255,255,255,.92) 100%)`, boxShadow: `inset 3px 0 0 ${color}`, opacity: item.completed ? 0.78 : 1 }}>
-                        <div className="truncate text-[8px] font-semibold leading-[10px]" style={{ color }}>{time} · {item.hospital || "병원 미지정"}</div>
+                        <div className="truncate text-[8px] font-semibold leading-[10px]" style={{ color }}>{time} · {item.hospital || "병원 미지정"}<span className="hidden lg:inline"> · {item.appointmentType}</span></div>
                         <div className={"truncate text-[9px] font-semibold leading-[11px] tracking-[-0.03em] text-[#101828]" + (cancelled ? " line-through decoration-1" : "")}>{item.name || "이름 없음"}</div>
                       </button>
                     );
