@@ -104,6 +104,13 @@ a {
     margin-top: 0;
   }
 
+  /* 스케줄 pill 외곽은 유지하고 내부 버튼만 맞춤 */
+  main section[class~="h-[184px]"][class~="rounded-[26px]"] > div:nth-child(1) > div > button,
+  main section[class~="h-[184px]"][class~="rounded-[26px]"] > div:nth-child(3) > div > button {
+    height: 28px !important;
+    min-height: 28px !important;
+  }
+
   /* 고객관리: 스케줄과 동일한 3열 + 하단 전체폭 보조행 */
   main section.relative[class~="mb-4"][class~="rounded-[26px]"]:not(:has(input[type="date"])) > div:first-child {
     display: grid;
@@ -131,6 +138,8 @@ a {
   }
 
   main section.relative[class~="mb-4"][class~="rounded-[26px]"]:not(:has(input[type="date"])) > div:first-child > div:nth-child(2) button {
+    height: 28px !important;
+    min-height: 28px !important;
     white-space: nowrap;
   }
 
@@ -146,8 +155,8 @@ a {
     margin: 0;
   }
 
-  /* 고객관리 상단 검색·필터 컨트롤 높이 */
-  main section.relative[class~="mb-4"][class~="rounded-[26px]"]:not(:has(input[type="date"])) > div:first-child > div:nth-child(-n + 2) :is(input, button) {
+  /* 고객관리 검색 영역은 36px 유지 */
+  main section.relative[class~="mb-4"][class~="rounded-[26px]"]:not(:has(input[type="date"])) > div:first-child > div:nth-child(1) :is(input, button) {
     height: 36px;
     min-height: 36px;
   }
@@ -200,14 +209,21 @@ a {
     padding-bottom: 0;
   }
 
-  /* 대시보드 컨트롤 패널은 별도 압축 배열 유지 */
+  /* 대시보드도 동일한 92px 패널 규격 */
   main section[class~="mb-4"][class~="rounded-[26px]"]:has(input[type="date"]) {
-    padding: 12px;
+    position: relative;
+    height: 92px !important;
+    min-height: 92px;
+    max-height: 92px;
+    padding: 12px !important;
+    box-shadow: none !important;
+    overflow: hidden;
   }
 
   main section[class~="mb-4"][class~="rounded-[26px]"]:has(input[type="date"]) > div:first-child {
     display: grid;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+    height: 36px;
+    grid-template-columns: repeat(9, minmax(0, 1fr));
     gap: 8px;
   }
 
@@ -215,9 +231,17 @@ a {
     display: contents;
   }
 
+  main section[class~="mb-4"][class~="rounded-[26px]"]:has(input[type="date"]) > div:first-child > div:nth-child(-n + 3) > :is(input, select, button) {
+    height: 36px;
+    min-height: 36px;
+  }
+
   main section[class~="mb-4"][class~="rounded-[26px]"]:has(input[type="date"]) > div:first-child > div:nth-child(4) {
-    grid-column: 1 / -1;
+    position: absolute;
+    left: 12px;
+    bottom: 8px;
     display: flex;
+    height: 24px;
     align-items: center;
     gap: 20px;
     overflow-x: auto;
@@ -226,15 +250,35 @@ a {
     padding: 0;
     white-space: nowrap;
   }
+
+  main section[class~="mb-4"][class~="rounded-[26px]"]:has(input[type="date"]) > div:first-child > div:nth-child(4) > div {
+    display: flex;
+    height: 24px;
+    align-items: center;
+    gap: 20px;
+  }
+
+  main section[class~="mb-4"][class~="rounded-[26px]"]:has(input[type="date"]) > div:first-child > div:nth-child(4) button {
+    height: 24px;
+    min-height: 24px;
+    padding-top: 0;
+    padding-bottom: 0;
+  }
+
+  main section[class~="mb-4"][class~="rounded-[26px]"]:has(input[type="date"]) > div:nth-child(2) {
+    position: absolute;
+    right: 12px;
+    bottom: 12px;
+    margin: 0;
+    height: 16px;
+    line-height: 16px;
+    white-space: nowrap;
+  }
 }
 
 @media (min-width: 1536px) {
   /* lg와 2xl 모두 동일한 패널 규격과 배열 사용 */
   main section.relative[class~="mb-4"][class~="rounded-[26px]"]:not(:has(input[type="date"])) > div:first-child {
     grid-template-columns: minmax(240px, 1fr) minmax(320px, 1fr) minmax(280px, 1fr);
-  }
-
-  main section[class~="mb-4"][class~="rounded-[26px]"]:has(input[type="date"]) > div:first-child {
-    grid-template-columns: repeat(9, minmax(0, 1fr));
   }
 }
