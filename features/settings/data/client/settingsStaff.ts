@@ -162,6 +162,7 @@ export async function updateStaffFromSettings(
   }
 
   await updateDoc(ref, updatePayload);
+  clearStaffListCache();
   invalidateDoctorsCache();
 
   const newDisplayName = typeof updatePayload.displayName === "string" ? updatePayload.displayName : "";
@@ -229,6 +230,7 @@ export async function createStaffFromSettings(
   if (!data.success) {
     throw new Error(data.message || "직원 생성에 실패했습니다.");
   }
+  clearStaffListCache();
   invalidateDoctorsCache();
 }
 
@@ -269,6 +271,7 @@ export async function deactivateStaffFromSettings(
   if (!data.success && !data.staffDeactivated) {
     throw new Error(data.message || "직원 비활성화에 실패했습니다.");
   }
+  clearStaffListCache();
   invalidateDoctorsCache();
   return data;
 }
@@ -297,6 +300,7 @@ export async function activateStaffFromSettings(
   if (!data.success) {
     throw new Error(data.message || "직원 활성화에 실패했습니다.");
   }
+  clearStaffListCache();
   invalidateDoctorsCache();
   return data;
 }
