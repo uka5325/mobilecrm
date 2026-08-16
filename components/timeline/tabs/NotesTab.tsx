@@ -33,17 +33,18 @@ export function NotesTab({ memoText, notes, notesLoading, notesError, memoError,
   const pagedNotes = notes.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   return (
-    <div>
+    <div className="space-y-4">
+      <div className="rounded-[22px] bg-[#f8fbfa] p-3 shadow-[0_8px_18px_rgba(15,23,42,0.04)]">
       <textarea
         rows={3}
         value={memoText}
         onChange={(e) => onMemoTextChange(e.target.value)}
-        className="w-full resize-none rounded-xl border border-[#dfe3e8] px-3 py-2 text-sm transition focus:border-emerald-500 focus:outline-none"
+        className="w-full resize-none rounded-[18px] bg-[#f8fbfa] px-3 py-2 text-base outline-none transition focus:ring-2 focus:ring-[#bdeee8] sm:text-sm"
         placeholder="메모를 입력하세요..."
       />
       <button
         onClick={onAddMemo}
-        className="mt-2 w-full rounded-xl bg-emerald-600 py-2 text-sm font-medium text-white transition hover:-translate-y-0.5 hover:shadow-md active:scale-95"
+        className="mt-2 w-full rounded-[18px] bg-[linear-gradient(135deg,#77dfd1_0%,#40c5b3_50%,#0f9b8e_100%)] py-2 text-sm font-semibold text-white shadow-[0_10px_24px_rgba(15,143,131,0.12)] transition active:scale-95"
       >
         메모 추가
       </button>
@@ -51,20 +52,21 @@ export function NotesTab({ memoText, notes, notesLoading, notesError, memoError,
         <div className="mt-2 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-600">{memoError}</div>
       )}
       {memoSuccess && (
-        <div className="mt-2 rounded-lg bg-emerald-50 px-3 py-2 text-xs text-emerald-700">{memoSuccess}</div>
+        <div className="mt-2 rounded-lg bg-emerald-50 px-3 py-2 text-xs text-[#0f9b8e]">{memoSuccess}</div>
       )}
+      </div>
 
-      <div className="mt-4 space-y-3">
+      <div className="space-y-3">
         {notesLoading ? (
-          <div className="rounded-xl border border-[#edf0f3] bg-white p-4 text-sm text-gray-400">
+          <div className="rounded-[22px] bg-[#f6f7f5] p-4 text-sm text-[#8b93a1]">
             메모를 불러오는 중...
           </div>
         ) : notesError ? (
-          <div className="rounded-xl border border-red-100 bg-red-50 p-4 text-sm text-red-600">
+          <div className="rounded-[20px] bg-red-50 p-4 text-sm text-red-600">
             {notesError}
           </div>
         ) : notes.length === 0 ? (
-          <div className="rounded-xl border border-[#edf0f3] bg-white p-4 text-sm text-gray-400">
+          <div className="rounded-[22px] bg-[#f6f7f5] p-4 text-sm text-[#8b93a1]">
             등록된 메모가 없습니다.
           </div>
         ) : (
@@ -82,7 +84,7 @@ export function NotesTab({ memoText, notes, notesLoading, notesError, memoError,
                 <button
                   onClick={() => setPage((p) => Math.max(1, p - 1))}
                   disabled={page === 1}
-                  className="rounded-lg border border-[#dfe3e8] px-3 py-1 text-xs text-gray-600 disabled:opacity-40"
+                  className="rounded-full bg-[#eaf8f3] px-3 py-1 text-xs text-[#667085] disabled:opacity-40"
                 >
                   이전
                 </button>
@@ -90,7 +92,7 @@ export function NotesTab({ memoText, notes, notesLoading, notesError, memoError,
                 <button
                   onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                   disabled={page === totalPages}
-                  className="rounded-lg border border-[#dfe3e8] px-3 py-1 text-xs text-gray-600 disabled:opacity-40"
+                  className="rounded-full bg-[#eaf8f3] px-3 py-1 text-xs text-[#667085] disabled:opacity-40"
                 >
                   다음
                 </button>

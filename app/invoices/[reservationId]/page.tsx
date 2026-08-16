@@ -156,34 +156,34 @@ export default function InvoiceEditPage() {
 
   if (!authReady || loadingInvoice) {
     return (
-      <div className="rounded-xl border border-black/10 bg-white p-6 shadow-[0_2px_16px_rgba(0,0,0,0.06)]">
+      <div className="rounded-[28px] bg-white p-6 shadow-[0_16px_50px_rgba(15,23,42,0.055)]">
         인보이스를 불러오는 중...
       </div>
     );
   }
 
   if (!currentUser) {
-    return <div className="rounded-xl border border-black/10 bg-white p-6 text-red-600">로그인 정보를 확인할 수 없습니다.</div>;
+    return <div className="rounded-[28px] bg-white p-6 text-red-600 shadow-[0_16px_50px_rgba(15,23,42,0.055)]">로그인 정보를 확인할 수 없습니다.</div>;
   }
 
   if (!invoice) {
-    return <div className="rounded-xl border border-black/10 bg-white p-6 text-red-600">{message || "인보이스 정보를 찾을 수 없습니다."}</div>;
+    return <div className="rounded-[28px] bg-white p-6 text-red-600 shadow-[0_16px_50px_rgba(15,23,42,0.055)]">{message || "인보이스 정보를 찾을 수 없습니다."}</div>;
   }
 
   return (
     <div className="space-y-5 pb-28">
       {/* 헤더 */}
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-black/10 bg-white p-5 shadow-[0_2px_16px_rgba(0,0,0,0.06)]">
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-[28px] bg-white p-5 shadow-[0_16px_50px_rgba(15,23,42,0.055)]">
         <div>
-          <div className="text-xs font-bold text-[#1d9e75]">INVOICE</div>
+          <div className="text-xs font-bold text-[#0f9b8e]">INVOICE</div>
           <h1 className="mt-1 text-xl font-bold text-[#1a1a1a]">{invoice.invoiceId}</h1>
         </div>
         <div className="flex flex-wrap gap-2">
-          <button onClick={() => router.back()} className="rounded-xl border border-gray-200 px-4 py-2 text-sm text-gray-700">← 뒤로</button>
-          <button onClick={handleDelete} disabled={deleting} className="rounded-xl border border-red-200 px-4 py-2 text-sm text-red-600 disabled:opacity-50">
+          <button onClick={() => router.back()} className="rounded-[18px] bg-[#e3f2ee] px-4 py-2 text-sm font-semibold text-[#0f9b8e]">← 뒤로</button>
+          <button onClick={handleDelete} disabled={deleting} className="rounded-[18px] bg-red-50 px-4 py-2 text-sm font-semibold text-red-600 disabled:opacity-50">
             {deleting ? "삭제 중..." : "삭제"}
           </button>
-          <button onClick={handleSave} disabled={saving} className="rounded-xl bg-black px-5 py-2 text-sm font-semibold text-white disabled:opacity-50">
+          <button onClick={handleSave} disabled={saving} className="rounded-[18px] bg-[linear-gradient(135deg,#77dfd1_0%,#40c5b3_50%,#0f9b8e_100%)] px-5 py-2 text-sm font-semibold text-white shadow-[0_10px_24px_rgba(15,143,131,0.14)] disabled:opacity-50">
             {saving ? "저장 중..." : "저장"}
           </button>
         </div>
@@ -197,7 +197,7 @@ export default function InvoiceEditPage() {
 
       <div className="grid gap-5 lg:grid-cols-2">
         {/* 환자 정보 */}
-        <div className="rounded-2xl border border-black/10 bg-white p-5 shadow-[0_2px_16px_rgba(0,0,0,0.06)]">
+        <div className="rounded-[28px] bg-white p-5 shadow-[0_16px_50px_rgba(15,23,42,0.055)]">
           <div className="mb-4 text-sm font-bold">환자 정보</div>
           <div className="grid grid-cols-[90px_1fr] gap-y-2.5 text-sm">
             <span className="text-gray-500">이름</span><span className="font-semibold">{invoice.patientName}</span>
@@ -210,7 +210,7 @@ export default function InvoiceEditPage() {
         </div>
 
         {/* 인보이스 입력 */}
-        <div className="rounded-2xl border border-black/10 bg-white p-5 shadow-[0_2px_16px_rgba(0,0,0,0.06)]">
+        <div className="rounded-[28px] bg-white p-5 shadow-[0_16px_50px_rgba(15,23,42,0.055)]">
           <div className="mb-4 text-sm font-bold">인보이스 정보</div>
           <div className="space-y-3">
             <div>
@@ -218,23 +218,25 @@ export default function InvoiceEditPage() {
               <input
                 value={hospitalName}
                 onChange={(e) => setHospitalName(e.target.value)}
-                className="w-full rounded-xl border border-[#dfe3e8] px-3 py-2 text-sm focus:border-[#1d9e75] focus:outline-none"
+                className="w-full rounded-[16px] bg-[#f8fbfa] px-3 py-2.5 text-base outline-none sm:text-sm transition focus:ring-2 focus:ring-[#bdeee8]"
                 placeholder="병원명 입력"
               />
             </div>
-            <div>
-              <label className="mb-1 block text-xs text-gray-500">수술날짜</label>
-              <input
-                type="date"
-                value={surgeryDate}
-                onChange={(e) => setSurgeryDate(e.target.value)}
-                className="w-full rounded-xl border border-[#dfe3e8] px-3 py-2 text-sm focus:border-[#1d9e75] focus:outline-none"
-              />
-            </div>
-            <div>
-              <label className="mb-1 block text-xs text-gray-500">담당 원장</label>
-              <div className="w-full rounded-xl border border-[#edf0f3] bg-gray-50 px-3 py-2 text-sm text-gray-600">
-                {invoice.doctors?.join(", ") || "-"}
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div>
+                <label className="mb-1 block text-xs text-gray-500">수술날짜</label>
+                <input
+                  type="date"
+                  value={surgeryDate}
+                  onChange={(e) => setSurgeryDate(e.target.value)}
+                  className="w-full rounded-[16px] bg-[#f8fbfa] px-3 py-2.5 text-base outline-none sm:text-sm transition focus:ring-2 focus:ring-[#bdeee8]"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs text-gray-500">담당 원장</label>
+                <div className="w-full rounded-[16px] bg-[#f8fbfa] px-3 py-2.5 text-sm text-[#667085]">
+                  {invoice.doctors?.join(", ") || "-"}
+                </div>
               </div>
             </div>
             <div>
@@ -243,30 +245,32 @@ export default function InvoiceEditPage() {
                 value={surgeryItems}
                 onChange={(e) => setSurgeryItems(e.target.value)}
                 rows={3}
-                className="w-full rounded-xl border border-[#dfe3e8] px-3 py-2 text-sm focus:border-[#1d9e75] focus:outline-none"
+                className="w-full rounded-[16px] bg-[#f8fbfa] px-3 py-2.5 text-base outline-none sm:text-sm transition focus:ring-2 focus:ring-[#bdeee8]"
                 placeholder="수술 및 시술 항목 입력"
               />
             </div>
-            <div>
-              <label className="mb-1 block text-xs text-gray-500">수술비 (KRW)</label>
-              <input
-                value={totalAmount ? formatMoney(totalAmount) : ""}
-                onChange={(e) => setTotalAmount(parseMoney(e.target.value))}
-                className="w-full rounded-xl border border-[#dfe3e8] px-3 py-2 text-right text-sm focus:border-[#1d9e75] focus:outline-none"
-                placeholder="0"
-              />
-            </div>
-            <div>
-              <label className="mb-1 block text-xs text-gray-500">상태</label>
-              <select
-                value={status}
-                onChange={(e) => setStatus(e.target.value as "draft" | "confirmed" | "void")}
-                className="w-full rounded-xl border border-[#dfe3e8] px-3 py-2 text-sm focus:border-[#1d9e75] focus:outline-none"
-              >
-                <option value="draft">임시저장</option>
-                <option value="confirmed">확정</option>
-                <option value="void">취소</option>
-              </select>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div>
+                <label className="mb-1 block text-xs text-gray-500">수술비 (KRW)</label>
+                <input
+                  value={totalAmount ? formatMoney(totalAmount) : ""}
+                  onChange={(e) => setTotalAmount(parseMoney(e.target.value))}
+                  className="w-full rounded-[16px] bg-[#f8fbfa] px-3 py-2.5 text-right text-base outline-none sm:text-sm transition focus:ring-2 focus:ring-[#bdeee8]"
+                  placeholder="0"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs text-gray-500">상태</label>
+                <select
+                  value={status}
+                  onChange={(e) => setStatus(e.target.value as "draft" | "confirmed" | "void")}
+                  className="w-full rounded-[16px] bg-[#f8fbfa] px-3 py-2.5 text-base outline-none sm:text-sm transition focus:ring-2 focus:ring-[#bdeee8]"
+                >
+                  <option value="draft">임시저장</option>
+                  <option value="confirmed">확정</option>
+                  <option value="void">취소</option>
+                </select>
+              </div>
             </div>
             <div>
               <label className="mb-1 block text-xs text-gray-500">메모</label>
@@ -274,7 +278,7 @@ export default function InvoiceEditPage() {
                 value={memo}
                 onChange={(e) => setMemo(e.target.value)}
                 rows={2}
-                className="w-full rounded-xl border border-[#dfe3e8] px-3 py-2 text-sm focus:border-[#1d9e75] focus:outline-none"
+                className="w-full rounded-[16px] bg-[#f8fbfa] px-3 py-2.5 text-base outline-none sm:text-sm transition focus:ring-2 focus:ring-[#bdeee8]"
               />
             </div>
           </div>
@@ -282,31 +286,51 @@ export default function InvoiceEditPage() {
       </div>
 
       {/* 커미션 섹션 */}
-      <div className="rounded-2xl border border-black/10 bg-white p-5 shadow-[0_2px_16px_rgba(0,0,0,0.06)]">
+      <div className="rounded-[28px] bg-white p-5 shadow-[0_16px_50px_rgba(15,23,42,0.055)]">
         <div className="mb-4 text-sm font-bold">커미션 정보</div>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          <div>
-            <label className="mb-1 block text-xs text-gray-500">결제 방법</label>
-            <select
-              value={paymentMethod}
-              onChange={(e) => setPaymentMethod(e.target.value as PaymentMethod | "")}
-              className="w-full rounded-xl border border-[#dfe3e8] px-3 py-2 text-sm focus:border-[#1d9e75] focus:outline-none"
-            >
-              <option value="">선택</option>
-              <option value="cash">현금</option>
-              <option value="card">카드</option>
-              <option value="mixed">혼합</option>
-            </select>
+        <div className="space-y-4">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div>
+              <label className="mb-1 block text-xs text-gray-500">결제 방법</label>
+              <select
+                value={paymentMethod}
+                onChange={(e) => setPaymentMethod(e.target.value as PaymentMethod | "")}
+                className="w-full rounded-[16px] bg-[#f8fbfa] px-3 py-2.5 text-base outline-none sm:text-sm transition focus:ring-2 focus:ring-[#bdeee8]"
+              >
+                <option value="">선택</option>
+                <option value="cash">현금</option>
+                <option value="card">카드</option>
+                <option value="mixed">혼합</option>
+              </select>
+            </div>
+            <div>
+              <label className="mb-1 block text-xs text-gray-500">담당 직원</label>
+              <select
+                value={commissionStaffUid}
+                onChange={(e) => {
+                  const uid = e.target.value;
+                  setCommissionStaffUid(uid);
+                  const found = staffList.find((s) => s.uid === uid);
+                  setCommissionStaffName(found?.displayName || "");
+                }}
+                className="w-full rounded-[16px] bg-[#f8fbfa] px-3 py-2.5 text-base outline-none sm:text-sm transition focus:ring-2 focus:ring-[#bdeee8]"
+              >
+                <option value="">선택</option>
+                {staffList.map((s) => (
+                  <option key={s.uid} value={s.uid}>{s.displayName}</option>
+                ))}
+              </select>
+            </div>
           </div>
 
           {paymentMethod === "mixed" && (
-            <>
+            <div className="grid gap-3 sm:grid-cols-2">
               <div>
                 <label className="mb-1 block text-xs text-gray-500">카드 금액</label>
                 <input
                   value={cardAmount ? formatMoney(cardAmount) : ""}
                   onChange={(e) => setCardAmount(parseMoney(e.target.value))}
-                  className="w-full rounded-xl border border-[#dfe3e8] px-3 py-2 text-right text-sm focus:border-[#1d9e75] focus:outline-none"
+                  className="w-full rounded-[16px] bg-[#f8fbfa] px-3 py-2.5 text-right text-base outline-none sm:text-sm transition focus:ring-2 focus:ring-[#bdeee8]"
                   placeholder="0"
                 />
               </div>
@@ -315,72 +339,55 @@ export default function InvoiceEditPage() {
                 <input
                   value={cashAmount ? formatMoney(cashAmount) : ""}
                   onChange={(e) => setCashAmount(parseMoney(e.target.value))}
-                  className="w-full rounded-xl border border-[#dfe3e8] px-3 py-2 text-right text-sm focus:border-[#1d9e75] focus:outline-none"
+                  className="w-full rounded-[16px] bg-[#f8fbfa] px-3 py-2.5 text-right text-base outline-none sm:text-sm transition focus:ring-2 focus:ring-[#bdeee8]"
                   placeholder="0"
                 />
               </div>
-            </>
-          )}
-
-          <div>
-            <label className="mb-1 block text-xs text-gray-500">담당 직원</label>
-            <select
-              value={commissionStaffUid}
-              onChange={(e) => {
-                const uid = e.target.value;
-                setCommissionStaffUid(uid);
-                const found = staffList.find((s) => s.uid === uid);
-                setCommissionStaffName(found?.displayName || "");
-              }}
-              className="w-full rounded-xl border border-[#dfe3e8] px-3 py-2 text-sm focus:border-[#1d9e75] focus:outline-none"
-            >
-              <option value="">선택</option>
-              {staffList.map((s) => (
-                <option key={s.uid} value={s.uid}>{s.displayName}</option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <label className="mb-1 block text-xs text-gray-500">커미션율 (%)</label>
-            <input
-              type="number"
-              min={0}
-              max={100}
-              step={0.1}
-              value={commissionRate}
-              onChange={(e) => setCommissionRate(e.target.value === "" ? "" : Number(e.target.value))}
-              className="w-full rounded-xl border border-[#dfe3e8] px-3 py-2 text-right text-sm focus:border-[#1d9e75] focus:outline-none"
-              placeholder="예: 15"
-            />
-          </div>
-
-          {commissionCalc && (
-            <div className="sm:col-span-2 lg:col-span-1">
-              <label className="mb-1 block text-xs text-gray-500">커미션 계산 결과</label>
-              <div className="rounded-xl bg-emerald-50 px-4 py-3 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-gray-600">기준액</span>
-                  <b>{formatMoney(commissionCalc.base)} KRW</b>
-                </div>
-                <div className="mt-1 flex justify-between">
-                  <span className="text-gray-600">커미션 ({commissionRate}%)</span>
-                  <b className="text-[#1d9e75]">{formatMoney(commissionCalc.amount)} KRW</b>
-                </div>
-                {paymentMethod === "card" && (
-                  <div className="mt-1 text-xs text-gray-400">* 카드: VAT(10%) 제외 후 계산</div>
-                )}
-                {paymentMethod === "mixed" && (
-                  <div className="mt-1 text-xs text-gray-400">* 혼합: 카드분 VAT 제외, 현금분 그대로</div>
-                )}
-              </div>
             </div>
           )}
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div>
+              <label className="mb-1 block text-xs text-gray-500">커미션율 (%)</label>
+              <input
+                type="number"
+                min={0}
+                max={100}
+                step={0.1}
+                value={commissionRate}
+                onChange={(e) => setCommissionRate(e.target.value === "" ? "" : Number(e.target.value))}
+                className="w-full rounded-[16px] bg-[#f8fbfa] px-3 py-2.5 text-right text-base outline-none sm:text-sm transition focus:ring-2 focus:ring-[#bdeee8]"
+                placeholder="예: 15"
+              />
+            </div>
+
+            {commissionCalc && (
+              <div>
+                <label className="mb-1 block text-xs text-gray-500">커미션 계산 결과</label>
+                <div className="rounded-[20px] bg-[#eaf8f3] px-4 py-3 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">기준액</span>
+                    <b>{formatMoney(commissionCalc.base)} KRW</b>
+                  </div>
+                  <div className="mt-1 flex justify-between">
+                    <span className="text-gray-600">커미션 ({commissionRate}%)</span>
+                    <b className="text-[#0f9b8e]">{formatMoney(commissionCalc.amount)} KRW</b>
+                  </div>
+                  {paymentMethod === "card" && (
+                    <div className="mt-1 text-xs text-gray-400">* 카드: VAT(10%) 제외 후 계산</div>
+                  )}
+                  {paymentMethod === "mixed" && (
+                    <div className="mt-1 text-xs text-gray-400">* 혼합: 카드분 VAT 제외, 현금분 그대로</div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
       {/* 하단 고정 바 */}
-      <div className="sticky bottom-0 z-20 rounded-t-2xl border border-black/10 bg-white p-4 shadow-[0_-4px_20px_rgba(0,0,0,0.08)]">
+      <div className="sticky bottom-3 z-20 rounded-[28px] bg-white p-4 shadow-[0_-10px_34px_rgba(15,23,42,0.08)]">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="text-sm">
             <span className="text-gray-500">수술비 </span>
@@ -389,14 +396,14 @@ export default function InvoiceEditPage() {
               <>
                 <span className="mx-2 text-gray-300">|</span>
                 <span className="text-gray-500">커미션 </span>
-                <b className="text-[#1d9e75]">{formatMoney(commissionCalc.amount)} KRW</b>
+                <b className="text-[#0f9b8e]">{formatMoney(commissionCalc.amount)} KRW</b>
               </>
             )}
           </div>
           <button
             onClick={handleSave}
             disabled={saving}
-            className="rounded-xl bg-black px-6 py-3 text-sm font-semibold text-white disabled:opacity-50"
+            className="rounded-[18px] bg-[linear-gradient(135deg,#77dfd1_0%,#40c5b3_50%,#0f9b8e_100%)] px-6 py-3 text-sm font-semibold text-white shadow-[0_10px_24px_rgba(15,143,131,0.14)] disabled:opacity-50"
           >
             {saving ? "저장 중..." : "인보이스 저장"}
           </button>

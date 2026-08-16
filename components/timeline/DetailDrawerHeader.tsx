@@ -1,6 +1,7 @@
 "use client";
 
 import type { ReservationRecord } from "@/features/reservations/domain/reservationModels";
+import { getAppointmentColor } from "@/features/reservations/ui/scheduleLayout";
 import { getBirthGenderText } from "@/features/reservations/ui/timelineUtils";
 
 type Props = {
@@ -25,74 +26,88 @@ export function DetailDrawerHeader({
   onAddReservation,
 }: Props) {
   const birthGenderText = getBirthGenderText(reservation);
+  const typeColor = getAppointmentColor(reservation.appointmentType);
+  const detailLabel = reservation.appointmentType === "상담" ? "상담 항목" : "예약 항목";
 
   return (
-    <div className="shrink-0 border-b border-[#edf0f3] px-5 py-4">
-      <div className="mb-3 flex items-start justify-between">
+    <div className="shrink-0 bg-white px-5 pb-4 pt-5 sm:px-6">
+      <div className="mb-4 flex items-start justify-between gap-4">
         <div className="min-w-0 flex-1">
-          <div className="text-xl font-bold">{reservation.name}</div>
-          {birthGenderText && (
-            <div className="mt-0.5 text-sm text-gray-500">{birthGenderText}</div>
-          )}
-          {(reservation.hospital || reservation.reservationTime || (reservation.doctors && reservation.doctors.length > 0)) && (
-            <div className="mt-0.5 text-sm text-gray-500">
-              {[
-                reservation.hospital,
-                reservation.doctors?.length ? reservation.doctors.join(", ") : null,
-                reservation.reservationTime,
-              ].filter(Boolean).join(" · ")}
-            </div>
-          )}
+          <div className="mb-2 flex flex-wrap items-center gap-2">
+            <span
+              className="rounded-full px-2.5 py-1 text-[11px] font-semibold"
+              style={{ backgroundColor: `${typeColor}16`, color: typeColor }}
+            >
+              {reservation.appointmentType}
+            </span>
+            <span className="rounded-full bg-[#e3f2ee] px-2.5 py-1 text-[11px] font-semibold text-[#0f9b8e]">
+              {reservation.reservationDate} {reservation.reservationTime?.slice(0, 5)}
+            </span>
+          </div>
+          <h2 className="break-words text-2xl font-bold tracking-[-0.04em] text-[#101828]">
+            {reservation.name || "이름 없음"}
+          </h2>
+          <div className="mt-2 flex flex-wrap gap-x-2 gap-y-1 text-xs font-normal text-[#667085]">
+            {birthGenderText ? <span>{birthGenderText}</span> : null}
+            {reservation.hospital ? <span>{reservation.hospital}</span> : null}
+            {reservation.doctors?.length ? <span>{reservation.doctors.join(", ")}</span> : null}
+          </div>
           {reservation.consultArea && (
-            <div className="mt-0.5 text-xs text-gray-400">
-              {reservation.appointmentType === "상담" ? "상담부위" : "수술항목"}: {reservation.consultArea}
+            <div className="mt-2 truncate text-xs font-normal text-[#667085]">
+              {detailLabel}: {reservation.consultArea}
             </div>
           )}
         </div>
         <button
+          type="button"
           onClick={onClose}
-          className="ml-3 shrink-0 text-2xl leading-none text-gray-400 transition hover:scale-110 hover:text-gray-700 active:scale-95"
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#f6f7f5] text-2xl leading-none text-[#667085] transition active:scale-95"
+          aria-label="닫기"
         >
           ×
         </button>
       </div>
 
-      <div className="flex items-center gap-2 flex-wrap">
+      <div className={reservation.appointmentType === "상담" ? "grid grid-cols-4 gap-1.5" : "grid grid-cols-3 gap-1.5"}>
         <button
+          type="button"
           onClick={onCompletedToggle}
-          className={`rounded-lg border px-3 py-1.5 text-xs font-semibold transition hover:-translate-y-0.5 hover:shadow-md active:scale-95 ${
+          className={`h-9 w-full rounded-full px-2 text-[11px] font-semibold transition active:scale-95 ${
             completed
-              ? "border-gray-500 bg-gray-500 text-white"
-              : "border-gray-300 bg-white text-gray-600"
+              ? "bg-[#667085] text-white"
+              : "bg-[#f6f7f5] text-[#667085]"
           }`}
         >
           완료 {completed ? "✓" : "—"}
         </button>
         <button
+          type="button"
           onClick={onCancelledToggle}
-          className={`rounded-lg border px-3 py-1.5 text-xs font-semibold transition hover:-translate-y-0.5 hover:shadow-md active:scale-95 ${
+          className={`h-9 w-full rounded-full px-2 text-[11px] font-semibold transition active:scale-95 ${
             cancelled
-              ? "border-yellow-400 bg-yellow-100 text-yellow-800"
-              : "border-gray-300 bg-white text-gray-600"
+              ? "bg-[#fff3c4] text-[#b7791f]"
+              : "bg-[#fff9e6] text-[#d69e2e]"
           }`}
         >
           취소 {cancelled ? "✓" : "—"}
         </button>
         {reservation.appointmentType === "상담" && (
           <button
+            type="button"
             onClick={onSurgeryToggle}
-            className={`rounded-lg border px-3 py-1.5 text-xs font-semibold transition hover:-translate-y-0.5 hover:shadow-md active:scale-95 ${
+            className={`h-9 w-full rounded-full px-2 text-[11px] font-semibold transition active:scale-95 ${
               reservation.surgeryReserved
-                ? "border-purple-600 bg-purple-600 text-white"
-                : "border-purple-400 bg-white text-purple-700"
+                ? "bg-[#7c3aed] text-white"
+                : "bg-[#f3edff] text-[#7c3aed]"
             }`}
           >
             수술예약 {reservation.surgeryReserved ? "✓" : "—"}
           </button>
         )}
         <button
+          type="button"
           onClick={onAddReservation}
-          className="rounded-lg border border-emerald-500 bg-white px-3 py-1.5 text-xs font-semibold text-emerald-700 transition hover:-translate-y-0.5 hover:shadow-md active:scale-95"
+          className="h-9 w-full rounded-full bg-[linear-gradient(135deg,#77dfd1_0%,#40c5b3_50%,#0f9b8e_100%)] px-2 text-[11px] font-bold text-white shadow-[0_10px_24px_rgba(15,143,131,0.14)] transition active:scale-95"
         >
           + 추가 예약
         </button>

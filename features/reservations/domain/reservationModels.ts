@@ -29,6 +29,7 @@ export type ReservationRecord = {
   id: string;
   reservationId: string;
   patientId: string;
+  surgeryCaseId: string;
 
   name: string;
   patientName: string;
@@ -87,6 +88,7 @@ export type CreateReservationParams = {
   coordinators?: string[];
   reservationId?: string;
   patientId?: string;
+  sourceReservationDocId?: string;
 };
 
 export type UpdateReservationParams = {
@@ -125,6 +127,7 @@ export function mapReservationDoc(id: string, data: Record<string, unknown>): Re
     id,
     reservationId: cleanText(data.reservationId || id),
     patientId: cleanText(data.patientId),
+    surgeryCaseId: cleanText(data.surgeryCaseId),
 
     name,
     patientName: name,

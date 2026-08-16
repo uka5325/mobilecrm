@@ -32,7 +32,7 @@ export function InvoiceDetailView({ invoice, onEdit, onBack }: Props) {
         <span className="text-xs text-gray-400">{invoice.invoiceId}</span>
       </div>
 
-      <div className="space-y-2 rounded-xl border border-[#edf0f3] bg-white p-4 text-sm">
+      <div className="space-y-2 rounded-[20px] bg-[#eaf8f3] p-4 text-sm shadow-[0_8px_18px_rgba(15,23,42,0.035)]">
         {details.map(([label, value]) => (
           <div key={label} className="flex gap-2">
             <span className="w-24 shrink-0 text-xs text-gray-500">{label}</span>
@@ -41,7 +41,7 @@ export function InvoiceDetailView({ invoice, onEdit, onBack }: Props) {
         ))}
       </div>
 
-      <button onClick={onEdit} className="w-full rounded-xl bg-[#1d9e75] px-4 py-2.5 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:shadow-md active:scale-95">
+      <button onClick={onEdit} className="w-full rounded-[18px] bg-[linear-gradient(135deg,#77dfd1_0%,#40c5b3_50%,#0f9b8e_100%)] px-4 py-2.5 text-sm font-semibold text-white shadow-[0_10px_24px_rgba(15,143,131,0.12)] transition active:scale-95">
         수정하기
       </button>
     </div>

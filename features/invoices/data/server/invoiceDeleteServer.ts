@@ -37,6 +37,11 @@ export async function deleteInvoiceAtomic(
     if (!reservationSnap.exists) return { kind: "linkMissing" as const };
     const reservation = reservationSnap.data() as Record<string, unknown>;
     if (!invoiceReservationMatches(current, reservation)) return { kind: "linkMismatch" as const };
+    const surgeryCaseId = cleanText(current.surgeryCaseId) || cleanText(reservation.surgeryCaseId);
+    const surgeryCaseRef = surgeryCaseId
+      ? adminDb.collection("surgeryCases").doc(surgeryCaseId)
+      : null;
+    const surgeryCaseSnap = surgeryCaseRef ? await tx.get(surgeryCaseRef) : null;
 
     const now = FieldValue.serverTimestamp();
     tx.update(invoiceRef, {
@@ -54,6 +59,15 @@ export async function deleteInvoiceAtomic(
       updatedBy: ctx.name,
       updatedByUid: ctx.uid,
     });
+    if (surgeryCaseRef && surgeryCaseSnap?.exists) {
+      tx.update(surgeryCaseRef, {
+        invoiceId: "",
+        invoiceDocId: "",
+        updatedAt: now,
+        updatedBy: ctx.name,
+        updatedByUid: ctx.uid,
+      });
+    }
     tx.set(adminDb.collection("logs").doc(), invoiceLog(ctx, {
       action: "invoice_delete",
       targetId: cleanText(current.invoiceId),

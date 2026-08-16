@@ -20,6 +20,7 @@ type InitialPatient = {
   appointmentType?: AppointmentType;
   coordinators?: string;
   doctors?: string;
+  sourceReservationDocId?: string;
 };
 
 type Props = {
@@ -109,6 +110,7 @@ export function CreateDrawer({ open, onClose, currentUser, initialDate, initialP
             appointmentType: resForm.appointmentType,
             coordinators: resForm.coordinators ? resForm.coordinators.split(",").map((s) => s.trim()).filter(Boolean) : [],
             patientId: initialPatient?.patientId,
+            sourceReservationDocId: initialPatient?.sourceReservationDocId,
           },
           currentUser
         );
@@ -129,10 +131,15 @@ export function CreateDrawer({ open, onClose, currentUser, initialDate, initialP
 
   return (
     <>
-      <div className="fixed inset-0 z-[998] bg-black/35" onClick={onClose} />
-
-      <div className="fixed right-0 top-0 z-[1001] flex h-[100dvh] w-[420px] max-w-[calc(100vw-12px)] flex-col bg-white shadow-[-8px_0_30px_rgba(0,0,0,0.12)]">
-        <div className="flex shrink-0 items-center justify-between border-b border-[#edf0f3] px-6 py-5">
+      <div
+        className="fixed inset-0 z-[1001] flex items-start justify-center overflow-y-auto bg-black/35 px-3 py-8 backdrop-blur-[2px] sm:items-center sm:p-8"
+        onClick={onClose}
+      >
+        <div
+          className="flex h-[calc(100dvh-64px)] max-h-[calc(100dvh-64px)] w-full max-w-[640px] flex-col overflow-hidden rounded-[30px] bg-white shadow-[0_28px_90px_rgba(15,23,42,0.26)] sm:h-[min(720px,calc(100dvh-64px))]"
+          onClick={(e) => e.stopPropagation()}
+        >
+        <div className="flex shrink-0 items-center justify-between bg-white px-5 pb-4 pt-5 sm:px-6">
           <div>
             <div className="text-xl font-bold">
               {isReservation ? `${initialPatient?.name || ""} 추가 예약` : "고객 등록"}
@@ -141,10 +148,10 @@ export function CreateDrawer({ open, onClose, currentUser, initialDate, initialP
               {isReservation ? "예약 정보를 입력하세요" : "새 고객 기본 정보를 입력하세요"}
             </div>
           </div>
-          <button onClick={onClose} className="text-2xl text-gray-400 transition hover:scale-110 hover:text-gray-700 active:scale-95">×</button>
+          <button onClick={onClose} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#f6f7f5] text-2xl leading-none text-[#667085] transition active:scale-95">×</button>
         </div>
 
-        <div className="flex-1 space-y-4 overflow-auto p-6">
+        <div className="flex-1 space-y-4 overflow-auto bg-white px-5 pb-5 pt-3 sm:px-6">
           {/* 이름 + 생년월일 */}
           <div className={isReservation ? "grid grid-cols-2 gap-3" : ""}>
             <div>
@@ -155,7 +162,7 @@ export function CreateDrawer({ open, onClose, currentUser, initialDate, initialP
                   ? setResForm((p) => ({ ...p, name: e.target.value }))
                   : setRegForm((p) => ({ ...p, name: e.target.value }))
                 }
-                className="mt-1 w-full rounded-xl border border-[#dfe3e8] px-3 py-2 text-sm transition focus:border-[#1d9e75] focus:outline-none"
+                className="mt-1 w-full rounded-[16px] bg-[#f8fbfa] px-3 py-2 text-base outline-none transition focus:ring-2 focus:ring-[#bdeee8] sm:text-sm"
               />
             </div>
             <div>
@@ -167,7 +174,7 @@ export function CreateDrawer({ open, onClose, currentUser, initialDate, initialP
                   : setRegForm((p) => ({ ...p, birthInput: e.target.value }))
                 }
                 placeholder="891210-1 / 19891210-1"
-                className="mt-1 w-full rounded-xl border border-[#dfe3e8] px-3 py-2 text-sm transition focus:border-[#1d9e75] focus:outline-none"
+                className="mt-1 w-full rounded-[16px] bg-[#f8fbfa] px-3 py-2 text-base outline-none transition focus:ring-2 focus:ring-[#bdeee8] sm:text-sm"
               />
               {(isReservation ? resForm.birthInput : regForm.birthInput) && (
                 <div className="mt-1 text-xs text-gray-500">
@@ -189,7 +196,7 @@ export function CreateDrawer({ open, onClose, currentUser, initialDate, initialP
                   ? setResForm((p) => ({ ...p, phone: e.target.value }))
                   : setRegForm((p) => ({ ...p, phone: e.target.value }))
                 }
-                className="mt-1 w-full rounded-xl border border-[#dfe3e8] px-3 py-2 text-sm transition focus:border-[#1d9e75] focus:outline-none"
+                className="mt-1 w-full rounded-[16px] bg-[#f8fbfa] px-3 py-2 text-base outline-none transition focus:ring-2 focus:ring-[#bdeee8] sm:text-sm"
               />
             </div>
             <div>
@@ -201,7 +208,7 @@ export function CreateDrawer({ open, onClose, currentUser, initialDate, initialP
                   : setRegForm((p) => ({ ...p, nationality: e.target.value }))
                 }
                 placeholder="몽골"
-                className="mt-1 w-full rounded-xl border border-[#dfe3e8] px-3 py-2 text-sm transition focus:border-[#1d9e75] focus:outline-none"
+                className="mt-1 w-full rounded-[16px] bg-[#f8fbfa] px-3 py-2 text-base outline-none transition focus:ring-2 focus:ring-[#bdeee8] sm:text-sm"
               />
             </div>
           </div>
@@ -209,6 +216,11 @@ export function CreateDrawer({ open, onClose, currentUser, initialDate, initialP
           {/* 예약 전용 필드 */}
           {isReservation && (
             <>
+              {initialPatient?.sourceReservationDocId && (
+                <div className="rounded-[18px] bg-[#eaf8f3] px-3 py-2 text-xs leading-5 text-[#0f766e]">
+                  현재 예약과 같은 수술 케이스로 연결됩니다. 예약금과 잔금은 하나의 인보이스에 자동 합산됩니다.
+                </div>
+              )}
               {/* 예약날짜 + 예약시간 */}
               <div className="grid grid-cols-2 gap-3">
                 <div className="min-w-0">
@@ -217,7 +229,7 @@ export function CreateDrawer({ open, onClose, currentUser, initialDate, initialP
                     type="date"
                     value={resForm.reservationDate}
                     onChange={(e) => setResForm((p) => ({ ...p, reservationDate: e.target.value }))}
-                    className="mt-1 min-w-0 w-full appearance-none rounded-xl border border-[#dfe3e8] px-3 py-2 text-sm transition focus:border-[#1d9e75] focus:outline-none"
+                    className="mt-1 min-w-0 w-full appearance-none rounded-[16px] bg-[#f8fbfa] px-3 py-2 text-base outline-none transition focus:ring-2 focus:ring-[#bdeee8] sm:text-sm"
                   />
                 </div>
                 <div>
@@ -226,7 +238,7 @@ export function CreateDrawer({ open, onClose, currentUser, initialDate, initialP
                     type="time"
                     value={resForm.reservationTime}
                     onChange={(e) => setResForm((p) => ({ ...p, reservationTime: e.target.value }))}
-                    className="mt-1 min-w-0 w-full appearance-none rounded-xl border border-[#dfe3e8] px-3 py-2 text-sm transition focus:border-[#1d9e75] focus:outline-none"
+                    className="mt-1 min-w-0 w-full appearance-none rounded-[16px] bg-[#f8fbfa] px-3 py-2 text-base outline-none transition focus:ring-2 focus:ring-[#bdeee8] sm:text-sm"
                   />
                 </div>
               </div>
@@ -238,7 +250,7 @@ export function CreateDrawer({ open, onClose, currentUser, initialDate, initialP
                   <input
                     value={resForm.hospital}
                     onChange={(e) => setResForm((p) => ({ ...p, hospital: e.target.value }))}
-                    className="mt-1 w-full rounded-xl border border-[#dfe3e8] px-3 py-2 text-sm transition focus:border-[#1d9e75] focus:outline-none"
+                    className="mt-1 w-full rounded-[16px] bg-[#f8fbfa] px-3 py-2 text-base outline-none transition focus:ring-2 focus:ring-[#bdeee8] sm:text-sm"
                   />
                 </div>
                 <div>
@@ -246,7 +258,7 @@ export function CreateDrawer({ open, onClose, currentUser, initialDate, initialP
                   <input
                     value={resForm.doctors}
                     onChange={(e) => setResForm((p) => ({ ...p, doctors: e.target.value }))}
-                    className="mt-1 w-full rounded-xl border border-[#dfe3e8] px-3 py-2 text-sm transition focus:border-[#1d9e75] focus:outline-none"
+                    className="mt-1 w-full rounded-[16px] bg-[#f8fbfa] px-3 py-2 text-base outline-none transition focus:ring-2 focus:ring-[#bdeee8] sm:text-sm"
                   />
                 </div>
               </div>
@@ -258,7 +270,7 @@ export function CreateDrawer({ open, onClose, currentUser, initialDate, initialP
                   <select
                     value={resForm.appointmentType}
                     onChange={(e) => setResForm((p) => ({ ...p, appointmentType: e.target.value as AppointmentType }))}
-                    className="mt-1 w-full rounded-xl border border-[#dfe3e8] px-3 py-2 text-sm transition focus:border-[#1d9e75] focus:outline-none"
+                    className="mt-1 w-full rounded-[16px] bg-[#f8fbfa] px-3 py-2 text-base outline-none transition focus:ring-2 focus:ring-[#bdeee8] sm:text-sm"
                   >
                     {APPOINTMENT_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
                   </select>
@@ -270,7 +282,7 @@ export function CreateDrawer({ open, onClose, currentUser, initialDate, initialP
                   <input
                     value={resForm.consultArea}
                     onChange={(e) => setResForm((p) => ({ ...p, consultArea: e.target.value }))}
-                    className="mt-1 w-full rounded-xl border border-[#dfe3e8] px-3 py-2 text-sm transition focus:border-[#1d9e75] focus:outline-none"
+                    className="mt-1 w-full rounded-[16px] bg-[#f8fbfa] px-3 py-2 text-base outline-none transition focus:ring-2 focus:ring-[#bdeee8] sm:text-sm"
                   />
                 </div>
               </div>
@@ -281,7 +293,7 @@ export function CreateDrawer({ open, onClose, currentUser, initialDate, initialP
                 <input
                   value={resForm.coordinators}
                   onChange={(e) => setResForm((p) => ({ ...p, coordinators: e.target.value }))}
-                  className="mt-1 w-full rounded-xl border border-[#dfe3e8] px-3 py-2 text-sm transition focus:border-[#1d9e75] focus:outline-none"
+                  className="mt-1 w-full rounded-[16px] bg-[#f8fbfa] px-3 py-2 text-base outline-none transition focus:ring-2 focus:ring-[#bdeee8] sm:text-sm"
                 />
               </div>
 
@@ -293,20 +305,21 @@ export function CreateDrawer({ open, onClose, currentUser, initialDate, initialP
           )}
         </div>
 
-        <div className="flex shrink-0 gap-2 border-t border-[#edf0f3] p-4">
+        <div className="flex shrink-0 gap-2 bg-white p-4">
           <button
             onClick={onClose}
-            className="flex-1 rounded-xl border border-[#dfe3e8] py-3 text-sm transition hover:-translate-y-0.5 hover:shadow-md active:scale-95"
+            className="flex-1 rounded-[18px] bg-[#f6f7f5] py-3 text-sm font-semibold text-[#667085] transition active:scale-95"
           >
             취소
           </button>
           <button
             onClick={handleCreate}
             disabled={saving}
-            className="flex-1 rounded-xl bg-black py-3 text-sm font-medium text-white transition hover:-translate-y-0.5 hover:shadow-md active:scale-95 disabled:opacity-50"
+            className="flex-1 rounded-[18px] bg-[linear-gradient(135deg,#77dfd1_0%,#40c5b3_50%,#0f9b8e_100%)] py-3 text-sm font-semibold text-white shadow-[0_10px_24px_rgba(15,143,131,0.14)] transition active:scale-95 disabled:opacity-50"
           >
             {saving ? "저장 중..." : isReservation ? "예약 등록" : "등록"}
           </button>
+        </div>
         </div>
       </div>
     </>

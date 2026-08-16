@@ -1,64 +1,129 @@
 "use client";
 
 import { useMemo } from "react";
-import type { ReservationRecord } from "@/features/reservations/domain/reservationModels";
-import { addDays, formatDayLabel, isToday } from "@/features/reservations/ui/scheduleDates";
-import {
-  getAppointmentColor,
-  minutesToPx,
-  timeToMinutes,
-  HOUR_HEIGHT,
-  START_HOUR,
-  TIME_COL_W,
-  TOTAL_HOURS,
-  WEEK_CARD_H,
-} from "@/features/reservations/ui/scheduleLayout";
-import { ScheduleHourGrid } from "@/components/schedule/ScheduleHourGrid";
+import type { AppointmentType, ReservationRecord } from "@/features/reservations/domain/reservationModels";
+import { addDays, isToday } from "@/features/reservations/ui/scheduleDates";
+import { getAppointmentColor, SCHEDULE_APPOINTMENT_TYPES } from "@/features/reservations/ui/scheduleLayout";
 
-const WEEK_CARD_GAP = 2;
+type WeekDisplayMode = "table" | "list";
 
-function buildWeekStackPositions(items: ReservationRecord[]) {
-  const sorted = [...items].sort((a, b) => {
-    const timeDiff =
-      timeToMinutes(a.reservationTime || "00:00") -
-      timeToMinutes(b.reservationTime || "00:00");
-    return timeDiff || String(a.id).localeCompare(String(b.id));
-  });
-  let nextTop = 0;
+const WEEKDAY_LABELS = ["일", "월", "화", "수", "목", "금", "토"];
+const CANCELLED_COLOR = "#facc15";
+const COMPLETED_COLOR = "#9ca3af";
+const DETAIL_LABELS: Record<AppointmentType, string> = {
+  상담: "상담 항목",
+  수술: "수술 항목",
+  시술: "시술 항목",
+  치료: "수술 항목",
+  경과: "경과 항목",
+  진료: "진료 항목",
+  검진: "검진 항목",
+};
 
-  return sorted.map((item) => {
-    const naturalTop = minutesToPx(
-      timeToMinutes(item.reservationTime || `${START_HOUR}:00`)
-    );
-    const top = Math.max(naturalTop, nextTop);
-    nextTop = top + WEEK_CARD_H + WEEK_CARD_GAP;
-    return { item, top };
-  });
+function dateObj(dateStr: string) {
+  const [year, month, day] = dateStr.split("-").map(Number);
+  return new Date(year, month - 1, day);
 }
 
-function WeekDayCard({ item, top, onClick }: { item: ReservationRecord; top: number; onClick: () => void }) {
+function dateLabel(dateStr: string) {
+  const d = dateObj(dateStr);
+  return `${d.getMonth() + 1}/${d.getDate()} ${WEEKDAY_LABELS[d.getDay()]}`;
+}
+
+function tableDateLabel(dateStr: string) {
+  const d = dateObj(dateStr);
+  return { day: String(d.getDate()), weekday: WEEKDAY_LABELS[d.getDay()] };
+}
+
+function sortByTime(a: ReservationRecord, b: ReservationRecord) {
+  return String(a.reservationTime || "").localeCompare(String(b.reservationTime || ""));
+}
+
+function cardColor(item: ReservationRecord) {
+  if (item.cancelled) return CANCELLED_COLOR;
+  if (item.completed) return COMPLETED_COLOR;
+  return getAppointmentColor(item.appointmentType);
+}
+
+function detailLabel(item: ReservationRecord) {
+  return DETAIL_LABELS[item.appointmentType] || "상담 항목";
+}
+
+function daySummary(items: ReservationRecord[]) {
+  const summary = SCHEDULE_APPOINTMENT_TYPES
+    .map((type) => ({ type, count: items.filter((item) => item.appointmentType === type).length }))
+    .filter((item) => item.count > 0)
+    .slice(0, 3)
+    .map((item) => `${item.type} ${item.count}`)
+    .join(" · ");
+
+  return summary ? `${items.length}건 · ${summary}` : `${items.length}건`;
+}
+
+function WeekReservationCard({
+  item,
+  compact = false,
+  onClick,
+}: {
+  item: ReservationRecord;
+  compact?: boolean;
+  onClick: () => void;
+}) {
+  const color = cardColor(item);
   const cancelled = item.cancelled === true;
-  const color = cancelled ? "#fef08a" : item.completed ? "#9ca3af" : getAppointmentColor(item.appointmentType);
-  const textColor = cancelled ? "#78350f" : "white";
-  const time = item.reservationTime ? item.reservationTime.slice(0, 5) : "";
+  const time = item.reservationTime ? item.reservationTime.slice(0, 5) : "--:--";
+
+  if (compact) {
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        className="h-[36px] w-full min-w-0 overflow-hidden rounded-[15px] px-1 py-1 text-left transition active:scale-[0.99]"
+        style={{
+          background: `linear-gradient(90deg, ${color}16 0%, rgba(255,255,255,0.94) 48%, rgba(255,255,255,0.98) 100%)`,
+          boxShadow: `inset 4px 0 0 ${color}, 0 6px 12px rgba(15,23,42,.035)`,
+          opacity: item.completed ? 0.84 : 1,
+        }}
+      >
+        <div className="whitespace-nowrap pl-1 text-[8px] font-semibold leading-3" style={{ color }}>
+          {time}
+        </div>
+        <div
+          className={
+            "overflow-hidden whitespace-nowrap pl-1 text-[9px] font-semibold leading-3 tracking-[-0.03em] text-[#101828]" +
+            (cancelled ? " line-through decoration-2" : "")
+          }
+        >
+          {item.name || "이름 없음"}
+        </div>
+      </button>
+    );
+  }
+
   return (
     <button
+      type="button"
       onClick={onClick}
-      className="absolute overflow-hidden rounded px-1 text-left shadow-sm transition hover:brightness-110 active:scale-[0.99]"
+      className="flex min-h-[54px] w-full min-w-0 items-center overflow-hidden rounded-[26px] py-1.5 pl-4 pr-3 text-left transition active:scale-[0.99]"
       style={{
-        top,
-        height: WEEK_CARD_H,
-        backgroundColor: color,
-        opacity: item.completed ? 0.75 : 1,
-        color: textColor,
-        left: 1,
-        width: "calc(100% - 2px)",
+        background: `linear-gradient(90deg, ${color}16 0%, rgba(255,255,255,0.92) 42%, rgba(255,255,255,0.98) 100%)`,
+        boxShadow: `inset 5px 0 0 ${color}, 0 8px 16px rgba(15,23,42,.04)`,
+        opacity: item.completed ? 0.84 : 1,
       }}
-      title={[item.name, time, item.hospital, item.consultArea].filter(Boolean).join(" · ")}
     >
-      <div className={`truncate text-[10px] font-semibold leading-tight ${cancelled ? "line-through" : ""}`}>
-        {time && <span className="mr-0.5 opacity-80">{time}</span>}
-        {item.name}
+      <div className="min-w-0 flex-1 overflow-hidden">
+        <div
+          className={
+            "truncate text-sm font-semibold tracking-[-0.035em] text-[#101828]" +
+            (cancelled ? " line-through decoration-2" : "")
+          }
+        >
+          {item.name || "이름 없음"}
+        </div>
+        <div className="mt-0.5 truncate text-[11px] font-normal leading-4 text-[#667085]">
+          {time} · {item.hospital || "병원 미지정"}
+          {item.consultArea ? ` · ${detailLabel(item)}: ${item.consultArea}` : ""}
+        </div>
       </div>
     </button>
   );
@@ -67,81 +132,119 @@ function WeekDayCard({ item, top, onClick }: { item: ReservationRecord; top: num
 export function WeekScheduleView({
   weekStart,
   reservations,
+  displayMode,
   onCardClick,
 }: {
   weekStart: string;
   reservations: ReservationRecord[];
+  displayMode: WeekDisplayMode;
   onCardClick: (item: ReservationRecord) => void;
 }) {
-  const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
+  const days = useMemo(() => Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)), [weekStart]);
 
   const dayData = useMemo(() => {
     return days.map((day) => {
-      const dayItems = reservations.filter((r) => r.reservationDate === day);
-      const positioned = buildWeekStackPositions(dayItems);
-      const contentH = positioned.length > 0
-        ? Math.max(...positioned.map((p) => p.top + WEEK_CARD_H + 4))
-        : 0;
-      return { day, dayItems, positioned, contentH };
+      const items = reservations.filter((item) => item.reservationDate === day).sort(sortByTime);
+      return { day, items };
     });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [weekStart, reservations]);
-
-  const baseH = TOTAL_HOURS * HOUR_HEIGHT;
-  const maxH = Math.max(baseH, ...dayData.map((d) => d.contentH));
-  const gridRows = Math.ceil(maxH / HOUR_HEIGHT);
-  const hours = Array.from({ length: gridRows }, (_, i) => START_HOUR + i);
-
-  const HEADER_H = 52;
+  }, [days, reservations]);
 
   return (
     <div className="min-h-0 flex-1 overflow-auto">
-      <div className="flex" style={{ minWidth: TIME_COL_W + 7 * 100 }}>
+      <div className="space-y-4">
+        {displayMode === "table" ? (
+          <section className="rounded-[34px] bg-white px-0.5 pb-6 pt-3 shadow-[0_10px_24px_rgba(15,23,42,.05)]">
+            <div className="grid grid-cols-7 gap-px">
+              {dayData.map(({ day, items }) => {
+                const today = isToday(day);
+                const label = tableDateLabel(day);
+                return (
+                  <div key={day} className="min-w-0 py-1">
+                    <div className="mb-2 flex min-h-[50px] flex-col items-center">
+                      <div
+                        className={
+                          today
+                            ? "rounded-[14px] bg-[#e3f2ee] px-2 py-1 text-center"
+                            : "px-2 py-1 text-center"
+                        }
+                      >
+                        <div className="text-xs font-semibold leading-4 tracking-[-0.03em] text-[#101828]">
+                          {label.day}
+                        </div>
+                        <div
+                          className={
+                            today
+                              ? "text-[9px] font-medium leading-3 text-[#0f9b8e]"
+                              : "text-[9px] font-medium leading-3 text-[#667085]"
+                          }
+                        >
+                          {label.weekday}
+                        </div>
+                      </div>
+                      <div
+                        className={
+                          items.length > 0
+                            ? "mt-1 text-[9px] font-normal leading-3 text-[#667085]"
+                            : "mt-1 text-[9px] font-normal leading-3 text-[#b4bcc8]"
+                        }
+                      >
+                        {items.length}건
+                      </div>
+                    </div>
 
-        {/* Sticky time column */}
-        <div
-          className="sticky left-0 z-10 flex shrink-0 flex-col border-r border-[#edf0f3] bg-white"
-          style={{ width: TIME_COL_W }}
-        >
-          <div className="shrink-0 border-b border-[#edf0f3]" style={{ height: HEADER_H }} />
-          {hours.map((h) => (
-            <div
-              key={h}
-              className="flex items-start justify-center border-b border-[#f1f3f5] pt-1 text-[10px] text-gray-400"
-              style={{ height: HOUR_HEIGHT }}
-            >
-              {h < 24 ? `${String(h).padStart(2, "0")}` : ""}
+                    <div className="space-y-1.5">
+                      {items.length === 0 ? (
+                        <div className="py-12 text-center text-[9px] font-normal leading-3 text-[#b4bcc8]">
+                          예약<br />없음
+                        </div>
+                      ) : (
+                        items.map((item) => (
+                          <WeekReservationCard key={item.id} item={item} compact onClick={() => onCardClick(item)} />
+                        ))
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
-          ))}
-        </div>
+          </section>
+        ) : (
+          <section className="rounded-[34px] bg-white p-3 shadow-[0_10px_24px_rgba(15,23,42,.05)]">
+            <div className="space-y-2">
+              {dayData.map(({ day, items }) => {
+                const today = isToday(day);
+                return (
+                  <div key={day} className="rounded-[26px] bg-[#f7faf8] p-2.5">
+                    <div className="mb-2 flex min-w-0 items-center gap-2">
+                      <h2
+                        className={
+                          today
+                            ? "shrink-0 rounded-[14px] bg-[#e3f2ee] px-2.5 py-1 text-base font-semibold tracking-[-0.035em] text-[#0f9b8e]"
+                            : "shrink-0 px-1 py-1 text-base font-semibold tracking-[-0.035em] text-[#101828]"
+                        }
+                      >
+                        {dateLabel(day)}
+                      </h2>
+                      <span className="min-w-0 truncate text-[10px] font-normal text-[#667085]">{daySummary(items)}</span>
+                    </div>
 
-        {/* Day columns */}
-        {dayData.map(({ day, dayItems, positioned }) => {
-          const today = isToday(day);
-          return (
-            <div
-              key={day}
-              className="flex flex-col border-r border-[#edf0f3]"
-              style={{ minWidth: 100, flex: 1 }}
-            >
-              <div
-                className={`sticky top-0 z-10 flex shrink-0 flex-col items-center justify-center border-b border-[#edf0f3] ${today ? "bg-emerald-50" : "bg-white"}`}
-                style={{ height: HEADER_H }}
-              >
-                <span className={`text-xs font-bold ${today ? "text-emerald-700" : "text-gray-700"}`}>
-                  {formatDayLabel(day)}
-                </span>
-                <span className={`text-[10px] ${today ? "text-emerald-500" : "text-gray-400"}`}>{dayItems.length}건</span>
-              </div>
-              <div className="relative" style={{ height: maxH }}>
-                <ScheduleHourGrid rows={gridRows} />
-                {positioned.map(({ item, top }) => (
-                  <WeekDayCard key={item.id} item={item} top={top} onClick={() => onCardClick(item)} />
-                ))}
-              </div>
+                    {items.length === 0 ? (
+                      <div className="rounded-[20px] bg-white/75 px-4 py-3 text-[11px] font-normal text-[#98a2b3]">
+                        예약 없음
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        {items.map((item) => (
+                          <WeekReservationCard key={item.id} item={item} onClick={() => onCardClick(item)} />
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
-          );
-        })}
+          </section>
+        )}
       </div>
     </div>
   );

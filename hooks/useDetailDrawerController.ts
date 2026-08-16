@@ -456,6 +456,7 @@ export function useDetailDrawerController({
     phone: selectedReservation.phone,
     nationality: selectedReservation.nationality,
     patientId: selectedReservation.patientId,
+    sourceReservationDocId: selectedReservation.id,
     hospital: selectedReservation.hospital,
     consultArea: selectedReservation.consultArea,
     appointmentType: selectedReservation.appointmentType,

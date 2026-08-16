@@ -13,6 +13,7 @@ import {
 export type SettlementRecord = {
   id: string;
   patientId: string;
+  surgeryCaseId?: string;
   reservationDocId: string;
   reservationId: string;
   appointmentDate: string;
@@ -37,6 +38,7 @@ export type SettlementAppointment = {
   id: string;
   reservationId: string;
   patientId: string;
+  surgeryCaseId?: string;
   reservationDate: string;
   reservationTime: string;
   appointmentType: string;
@@ -127,6 +129,7 @@ function mapSettlement(raw: Record<string, unknown>): SettlementRecord {
   return {
     id: cleanText(raw.id),
     patientId: cleanText(raw.patientId),
+    surgeryCaseId: cleanText(raw.surgeryCaseId) || undefined,
     reservationDocId: cleanText(raw.reservationDocId),
     reservationId: cleanText(raw.reservationId),
     appointmentDate: cleanText(raw.appointmentDate),
@@ -157,6 +160,7 @@ function mapAppointment(raw: Record<string, unknown>): SettlementAppointment {
     id: cleanText(raw.id),
     reservationId: cleanText(raw.reservationId),
     patientId: cleanText(raw.patientId),
+    surgeryCaseId: cleanText(raw.surgeryCaseId) || undefined,
     reservationDate: cleanText(raw.reservationDate),
     reservationTime: cleanText(raw.reservationTime),
     appointmentType: cleanText(raw.appointmentType),

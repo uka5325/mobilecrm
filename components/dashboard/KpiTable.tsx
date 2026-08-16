@@ -15,9 +15,9 @@ export const KpiTable = memo(function KpiTable({
 
   return (
     <div>
-      <div className="overflow-x-auto">
+      <div className="overflow-x-auto px-1 pb-2">
         <table className="w-full text-sm">
-          <thead className="border-b border-[#edf0f3] bg-[#f8fafc]">
+          <thead className="bg-[#f8fbfa]">
             <tr>
               {headers.map((header, i) => (
                 <th
@@ -38,7 +38,7 @@ export const KpiTable = memo(function KpiTable({
               </tr>
             ) : (
               visibleRows.map((row, rowIndex) => (
-                <tr key={page * pageSize + rowIndex} className="hover:bg-[#f8fafc]">
+                <tr key={page * pageSize + rowIndex} className="transition hover:bg-[#f8fbfa]">
                   {row.map((cell, cellIndex) => (
                     <td
                       key={cellIndex}
@@ -63,14 +63,14 @@ export const KpiTable = memo(function KpiTable({
             <button
               onClick={() => setPage((p) => Math.max(0, p - 1))}
               disabled={page === 0}
-              className="rounded-lg border border-[#edf0f3] px-2 py-1 text-xs text-gray-500 transition hover:bg-gray-50 disabled:opacity-30"
+              className="rounded-[14px] bg-[#f6f7f5] px-3 py-1.5 text-xs font-semibold text-[#667085] transition hover:bg-[#e3f2ee] hover:text-[#0f9b8e] disabled:opacity-30"
             >
               ‹
             </button>
             <button
               onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
               disabled={page >= totalPages - 1}
-              className="rounded-lg border border-[#edf0f3] px-2 py-1 text-xs text-gray-500 transition hover:bg-gray-50 disabled:opacity-30"
+              className="rounded-[14px] bg-[#f6f7f5] px-3 py-1.5 text-xs font-semibold text-[#667085] transition hover:bg-[#e3f2ee] hover:text-[#0f9b8e] disabled:opacity-30"
             >
               ›
             </button>

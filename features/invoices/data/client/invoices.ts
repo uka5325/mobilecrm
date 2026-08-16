@@ -6,6 +6,8 @@ import { INVOICE_LIST_CACHE_PREFIX } from "@/lib/clientCache";
 export type InvoiceRecord = {
   id: string;
   invoiceId: string;
+  surgeryCaseId?: string;
+  reservationDocIds?: string[];
 
   reservationDocId: string;
   reservationId: string;
@@ -132,6 +134,10 @@ function mapInvoiceDoc(data: Record<string, unknown>): InvoiceRecord {
   return {
     id: cleanText(data.id),
     invoiceId: cleanText(data.invoiceId || data.id),
+    surgeryCaseId: cleanText(data.surgeryCaseId) || undefined,
+    reservationDocIds: Array.isArray(data.reservationDocIds)
+      ? data.reservationDocIds.map(cleanText).filter(Boolean)
+      : undefined,
 
     reservationDocId: cleanText(data.reservationDocId),
     reservationId: cleanText(data.reservationId),
@@ -233,10 +239,12 @@ export async function getOrCreateInvoiceDraft(
   if (!result.success || !result.invoice) {
     return { success: false as const, message: result.message || "인보이스 생성 실패" };
   }
+  const invoice = mapInvoiceDoc(result.invoice as Record<string, unknown>);
   invalidateInvoiceListCache();
+  invalidateInvoicesByPatientCache(invoice.patientId);
   return {
     success: true as const,
-    invoice: mapInvoiceDoc(result.invoice as Record<string, unknown>),
+    invoice,
     alreadyExists: !!result.alreadyExists,
   };
 }
@@ -272,10 +280,12 @@ export async function updateInvoice(
   if (!result.success || !result.invoice) {
     return { success: false as const, message: result.message || "저장 실패" };
   }
+  const invoice = mapInvoiceDoc(result.invoice as Record<string, unknown>);
   invalidateInvoiceListCache();
+  invalidateInvoicesByPatientCache(invoice.patientId);
   return {
     success: true as const,
-    invoice: mapInvoiceDoc(result.invoice as Record<string, unknown>),
+    invoice,
   };
 }
 

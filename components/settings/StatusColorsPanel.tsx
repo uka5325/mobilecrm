@@ -45,7 +45,7 @@ export function StatusColorsPanel({
   onReset,
 }: Props) {
   return (
-    <section className="rounded-[18px] border border-[#edf0f3] bg-white p-6 shadow-[0_2px_14px_rgba(0,0,0,0.04)]">
+    <section className="rounded-[28px] bg-white p-5 shadow-[0_16px_50px_rgba(15,23,42,0.055)] lg:p-6">
       <SectionHeader
         title="유형별 색상 설정"
         description="스케줄 및 예약관리 카드에 표시되는 예약 유형별 색상을 설정합니다."
@@ -64,7 +64,7 @@ export function StatusColorsPanel({
               const previewColor = valid ? color : DEFAULT_APPOINTMENT_TYPE_COLORS[type];
 
               return (
-                <div key={type} className="rounded-2xl border border-[#edf0f3] bg-white p-4">
+                <div key={type} className="rounded-[22px] bg-[#f8fbfa] p-4 shadow-[0_10px_24px_rgba(15,23,42,0.035)]">
                   <div className="mb-3 flex items-center justify-between gap-3">
                     <div>
                       <div className="text-sm font-bold text-gray-900">{type}</div>
@@ -85,14 +85,14 @@ export function StatusColorsPanel({
                       value={previewColor}
                       disabled={!canManage || saving}
                       onChange={(e) => onUpdateColor(type, e.target.value)}
-                      className="h-10 w-12 shrink-0 cursor-pointer rounded-lg border border-[#dfe3e8] bg-white p-1 disabled:cursor-not-allowed disabled:opacity-50"
+                      className="h-10 w-12 shrink-0 cursor-pointer rounded-[14px] border border-[#dbe7e3] bg-white p-1 disabled:cursor-not-allowed disabled:opacity-50"
                     />
 
                     <input
                       value={color}
                       disabled={!canManage || saving}
                       onChange={(e) => onUpdateColor(type, e.target.value)}
-                      className={`h-10 min-w-0 flex-1 rounded-xl border bg-white px-3 text-sm outline-none transition focus:border-[#1d9e75] focus:ring-4 focus:ring-emerald-100 disabled:bg-gray-50 disabled:text-gray-400 ${valid ? "border-[#dfe3e8]" : "border-red-300"}`}
+                      className={`h-10 min-w-0 flex-1 rounded-xl border bg-white px-3 text-sm outline-none transition focus:border-[#5bd5c8] focus:ring-2 focus:ring-[#dff7f3] disabled:bg-gray-50 disabled:text-gray-400 ${valid ? "border-[#dfe3e8]" : "border-red-300"}`}
                       placeholder="#1d9e75"
                     />
                   </div>
@@ -105,7 +105,7 @@ export function StatusColorsPanel({
             })}
           </div>
 
-          <div className="mt-5 rounded-2xl border border-[#edf0f3] bg-gray-50 p-4">
+          <div className="mt-5 rounded-[22px] bg-[#f8fbfa] p-4">
             <div className="mb-3 text-sm font-bold text-gray-900">미리보기</div>
             <div className="flex flex-wrap gap-2">
               {TYPE_KEYS.map((type) => {
@@ -127,7 +127,7 @@ export function StatusColorsPanel({
             <button
               onClick={onReset}
               disabled={!canManage || saving}
-              className="rounded-xl border border-[#dfe3e8] bg-white px-5 py-3 text-sm font-medium text-gray-700 transition hover:-translate-y-0.5 hover:shadow-md active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
+              className="rounded-[16px] border border-[#dbe7e3] bg-white px-5 py-3 text-sm font-medium text-gray-700 transition hover:-translate-y-0.5 hover:shadow-md active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
             >
               기본값 복원
             </button>
@@ -135,7 +135,7 @@ export function StatusColorsPanel({
             <button
               onClick={onSave}
               disabled={!canManage || saving || !hasChanges}
-              className="rounded-xl bg-black px-5 py-3 text-sm font-medium text-white transition hover:-translate-y-0.5 hover:shadow-md active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
+              className="rounded-[18px] bg-[linear-gradient(135deg,#77dfd1_0%,#40c5b3_50%,#0f9b8e_100%)] px-5 py-3 text-sm font-bold text-white shadow-[0_10px_24px_rgba(15,143,131,0.14)] transition hover:-translate-y-0.5 active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {saving ? "저장 중..." : "색상 저장"}
             </button>

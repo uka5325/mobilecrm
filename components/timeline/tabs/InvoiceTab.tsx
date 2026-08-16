@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import type { StaffUser } from "@/lib/auth";
 import {
   deleteInvoice,
-  getInvoicesByPatientId,
+  getInvoiceByReservationDocId,
   getOrCreateInvoiceDraft,
   type InvoiceRecord,
 } from "@/features/invoices/data/client/invoices";
@@ -38,13 +38,9 @@ export function InvoiceTab({ reservationDocId, patientId, currentUser, appointme
     setLoading(true);
     setError("");
     try {
-      if (patientId) {
-        setInvoices(await getInvoicesByPatientId(patientId));
-      } else {
-        const { getInvoiceByReservationDocId } = await import("@/features/invoices/data/client/invoices");
-        const invoice = await getInvoiceByReservationDocId(reservationDocId);
-        setInvoices(invoice ? [invoice] : []);
-      }
+      // 예약 상세에서는 환자 전체 인보이스를 읽지 않고 이 surgeryCase의 1건만 조회한다.
+      const invoice = await getInvoiceByReservationDocId(reservationDocId);
+      setInvoices(invoice ? [invoice] : []);
     } catch (loadError) {
       console.error("[InvoiceTab] load error:", (loadError as Error)?.message ?? "");
       setError("인보이스를 불러오지 못했습니다.");

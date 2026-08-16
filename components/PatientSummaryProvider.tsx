@@ -72,6 +72,7 @@ function mapPatientDocument(doc: QueryDocumentSnapshot<DocumentData>): PatientRe
     lastSettlementAt: text(data.lastSettlementAt),
     lastReservationDate: text(data.lastReservationDate),
     lastReservationTime: text(data.lastReservationTime),
+    lastAppointmentType: text(data.lastAppointmentType || data.lastReservationType || data.appointmentType),
     hasMemo: data.hasMemo === true,
     hasInvoice: data.hasInvoice === true,
     reservationCountCapped: data.reservationCountCapped === true,

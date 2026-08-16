@@ -30,9 +30,14 @@ export function DetailDrawer({ open, reservation, currentUser, onClose, onRefres
 
   return (
     <>
-      <div className="fixed inset-0 z-[998] bg-black/35" onClick={onClose} />
-
-      <div className="fixed right-0 top-0 z-[999] flex h-screen w-[420px] max-w-[calc(100vw-12px)] flex-col bg-white shadow-[-8px_0_30px_rgba(0,0,0,0.12)]">
+      <div
+        className="fixed inset-0 z-[998] flex items-start justify-center overflow-y-auto bg-black/35 px-3 py-8 backdrop-blur-[2px] sm:items-center sm:p-8"
+        onClick={onClose}
+      >
+        <div
+          className="flex h-[calc(100dvh-64px)] max-h-[calc(100dvh-64px)] w-full max-w-[720px] flex-col overflow-hidden rounded-[32px] bg-white shadow-[0_28px_90px_rgba(15,23,42,0.26)] sm:h-[min(760px,calc(100dvh-64px))]"
+          onClick={(e) => e.stopPropagation()}
+        >
         <DetailDrawerHeader
           reservation={selectedReservation}
           completed={d.detailForm.completed}
@@ -46,7 +51,7 @@ export function DetailDrawer({ open, reservation, currentUser, onClose, onRefres
 
         <DetailDrawerTabs activeTab={activeTab} onTabChange={d.setActiveTab} />
 
-        <div className="flex-1 overflow-y-auto p-5">
+        <div className="flex-1 overflow-y-auto bg-white px-4 pb-5 pt-4 sm:px-5">
           {activeTab === "info" && (
             <InfoTab
               detailForm={d.detailForm}
@@ -130,6 +135,7 @@ export function DetailDrawer({ open, reservation, currentUser, onClose, onRefres
               coordinators={selectedReservation.coordinators}
             />
           )}
+        </div>
         </div>
       </div>
 

@@ -19,6 +19,7 @@ export async function recomputeReservationSummary(patientId: string): Promise<vo
   let reservationCount = 0;
   let lastReservationDate = "";
   let lastReservationTime = "";
+  let lastAppointmentType = "";
   let lastReservationDocId = "";
   let lastComposite = "";
 
@@ -32,6 +33,7 @@ export async function recomputeReservationSummary(patientId: string): Promise<vo
       lastComposite = composite;
       lastReservationDate = date;
       lastReservationTime = time;
+      lastAppointmentType = String(r.appointmentType || "");
       lastReservationDocId = d.id;
     }
   }
@@ -40,6 +42,7 @@ export async function recomputeReservationSummary(patientId: string): Promise<vo
     reservationCount,
     lastReservationDate,
     lastReservationTime,
+    lastAppointmentType,
     lastReservationAt: lastReservationDate ? `${lastReservationDate} ${lastReservationTime}`.trim() : "",
     lastReservationDocId,
     reservationCountCapped: snap.docs.length > RESERVATION_CAP,
@@ -76,6 +79,7 @@ function latestReservationPatch(
     return {
       lastReservationDate: "",
       lastReservationTime: "",
+      lastAppointmentType: "",
       lastReservationAt: "",
       lastReservationDocId: "",
     };
@@ -85,6 +89,7 @@ function latestReservationPatch(
   return {
     lastReservationDate: date,
     lastReservationTime: time,
+    lastAppointmentType: String(record.appointmentType || ""),
     lastReservationAt: date ? `${date} ${time}`.trim() : "",
     lastReservationDocId: reservationDocId,
   };

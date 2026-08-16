@@ -38,11 +38,11 @@ export function InvoiceList({
       {error && <div className="rounded-lg bg-red-50 px-3 py-2 text-center text-xs text-red-600">{error}</div>}
 
       {!reservationInvoice && (
-        <div className="rounded-2xl border-2 border-dashed border-[#dfe3e8] p-4 text-center">
+        <div className="rounded-[24px] bg-[#eaf8f3] p-4 text-center shadow-[0_8px_18px_rgba(15,23,42,0.035)]">
           {eligibleAppointment ? (canCreate ? (
             <>
               <div className="text-sm text-gray-400">이 예약에 대한 인보이스가 없습니다.</div>
-              <button onClick={onCreate} disabled={creating} className="mt-3 w-full rounded-xl bg-black px-5 py-2.5 text-sm font-medium text-white transition hover:-translate-y-0.5 hover:shadow-md active:scale-95 disabled:opacity-50">
+              <button onClick={onCreate} disabled={creating} className="mt-3 w-full rounded-[18px] bg-[linear-gradient(135deg,#77dfd1_0%,#40c5b3_50%,#0f9b8e_100%)] px-5 py-2.5 text-sm font-semibold text-white shadow-[0_10px_24px_rgba(15,143,131,0.12)] transition active:scale-95 disabled:opacity-50">
                 {creating ? "생성 중..." : "이 예약으로 인보이스 생성"}
               </button>
             </>
@@ -60,13 +60,13 @@ export function InvoiceList({
           {invoices.map((invoice) => {
             const isCurrentReservation = invoice.reservationDocId === reservationDocId;
             return (
-              <div key={invoice.id} className={`rounded-xl border p-3 ${isCurrentReservation ? "border-[#1d9e75] bg-emerald-50/30" : "border-[#edf0f3] bg-white"}`}>
+              <div key={invoice.id} className={`rounded-[20px] p-3 shadow-[0_8px_18px_rgba(15,23,42,0.035)] ${isCurrentReservation ? "bg-[#eaf8f3]" : "bg-[#f8fbfa]"}`}>
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="truncate text-sm font-semibold">{invoice.hospitalName || "병원명 미입력"}</span>
                       {invoice.doctors?.length > 0 && <span className="text-xs text-gray-500">{invoice.doctors.join(", ")}</span>}
-                      {isCurrentReservation && <span className="rounded-full bg-[#1d9e75] px-1.5 py-0.5 text-[10px] font-bold text-white">이 예약</span>}
+                      {isCurrentReservation && <span className="rounded-full bg-[#0f9b8e] px-1.5 py-0.5 text-[10px] font-bold text-white">이 예약</span>}
                     </div>
                     {invoice.surgeryItems && <div className="mt-0.5 truncate text-xs text-gray-500">{invoice.surgeryItems}</div>}
                     {invoice.surgeryDate && <div className="mt-0.5 text-xs text-gray-400">수술일: {invoice.surgeryDate}</div>}
@@ -75,14 +75,14 @@ export function InvoiceList({
                         {INVOICE_STATUS_LABEL[invoice.status] || invoice.status}
                       </span>
                       {invoice.totalAmount > 0 && <span className="text-xs text-gray-600">₩{formatMoney(invoice.totalAmount)}</span>}
-                      {invoice.commissionAmount && <span className="text-xs text-[#1d9e75]">커미션 ₩{formatMoney(invoice.commissionAmount)}</span>}
+                      {invoice.commissionAmount && <span className="text-xs text-[#0f9b8e]">커미션 ₩{formatMoney(invoice.commissionAmount)}</span>}
                     </div>
                     <div className="mt-0.5 text-[10px] text-gray-400">{invoice.invoiceId}</div>
                   </div>
                   <div className="flex shrink-0 gap-1">
-                    <button onClick={() => onView(invoice)} className="rounded-lg bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-600 hover:bg-blue-100">보기</button>
-                    <button onClick={() => onEdit(invoice)} className="rounded-lg bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-600 hover:bg-gray-200">수정</button>
-                    <button onClick={() => onDelete(invoice)} className="rounded-lg bg-red-50 px-2.5 py-1 text-xs font-medium text-red-600 hover:bg-red-100">삭제</button>
+                    <button onClick={() => onView(invoice)} className="rounded-full bg-[#e3f2ee] px-2.5 py-1 text-xs font-semibold text-[#0f9b8e]">보기</button>
+                    <button onClick={() => onEdit(invoice)} className="rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-[#667085]">수정</button>
+                    <button onClick={() => onDelete(invoice)} className="rounded-full bg-red-50 px-2.5 py-1 text-xs font-semibold text-red-600">삭제</button>
                   </div>
                 </div>
               </div>

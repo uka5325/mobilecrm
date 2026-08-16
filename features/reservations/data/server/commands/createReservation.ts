@@ -8,6 +8,10 @@ import { safeRecompute } from "@/features/patients/jobs/summary/patientSummaryDi
 import type { ReservationApiPayload } from "@/features/reservations/domain/reservationApiContracts";
 import { identityKeyForPatient } from "@/lib/patientIdentity";
 import {
+  emptySettlementAggregate,
+  surgeryCaseAggregatePatch,
+} from "@/lib/surgeryCaseAggregates";
+import {
   RESERVATION_LOCKS,
   buildLockDoc,
   isLockStale,
@@ -25,6 +29,7 @@ import {
 
 class DuplicateReservationError extends Error {}
 class PatientDeletedError extends Error {}
+class SourceReservationError extends Error {}
 
 function makeGeneratedPatientId(): string {
   const date = new Date().toISOString().slice(0, 10).replace(/-/g, "");
@@ -111,6 +116,7 @@ export async function createReservationCommand(
   };
 
   const reservationId = String(safeReservation.reservationId || "");
+  const sourceReservationDocId = String(payload.sourceReservationDocId || "").trim();
   const now = FieldValue.serverTimestamp();
   const authorFields = {
     createdBy: ctx.name,
@@ -121,6 +127,7 @@ export async function createReservationCommand(
   const incomingPatientId = String(safePatient.patientId || "");
   const identityKey = identityKeyForPatient(safePatient);
   const reservationRef = adminDb.collection("reservations").doc();
+  const generatedCaseRef = adminDb.collection("surgeryCases").doc();
 
   let resultPatientDocId = "";
   let resultPatientId = canonicalPatientId;
@@ -128,6 +135,7 @@ export async function createReservationCommand(
   let linkedExistingPatient = false;
   let staleLockRepaired = false;
   let resultLockId = "";
+  let resultSurgeryCaseId = "";
 
   try {
     await adminDb.runTransaction(async (tx) => {
@@ -220,6 +228,36 @@ export async function createReservationCommand(
         resultPatientId = linkedPatientId;
       }
 
+      const sourceReservationRef = sourceReservationDocId
+        ? adminDb.collection("reservations").doc(sourceReservationDocId)
+        : null;
+      const sourceReservationSnap = sourceReservationRef
+        ? await tx.get(sourceReservationRef)
+        : null;
+      const sourceReservation = sourceReservationSnap?.exists
+        ? sourceReservationSnap.data() as Record<string, unknown>
+        : null;
+      if (sourceReservationRef && (
+        !sourceReservation
+        || sourceReservation.isDeleted === true
+        || String(sourceReservation.patientId || "") !== resultPatientId
+      )) {
+        throw new SourceReservationError();
+      }
+
+      const sourceCaseId = String(sourceReservation?.surgeryCaseId || "").trim();
+      const surgeryCaseRef = sourceCaseId
+        ? adminDb.collection("surgeryCases").doc(sourceCaseId)
+        : generatedCaseRef;
+      const surgeryCaseSnap = sourceCaseId ? await tx.get(surgeryCaseRef) : null;
+      const surgeryCase = surgeryCaseSnap?.exists
+        ? surgeryCaseSnap.data() as Record<string, unknown>
+        : null;
+      if (surgeryCase && String(surgeryCase.patientId || "") !== resultPatientId) {
+        throw new SourceReservationError();
+      }
+      resultSurgeryCaseId = surgeryCaseRef.id;
+
       // canonical 환자 연결과 generated-ID 정책이 결정된 뒤 중복 lock을 계산한다.
       const lockId = lockIdForReservation(safeReservation);
       resultLockId = lockId;
@@ -249,6 +287,7 @@ export async function createReservationCommand(
       const afterReservation = {
         ...reservationDefaults,
         ...safeReservation,
+        surgeryCaseId: resultSurgeryCaseId,
         isDeleted: false,
       };
       createdReservationData = afterReservation;
@@ -264,6 +303,46 @@ export async function createReservationCommand(
             now,
           })
         );
+      }
+
+      const caseReservationDocIds = Array.from(new Set([
+        ...(Array.isArray(surgeryCase?.reservationDocIds)
+          ? surgeryCase.reservationDocIds.map(String).filter(Boolean)
+          : []),
+        sourceReservationDocId,
+        reservationRef.id,
+      ].filter(Boolean)));
+      if (surgeryCase) {
+        tx.update(surgeryCaseRef, {
+          reservationDocIds: FieldValue.arrayUnion(reservationRef.id),
+          updatedAt: now,
+          updatedBy: ctx.name,
+          updatedByUid: ctx.uid,
+        });
+      } else {
+        tx.set(surgeryCaseRef, {
+          patientId: resultPatientId,
+          reservationDocIds: caseReservationDocIds,
+          primaryReservationDocId: sourceReservationDocId || reservationRef.id,
+          invoiceDocId: "",
+          invoiceId: "",
+          isDeleted: false,
+          ...surgeryCaseAggregatePatch(emptySettlementAggregate()),
+          createdAt: now,
+          createdBy: ctx.name,
+          createdByUid: ctx.uid,
+          updatedAt: now,
+          updatedBy: ctx.name,
+          updatedByUid: ctx.uid,
+        });
+      }
+      if (sourceReservationRef && !sourceCaseId) {
+        tx.update(sourceReservationRef, {
+          surgeryCaseId: resultSurgeryCaseId,
+          updatedAt: now,
+          updatedBy: ctx.name,
+          updatedByUid: ctx.uid,
+        });
       }
 
       if (existingPatientDocId) {
@@ -351,6 +430,16 @@ export async function createReservationCommand(
         { status: 409 }
       );
     }
+    if (error instanceof SourceReservationError) {
+      return NextResponse.json(
+        {
+          success: false,
+          code: "SURGERY_CASE_SOURCE_MISMATCH",
+          message: "같은 환자의 유효한 원본 예약만 수술 케이스로 연결할 수 있습니다.",
+        },
+        { status: 409 }
+      );
+    }
     throw error;
   }
 
@@ -383,6 +472,7 @@ export async function createReservationCommand(
     patientDocId: resultPatientDocId,
     reservationDocId: reservationRef.id,
     patientId: resultPatientId,
+    surgeryCaseId: resultSurgeryCaseId,
     ...(linkedExistingPatient ? { linkedExistingPatient: true } : {}),
   });
 }

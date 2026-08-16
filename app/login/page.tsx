@@ -9,6 +9,7 @@ export default function LoginPage() {
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
 
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
@@ -20,6 +21,7 @@ export default function LoginPage() {
     if (e) e.preventDefault();
 
     setErrorMessage("");
+    setResetSent(false);
 
     if (!email.trim()) {
       setErrorMessage("이메일을 입력하세요.");
@@ -63,6 +65,7 @@ export default function LoginPage() {
 
   async function handleGoogleLogin() {
     setErrorMessage("");
+    setResetSent(false);
     setGoogleLoading(true);
     try {
       const result = await loginWithGoogle();
@@ -78,213 +81,220 @@ export default function LoginPage() {
     }
   }
 
-  const menuItems = [
-    { icon: "📋", label: "스케줄" },
-    { icon: "👥", label: "고객관리" },
-    { icon: "🧾", label: "인보이스" },
-    { icon: "📊", label: "KPI 대시보드" },
-  ];
+  const busy = loading || googleLoading || resetLoading;
 
   return (
-    <main className="min-h-screen bg-[#f3f4f6]">
-      <div className="flex min-h-screen w-full bg-white max-[1023px]:flex-col">
-        {/* Side / Top Brand Area */}
-        <aside className="flex w-[260px] shrink-0 flex-col justify-between bg-[#0f1923] px-6 py-8 max-[1023px]:w-full max-[1023px]:px-6 max-[1023px]:py-6">
-          <div>
-            {/* Brand */}
-            <div className="max-[1023px]:flex max-[1023px]:items-center max-[1023px]:gap-4">
-              <div className="mb-4 flex h-[38px] w-[38px] items-center justify-center rounded-lg bg-[#1d9e75] text-xl max-[1023px]:mb-0 max-[1023px]:h-12 max-[1023px]:w-12 max-[1023px]:text-2xl">
-                🏥
+    <main data-login-page className="-mt-[env(safe-area-inset-top)] min-h-[calc(100dvh+env(safe-area-inset-top))] bg-[#07383A] text-[#12151f] md:mt-0 md:min-h-[100dvh] md:bg-[#f7f7f5] md:px-6 md:py-8">
+      <section className="grid min-h-[calc(100dvh+env(safe-area-inset-top))] w-full overflow-hidden bg-white md:mx-auto md:min-h-[640px] md:max-w-[1180px] md:grid-cols-[1.08fr_0.92fr] md:rounded-[32px] md:border md:border-[#d9ddd9] md:shadow-[0_24px_80px_rgba(15,23,42,0.10)]">
+        <BrandPanel />
+
+        <section className="relative z-10 -mt-6 flex-1 rounded-t-[28px] bg-white px-5 pb-8 pt-7 md:mt-0 md:flex md:items-center md:justify-center md:rounded-none md:px-10 md:py-12 lg:px-14">
+          <div className="w-full md:max-w-[430px]">
+            <div className="hidden justify-end md:flex">
+              <StaffBadge />
+            </div>
+
+            <div className="md:mt-20">
+              <h2 className="text-[26px] font-bold tracking-[-0.03em] text-[#12151f] md:text-[30px]">
+                로그인
+              </h2>
+              <p className="mt-2 text-sm leading-6 text-[#7b8290]">
+                등록된 계정 정보를 입력하세요.
+              </p>
+            </div>
+
+            <form className="mt-7 space-y-5" onSubmit={handleLogin} noValidate>
+              <div>
+                <label htmlFor="email" className="mb-2 block text-sm font-bold text-[#12151f]">
+                  이메일
+                </label>
+                <div className="flex h-[52px] items-center rounded-xl border border-[#dfe3e8] bg-white px-4 transition focus-within:border-[#087D78] focus-within:ring-4 focus-within:ring-[#087D78]/10">
+                  <MailIcon />
+                  <input
+                    id="email"
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="이메일을 입력하세요"
+                    autoComplete="email"
+                    className="ml-3 min-w-0 flex-1 border-0 bg-transparent p-0 text-base text-[#12151f] outline-none placeholder:text-[#a6adba]"
+                  />
+                </div>
               </div>
 
               <div>
-                <div className="text-base font-semibold text-white max-[1023px]:text-2xl">
-                  모바일 CRM
-                </div>
-
-                <div className="mt-1 text-xs leading-relaxed text-white/45 max-[1023px]:hidden">
-                  예약관리 시스템
-                </div>
-              </div>
-            </div>
-
-            {/* Desktop / Tablet landscape sidebar menu */}
-            <nav className="mt-8 flex flex-col gap-[7px] max-[1023px]:hidden">
-              {menuItems.map((item) => (
-                <div
-                  key={item.label}
-                  className="flex items-center gap-2 rounded-md bg-white/5 px-3 py-2 text-xs text-white/50"
-                >
-                  <span className="w-[18px] text-center text-[15px]">
-                    {item.icon}
-                  </span>
-                  {item.label}
-                </div>
-              ))}
-            </nav>
-
-            {/* Tablet portrait / mobile top menu */}
-            <nav className="mt-5 hidden gap-2 overflow-x-auto pb-1 max-[1023px]:flex">
-              {menuItems.map((item) => (
-                <div
-                  key={item.label}
-                  className="flex shrink-0 items-center gap-2 rounded-lg bg-white/8 px-4 py-3 text-sm font-medium text-white/70"
-                >
-                  <span className="text-base">{item.icon}</span>
-                  <span>{item.label}</span>
-                </div>
-              ))}
-            </nav>
-          </div>
-
-          <div className="text-[11px] text-white/20 max-[1023px]:hidden">
-            v1.0 · Firebase / Vercel
-          </div>
-        </aside>
-
-        {/* Main Login Area */}
-        <section className="flex flex-1 items-center justify-center bg-[#f3f4f6] p-12 max-[1023px]:items-start max-[1023px]:p-6 max-[700px]:p-5">
-          <div className="w-full max-w-[420px] rounded-[14px] border border-black/10 bg-white p-8 shadow-[0_2px_16px_rgba(0,0,0,0.07)] max-[1023px]:max-w-none max-[1023px]:p-8 max-[700px]:p-6">
-            <h1 className="mb-1 text-[22px] font-bold text-[#1a1a1a] max-[700px]:text-[26px]">
-              로그인
-            </h1>
-
-            <p className="mb-7 text-[13px] text-[#6b7280] max-[700px]:text-base">
-              이메일로 로그인하세요
-            </p>
-
-            <form onSubmit={handleLogin}>
-              <div className="mb-4">
-                <label
-                  htmlFor="email"
-                  className="mb-[5px] block text-xs font-medium text-[#6b7280] max-[700px]:text-sm"
-                >
-                  이메일
-                </label>
-
-                <input
-                  id="email"
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="name@clinic.com"
-                  autoComplete="email"
-                  className={`w-full rounded-md border bg-[#f9fafb] px-3 py-2.5 text-sm text-[#1a1a1a] outline-none transition focus:border-[#1d9e75] focus:bg-white focus:shadow-[0_0_0_3px_rgba(29,158,117,0.12)] max-[700px]:px-4 max-[700px]:py-4 max-[700px]:text-base ${
-                    errorMessage && !email.trim()
-                      ? "border-[#e24b4a]"
-                      : "border-black/10"
-                  }`}
-                />
-              </div>
-
-              <div className="mb-4">
-                <label
-                  htmlFor="password"
-                  className="mb-[5px] block text-xs font-medium text-[#6b7280] max-[700px]:text-sm"
-                >
+                <label htmlFor="password" className="mb-2 block text-sm font-bold text-[#12151f]">
                   비밀번호
                 </label>
-
-                <input
-                  id="password"
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="••••••••"
-                  autoComplete="current-password"
-                  className={`w-full rounded-md border bg-[#f9fafb] px-3 py-2.5 text-sm text-[#1a1a1a] outline-none transition focus:border-[#1d9e75] focus:bg-white focus:shadow-[0_0_0_3px_rgba(29,158,117,0.12)] max-[700px]:px-4 max-[700px]:py-4 max-[700px]:text-base ${
-                    errorMessage && !password.trim()
-                      ? "border-[#e24b4a]"
-                      : "border-black/10"
-                  }`}
-                />
+                <div className="flex h-[52px] items-center rounded-xl border border-[#dfe3e8] bg-white px-4 transition focus-within:border-[#087D78] focus-within:ring-4 focus-within:ring-[#087D78]/10">
+                  <LockIcon />
+                  <input
+                    id="password"
+                    type={showPassword ? "text" : "password"}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="비밀번호를 입력하세요"
+                    autoComplete="current-password"
+                    className="ml-3 min-w-0 flex-1 border-0 bg-transparent p-0 text-base text-[#12151f] outline-none placeholder:text-[#a6adba]"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword((current) => !current)}
+                    className="ml-2 shrink-0 rounded-md px-1.5 py-1 text-sm font-medium text-[#12151f] transition hover:text-[#087D78] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#087D78]"
+                    aria-label={showPassword ? "비밀번호 숨기기" : "비밀번호 보기"}
+                  >
+                    {showPassword ? "숨기기" : "보기"}
+                  </button>
+                </div>
               </div>
 
-              <button
-                type="submit"
-                disabled={loading}
-                className="relative w-full rounded-md bg-[#1d9e75] py-[11px] text-sm font-semibold text-white transition hover:bg-[#178f68] disabled:cursor-not-allowed disabled:opacity-60 max-[700px]:py-4 max-[700px]:text-lg"
-              >
-                {loading ? (
-                  <span className="mx-auto block h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" />
-                ) : (
-                  "로그인"
-                )}
-              </button>
-
-              {errorMessage && (
-                <div className="mt-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-[13px] text-red-700">
-                  {errorMessage}
-                </div>
-              )}
-
-              {resetSent ? (
-                <div className="mt-3 rounded-md border border-green-200 bg-green-50 px-3 py-2 text-[13px] text-green-700">
-                  비밀번호 재설정 메일을 보냈습니다. 받은 편지함을 확인하세요.
-                </div>
-              ) : (
+              <div className="flex items-center justify-between gap-4">
+                <label className="flex cursor-pointer items-center gap-2.5 text-sm text-[#4b5563]">
+                  <input type="checkbox" defaultChecked className="h-4 w-4 rounded border-[#cfd5dd] accent-[#087D78]" />
+                  로그인 유지
+                </label>
                 <button
                   type="button"
                   onClick={handleResetPassword}
                   disabled={resetLoading || loading}
-                  className="mt-2 w-full text-right text-xs text-[#9ca3af] hover:text-[#6b7280] disabled:opacity-50"
+                  className="shrink-0 text-sm font-semibold text-[#087D78] transition hover:text-[#056561] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#087D78] disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  {resetLoading ? "전송 중..." : "비밀번호를 잊으셨나요?"}
+                  {resetLoading ? "전송 중..." : "비밀번호 찾기"}
                 </button>
-              )}
-
-              <div className="my-5 flex items-center gap-3">
-                <div className="h-px flex-1 bg-black/8" />
-                <span className="text-xs text-[#9ca3af]">또는</span>
-                <div className="h-px flex-1 bg-black/8" />
               </div>
 
               <button
-                type="button"
-                onClick={handleGoogleLogin}
-                disabled={googleLoading || loading}
-                className="flex w-full items-center justify-center gap-2.5 rounded-md border border-black/10 bg-white py-[11px] text-sm font-medium text-[#1a1a1a] transition hover:bg-[#f9fafb] disabled:cursor-not-allowed disabled:opacity-60 max-[700px]:py-4 max-[700px]:text-base"
+                type="submit"
+                disabled={busy}
+                className="flex h-[52px] w-full items-center justify-center rounded-xl bg-[#3b82f6] px-4 text-base font-bold text-white transition hover:bg-[#2563eb] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[#3b82f6]/20 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {googleLoading ? (
-                  <span className="h-4 w-4 animate-spin rounded-full border-2 border-gray-300 border-t-gray-600" />
-                ) : (
-                  <svg width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M17.64 9.20455C17.64 8.56636 17.5827 7.95273 17.4764 7.36364H9V10.845H13.8436C13.635 11.97 13.0009 12.9232 12.0477 13.5614V15.8195H14.9564C16.6582 14.2527 17.64 11.9455 17.64 9.20455Z" fill="#4285F4"/>
-                    <path d="M9 18C11.43 18 13.4673 17.1941 14.9564 15.8195L12.0477 13.5614C11.2418 14.1014 10.2109 14.4204 9 14.4204C6.65591 14.4204 4.67182 12.8373 3.96409 10.71H0.957275V13.0418C2.43818 15.9832 5.48182 18 9 18Z" fill="#34A853"/>
-                    <path d="M3.96409 10.71C3.78409 10.17 3.68182 9.59318 3.68182 9C3.68182 8.40682 3.78409 7.83 3.96409 7.29V4.95818H0.957275C0.347727 6.17318 0 7.54773 0 9C0 10.4523 0.347727 11.8268 0.957275 13.0418L3.96409 10.71Z" fill="#FBBC05"/>
-                    <path d="M9 3.57955C10.3214 3.57955 11.5077 4.03364 12.4405 4.92545L15.0218 2.34409C13.4632 0.891818 11.4259 0 9 0C5.48182 0 2.43818 2.01682 0.957275 4.95818L3.96409 7.29C4.67182 5.16273 6.65591 3.57955 9 3.57955Z" fill="#EA4335"/>
-                  </svg>
-                )}
-                Google로 로그인
+                {loading ? "로그인 중..." : "로그인"}
               </button>
             </form>
 
-            <div className="mt-5 flex flex-wrap gap-[5px] max-[700px]:gap-2">
-              <span className="rounded border border-black/10 bg-[#f3f4f6] px-2 py-[3px] text-[11px] text-[#6b7280] max-[700px]:px-3 max-[700px]:py-2 max-[700px]:text-sm">
-                admin
-              </span>
-              <span className="rounded border border-black/10 bg-[#f3f4f6] px-2 py-[3px] text-[11px] text-[#6b7280] max-[700px]:px-3 max-[700px]:py-2 max-[700px]:text-sm">
-                doctor
-              </span>
-              <span className="rounded border border-black/10 bg-[#f3f4f6] px-2 py-[3px] text-[11px] text-[#6b7280] max-[700px]:px-3 max-[700px]:py-2 max-[700px]:text-sm">
-                coordinator
-              </span>
-              <span className="rounded border border-black/10 bg-[#f3f4f6] px-2 py-[3px] text-[11px] text-[#6b7280] max-[700px]:px-3 max-[700px]:py-2 max-[700px]:text-sm">
-                staff
-              </span>
-              <span className="rounded border border-black/10 bg-[#f3f4f6] px-2 py-[3px] text-[11px] text-[#6b7280] max-[700px]:px-3 max-[700px]:py-2 max-[700px]:text-sm">
-                interpreter
-              </span>
+            <div className="my-6 flex items-center gap-4">
+              <div className="h-px flex-1 bg-[#e5e7eb]" />
+              <span className="shrink-0 text-sm font-medium text-[#12151f]">또는</span>
+              <div className="h-px flex-1 bg-[#e5e7eb]" />
             </div>
 
-            <p className="mt-4 text-center text-xs leading-relaxed text-[#9ca3af] max-[700px]:text-sm">
-              등록된 계정만 접근 가능합니다.
-              <br />
-              계정 문의는 관리자에게 연락하세요.
-            </p>
+            <button
+              type="button"
+              onClick={handleGoogleLogin}
+              disabled={busy}
+              className="flex h-[52px] w-full items-center justify-center gap-3 rounded-xl border border-[#dfe3e8] bg-white px-3 text-sm font-bold text-[#12151f] transition hover:bg-[#f9fafb] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[#dfe3e8] disabled:cursor-not-allowed disabled:opacity-60 sm:text-base"
+            >
+              {googleLoading ? <Spinner dark /> : <GoogleIcon />}
+              Google 계정으로 계속하기
+            </button>
+
+            {errorMessage && (
+              <p className="mt-5 rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm leading-6 text-red-700" role="alert">
+                {errorMessage}
+              </p>
+            )}
+
+            {resetSent && (
+              <p className="mt-5 rounded-xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm leading-6 text-emerald-800" role="status" aria-live="polite">
+                비밀번호 재설정 메일을 보냈습니다. 받은 편지함을 확인하세요.
+              </p>
+            )}
+
+            <div className="mt-7 border-t border-[#eef0f3] pt-5 text-center">
+              <p className="text-sm text-[#7b8290]">계정 접근에 문제가 있나요?</p>
+              <p className="mt-1 text-sm font-semibold text-[#087D78]">관리자에게 문의하기</p>
+            </div>
           </div>
         </section>
-      </div>
+      </section>
     </main>
+  );
+}
+
+function BrandPanel() {
+  return (
+    <section className="relative min-h-[250px] overflow-hidden bg-[linear-gradient(145deg,#07383A_0%,#074244_46%,#06413D_100%)] px-6 pb-16 pt-[calc(env(safe-area-inset-top)+1.75rem)] md:flex md:min-h-full md:items-center md:px-12 md:py-14 lg:px-16">
+      <div className="pointer-events-none absolute -right-24 -top-24 h-[320px] w-[320px] rounded-full bg-[radial-gradient(circle,rgba(52,211,180,0.20)_0%,rgba(52,211,180,0)_68%)]" />
+      <div className="pointer-events-none absolute -bottom-36 -left-28 h-[420px] w-[420px] rounded-full bg-[radial-gradient(circle,rgba(13,148,136,0.24)_0%,rgba(13,148,136,0)_70%)]" />
+      <div className="pointer-events-none absolute inset-0 opacity-70">
+        <svg viewBox="0 0 700 700" className="h-full w-full" preserveAspectRatio="none" aria-hidden="true">
+          <path d="M-40 500 C170 520 220 430 315 290 C420 135 565 130 760 250" fill="none" stroke="rgba(71,213,192,0.18)" strokeWidth="2" />
+          <path d="M-60 610 C160 635 250 510 340 370 C455 190 595 220 770 350" fill="none" stroke="rgba(82,226,205,0.42)" strokeWidth="2" />
+          <path d="M0 680 C230 690 315 570 400 455 C510 310 620 320 760 420" fill="none" stroke="rgba(42,180,165,0.15)" strokeWidth="1.5" />
+        </svg>
+      </div>
+
+      <div className="relative z-10 w-full">
+        <div className="flex justify-end md:hidden">
+          <StaffBadge dark />
+        </div>
+
+        <div className="mt-12 max-w-[500px] md:mt-0">
+          <h1 className="text-[28px] font-bold leading-tight tracking-[-0.04em] text-white md:text-[38px] lg:text-[42px]">
+            통합 고객 관리 시스템
+          </h1>
+          <p className="mt-4 max-w-[430px] text-sm leading-6 text-white/65 md:text-base md:leading-7">
+            예약, 상담, 결제와 환자 기록을 한곳에서 관리하세요.
+          </p>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function StaffBadge({ dark = false }: { dark?: boolean }) {
+  return (
+    <span
+      className={
+        dark
+          ? "inline-flex rounded-lg border border-emerald-300/30 bg-emerald-300/5 px-3 py-1.5 text-xs font-medium text-emerald-200"
+          : "inline-flex rounded-lg border border-[#087D78]/25 bg-[#087D78]/5 px-3 py-1.5 text-xs font-medium text-[#087D78]"
+      }
+    >
+      직원 전용
+    </span>
+  );
+}
+
+function MailIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-5 w-5 shrink-0 text-[#a6adba]" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+      <rect x="3" y="5" width="18" height="14" rx="2" />
+      <path d="m4 7 8 6 8-6" />
+    </svg>
+  );
+}
+
+function LockIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-5 w-5 shrink-0 text-[#a6adba]" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+      <rect x="5" y="10" width="14" height="11" rx="2" />
+      <path d="M8 10V7a4 4 0 0 1 8 0v3" />
+      <path d="M12 14v3" />
+    </svg>
+  );
+}
+
+function GoogleIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-5 w-5 shrink-0" aria-hidden="true">
+      <path fill="#4285F4" d="M21.6 12.23c0-.71-.06-1.4-.18-2.06H12v3.9h5.38a4.6 4.6 0 0 1-1.99 3.02v2.53h3.23c1.89-1.74 2.98-4.3 2.98-7.39Z" />
+      <path fill="#34A853" d="M12 22c2.7 0 4.96-.9 6.62-2.38l-3.23-2.53c-.9.6-2.04.96-3.39.96-2.6 0-4.81-1.76-5.6-4.13H3.07v2.61A10 10 0 0 0 12 22Z" />
+      <path fill="#FBBC05" d="M6.4 13.92A6.02 6.02 0 0 1 6.09 12c0-.67.11-1.32.31-1.92V7.47H3.07A10 10 0 0 0 2 12c0 1.61.38 3.14 1.07 4.53l3.33-2.61Z" />
+      <path fill="#EA4335" d="M12 5.95c1.47 0 2.79.51 3.83 1.5l2.87-2.88A9.63 9.63 0 0 0 12 2a10 10 0 0 0-8.93 5.47l3.33 2.61c.79-2.37 3-4.13 5.6-4.13Z" />
+    </svg>
+  );
+}
+
+function Spinner({ dark = false }: { dark?: boolean }) {
+  return (
+    <span
+      className={
+        dark
+          ? "h-4 w-4 animate-spin rounded-full border-2 border-[#cfd5dd] border-t-[#12151f]"
+          : "h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white"
+      }
+      aria-hidden="true"
+    />
   );
 }

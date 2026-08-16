@@ -81,7 +81,7 @@ export function InfoTab({
           <input
             value={detailForm.birthInput}
             onChange={(e) => onFormChange({ birthInput: e.target.value })}
-            className="mt-1 w-full rounded-xl border border-[#dfe3e8] bg-white px-3 py-2 text-sm transition focus:border-[#1d9e75] focus:outline-none"
+            className="mt-1 w-full rounded-[16px] bg-[#f8fbfa] px-3 py-2 text-base outline-none transition focus:ring-2 focus:ring-[#bdeee8] sm:text-sm"
             placeholder="891210-1 / 19891210-1"
           />
           {detailForm.birthInput && (
@@ -112,7 +112,7 @@ export function InfoTab({
           <input
             value={detailForm.hospital}
             onChange={(e) => onFormChange({ hospital: e.target.value })}
-            className="mt-1 w-full rounded-xl border border-[#dfe3e8] bg-white px-3 py-2 text-sm transition focus:border-[#1d9e75] focus:outline-none"
+            className="mt-1 w-full rounded-[16px] bg-[#f8fbfa] px-3 py-2 text-base outline-none transition focus:ring-2 focus:ring-[#bdeee8] sm:text-sm"
           />
         </div>
         <div>
@@ -121,7 +121,7 @@ export function InfoTab({
             value={detailForm.doctors}
             onChange={(e) => onFormChange({ doctors: e.target.value })}
             placeholder="쉼표로 구분"
-            className="mt-1 w-full rounded-xl border border-[#dfe3e8] bg-white px-3 py-2 text-sm transition focus:border-[#1d9e75] focus:outline-none"
+            className="mt-1 w-full rounded-[16px] bg-[#f8fbfa] px-3 py-2 text-base outline-none transition focus:ring-2 focus:ring-[#bdeee8] sm:text-sm"
           />
         </div>
       </div>
@@ -132,7 +132,7 @@ export function InfoTab({
           <select
             value={detailForm.appointmentType}
             onChange={(e) => onFormChange({ appointmentType: e.target.value as AppointmentType })}
-            className="mt-1 w-full rounded-xl border border-[#dfe3e8] px-3 py-2 text-sm transition focus:border-[#1d9e75] focus:outline-none"
+            className="mt-1 w-full rounded-[16px] bg-[#f8fbfa] px-3 py-2 text-base outline-none transition focus:ring-2 focus:ring-[#bdeee8] sm:text-sm"
           >
             {APPOINTMENT_TYPES.map((type) => (
               <option key={type} value={type}>{type}</option>
@@ -155,7 +155,7 @@ export function InfoTab({
             type="date"
             value={detailForm.reservationDate}
             onChange={(e) => onFormChange({ reservationDate: e.target.value })}
-            className="mt-1 min-w-0 w-full appearance-none rounded-xl border border-[#dfe3e8] bg-white px-3 py-2 text-sm transition focus:border-[#1d9e75] focus:outline-none"
+            className="mt-1 min-w-0 w-full appearance-none rounded-[16px] bg-[#f8fbfa] px-3 py-2 text-base outline-none transition focus:ring-2 focus:ring-[#bdeee8] sm:text-sm"
           />
         </div>
 
@@ -166,7 +166,7 @@ export function InfoTab({
             step={1800}
             value={detailForm.reservationTime}
             onChange={(e) => onFormChange({ reservationTime: e.target.value })}
-            className="mt-1 min-w-0 w-full appearance-none rounded-xl border border-[#dfe3e8] bg-white px-3 py-2 text-sm transition focus:border-[#1d9e75] focus:outline-none"
+            className="mt-1 min-w-0 w-full appearance-none rounded-[16px] bg-[#f8fbfa] px-3 py-2 text-base outline-none transition focus:ring-2 focus:ring-[#bdeee8] sm:text-sm"
           />
         </div>
       </div>
@@ -184,13 +184,13 @@ export function InfoTab({
         <div className="mt-3 rounded-xl bg-red-50 px-3 py-2 text-sm text-red-600">{detailError}</div>
       )}
       {detailMessage && (
-        <div className="mt-3 rounded-xl bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{detailMessage}</div>
+        <div className="mt-3 rounded-xl bg-emerald-50 px-3 py-2 text-sm text-[#0f9b8e]">{detailMessage}</div>
       )}
 
       <button
         onClick={onSave}
         disabled={detailSaving}
-        className="mt-4 w-full rounded-xl bg-black py-3 text-sm font-medium text-white transition hover:-translate-y-0.5 hover:shadow-md active:scale-95 disabled:opacity-50"
+        className="mt-4 w-full rounded-[18px] bg-[linear-gradient(135deg,#77dfd1_0%,#40c5b3_50%,#0f9b8e_100%)] py-3 text-sm font-semibold text-white shadow-[0_10px_24px_rgba(15,143,131,0.14)] transition active:scale-95 disabled:opacity-50"
       >
         {detailSaving ? "저장 중..." : "수정 저장"}
       </button>
@@ -200,7 +200,7 @@ export function InfoTab({
           <label className="text-xs font-semibold text-gray-500">최근 메모</label>
           <button
             onClick={onShowAllNotes}
-            className="text-xs text-emerald-600 transition hover:underline active:scale-95"
+            className="rounded-full bg-[#0f9b8e] px-3 py-1 text-xs font-semibold text-white transition active:scale-95"
           >
             전체보기
           </button>
@@ -210,13 +210,13 @@ export function InfoTab({
           rows={2}
           value={memoText}
           onChange={(e) => onMemoTextChange(e.target.value)}
-          className="w-full resize-none rounded-xl border border-[#dfe3e8] px-3 py-2 text-sm transition focus:border-emerald-500 focus:outline-none"
+          className="w-full resize-none rounded-[16px] bg-[#f8fbfa] px-3 py-2 text-base outline-none transition focus:ring-2 focus:ring-[#bdeee8] sm:text-sm"
           placeholder="기본정보에서 바로 메모 입력"
         />
 
         <button
           onClick={onAddMemo}
-          className="mt-2 w-full rounded-xl bg-emerald-600 py-2 text-sm font-medium text-white transition hover:-translate-y-0.5 hover:shadow-md active:scale-95"
+          className="mt-2 w-full rounded-[18px] bg-[linear-gradient(135deg,#77dfd1_0%,#40c5b3_50%,#0f9b8e_100%)] py-2 text-sm font-semibold text-white shadow-[0_10px_24px_rgba(15,143,131,0.12)] transition active:scale-95"
         >
           메모 추가
         </button>
@@ -225,12 +225,12 @@ export function InfoTab({
           <div className="mt-2 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-600">{memoError}</div>
         )}
         {memoSuccess && (
-          <div className="mt-2 rounded-lg bg-emerald-50 px-3 py-2 text-xs text-emerald-700">{memoSuccess}</div>
+          <div className="mt-2 rounded-lg bg-emerald-50 px-3 py-2 text-xs text-[#0f9b8e]">{memoSuccess}</div>
         )}
 
         <div className="mt-3 space-y-2">
           {notesLoading ? (
-            <div className="rounded-xl bg-gray-50 px-4 py-3 text-sm text-gray-400">
+            <div className="rounded-[22px] bg-[#f6f7f5] px-4 py-3 text-sm text-[#8b93a1]">
               메모를 불러오는 중...
             </div>
           ) : notesError ? (
@@ -238,7 +238,7 @@ export function InfoTab({
               {notesError}
             </div>
           ) : recentNotes.length === 0 ? (
-            <div className="rounded-xl bg-gray-50 px-4 py-3 text-sm text-gray-400">
+            <div className="rounded-[22px] bg-[#f6f7f5] px-4 py-3 text-sm text-[#8b93a1]">
               등록된 메모가 없습니다.
             </div>
           ) : (

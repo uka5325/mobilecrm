@@ -87,6 +87,7 @@ export default function DashboardPage() {
   const [itemFilter, setItemFilter] = useState("");
   const [doctorFilter, setDoctorFilter] = useState("");
   const [coordinatorFilter, setCoordinatorFilter] = useState("");
+  const [quickRangeType, setQuickRangeType] = useState<"today" | "week" | "month" | "lastMonth" | null>("today");
 
   const load = useCallback(async (from: string, to: string) => {
     const normFrom = from <= to ? from : to;
@@ -208,6 +209,7 @@ export default function DashboardPage() {
 
   function handleQuickRange(type: "today" | "week" | "month" | "lastMonth" | "last7" | "last30") {
     const range = setQuickRange(type);
+    setQuickRangeType(type === "last7" || type === "last30" ? null : type);
     setStartDate(range.start);
     setEndDate(range.end);
     load(range.start, range.end);
@@ -223,110 +225,99 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-5">
-      <section className="-mx-6 mb-4 rounded-t-2xl border border-[#edf0f3] bg-[#ecfdf5] px-4 py-4 lg:-mx-8 lg:px-8">
-        <div className="flex items-center gap-2">
-          <input
-            type="date"
-            value={startDate}
-            onChange={(e) => setStartDate(e.target.value)}
-            className="h-10 min-w-0 flex-1 appearance-none rounded-xl border border-[#dfe3e8] bg-white px-2 text-sm outline-none transition focus:border-[#1d9e75] focus:ring-4 focus:ring-emerald-100"
-          />
-          <span className="shrink-0 text-sm text-gray-400">~</span>
-          <input
-            type="date"
-            value={endDate}
-            onChange={(e) => setEndDate(e.target.value)}
-            className="h-10 min-w-0 flex-1 appearance-none rounded-xl border border-[#dfe3e8] bg-white px-2 text-sm outline-none transition focus:border-[#1d9e75] focus:ring-4 focus:ring-emerald-100"
-          />
-        </div>
+      <section className="mb-4 rounded-[26px] bg-[#eaf8f3] p-5 shadow-[0_18px_50px_rgba(7,56,58,0.08)] lg:p-6">
+        <div className="space-y-2">
+          <div className="grid grid-cols-3 items-center gap-2">
+            <input
+              type="date"
+              value={startDate}
+              onChange={(e) => { setQuickRangeType(null); setStartDate(e.target.value); }}
+              className="h-10 min-w-0 appearance-none rounded-[18px] bg-white px-2 text-[11px] text-[#101828] outline-none transition focus:ring-2 focus:ring-[#bdeee8]"
+            />
+            <input
+              type="date"
+              value={endDate}
+              onChange={(e) => { setQuickRangeType(null); setEndDate(e.target.value); }}
+              className="h-10 min-w-0 appearance-none rounded-[18px] bg-white px-2 text-[11px] text-[#101828] outline-none transition focus:ring-2 focus:ring-[#bdeee8]"
+            />
+            <select
+              value={hospitalFilter}
+              onChange={(e) => setHospitalFilter(e.target.value)}
+              className="h-10 min-w-0 rounded-[18px] bg-white px-2 text-[11px] text-[#101828] outline-none transition focus:ring-2 focus:ring-[#bdeee8]"
+            >
+              <option value="">전체 병원</option>
+              {hospitals.map((h) => (
+                <option key={h} value={h}>{h}</option>
+              ))}
+            </select>
+          </div>
 
-        <div className="mt-2 grid grid-cols-2 gap-2 lg:grid-cols-5">
-          <select
-            value={hospitalFilter}
-            onChange={(e) => setHospitalFilter(e.target.value)}
-            className="h-10 min-w-0 rounded-xl border border-[#dfe3e8] bg-white px-2 text-sm outline-none transition focus:border-[#1d9e75] focus:ring-4 focus:ring-emerald-100"
-          >
-            <option value="">전체 병원</option>
-            {hospitals.map((h) => (
-              <option key={h} value={h}>{h}</option>
-            ))}
-          </select>
-          <select
-            value={apptTypeFilter}
-            onChange={(e) => setApptTypeFilter(e.target.value)}
-            className="h-10 min-w-0 rounded-xl border border-[#dfe3e8] bg-white px-2 text-sm outline-none transition focus:border-[#1d9e75] focus:ring-4 focus:ring-emerald-100"
-          >
-            <option value="">전체 유형</option>
-            {APPOINTMENT_TYPES.map((type) => (
-              <option key={type} value={type}>{type}</option>
-            ))}
-          </select>
-          <select
-            value={itemFilter}
-            onChange={(e) => setItemFilter(e.target.value)}
-            className="h-10 min-w-0 rounded-xl border border-[#dfe3e8] bg-white px-2 text-sm outline-none transition focus:border-[#1d9e75] focus:ring-4 focus:ring-emerald-100"
-          >
-            <option value="">전체 항목</option>
-            {itemOptions.map((item) => (
-              <option key={item} value={item}>{item}</option>
-            ))}
-          </select>
-          <select
-            value={doctorFilter}
-            onChange={(e) => setDoctorFilter(e.target.value)}
-            className="h-10 min-w-0 rounded-xl border border-[#dfe3e8] bg-white px-2 text-sm outline-none transition focus:border-[#1d9e75] focus:ring-4 focus:ring-emerald-100"
-          >
-            <option value="">전체 원장</option>
-            {doctors.map((doctor) => (
-              <option key={doctor} value={doctor}>{doctor}</option>
-            ))}
-          </select>
-          <select
-            value={coordinatorFilter}
-            onChange={(e) => setCoordinatorFilter(e.target.value)}
-            className="h-10 min-w-0 rounded-xl border border-[#dfe3e8] bg-white px-2 text-sm outline-none transition focus:border-[#1d9e75] focus:ring-4 focus:ring-emerald-100"
-          >
-            <option value="">전체 코디</option>
-            {coordinators.map((coordinator) => (
-              <option key={coordinator} value={coordinator}>{coordinator}</option>
-            ))}
-          </select>
-          <div className="flex min-w-0 gap-2 lg:hidden">
+          <div className="grid grid-cols-3 gap-2">
+            <select
+              value={apptTypeFilter}
+              onChange={(e) => setApptTypeFilter(e.target.value)}
+              className="h-10 min-w-0 rounded-[18px] bg-white px-2 text-[11px] text-[#101828] outline-none transition focus:ring-2 focus:ring-[#bdeee8]"
+            >
+              <option value="">전체 유형</option>
+              {APPOINTMENT_TYPES.map((type) => (
+                <option key={type} value={type}>{type}</option>
+              ))}
+            </select>
+            <select
+              value={itemFilter}
+              onChange={(e) => setItemFilter(e.target.value)}
+              className="h-10 min-w-0 rounded-[18px] bg-white px-2 text-[11px] text-[#101828] outline-none transition focus:ring-2 focus:ring-[#bdeee8]"
+            >
+              <option value="">전체 항목</option>
+              {itemOptions.map((item) => (
+                <option key={item} value={item}>{item}</option>
+              ))}
+            </select>
+            <select
+              value={doctorFilter}
+              onChange={(e) => setDoctorFilter(e.target.value)}
+              className="h-10 min-w-0 rounded-[18px] bg-white px-2 text-[11px] text-[#101828] outline-none transition focus:ring-2 focus:ring-[#bdeee8]"
+            >
+              <option value="">전체 원장</option>
+              {doctors.map((doctor) => (
+                <option key={doctor} value={doctor}>{doctor}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="grid grid-cols-3 gap-2">
+            <select
+              value={coordinatorFilter}
+              onChange={(e) => setCoordinatorFilter(e.target.value)}
+              className="h-10 min-w-0 rounded-[18px] bg-white px-2 text-[11px] text-[#101828] outline-none transition focus:ring-2 focus:ring-[#bdeee8]"
+            >
+              <option value="">전체 코디</option>
+              {coordinators.map((coordinator) => (
+                <option key={coordinator} value={coordinator}>{coordinator}</option>
+              ))}
+            </select>
             <button
               onClick={() => load(startDate, endDate)}
               disabled={loading}
-              className="h-10 min-w-0 flex-1 rounded-xl bg-[#1d9e75] px-2 text-sm font-medium text-white transition active:scale-95 disabled:opacity-60"
+              className="h-10 min-w-0 rounded-[18px] bg-[linear-gradient(135deg,#77dfd1_0%,#40c5b3_50%,#0f9b8e_100%)] px-2 text-[11px] font-bold text-white shadow-[0_10px_24px_rgba(15,143,131,0.14)] transition hover:-translate-y-0.5 active:scale-95 disabled:opacity-60"
             >
-              {loading ? "조회 중" : "조회"}
+              {loading ? "조회 중..." : "조회"}
             </button>
             <button
               onClick={resetFilters}
-              className="h-10 min-w-0 flex-1 rounded-xl bg-black px-2 text-sm font-medium text-white transition active:scale-95"
+              className="h-10 min-w-0 rounded-[18px] bg-[#e3f2ee] px-2 text-[11px] font-bold text-[#0f9b8e] transition hover:-translate-y-0.5 active:scale-95"
             >
               초기화
             </button>
           </div>
-        </div>
 
-        <div className="mt-2 flex items-center gap-2">
-          <button
-            onClick={() => load(startDate, endDate)}
-            disabled={loading}
-            className="hidden h-10 shrink-0 rounded-xl bg-[#1d9e75] px-4 text-sm font-medium text-white transition hover:-translate-y-0.5 hover:shadow-md active:scale-95 disabled:opacity-60 lg:block"
-          >
-            {loading ? "조회 중..." : "조회"}
-          </button>
-          <button
-            onClick={resetFilters}
-            className="hidden h-10 shrink-0 rounded-xl bg-black px-4 text-sm font-medium text-white transition hover:-translate-y-0.5 hover:shadow-md active:scale-95 lg:block"
-          >
-            초기화
-          </button>
-          <div className="flex gap-2 overflow-x-auto [&::-webkit-scrollbar]:hidden">
-            <QuickButton onClick={() => handleQuickRange("today")}>오늘</QuickButton>
-            <QuickButton onClick={() => handleQuickRange("week")}>이번 주</QuickButton>
-            <QuickButton onClick={() => handleQuickRange("month")}>이번 달</QuickButton>
-            <QuickButton onClick={() => handleQuickRange("lastMonth")}>전달</QuickButton>
+          <div className="rounded-[20px] bg-white p-1">
+            <div className="grid grid-cols-4 gap-1">
+              <QuickButton active={quickRangeType === "today"} onClick={() => handleQuickRange("today")}>오늘</QuickButton>
+              <QuickButton active={quickRangeType === "week"} onClick={() => handleQuickRange("week")}>이번 주</QuickButton>
+              <QuickButton active={quickRangeType === "month"} onClick={() => handleQuickRange("month")}>이번 달</QuickButton>
+              <QuickButton active={quickRangeType === "lastMonth"} onClick={() => handleQuickRange("lastMonth")}>전달</QuickButton>
+            </div>
           </div>
         </div>
 
@@ -344,7 +335,7 @@ export default function DashboardPage() {
       </section>
 
       {!searched ? (
-        <div className="flex items-center justify-center rounded-2xl border border-[#edf0f3] bg-white py-20 text-sm text-gray-400">
+        <div className="flex items-center justify-center rounded-[28px] bg-white py-20 text-sm text-gray-400 shadow-[0_16px_50px_rgba(15,23,42,0.055)]">
           기간을 선택하고 조회를 누르세요.
         </div>
       ) : (
@@ -358,7 +349,7 @@ export default function DashboardPage() {
               { label: "취소", value: dashboard.summary.cancelled, helper: rateText(dashboard.summary.cancelled, dashboard.summary.total) },
               { label: "완료율", value: pctText(dashboard.summary.completionRate), helper: "취소 제외 기준" },
             ].map((card) => (
-              <div key={card.label} className="rounded-[14px] border border-black/5 bg-white p-4 shadow-[0_2px_10px_rgba(0,0,0,0.04)]">
+              <div key={card.label} className="rounded-[22px] bg-[#f8fbfa] p-4 shadow-[0_10px_24px_rgba(15,23,42,0.04)]">
                 <div className="text-xs font-bold text-gray-500">{card.label}</div>
                 <div className="mt-1 text-[24px] font-bold text-gray-900">
                   {typeof card.value === "number" ? formatNumber(card.value) : card.value}
@@ -381,7 +372,7 @@ export default function DashboardPage() {
                       { label: "총 환불", value: formatWon(sales.aggregate.totalRefunded), helper: `${formatNumber(sales.aggregate.refundCount)}건` },
                       { label: "정산 건수", value: `${formatNumber(sales.aggregate.count)}건`, helper: `결제 ${formatNumber(sales.aggregate.paymentCount)} · 환불 ${formatNumber(sales.aggregate.refundCount)}` },
                     ].map((card) => (
-                      <div key={card.label} className="rounded-[8px] border border-black/5 bg-[#f8fafc] p-4">
+                      <div key={card.label} className="rounded-[20px] bg-[#f8fbfa] p-4">
                         <div className="text-xs font-bold text-gray-500">{card.label}</div>
                         <div className="mt-1 break-words text-[20px] font-bold text-gray-900">{card.value}</div>
                         <div className="mt-0.5 text-xs text-gray-500">{card.helper}</div>
@@ -434,7 +425,7 @@ export default function DashboardPage() {
                 return (
                   <div
                     key={type}
-                    className="rounded-[14px] border border-black/5 bg-white p-4 shadow-[0_2px_10px_rgba(0,0,0,0.04)]"
+                    className="rounded-[22px] bg-[#f8fbfa] p-4 shadow-[0_10px_24px_rgba(15,23,42,0.04)]"
                     style={{ borderLeftWidth: 4, borderLeftColor: APPT_TYPE_COLORS[type] }}
                   >
                     <div className="text-xs font-bold" style={{ color: APPT_TYPE_COLORS[type] }}>{type}</div>
@@ -491,7 +482,7 @@ export default function DashboardPage() {
                   key={item.label}
                   type="button"
                   onClick={() => router.push("/schedule")}
-                  className="rounded-[14px] border border-[#edf0f3] bg-[#f8fafc] p-4 text-left transition hover:-translate-y-0.5 hover:bg-white hover:shadow-md active:scale-[0.99]"
+                  className="rounded-[22px] bg-[#f8fbfa] p-4 text-left shadow-[0_10px_24px_rgba(15,23,42,0.04)] transition hover:-translate-y-0.5 hover:bg-white active:scale-[0.99]"
                 >
                   <div className="text-xs font-bold text-gray-500">{item.label}</div>
                   <div className="mt-1 text-[22px] font-bold text-gray-900">{formatNumber(item.value)}</div>
@@ -511,7 +502,7 @@ export default function DashboardPage() {
                     <div key={row.date} className="grid grid-cols-[92px_1fr] gap-3 text-xs md:grid-cols-[92px_1fr_160px] md:items-center">
                       <div className="font-medium text-gray-700">{row.date}</div>
                       <div className="h-3 overflow-hidden rounded-full bg-gray-100">
-                        <div className="h-full rounded-full bg-[#1d9e75]" style={{ width: `${Math.max(4, (row.total / max) * 100)}%` }} />
+                        <div className="h-full rounded-full bg-[linear-gradient(135deg,#77dfd1_0%,#40c5b3_50%,#0f9b8e_100%)]" style={{ width: `${Math.max(4, (row.total / max) * 100)}%` }} />
                       </div>
                       <div className="col-span-2 text-gray-500 md:col-span-1 md:text-right">
                         {formatNumber(row.total)}건 · 완료 {formatNumber(row.completed)} · 예정 {formatNumber(row.scheduled)} · 취소 {formatNumber(row.cancelled)}

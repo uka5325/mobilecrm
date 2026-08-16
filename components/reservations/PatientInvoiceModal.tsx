@@ -144,7 +144,6 @@ export function PatientInvoiceModal({ patientId, patientName, onClose, onCountLo
       <PatientInvoiceDetailModal
         invoice={viewingInvoice}
         patientName={patientName}
-        onBack={() => setViewingInvoice(null)}
         onEdit={() => { setEditingInvoice(viewingInvoice); setViewingInvoice(null); }}
         onClose={onClose}
       />
@@ -153,12 +152,12 @@ export function PatientInvoiceModal({ patientId, patientName, onClose, onCountLo
 
   if (editingInvoice) {
     return (
-      <div className="fixed inset-0 z-[1100] flex items-center justify-center bg-black/40" onClick={onClose}>
-        <div className="relative mx-4 flex max-h-[90vh] w-full max-w-xl flex-col rounded-2xl bg-white shadow-2xl" onClick={(event) => event.stopPropagation()}>
-          <div className="flex shrink-0 items-center justify-between border-b border-gray-100 px-5 py-4">
+      <div className="fixed inset-0 z-[1100] flex items-center justify-center bg-black/35 px-3 py-8 backdrop-blur-[2px]" onClick={onClose}>
+        <div className="relative mx-0 flex max-h-[calc(100dvh-64px)] w-full max-w-xl flex-col overflow-hidden rounded-[30px] bg-white shadow-[0_28px_90px_rgba(15,23,42,0.26)]" onClick={(event) => event.stopPropagation()}>
+          <div className="flex shrink-0 items-center justify-between bg-white px-5 pb-3 pt-5">
             <button onClick={() => setEditingInvoice(null)} className="text-xs text-gray-500 hover:underline">← 목록</button>
             <span className="text-sm font-bold">{patientName} — 인보이스 수정</span>
-            <button onClick={onClose} className="text-gray-400 hover:text-gray-600">✕</button>
+            <button onClick={onClose} className="flex h-9 w-9 items-center justify-center rounded-full bg-[#f6f7f5] text-[#667085]">✕</button>
           </div>
           <div className="flex-1 overflow-y-auto p-5">
             <InvoiceEditorForm
@@ -184,31 +183,47 @@ export function PatientInvoiceModal({ patientId, patientName, onClose, onCountLo
     );
   }
 
-  const invoiceByReservation = new Map(invoices.map((invoice) => [invoice.reservationDocId, invoice]));
+  const invoiceByReservation = new Map<string, InvoiceRecord>();
+  for (const invoice of invoices) {
+    const linkedReservationIds = invoice.reservationDocIds?.length
+      ? invoice.reservationDocIds
+      : [invoice.reservationDocId];
+    linkedReservationIds.forEach((id) => invoiceByReservation.set(id, invoice));
+  }
   const availableReservations = reservations.filter(
     (reservation) => (reservation.appointmentType === "수술" || reservation.appointmentType === "시술") && !invoiceByReservation.has(reservation.id)
   );
 
   return (
-    <div className="fixed inset-0 z-[1100] flex items-center justify-center bg-black/40" onClick={onClose}>
-      <div className="relative mx-4 flex max-h-[85vh] w-full max-w-xl flex-col rounded-2xl bg-white shadow-2xl" onClick={(event) => event.stopPropagation()}>
-        <div className="flex shrink-0 items-center justify-between border-b border-gray-100 px-5 py-4">
+    <div className="fixed inset-0 z-[1100] flex items-center justify-center bg-black/35 px-3 py-8 backdrop-blur-[2px]" onClick={onClose}>
+      <div className="relative mx-0 flex max-h-[calc(100dvh-64px)] w-full max-w-xl flex-col overflow-hidden rounded-[30px] bg-white shadow-[0_28px_90px_rgba(15,23,42,0.26)]" onClick={(event) => event.stopPropagation()}>
+        <div className="flex shrink-0 items-center justify-between bg-white px-5 pb-3 pt-5">
           <div><div className="text-base font-bold">{patientName} — 인보이스</div><div className="mt-0.5 text-xs text-gray-400">전체 {invoices.length}건</div></div>
-          <button onClick={onClose} className="text-xl text-gray-400 hover:text-gray-700">✕</button>
+          <button onClick={onClose} className="flex h-9 w-9 items-center justify-center rounded-full bg-[#f6f7f5] text-xl text-[#667085]">✕</button>
         </div>
         <div className="flex-1 space-y-3 overflow-y-auto p-4">
           {error && <div className="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-600">{error}</div>}
           {loading ? <div className="py-12 text-center text-sm text-gray-400">로딩 중...</div> : (
             <>
-              {reservations.map((reservation) => {
-                const invoice = invoiceByReservation.get(reservation.id);
-                return invoice ? <PatientInvoiceCard key={reservation.id} invoice={invoice} reservation={reservation} onView={() => setViewingInvoice(invoice)} onEdit={() => setEditingInvoice(invoice)} onDelete={() => void handleDelete(invoice)} /> : null;
+              {invoices.map((invoice) => {
+                const linkedIds = invoice.reservationDocIds?.length
+                  ? invoice.reservationDocIds
+                  : [invoice.reservationDocId];
+                const reservation = reservations.find((item) => item.id === invoice.reservationDocId)
+                  || reservations.find((item) => linkedIds.includes(item.id));
+                return (
+                  <PatientInvoiceCard
+                    key={invoice.id}
+                    invoice={invoice}
+                    reservation={reservation}
+                    onView={() => setViewingInvoice(invoice)}
+                    onEdit={() => setEditingInvoice(invoice)}
+                    onDelete={() => void handleDelete(invoice)}
+                  />
+                );
               })}
-              {invoices.filter((invoice) => !reservations.some((reservation) => reservation.id === invoice.reservationDocId)).map((invoice) => (
-                <PatientInvoiceCard key={invoice.id} invoice={invoice} onView={() => setViewingInvoice(invoice)} onEdit={() => setEditingInvoice(invoice)} onDelete={() => void handleDelete(invoice)} />
-              ))}
               <div className="mt-1">
-                <button onClick={() => { if (!showCreatePanel) void loadReservations(); setShowCreatePanel((current) => !current); }} className="w-full rounded-xl border border-[#1d9e75] px-3 py-2 text-sm font-medium text-[#1d9e75] hover:bg-emerald-50">
+                <button onClick={() => { if (!showCreatePanel) void loadReservations(); setShowCreatePanel((current) => !current); }} className="w-full rounded-[18px] bg-[#e3f2ee] px-3 py-2 text-sm font-semibold text-[#0f9b8e] transition active:scale-95">
                   {showCreatePanel ? "닫기" : "+ 인보이스 생성"}
                 </button>
                 {showCreatePanel && <div className="mt-2"><PatientInvoiceCreatePanel reservations={availableReservations} loading={reservationsLoading} creatingId={creating} onCreate={(reservationId) => { void handleCreate(reservationId); setShowCreatePanel(false); }} /></div>}
